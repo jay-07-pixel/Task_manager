@@ -1,0 +1,86 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../prisma-client"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  owner
+  employee
+}
+
+enum TaskRecurrence {
+  none
+  daily
+  weekly
+  monthly
+  yearly
+  custom
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  displayName  String   @map("display_name")
+  phone        String?  @map("phone") @db.VarChar(32)
+  role         Role     @default(employee)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  ownedLists        TaskList[]
+  createdTasks      Task[]         @relation("CreatedBy")
+  taskAssignments   TaskAssignee[]
+}
+
+model TaskList {
+  id        String   @id @default(uuid())
+  ownerId   String   @map("owner_id")
+  title     String
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  owner User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  tasks Task[]
+}
+
+model TaskAssignee {
+  taskId              String  @map("task_id")
+  userId              String  @map("user_id")
+  completionProofPath String? @map("completion_proof_path") @db.VarChar(512)
+  assigneeDone        Boolean @default(false) @map("assignee_done")
+  task                Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user                User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, userId])
+  @@map("task_assignee")
+  @@index([userId])
+}
+
+model Task {
+  id              String           @id @default(uuid())
+  listId          String           @map("list_id")
+  createdById     String           @map("created_by_id")
+  title           String
+  notes           String           @db.Text @default("")
+  dueAt           DateTime?        @map("due_at")
+  allDay          Boolean          @default(false) @map("all_day")
+  recurrence      TaskRecurrence   @default(none)
+  recurrenceRule  String?          @map("recurrence_rule") @db.Text
+  completed       Boolean          @default(false)
+  starred         Boolean          @default(false)
+  sortOrder       Int              @default(0) @map("sort_order")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+
+  list         TaskList       @relation(fields: [listId], references: [id], onDelete: Cascade)
+  createdBy    User           @relation("CreatedBy", fields: [createdById], references: [id])
+  assignments  TaskAssignee[]
+
+  @@index([listId])
+}

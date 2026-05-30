@@ -1,0 +1,10 @@
+{
+  "name": "Task Manager",
+  "short_name": "Tasks",
+  "description": "Task lists, assignments, and due reminders",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0d6efd",
+  "scope": "/"
+}

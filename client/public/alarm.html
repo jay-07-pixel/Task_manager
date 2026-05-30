@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#0d6efd" />
+    <title>Task due — Reminder</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+    <style>
+      :root {
+        --bs-primary: #0d6efd;
+        --bs-primary-rgb: 13, 110, 253;
+        --bs-body-font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans",
+          "Liberation Sans", Arial, sans-serif;
+        --alarm-blue-deep: #084298;
+        --alarm-blue-mid: #0d6efd;
+        --alarm-blue-light: #3d8bfd;
+      }
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        font-family: var(--bs-body-font-family);
+        font-size: 1rem;
+        line-height: 1.5;
+        color: #fff;
+        background: var(--alarm-blue-deep);
+        -webkit-font-smoothing: antialiased;
+      }
+      .alarm-screen {
+        min-height: 100%;
+        min-height: 100dvh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: max(1.5rem, env(safe-area-inset-top)) 1.5rem max(2rem, env(safe-area-inset-bottom));
+        text-align: center;
+        background: linear-gradient(
+          165deg,
+          var(--alarm-blue-light) 0%,
+          var(--alarm-blue-mid) 42%,
+          var(--alarm-blue-deep) 100%
+        );
+        animation: alarm-bg 2s ease-in-out infinite;
+      }
+      @keyframes alarm-bg {
+        0%,
+        100% {
+          filter: brightness(1);
+        }
+        50% {
+          filter: brightness(1.06);
+        }
+      }
+      .alarm-icon {
+        font-size: clamp(2.5rem, 12vw, 3.75rem);
+        line-height: 1;
+        margin-bottom: 1rem;
+        opacity: 0.95;
+      }
+      .alarm-eyebrow {
+        margin: 0;
+        font-size: 0.7rem;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        opacity: 0.9;
+      }
+      .alarm-title {
+        margin: 0.75rem 0 0.5rem;
+        font-size: clamp(1.5rem, 6vw, 2.25rem);
+        font-weight: 600;
+        line-height: 1.25;
+        max-width: 24ch;
+        word-break: break-word;
+      }
+      .alarm-due {
+        margin: 0;
+        font-size: 0.9375rem;
+        font-weight: 400;
+        opacity: 0.9;
+      }
+      .alarm-dismiss {
+        margin-top: 2rem;
+        padding: 0.5rem 1.5rem;
+        font-family: inherit;
+        font-size: 0.875rem;
+        font-weight: 600;
+        line-height: 1.5;
+        border: 1px solid rgba(255, 255, 255, 0.85);
+        border-radius: 0.375rem;
+        background: #fff;
+        color: var(--alarm-blue-deep);
+        cursor: pointer;
+        box-shadow: 0 0.125rem 0.5rem rgba(0, 0, 0, 0.15);
+      }
+      .alarm-dismiss:hover {
+        background: #f8f9fa;
+      }
+      .alarm-dismiss:active {
+        transform: scale(0.98);
+      }
+      .alarm-hint {
+        margin-top: 1.25rem;
+        font-size: 0.8125rem;
+        font-weight: 400;
+        opacity: 0.85;
+        max-width: 28rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="alarm-screen" role="alertdialog" aria-labelledby="alarm-title" aria-modal="true">
+      <div class="alarm-icon" aria-hidden="true"><i class="bi bi-alarm-fill"></i></div>
+      <p class="alarm-eyebrow">Due in about 10 minutes</p>
+      <h1 class="alarm-title" id="alarm-title">Task</h1>
+      <p class="alarm-due" id="alarm-due"></p>
+      <button type="button" class="alarm-dismiss" id="alarm-dismiss">Stop alarm and dismiss</button>
+      <p class="alarm-hint">Dismiss here or submit the task in Task Manager.</p>
+    </div>
+    <script>
+      (function () {
+        const params = new URLSearchParams(location.search);
+        const title = params.get("title") || "Your task";
+        const dueAt = params.get("dueAt");
+        const slot = params.get("slot");
+        const eyebrowEl = document.querySelector(".alarm-eyebrow");
+        if (slot === "followup1h") {
+          eyebrowEl.textContent = "Still not submitted — follow-up reminder";
+        }
+        document.getElementById("alarm-title").textContent = title;
+        const dueEl = document.getElementById("alarm-due");
+        if (dueAt) {
+          try {
+            dueEl.textContent = "Deadline: " + new Date(dueAt).toLocaleString();
+          } catch {
+            dueEl.textContent = "";
+          }
+        }
+
+        let beepTimer = null;
+        let audioCtx = null;
+        let wakeLock = null;
+
+        function stopSound() {
+          if (beepTimer) {
+            clearInterval(beepTimer);
+            beepTimer = null;
+          }
+          if (audioCtx) {
+            audioCtx.close().catch(function () {});
+            audioCtx = null;
+          }
+        }
+
+        async function playAlarm() {
+          const Ctx = window.AudioContext || window.webkitAudioContext;
+          if (!Ctx) return;
+          stopSound();
+          audioCtx = new Ctx();
+          if (audioCtx.state === "suspended") await audioCtx.resume();
+          let high = true;
+          const master = audioCtx.createGain();
+          master.gain.value = 0.55;
+          master.connect(audioCtx.destination);
+          function beep() {
+            const osc = audioCtx.createOscillator();
+            const g = audioCtx.createGain();
+            osc.type = "square";
+            osc.frequency.value = high ? 880 : 698;
+            high = !high;
+            const t = audioCtx.currentTime;
+            g.gain.setValueAtTime(0.001, t);
+            g.gain.exponentialRampToValueAtTime(0.7, t + 0.03);
+            g.gain.exponentialRampToValueAtTime(0.001, t + 0.42);
+            osc.connect(g);
+            g.connect(master);
+            osc.start(t);
+            osc.stop(t + 0.45);
+          }
+          beep();
+          beepTimer = setInterval(beep, 420);
+        }
+
+        async function enterFullscreen() {
+          try {
+            const el = document.documentElement;
+            if (el.requestFullscreen) await el.requestFullscreen();
+            else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+          } catch {
+            /* ignore */
+          }
+        }
+
+        async function requestWakeLock() {
+          try {
+            if ("wakeLock" in navigator) {
+              wakeLock = await navigator.wakeLock.request("screen");
+            }
+          } catch {
+            /* ignore */
+          }
+        }
+
+        document.getElementById("alarm-dismiss").addEventListener("click", function () {
+          stopSound();
+          if (wakeLock) wakeLock.release().catch(function () {});
+          if (document.fullscreenElement) document.exitFullscreen().catch(function () {});
+          window.close();
+          if (!window.closed) location.href = "/";
+        });
+
+        document.addEventListener("visibilitychange", function () {
+          if (document.visibilityState === "visible") requestWakeLock();
+        });
+
+        enterFullscreen();
+        requestWakeLock();
+        playAlarm();
+        if (navigator.vibrate) navigator.vibrate([400, 150, 400, 150, 400]);
+      })();
+    </script>
+  </body>
+</html>
