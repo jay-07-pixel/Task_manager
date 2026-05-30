@@ -191,10 +191,42 @@ All JSON routes are under `/api`. Authenticated routes use the session cookie (`
 | Tasks | `GET /api/tasks/lists/:listId`, `POST /api/tasks/lists/:listId`, `PATCH /api/tasks/:id`, `GET /api/tasks/assigned` (employees) |
 | Users | `GET /api/users/assignees` (owner: employee picker) |
 
-`GET /api/health` — health check.
+`GET /api/health` — health check (includes database connectivity).
+
+## Deployed server (VPS) checklist
+
+If login fails on a server like `http://YOUR_IP:3000`:
+
+1. **Open** `http://YOUR_IP:3000/api/health`  
+   - `"db":"connected"` → database OK  
+   - `"db":"error"` → fix MySQL and `DATABASE_URL` in `server/.env`
+
+2. **On the server**, from the project folder:
+   ```bash
+   npm install --prefix server
+   npm run db:generate --prefix server
+   npm run db:migrate --prefix server
+   npm run db:seed --prefix server
+   npm run build
+   NODE_ENV=production npm run start
+   ```
+
+3. **`server/.env` must include:**
+   ```env
+   DATABASE_URL="mysql://USER:PASS@localhost:3306/taskmanager"
+   SESSION_SECRET="long-random-string"
+   COOKIE_SECURE=false
+   ```
+   Use `COOKIE_SECURE=false` when using **HTTP** (not HTTPS). Without this, login succeeds but the session cookie is dropped and you stay on the sign-in screen.
+
+4. **Demo users** (`owner@local.test` / `password123`) exist only **after** `db:seed` on **that** server’s database—not automatically from your laptop.
 
 ## Troubleshooting
 
+- **`401` on `/api/auth/me` before login:** Normal — you are not signed in yet.
+- **`401` on `/api/auth/login`:** Wrong email/password, or user not seeded on this server.
+- **`400` on login:** Invalid email format or empty fields.
+- **`500` on login:** Database error — check `/api/health` and server logs.
 - **Prisma / EPERM on Windows:** Stop the dev server, close tools using the DB folder, then rerun `npm run db:generate --prefix server`.
 - **API errors from the UI:** Confirm MySQL is running and `DATABASE_URL` in `server/.env` is correct.
 - **Login fails after seed:** Run `npm run db:seed --prefix server` again; use the demo emails above.

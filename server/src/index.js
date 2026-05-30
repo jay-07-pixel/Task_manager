@@ -13,6 +13,7 @@ import authRoutes from "./routes/auth.js";
 import listRoutes from "./routes/lists.js";
 import taskRoutes from "./routes/tasks.js";
 import userRoutes from "./routes/users.js";
+import { prisma } from "./lib/prisma.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const sessionsDir = path.join(__dirname, "..", "sessions");
@@ -23,9 +24,24 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const isProd = process.env.NODE_ENV === "production";
 
+/** Stay signed in until manual logout (default ~10 years). Override with SESSION_MAX_AGE_MS. */
+const SESSION_MAX_AGE_MS = Number(process.env.SESSION_MAX_AGE_MS) || 10 * 365 * 24 * 60 * 60 * 1000;
+/** Set COOKIE_SECURE=true only when the site is served over HTTPS. HTTP VPS needs false. */
+const COOKIE_SECURE = process.env.COOKIE_SECURE === "true";
+
+if (process.env.TRUST_PROXY === "1" || process.env.TRUST_PROXY === "true") {
+  app.set("trust proxy", 1);
+}
+
+const corsOrigins = process.env.CLIENT_ORIGIN
+  ? process.env.CLIENT_ORIGIN.split(",").map((s) => s.trim()).filter(Boolean)
+  : isProd
+    ? false
+    : ["http://localhost:5173", "http://127.0.0.1:5173"];
+
 app.use(
   cors({
-    origin: isProd ? false : ["http://localhost:5173", "http://127.0.0.1:5173"],
+    origin: corsOrigins,
     credentials: true,
   })
 );
@@ -36,7 +52,7 @@ app.use(
     name: "taskmgr.sid",
     store: new FileStore({
       path: sessionsDir,
-      ttl: 60 * 60 * 24 * 7,
+      ttl: Math.ceil(SESSION_MAX_AGE_MS / 1000),
       logFn: () => {},
     }),
     secret: process.env.SESSION_SECRET || "dev-secret-change-me",
@@ -45,9 +61,9 @@ app.use(
     rolling: true,
     cookie: {
       httpOnly: true,
-      sameSite: isProd ? "lax" : "lax",
-      secure: isProd,
-      maxAge: 7 * 24 * 60 * 60 * 1000,
+      sameSite: "lax",
+      secure: COOKIE_SECURE,
+      maxAge: SESSION_MAX_AGE_MS,
     },
   })
 );
@@ -57,7 +73,19 @@ app.use("/api/users", userRoutes);
 app.use("/api/lists", listRoutes);
 app.use("/api/tasks", taskRoutes);
 
-app.get("/api/health", (_req, res) => res.json({ ok: true }));
+app.get("/api/health", async (_req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ ok: true, db: "connected" });
+  } catch (err) {
+    console.error("[health/db]", err);
+    res.status(503).json({
+      ok: false,
+      db: "error",
+      hint: "Check DATABASE_URL, MySQL is running, and run prisma migrate + seed on the server.",
+    });
+  }
+});
 
 const clientDist = path.join(__dirname, "../../client/dist");
 if (isProd) {
