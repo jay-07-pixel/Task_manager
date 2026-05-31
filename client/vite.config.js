@@ -10,6 +10,15 @@ export default defineConfig({
       },
     },
   },
+  css: {
+    preprocessorOptions: {
+      scss: {
+        /** Suppress hundreds of Bootstrap 5 @import / color-function deprecations from node_modules */
+        quietDeps: true,
+        silenceDeprecations: ["import", "global-builtin", "color-functions", "if-function"],
+      },
+    },
+  },
   build: {
     outDir: "dist",
     emptyOutDir: true,

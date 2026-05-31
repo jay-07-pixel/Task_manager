@@ -1,7 +1,7 @@
 import {
   cancelBackgroundAlarms,
   requestNotificationPermissionForAlarms,
-  syncBackgroundAlarms,
+  subscribeToPush,
 } from "./sw-register.js";
 
 /** @typedef {{ id: string, title: string, dueAt: string | null, assignees?: { id: string, assigneeDone?: boolean }[] }} ReminderTask */
@@ -296,7 +296,7 @@ function wireAudioUnlockOnce() {
   document.addEventListener("keydown", unlock, { capture: true });
 }
 
-export function startEmployeeReminders(reloadTasks, getTasks, getMyAssignment, showToast, getUserId) {
+export function startEmployeeReminders(reloadTasks, getTasks, getMyAssignment, showToast, getUserId, apiFetch) {
   stopEmployeeReminders();
   wireAudioUnlockOnce();
 
@@ -314,8 +314,8 @@ export function startEmployeeReminders(reloadTasks, getTasks, getMyAssignment, s
       permissionAsked = true;
       await ensureNotificationPermission(showToast);
     }
-    if (userId && Notification.permission === "granted") {
-      await syncBackgroundAlarms(tasks, userId);
+    if (userId && Notification.permission === "granted" && apiFetch) {
+      await subscribeToPush(apiFetch).catch(() => {});
     }
     checkDueReminders(tasks, getMyAssignment, showToast);
   };

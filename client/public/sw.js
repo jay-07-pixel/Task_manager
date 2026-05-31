@@ -1,23 +1,7 @@
-/* Task Manager — background due reminders (service worker) */
-const REMINDER_BEFORE_MS = 10 * 60 * 1000;
-const FOLLOWUP_AFTER_FIRST_MS = 60 * 60 * 1000;
-const TAG_PREFIX = "taskmgr-";
-
-function formatDue(dueAt) {
-  try {
-    return new Date(dueAt).toLocaleString(undefined, {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    });
-  } catch {
-    return "";
-  }
-}
+/* Task Manager — service worker: server push + local notification fallback */
 
 function alarmUrl(data) {
+  if (data?.url) return data.url;
   const p = new URLSearchParams();
   if (data?.taskId) p.set("taskId", data.taskId);
   if (data?.title) p.set("title", data.title);
@@ -43,97 +27,27 @@ async function openAlarmWindow(data) {
   }
 }
 
-async function scheduleOne(reg, task, userId, slot, trigger, title, body) {
-  if (trigger <= Date.now()) return false;
+function showNotificationFromPayload(payload) {
+  const data = payload.payload || payload;
+  return self.registration.showNotification(payload.title || "Task reminder", {
+    body: payload.body || "",
+    tag: payload.tag || "taskmgr-reminder",
+    requireInteraction: true,
+    silent: false,
+    vibrate: [600, 200, 600, 200, 600, 200, 600],
+    data,
+  });
+}
 
-  const tag = `${TAG_PREFIX}${task.id}-${task.dueAt}-${slot}`;
-  const data = { taskId: task.id, title: task.title, dueAt: task.dueAt, slot };
+/** Server Web Push — works when browser tab is closed (Android Chrome, etc.) */
+self.addEventListener("push", (event) => {
+  let payload = { title: "Task reminder", body: "You have a due task." };
   try {
-    await reg.showNotification(title, {
-      body,
-      tag,
-      requireInteraction: true,
-      silent: false,
-      vibrate: [500, 200, 500, 200, 500, 200, 500, 200, 500],
-      data,
-      showTrigger: { timestamp: trigger },
-    });
-    return true;
+    if (event.data) payload = event.data.json();
   } catch {
-    return false;
+    /* use defaults */
   }
-}
-
-async function scheduleReminders(tasks, userId) {
-  const reg = self.registration;
-  const existing = await reg.getNotifications();
-  for (const n of existing) {
-    if (n.tag && n.tag.startsWith(TAG_PREFIX)) {
-      n.close();
-    }
-  }
-
-  let scheduled = 0;
-
-  for (const task of tasks) {
-    if (!task?.dueAt || !task?.id) continue;
-    const me = (task.assignees || []).find((a) => a.id === userId);
-    if (!me || me.assigneeDone) continue;
-
-    const due = new Date(task.dueAt).getTime();
-    if (!Number.isFinite(due)) continue;
-
-    const firstAt = due - REMINDER_BEFORE_MS;
-    const followupAt = firstAt + FOLLOWUP_AFTER_FIRST_MS;
-    const dueLabel = formatDue(task.dueAt);
-
-    if (
-      await scheduleOne(
-        reg,
-        task,
-        userId,
-        "before10",
-        firstAt,
-        `Due in 10 min: ${task.title}`,
-        `Due at ${dueLabel}. Opening full-screen alarm.`
-      )
-    ) {
-      scheduled += 1;
-    }
-
-    if (
-      await scheduleOne(
-        reg,
-        task,
-        userId,
-        "followup1h",
-        followupAt,
-        `Still not submitted: ${task.title}`,
-        `One hour after your first reminder. Due was ${dueLabel}.`
-      )
-    ) {
-      scheduled += 1;
-    }
-  }
-
-  return scheduled;
-}
-
-self.addEventListener("message", (event) => {
-  const msg = event.data;
-  if (!msg || msg.type !== "SCHEDULE_REMINDERS") return;
-  event.waitUntil(
-    scheduleReminders(msg.tasks || [], msg.userId).then((count) => {
-      if (event.ports[0]) {
-        event.ports[0].postMessage({ ok: true, scheduled: count });
-      }
-    })
-  );
-});
-
-self.addEventListener("notification", (event) => {
-  const data = event.notification?.data;
-  event.waitUntil(openAlarmWindow(data));
+  event.waitUntil(showNotificationFromPayload(payload));
 });
 
 self.addEventListener("notificationclick", (event) => {

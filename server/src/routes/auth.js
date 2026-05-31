@@ -6,6 +6,17 @@ import { requireAuth } from "../middleware/auth.js";
 
 const router = Router();
 
+function friendlyAuthError(err) {
+  const msg = err?.message || String(err);
+  if (msg.includes("Can't reach database server") || /ECONNREFUSED|connect ECONNREFUSED/i.test(msg)) {
+    return "Cannot connect to MySQL. Start MySQL, check DATABASE_URL in server/.env, then run npm run db:migrate and npm run db:seed.";
+  }
+  if (process.env.NODE_ENV === "production") {
+    return "Server error";
+  }
+  return msg;
+}
+
 const phoneSchema = z
   .string()
   .trim()
@@ -83,11 +94,7 @@ router.post("/login", async (req, res) => {
     });
   } catch (err) {
     console.error("[auth/login]", err);
-    const detail =
-      process.env.NODE_ENV === "production"
-        ? "Server error"
-        : err?.message || String(err);
-    res.status(500).json({ error: detail });
+    res.status(500).json({ error: friendlyAuthError(err) });
   }
 });
 

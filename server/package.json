@@ -11,7 +11,8 @@
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
     "db:seed": "node prisma/seed.js",
-    "db:clear": "node scripts/clear-tasks-lists.mjs"
+    "db:clear": "node scripts/clear-tasks-lists.mjs",
+    "vapid:generate": "node scripts/generate-vapid.mjs"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
@@ -24,6 +25,7 @@
     "express-session": "^1.18.1",
     "multer": "^2.1.1",
     "session-file-store": "^1.5.0",
+    "web-push": "^3.6.7",
     "zod": "^3.24.1"
   },
   "devDependencies": {

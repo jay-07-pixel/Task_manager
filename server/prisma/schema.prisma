@@ -33,8 +33,9 @@ model User {
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   ownedLists        TaskList[]
-  createdTasks      Task[]         @relation("CreatedBy")
+  createdTasks      Task[]             @relation("CreatedBy")
   taskAssignments   TaskAssignee[]
+  pushSubscriptions PushSubscription[]
 }
 
 model TaskList {
@@ -83,4 +84,29 @@ model Task {
   assignments  TaskAssignee[]
 
   @@index([listId])
+}
+
+model PushSubscription {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  endpoint  String   @unique @db.VarChar(768)
+  p256dh    String   @db.VarChar(255)
+  auth      String   @db.VarChar(255)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_subscription")
+}
+
+model ReminderSent {
+  taskId String   @map("task_id")
+  userId String   @map("user_id")
+  dueAt  DateTime @map("due_at")
+  slot   String   @db.VarChar(16)
+  sentAt DateTime @default(now()) @map("sent_at")
+
+  @@id([taskId, userId, dueAt, slot])
+  @@map("reminder_sent")
 }

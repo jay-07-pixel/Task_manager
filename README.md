@@ -19,7 +19,7 @@ A full-stack task management app for a **list owner** and **assigned employees**
 - Checkbox to complete tasks (optional proof photo upload)
 - List name and deadline on each assignment
 - Mobile-friendly card layout
-- **Due reminders:** ~**10 minutes before** the deadline, then again **1 hour later** if you still have not submitted (full-screen alarm + sound; allow **notifications**). Works in the background on **Chrome/Edge** when the site is closed. **Safari/Firefox** may only alert while the tab is open.
+- **Due reminders:** ~**10 minutes before** the deadline, then again **1 hour later** if you still have not submitted. Allow **notifications** when prompted. The **server sends push alerts** so reminders can appear while you use other apps (best on **Android Chrome**). Tapping the notification opens the full-screen alarm. **iPhone:** requires iOS 16.4+, Safari or installed PWA, and usually **HTTPS**.
 
 ### Auth
 - Email + password sign-in
@@ -130,6 +130,7 @@ Seed also creates a **My Tasks** list with a **daily** sample task assigned to E
 | `npm run db:migrate` | Apply migrations |
 | `npm run db:push` | Push schema to DB |
 | `npm run db:seed` | Seed demo users and sample data |
+| `npm run vapid:generate` | Generate VAPID keys for phone push reminders |
 
 ### Client (`client/`)
 
@@ -190,8 +191,42 @@ All JSON routes are under `/api`. Authenticated routes use the session cookie (`
 | Lists | `GET/POST /api/lists`, `PATCH /api/lists/:id`, reorder |
 | Tasks | `GET /api/tasks/lists/:listId`, `POST /api/tasks/lists/:listId`, `PATCH /api/tasks/:id`, `GET /api/tasks/assigned` (employees) |
 | Users | `GET /api/users/assignees` (owner: employee picker) |
+| Push | `GET /api/push/vapid-public-key`, `POST /api/push/subscribe` (employee phone alerts) |
 
 `GET /api/health` — health check (includes database connectivity).
+
+## Phone push reminders (employees)
+
+Reminders are sent from the **server** (~10 min before due, +1 h follow-up) so alerts can appear while the employee uses other apps.
+
+### Server setup
+
+1. Run the push migration (includes `push_subscription` and `reminder_sent` tables):
+
+   ```bash
+   npm run db:migrate --prefix server
+   ```
+
+2. Generate VAPID keys and add them to `server/.env`:
+
+   ```bash
+   npm run vapid:generate --prefix server
+   ```
+
+3. Restart the API. You should see `[reminder] server push scheduler started` in the logs.
+
+### Employee phone
+
+1. Open the app in **Chrome** (Android) or Safari (iOS 16.4+).
+2. Log in as an employee and **Allow notifications** when prompted.
+3. Optional: **Add to Home screen** (PWA) for more reliable delivery on iPhone.
+
+**Notes**
+
+- **HTTPS** is strongly recommended on real devices (many browsers block push on plain HTTP except localhost).
+- **Android Chrome** has the best support for background push.
+- **iPhone:** push works in Safari / installed PWA on iOS 16.4+; older iOS or in-app browsers may not receive background alerts.
+- If push is not configured (no VAPID keys), in-tab reminders still work while the site is open.
 
 ## Deployed server (VPS) checklist
 
@@ -216,10 +251,17 @@ If login fails on a server like `http://YOUR_IP:3000`:
    DATABASE_URL="mysql://USER:PASS@localhost:3306/taskmanager"
    SESSION_SECRET="long-random-string"
    COOKIE_SECURE=false
+   VAPID_PUBLIC_KEY="..."
+   VAPID_PRIVATE_KEY="..."
+   VAPID_SUBJECT="mailto:admin@yourdomain.com"
    ```
    Use `COOKIE_SECURE=false` when using **HTTP** (not HTTPS). Without this, login succeeds but the session cookie is dropped and you stay on the sign-in screen.
 
+   Generate VAPID keys with `npm run vapid:generate --prefix server`. For **phone push while in other apps**, use **HTTPS** on the VPS when possible—plain HTTP often blocks push on mobile (localhost is the exception).
+
 4. **Demo users** (`owner@local.test` / `password123`) exist only **after** `db:seed` on **that** server’s database—not automatically from your laptop.
+
+5. **Phone reminders:** After deploy, log in as an employee on the phone, allow notifications, and confirm the API log shows `[reminder] server push scheduler started`.
 
 ## Troubleshooting
 

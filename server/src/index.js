@@ -13,7 +13,10 @@ import authRoutes from "./routes/auth.js";
 import listRoutes from "./routes/lists.js";
 import taskRoutes from "./routes/tasks.js";
 import userRoutes from "./routes/users.js";
+import pushRoutes from "./routes/push.js";
 import { prisma } from "./lib/prisma.js";
+import { initPush } from "./lib/push.js";
+import { startReminderScheduler } from "./lib/reminderScheduler.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const sessionsDir = path.join(__dirname, "..", "sessions");
@@ -72,6 +75,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/lists", listRoutes);
 app.use("/api/tasks", taskRoutes);
+app.use("/api/push", pushRoutes);
 
 app.get("/api/health", async (_req, res) => {
   try {
@@ -106,6 +110,8 @@ app.use((err, _req, res, _next) => {
 
 const server = app.listen(PORT, () => {
   console.log(`API listening on http://localhost:${PORT}`);
+  initPush();
+  startReminderScheduler();
 });
 
 /** Avoid dev crash on abrupt client disconnect (browser tab closed mid-request, flaky proxy, etc.). */

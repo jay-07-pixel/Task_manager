@@ -7,6 +7,7 @@ import {
   stopEmployeeReminders,
   stopTaskAlarm,
 } from "./reminders.js";
+import { registerServiceWorker, requestNotificationPermissionForAlarms, subscribeToPush } from "./sw-register.js";
 
 const app = document.getElementById("app");
 const toastHost = document.getElementById("toastHost");
@@ -435,7 +436,8 @@ function startEmployeeReminderPolling() {
     () => state.tasks,
     employeeReminderAssignment,
     showToast,
-    () => state.user?.id
+    () => state.user?.id,
+    (path, options) => api(path, options)
   );
 }
 
@@ -2194,20 +2196,23 @@ async function render() {
     renderEmployeeView();
     startEmployeeReminderPolling();
     if ("serviceWorker" in navigator) {
-      const { registerServiceWorker, requestNotificationPermissionForAlarms } = await import(
-        "./sw-register.js"
-      );
       await registerServiceWorker();
       const perm = await requestNotificationPermissionForAlarms();
+      const push = await subscribeToPush((path, options) => api(path, options));
       if (!sessionStorage.getItem("taskmgr-alarm-hint")) {
         sessionStorage.setItem("taskmgr-alarm-hint", "1");
-        if (perm === "granted") {
+        if (push.ok) {
           showToast(
-            "Background alarms on: full-screen alert ~10 min before each due task (Chrome/Edge recommended).",
+            "Phone reminders on: the server will notify you ~10 min before tasks, even in other apps (Android Chrome).",
             "primary"
           );
+        } else if (perm === "granted") {
+          showToast(
+            "Allow notifications and ensure the server has VAPID keys for background phone alerts.",
+            "warning"
+          );
         } else if (perm !== "denied") {
-          showToast("Allow notifications so alarms work when this site is closed.", "primary");
+          showToast("Allow notifications so reminders work when you are not on this site.", "primary");
         }
       }
     }
