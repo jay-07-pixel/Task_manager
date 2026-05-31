@@ -8,11 +8,15 @@ import {
   stopTaskAlarm,
 } from "./reminders.js";
 import {
+  beginLocalPushSubscribeDuringGesture,
+  finishPushRegistrationAfterAuth,
   getLocalPushSubscription,
+  isPushSupported,
   registerServiceWorker,
   requestNotificationPermissionForAlarms,
-  subscribeToPush,
+  setupEmployeePushRegistration,
   syncPushSubscriptionToServer,
+  warmupPushInfrastructure,
   wirePushSubscribeOnGesture,
 } from "./sw-register.js";
 
@@ -381,28 +385,45 @@ function renderAuthForm() {
       </div>
     </div>`;
 
-  document.getElementById("form-login").addEventListener("submit", async (e) => {
+  document.getElementById("form-login").addEventListener("submit", (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
-    try {
-      await api("/api/auth/login", {
-        method: "POST",
-        body: JSON.stringify({ email: fd.get("email"), password: fd.get("password") }),
-      });
-      await refreshMe();
-      if (state.user?.role === "employee" && "serviceWorker" in navigator) {
-        const perm = await requestNotificationPermissionForAlarms();
-        if (perm === "granted") {
-          const push = await subscribeToPush((path, options) => api(path, options));
-          if (!push.ok && push.reason === "subscribe-failed") {
-            wirePushSubscribeOnGesture((path, options) => api(path, options));
-          }
-        }
+    const apiFetch = (path, options) => api(path, options);
+
+    // Start push subscribe synchronously while Login click still counts as user gesture.
+    warmupPushInfrastructure(apiFetch);
+    let localPushPromise = null;
+    if (isPushSupported()) {
+      if (Notification.permission === "granted") {
+        localPushPromise = beginLocalPushSubscribeDuringGesture(undefined, apiFetch);
+      } else if (Notification.permission === "default") {
+        localPushPromise = Notification.requestPermission().then((perm) => {
+          if (perm !== "granted") return null;
+          return beginLocalPushSubscribeDuringGesture(undefined, apiFetch);
+        });
       }
-      render();
-    } catch (err) {
-      showToast(err.message, "danger");
     }
+
+    void (async () => {
+      try {
+        await api("/api/auth/login", {
+          method: "POST",
+          body: JSON.stringify({ email: fd.get("email"), password: fd.get("password") }),
+        });
+        await refreshMe();
+        if (state.user?.role === "employee" && localPushPromise) {
+          const push = await finishPushRegistrationAfterAuth(apiFetch, localPushPromise);
+          if (!push.ok) {
+            wirePushSubscribeOnGesture(apiFetch);
+          }
+        } else if (state.user?.role === "employee") {
+          await setupEmployeePushRegistration(apiFetch, showToast);
+        }
+        render();
+      } catch (err) {
+        showToast(err.message, "danger");
+      }
+    })();
   });
 
   document.getElementById("form-register").addEventListener("submit", async (e) => {
@@ -428,6 +449,7 @@ function renderAuthForm() {
 
   wireRegisterPhoneDigits();
   wireThemeIconToggles();
+  warmupPushInfrastructure((path, options) => api(path, options));
 }
 
 async function logout() {
@@ -2211,45 +2233,14 @@ async function render() {
     await loadAssigned();
     renderEmployeeView();
     startEmployeeReminderPolling();
-    if ("serviceWorker" in navigator) {
-      await registerServiceWorker();
-      const perm = await requestNotificationPermissionForAlarms();
-      let push = { ok: false, reason: "skipped" };
-      if (perm === "granted") {
-        const localSub = await getLocalPushSubscription();
-        if (localSub) {
-          push = await syncPushSubscriptionToServer((path, options) => api(path, options));
-        } else {
-          push = await subscribeToPush((path, options) => api(path, options));
-          if (!push.ok && push.reason === "subscribe-failed") {
-            wirePushSubscribeOnGesture((path, options) => api(path, options), (result) => {
-              if (result.ok) {
-                showToast(
-                  "Phone reminders on: the server will notify you ~10 min before tasks, even in other apps.",
-                  "primary"
-                );
-              }
-            });
-          }
-        }
-      }
-      if (!sessionStorage.getItem("taskmgr-alarm-hint")) {
-        sessionStorage.setItem("taskmgr-alarm-hint", "1");
-        if (push.ok) {
-          showToast(
-            "Phone reminders on: the server will notify you ~10 min before tasks, even in other apps (Android Chrome).",
-            "primary"
-          );
-        } else if (perm === "granted" && push.reason === "subscribe-failed") {
-          showToast("Tap anywhere on the screen once to enable phone reminders.", "primary");
-        } else if (perm === "granted") {
-          showToast(
-            "Allow notifications and ensure the server has VAPID keys for background phone alerts.",
-            "warning"
-          );
-        } else if (perm !== "denied") {
-          showToast("Allow notifications so reminders work when you are not on this site.", "primary");
-        }
+    const push = await setupEmployeePushRegistration((path, options) => api(path, options), showToast);
+    if (!sessionStorage.getItem("taskmgr-alarm-hint")) {
+      sessionStorage.setItem("taskmgr-alarm-hint", "1");
+      if (push.ok) {
+        showToast(
+          "Phone reminders on: the server will notify you ~10 min before tasks, even in other apps.",
+          "primary"
+        );
       }
     }
     return;
@@ -2262,6 +2253,7 @@ async function render() {
 }
 
 initTheme();
+warmupPushInfrastructure((path, options) => api(path, options));
 render().catch((e) => {
   console.error(e);
   showToast(String(e.message || e), "danger");

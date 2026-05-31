@@ -1,6 +1,8 @@
 /** @typedef {{ id: string, title: string, dueAt: string | null, assignees?: { id: string, assigneeDone?: boolean }[] }} ScheduleTask */
 
 let swRegistration = null;
+let cachedVapidPublicKey = null;
+let warmupPromise = null;
 let gestureWireInstalled = false;
 
 function urlBase64ToUint8Array(base64String) {
@@ -31,6 +33,27 @@ export async function registerServiceWorker() {
     console.warn("[push] service worker registration failed:", err);
     return null;
   }
+}
+
+/**
+ * Register SW + cache VAPID key early so subscribe can run quickly during a user gesture.
+ * @param {(path: string, options?: RequestInit) => Promise<any>} [apiFetch]
+ */
+export function warmupPushInfrastructure(apiFetch) {
+  if (!isPushSupported() || !apiFetch) return Promise.resolve(false);
+  if (warmupPromise) return warmupPromise;
+  warmupPromise = (async () => {
+    await registerServiceWorker();
+    if (cachedVapidPublicKey) return true;
+    try {
+      const keyRes = await apiFetch("/api/push/vapid-public-key");
+      cachedVapidPublicKey = keyRes?.publicKey || null;
+    } catch (err) {
+      console.warn("[push] could not prefetch VAPID key:", err);
+    }
+    return !!cachedVapidPublicKey;
+  })();
+  return warmupPromise;
 }
 
 export async function requestNotificationPermissionForAlarms() {
@@ -71,8 +94,119 @@ async function postSubscriptionToServer(apiFetch, sub) {
 }
 
 /**
- * Register this phone/browser for **server push** so reminders work in other apps.
- * pushManager.subscribe() requires a user gesture — call after login, Allow click, or tap handler.
+ * Start pushManager.subscribe during an active user gesture.
+ * Must be called synchronously from click/submit/pointerdown — do not await before calling.
+ * @param {string | null | undefined} [vapidPublicKey]
+ * @param {(path: string, options?: RequestInit) => Promise<any>} [apiFetch]
+ * @returns {Promise<PushSubscription | null>}
+ */
+export function beginLocalPushSubscribeDuringGesture(vapidPublicKey, apiFetch) {
+  if (!isPushSupported() || Notification.permission !== "granted") {
+    return Promise.resolve(null);
+  }
+
+  const keyPromise =
+    vapidPublicKey || cachedVapidPublicKey
+      ? Promise.resolve(vapidPublicKey || cachedVapidPublicKey)
+      : apiFetch
+        ? warmupPushInfrastructure(apiFetch).then(() => cachedVapidPublicKey)
+        : Promise.resolve(null);
+
+  return keyPromise
+    .then((key) => {
+      if (!key) return null;
+      return navigator.serviceWorker.ready.then((reg) => {
+        if (!reg.pushManager) return null;
+        return reg.pushManager.getSubscription().then((existing) => {
+          if (existing) return existing;
+          return reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(key),
+          });
+        });
+      });
+    })
+    .catch((err) => {
+      console.warn("[push] beginLocalPushSubscribeDuringGesture failed:", err);
+      return null;
+    });
+}
+
+/**
+ * Complete registration: local subscribe (during gesture) + POST after auth.
+ * @param {(path: string, options?: RequestInit) => Promise<any>} apiFetch
+ * @param {Promise<PushSubscription | null>} localSubPromise
+ */
+export async function finishPushRegistrationAfterAuth(apiFetch, localSubPromise) {
+  const sub = await localSubPromise;
+  if (!sub) {
+    return { ok: false, reason: "no-local-subscription" };
+  }
+  try {
+    await postSubscriptionToServer(apiFetch, sub);
+    return { ok: true };
+  } catch (err) {
+    console.warn("[push] POST /api/push/subscribe failed:", err);
+    return {
+      ok: false,
+      reason: "server-failed",
+      message: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+/**
+ * Full push registration during user gesture (local subscribe + server POST).
+ * Uses .then() chains started synchronously — safe inside click/pointer handlers.
+ * @param {(path: string, options?: RequestInit) => Promise<any>} apiFetch
+ * @param {(result: { ok: boolean, reason?: string, message?: string }) => void} [onResult]
+ */
+export function runPushRegistrationDuringGesture(apiFetch, onResult) {
+  if (!isPushSupported()) {
+    onResult?.({ ok: false, reason: "unsupported" });
+    return;
+  }
+  if (Notification.permission !== "granted") {
+    onResult?.({ ok: false, reason: "denied" });
+    return;
+  }
+
+  const start = () => {
+    beginLocalPushSubscribeDuringGesture(undefined, apiFetch)
+      .then((sub) => {
+        if (!sub) throw new Error("Could not create push subscription");
+        return postSubscriptionToServer(apiFetch, sub);
+      })
+      .then(() => {
+        onResult?.({ ok: true });
+        document.dispatchEvent(new CustomEvent("taskmgr-push-subscribed"));
+      })
+      .catch((err) => {
+        console.warn("[push] gesture registration failed:", err);
+        onResult?.({
+          ok: false,
+          reason: "subscribe-failed",
+          message: err instanceof Error ? err.message : String(err),
+        });
+      });
+  };
+
+  if (cachedVapidPublicKey) {
+    start();
+    return;
+  }
+
+  warmupPushInfrastructure(apiFetch).then((ready) => {
+    if (!ready) {
+      onResult?.({ ok: false, reason: "no-vapid" });
+      return;
+    }
+    start();
+  });
+}
+
+/**
+ * Register this phone/browser for server push (async — only works with existing subscription or fresh permission prompt).
  * @param {(path: string, options?: RequestInit) => Promise<any>} apiFetch
  */
 export async function subscribeToPush(apiFetch) {
@@ -85,38 +219,21 @@ export async function subscribeToPush(apiFetch) {
     return { ok: false, reason: "denied" };
   }
 
+  await warmupPushInfrastructure(apiFetch);
   const reg = await registerServiceWorker();
   if (!reg?.pushManager) {
     return { ok: false, reason: "no-push-manager" };
   }
 
-  let keyRes;
-  try {
-    keyRes = await apiFetch("/api/push/vapid-public-key");
-  } catch (err) {
-    console.warn("[push] could not load VAPID public key:", err);
-    return { ok: false, reason: "no-vapid" };
-  }
-
-  const publicKey = keyRes?.publicKey;
-  if (!publicKey) {
+  if (!cachedVapidPublicKey) {
     return { ok: false, reason: "no-vapid" };
   }
 
   let sub = await reg.pushManager.getSubscription();
   if (!sub) {
-    try {
-      sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(publicKey),
-      });
-    } catch (err) {
-      console.warn("[push] pushManager.subscribe failed (needs user tap?):", err);
-      return {
-        ok: false,
-        reason: "subscribe-failed",
-        message: err instanceof Error ? err.message : String(err),
-      };
+    sub = await beginLocalPushSubscribeDuringGesture(undefined, apiFetch);
+    if (!sub) {
+      return { ok: false, reason: "subscribe-failed" };
     }
   }
 
@@ -135,7 +252,7 @@ export async function subscribeToPush(apiFetch) {
 }
 
 /**
- * Sync an existing browser subscription to the server (safe without user gesture).
+ * Sync an existing browser subscription to the server (no user gesture needed).
  * @param {(path: string, options?: RequestInit) => Promise<any>} apiFetch
  */
 export async function syncPushSubscriptionToServer(apiFetch) {
@@ -160,31 +277,71 @@ export async function syncPushSubscriptionToServer(apiFetch) {
 }
 
 /**
- * Chrome requires user activation for pushManager.subscribe().
- * Wire a one-time tap/key handler when permission is already granted but no subscription exists.
+ * Wire tap/key to register push. Handler is synchronous so user activation reaches subscribe().
  * @param {(path: string, options?: RequestInit) => Promise<any>} apiFetch
  * @param {(result: { ok: boolean, reason?: string }) => void} [onResult]
  */
 export function wirePushSubscribeOnGesture(apiFetch, onResult) {
   if (gestureWireInstalled) return;
   gestureWireInstalled = true;
+  warmupPushInfrastructure(apiFetch);
 
-  const handler = async () => {
+  const handler = () => {
     document.removeEventListener("pointerdown", handler, true);
+    document.removeEventListener("click", handler, true);
     document.removeEventListener("keydown", handler, true);
     gestureWireInstalled = false;
-
-    const result = await subscribeToPush(apiFetch);
-    onResult?.(result);
-    if (result.ok) {
-      document.dispatchEvent(new CustomEvent("taskmgr-push-subscribed"));
-    } else if (result.reason === "subscribe-failed" || result.reason === "no-local-subscription") {
-      wirePushSubscribeOnGesture(apiFetch, onResult);
-    }
+    runPushRegistrationDuringGesture(apiFetch, onResult);
   };
 
   document.addEventListener("pointerdown", handler, { capture: true });
+  document.addEventListener("click", handler, { capture: true });
   document.addEventListener("keydown", handler, { capture: true });
+}
+
+/**
+ * Employee push setup after login / page load.
+ * @param {(path: string, options?: RequestInit) => Promise<any>} apiFetch
+ * @param {(title: string, variant?: string) => void} [showToast]
+ */
+export async function setupEmployeePushRegistration(apiFetch, showToast) {
+  if (!apiFetch || !isPushSupported()) return { ok: false, reason: "unsupported" };
+
+  await warmupPushInfrastructure(apiFetch);
+
+  const perm = Notification.permission;
+  if (perm === "granted") {
+    const localSub = await getLocalPushSubscription();
+    if (localSub) {
+      return syncPushSubscriptionToServer(apiFetch);
+    }
+    wirePushSubscribeOnGesture(apiFetch, (result) => {
+      if (result.ok) {
+        showToast?.("Phone reminders enabled — alerts work even in other apps.", "primary");
+      }
+    });
+    if (!sessionStorage.getItem("taskmgr-push-tap-hint")) {
+      sessionStorage.setItem("taskmgr-push-tap-hint", "1");
+      showToast?.("Tap anywhere once to enable phone reminders.", "primary");
+    }
+    return { ok: false, reason: "needs-gesture" };
+  }
+
+  if (perm === "default") {
+    const requested = await requestNotificationPermissionForAlarms();
+    if (requested === "granted") {
+      return new Promise((resolve) => {
+        runPushRegistrationDuringGesture(apiFetch, (result) => {
+          if (result.ok) {
+            showToast?.("Phone reminders enabled — alerts work even in other apps.", "primary");
+          }
+          resolve(result);
+        });
+      });
+    }
+  }
+
+  return { ok: false, reason: perm === "denied" ? "denied" : "skipped" };
 }
 
 /** @deprecated Client-only scheduling; server push is preferred */
