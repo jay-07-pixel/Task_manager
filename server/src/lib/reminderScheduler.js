@@ -119,14 +119,13 @@ export async function runReminderTick() {
 
     const firstAt = due - REMINDER_BEFORE_MS;
     const followupAt = firstAt + FOLLOWUP_AFTER_FIRST_MS;
-    const dueLabel = formatDue(row.task.dueAt);
 
     if (now >= firstAt && now < firstAt + TICK_WINDOW_MS) {
       await sendReminder(
         row,
         "before10",
-        `Due in 10 min: ${row.task.title}`,
-        `Due at ${dueLabel}. Tap to open alarm.`
+        "Task due in 10 minutes",
+        `${row.task.title}\nTap to open the alarm screen.`
       );
     }
 
@@ -134,8 +133,8 @@ export async function runReminderTick() {
       await sendReminder(
         row,
         "followup1h",
-        `Still not submitted: ${row.task.title}`,
-        `Follow-up reminder. Due was ${dueLabel}.`
+        "Task still not submitted",
+        `${row.task.title}\nFollow-up reminder — please submit now.`
       );
     }
   }

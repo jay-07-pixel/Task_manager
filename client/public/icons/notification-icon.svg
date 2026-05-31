@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" role="img" aria-label="Task Manager">
+  <rect width="192" height="192" rx="40" fill="#0d6efd"/>
+  <path fill="#fff" d="M96 36c-24.3 0-44 19.7-44 44v18.5l-8 10.7V116h104v-7.8l-8-10.7V80c0-24.3-19.7-44-44-44zm-8 104h16v12H88v-12z"/>
+  <circle cx="132" cy="52" r="18" fill="#ffc107"/>
+</svg>
