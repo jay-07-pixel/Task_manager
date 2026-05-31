@@ -66,12 +66,24 @@ function loadFiredKeys() {
 }
 
 function saveFiredKeys(set) {
+  firedKeysMemory.clear();
   for (const k of set) firedKeysMemory.add(k);
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify([...set]));
   } catch {
     /* ignore quota */
   }
+}
+
+function markReminderFired(task, slot) {
+  const fired = loadFiredKeys();
+  fired.add(reminderKey(task, slot));
+  saveFiredKeys(fired);
+  activeReminderKey = reminderKey(task, slot);
+}
+
+function isReminderFired(task, slot) {
+  return loadFiredKeys().has(reminderKey(task, slot));
 }
 
 function reminderKey(task, slot) {
@@ -115,11 +127,10 @@ function stopAlarmSound() {
     clearInterval(beepTimer);
     beepTimer = null;
   }
-  if (audioCtx) {
-    audioCtx.close().catch(() => {});
-    audioCtx = null;
-  }
   stopHtmlAlarmAudio();
+  if (audioCtx && audioCtx.state === "running") {
+    void audioCtx.suspend();
+  }
 }
 
 export function stopTaskAlarm() {
@@ -138,21 +149,35 @@ async function ensureAudio() {
 
 /** Alternating square-wave beeps (alarm-clock style). */
 export async function playTaskAlarm() {
-  stopAlarmSound();
+  if (beepTimer) {
+    clearInterval(beepTimer);
+    beepTimer = null;
+  }
+  stopHtmlAlarmAudio();
 
-  const htmlAudio = getAlarmHtmlAudio();
-  htmlAudio.volume = 1;
-  try {
+  const tryHtml = async () => {
+    const htmlAudio = getAlarmHtmlAudio();
+    htmlAudio.volume = 1;
     await htmlAudio.play();
     return true;
+  };
+
+  try {
+    await tryHtml();
+    return true;
   } catch {
-    /* fall through to Web Audio */
+    alarmHtmlAudio = null;
+    try {
+      await tryHtml();
+      return true;
+    } catch {
+      /* fall through to Web Audio */
+    }
   }
 
   const ctx = await ensureAudio();
   if (!ctx) return false;
 
-  audioCtx = ctx;
   let highTone = true;
   const master = ctx.createGain();
   master.gain.value = 0.5;
@@ -182,7 +207,6 @@ export async function playTaskAlarm() {
 function showReminderBanner(task, eyebrowText, showToast) {
   document.getElementById("task-reminder-banner")?.remove();
   stopAlarmSound();
-  activeReminderKey = null;
 
   const banner = document.createElement("div");
   banner.id = "task-reminder-banner";
@@ -323,12 +347,12 @@ function fireDueReminder(task, plan, fired, showToast) {
   const key = reminderKey(task, plan.slot);
   if (fired.has(key)) return false;
 
-  fired.add(key);
-  saveFiredKeys(fired);
-  activeReminderKey = key;
+  markReminderFired(task, plan.slot);
 
-  tryBrowserNotification(task, plan.slot, plan.notify);
-  openFullscreenAlarmPage(task, plan.slot);
+  if (!serverPushActive) {
+    tryBrowserNotification(task, plan.slot, plan.notify);
+    openFullscreenAlarmPage(task, plan.slot);
+  }
   showToast(plan.toast, "warning");
   showReminderBanner(task, plan.eyebrow, showToast);
   return true;
@@ -342,16 +366,19 @@ export function handlePushReminderMessage(payload, showToast) {
     title: payload.title || "Your task",
     dueAt: payload.dueAt || null,
   };
+  const slot = payload.slot === "followup1h" ? SLOT_FOLLOWUP : SLOT_BEFORE;
+  if (isReminderFired(task, slot)) return;
+
+  markReminderFired(task, slot);
+
   const eyebrow =
-    payload.slot === "followup1h" ? "Still not submitted — follow-up reminder" : "Task due soon";
-  openFullscreenAlarmPage(task, payload.slot);
+    slot === SLOT_FOLLOWUP ? "Still not submitted — follow-up reminder" : "Task due soon";
+  openFullscreenAlarmPage(task, slot);
   showReminderBanner(task, eyebrow, showToast);
   if (navigator.vibrate) navigator.vibrate([500, 150, 500, 150, 500]);
 }
 
 export function checkDueReminders(tasks, getMyAssignment, showToast) {
-  if (serverPushActive) return;
-
   const now = Date.now();
   const fired = loadFiredKeys();
 
