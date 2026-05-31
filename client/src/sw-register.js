@@ -4,6 +4,7 @@ let swRegistration = null;
 let cachedVapidPublicKey = null;
 let warmupPromise = null;
 let gestureWireInstalled = false;
+const VAPID_STORAGE_KEY = "taskmgr-vapid-public-key";
 
 function urlBase64ToUint8Array(base64String) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -79,6 +80,42 @@ export async function getLocalPushSubscription() {
 }
 
 /**
+ * Browser binds push subscriptions to the VAPID key used at subscribe() time.
+ * If server keys rotate, old subscriptions return 401/403 until re-subscribed.
+ * @param {ServiceWorkerRegistration} reg
+ * @param {string} publicKey
+ */
+async function subscribePushManager(reg, publicKey) {
+  const existing = await reg.pushManager.getSubscription();
+  const storedKey = localStorage.getItem(VAPID_STORAGE_KEY);
+
+  if (existing && storedKey && storedKey !== publicKey) {
+    console.warn("[push] VAPID key changed — re-subscribing push endpoint");
+    try {
+      await existing.unsubscribe();
+    } catch {
+      /* ignore */
+    }
+  } else if (existing && storedKey === publicKey) {
+    return existing;
+  } else if (existing && !storedKey) {
+    /** Unknown binding — refresh subscription so it matches current server key */
+    try {
+      await existing.unsubscribe();
+    } catch {
+      /* ignore */
+    }
+  }
+
+  const sub = await reg.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: urlBase64ToUint8Array(publicKey),
+  });
+  localStorage.setItem(VAPID_STORAGE_KEY, publicKey);
+  return sub;
+}
+
+/**
  * @param {(path: string, options?: RequestInit) => Promise<any>} apiFetch
  * @param {PushSubscription} sub
  */
@@ -117,13 +154,7 @@ export function beginLocalPushSubscribeDuringGesture(vapidPublicKey, apiFetch) {
       if (!key) return null;
       return navigator.serviceWorker.ready.then((reg) => {
         if (!reg.pushManager) return null;
-        return reg.pushManager.getSubscription().then((existing) => {
-          if (existing) return existing;
-          return reg.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: urlBase64ToUint8Array(key),
-          });
-        });
+        return subscribePushManager(reg, key);
       });
     })
     .catch((err) => {
@@ -230,8 +261,12 @@ export async function subscribeToPush(apiFetch) {
   }
 
   let sub = await reg.pushManager.getSubscription();
-  if (!sub) {
-    sub = await beginLocalPushSubscribeDuringGesture(undefined, apiFetch);
+  const storedKey = localStorage.getItem(VAPID_STORAGE_KEY);
+  if (!sub || storedKey !== cachedVapidPublicKey) {
+    sub = await subscribePushManager(reg, cachedVapidPublicKey);
+    if (!sub) {
+      sub = await beginLocalPushSubscribeDuringGesture(cachedVapidPublicKey, apiFetch);
+    }
     if (!sub) {
       return { ok: false, reason: "subscribe-failed" };
     }
@@ -259,9 +294,18 @@ export async function syncPushSubscriptionToServer(apiFetch) {
   if (Notification.permission !== "granted") {
     return { ok: false, reason: "denied" };
   }
-  const sub = await getLocalPushSubscription();
-  if (!sub) {
-    return { ok: false, reason: "no-local-subscription" };
+  await warmupPushInfrastructure(apiFetch);
+  if (!cachedVapidPublicKey) {
+    return { ok: false, reason: "no-vapid" };
+  }
+  const reg = await navigator.serviceWorker.ready;
+  if (!reg?.pushManager) {
+    return { ok: false, reason: "no-push-manager" };
+  }
+  let sub = await reg.pushManager.getSubscription();
+  const storedKey = localStorage.getItem(VAPID_STORAGE_KEY);
+  if (!sub || storedKey !== cachedVapidPublicKey) {
+    return { ok: false, reason: "needs-gesture-resubscribe" };
   }
   try {
     await postSubscriptionToServer(apiFetch, sub);

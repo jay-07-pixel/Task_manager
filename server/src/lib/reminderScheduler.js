@@ -93,17 +93,26 @@ async function sendReminder(row, slot, title, body) {
   let anyOk = false;
   for (const sub of subs) {
     const result = await sendPushToSubscription(sub, payload);
-    dbg("sendPushToSubscription", { subId: sub.id, ok: result.ok, statusCode: result.statusCode });
+    dbg("sendPushToSubscription", {
+      subId: sub.id,
+      ok: result.ok,
+      statusCode: result.statusCode,
+      message: result.message,
+      hint: result.hint,
+      endpointHost: result.endpointHost,
+    });
     if (result.ok) {
       anyOk = true;
     } else if (result.gone) {
+      console.warn(`[reminder] removing invalid push_subscription ${sub.id} (${result.message})`);
       await prisma.pushSubscription.delete({ where: { id: sub.id } }).catch(() => {});
     }
   }
 
   if (!anyOk) {
     console.warn(
-      `[reminder] push failed for all subscriptions (task ${row.taskId}, user ${row.userId}, slot ${slot})`
+      `[reminder] push failed for all subscriptions (task ${row.taskId}, user ${row.userId}, slot ${slot}). ` +
+        "Check [push] sendNotification failed logs above — usually VAPID mismatch (403) after key rotation."
     );
     return;
   }
