@@ -1,7 +1,6 @@
-/* Task Manager — service worker: push notifications with branded UI */
+/* Task Manager — service worker: push notifications (Android-safe) */
 
-const NOTIFICATION_ICON = "/icons/notification-icon.svg";
-const NOTIFICATION_BADGE = "/icons/notification-badge.svg";
+const NOTIFICATION_ICON = "/icons/notification-icon.png";
 
 function alarmUrl(data) {
   if (data?.url) return data.url;
@@ -58,56 +57,54 @@ function formatNotificationCopy(payload) {
   }
 
   if (!body) {
-    if (slot === "followup1h") {
-      body = `${taskTitle} — please submit your task.`;
-    } else {
-      body = `${taskTitle} — due in about 10 minutes.`;
-    }
-  }
-
-  if (dueAt && !body.includes("Due")) {
-    try {
-      const dueLabel = new Date(dueAt).toLocaleString(undefined, {
-        weekday: "short",
-        month: "short",
-        day: "numeric",
-        hour: "numeric",
-        minute: "2-digit",
-      });
-      body = `${body}\nDue: ${dueLabel}`;
-    } catch {
-      /* ignore */
-    }
+    body =
+      slot === "followup1h"
+        ? `${taskTitle} — please submit your task.`
+        : `${taskTitle} — due in about 10 minutes.`;
   }
 
   return { title, body, data: data || {} };
 }
 
-function showNotificationFromPayload(payload) {
+/** Android Chrome rejects SVG icons — always fall back to minimal options if rich notify fails. */
+async function showNotificationFromPayload(payload) {
   const { title, body, data } = formatNotificationCopy(payload);
   const tag = payload.tag || `taskmgr-${data.taskId || "reminder"}`;
 
-  /** @type {NotificationOptions} */
-  const options = {
+  const base = {
     body,
     tag,
-    icon: NOTIFICATION_ICON,
-    badge: NOTIFICATION_BADGE,
     requireInteraction: true,
     silent: false,
     vibrate: [600, 200, 600, 200, 600],
-    timestamp: Date.now(),
     data,
-    actions: [
-      { action: "open-alarm", title: "Open alarm" },
-      { action: "open-app", title: "Open app" },
-    ],
   };
 
-  return self.registration.showNotification(title, options);
+  try {
+    await self.registration.showNotification(title, {
+      ...base,
+      icon: NOTIFICATION_ICON,
+    });
+    return;
+  } catch (err) {
+    console.warn("[sw] notification with icon failed:", err);
+  }
+
+  await self.registration.showNotification(title, base);
 }
 
-/** Server Web Push — works when browser tab is closed (Android Chrome, etc.) */
+async function notifyOpenClients(data) {
+  try {
+    const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    for (const client of clients) {
+      client.postMessage({ type: "taskmgr-push-reminder", payload: data });
+    }
+  } catch (err) {
+    console.warn("[sw] postMessage to clients failed:", err);
+  }
+}
+
+/** Server Web Push — must show notification even when phone is on home screen / Chrome closed. */
 self.addEventListener("push", (event) => {
   let payload = { title: "Task reminder", body: "You have a due task." };
   try {
@@ -116,27 +113,18 @@ self.addEventListener("push", (event) => {
     /* use defaults */
   }
   const data = payload.payload || payload;
+
   event.waitUntil(
     (async () => {
       await showNotificationFromPayload(payload);
-      const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-      for (const client of clients) {
-        client.postMessage({ type: "taskmgr-push-reminder", payload: data });
-      }
+      await notifyOpenClients(data);
     })()
   );
 });
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const action = event.action;
   const data = event.notification.data;
-
-  if (action === "open-app") {
-    event.waitUntil(openAppHome());
-    return;
-  }
-
   event.waitUntil(openAlarmWindow(data));
 });
 

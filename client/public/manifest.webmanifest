@@ -9,9 +9,9 @@
   "scope": "/",
   "icons": [
     {
-      "src": "/icons/notification-icon.svg",
-      "sizes": "192x192",
-      "type": "image/svg+xml",
+      "src": "/icons/notification-icon.png",
+      "sizes": "96x96",
+      "type": "image/png",
       "purpose": "any"
     }
   ]
