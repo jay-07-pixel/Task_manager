@@ -3,6 +3,7 @@ import * as bootstrap from "bootstrap";
 import Sortable from "sortablejs";
 import {
   clearReminderForTask,
+  setServerPushRemindersActive,
   startEmployeeReminders,
   stopEmployeeReminders,
   stopTaskAlarm,
@@ -413,11 +414,14 @@ function renderAuthForm() {
         await refreshMe();
         if (state.user?.role === "employee" && localPushPromise) {
           const push = await finishPushRegistrationAfterAuth(apiFetch, localPushPromise);
-          if (!push.ok) {
+          if (push.ok) {
+            setServerPushRemindersActive(true);
+          } else if (!push.ok) {
             wirePushSubscribeOnGesture(apiFetch);
           }
         } else if (state.user?.role === "employee") {
-          await setupEmployeePushRegistration(apiFetch, showToast);
+          const setup = await setupEmployeePushRegistration(apiFetch, showToast);
+          if (setup.ok) setServerPushRemindersActive(true);
         }
         render();
       } catch (err) {
@@ -2234,6 +2238,7 @@ async function render() {
     renderEmployeeView();
     startEmployeeReminderPolling();
     const push = await setupEmployeePushRegistration((path, options) => api(path, options), showToast);
+    if (push.ok) setServerPushRemindersActive(true);
     if (!sessionStorage.getItem("taskmgr-alarm-hint")) {
       sessionStorage.setItem("taskmgr-alarm-hint", "1");
       if (push.ok) {

@@ -44,6 +44,20 @@ async function sendReminder(row, slot, title, body) {
   const subs = await prisma.pushSubscription.findMany({ where: { userId: row.userId } });
   if (!subs.length) return;
 
+  try {
+    await prisma.reminderSent.create({
+      data: {
+        taskId: row.taskId,
+        userId: row.userId,
+        dueAt,
+        slot,
+      },
+    });
+  } catch (err) {
+    if (err?.code === "P2002") return;
+    throw err;
+  }
+
   const payload = {
     title,
     body,
@@ -68,15 +82,20 @@ async function sendReminder(row, slot, title, body) {
   }
 
   if (anyOk) {
-    await prisma.reminderSent.create({
-      data: {
-        taskId: row.taskId,
-        userId: row.userId,
-        dueAt,
-        slot,
-      },
-    });
     console.log(`[reminder] sent ${slot} for task ${row.taskId} → user ${row.userId}`);
+  } else {
+    await prisma.reminderSent
+      .delete({
+        where: {
+          taskId_userId_dueAt_slot: {
+            taskId: row.taskId,
+            userId: row.userId,
+            dueAt,
+            slot,
+          },
+        },
+      })
+      .catch(() => {});
   }
 }
 

@@ -14,10 +14,32 @@ const REMINDER_BEFORE_MS = 10 * 60 * 1000;
 /** Second reminder if still not submitted — 1 hour after the first (10 min before due). */
 const FOLLOWUP_AFTER_FIRST_MS = 60 * 60 * 1000;
 const CHECK_INTERVAL_MS = 15 * 1000;
+/** When server push is active, poll tasks less often (reminders come from server). */
+const CHECK_INTERVAL_PUSH_MS = 60 * 1000;
 const SLOT_BEFORE = "before10";
 const SLOT_FOLLOWUP = "followup1h";
 const STORAGE_KEY = "taskmgr-reminders-fired";
 const AUTO_STOP_MS = 45 * 1000;
+
+/** Server push handles reminders — skip duplicate in-tab alarms. */
+let serverPushActive = false;
+/** In-memory dedup so repeats cannot happen even if storage fails. */
+const firedKeysMemory = new Set();
+let pushSyncedToServer = false;
+/** @type {(() => Promise<void>) | null} */
+let pollTickFn = null;
+
+export function setServerPushRemindersActive(active = true) {
+  serverPushActive = !!active;
+  if (serverPushActive && pollTimer && pollTickFn) {
+    clearInterval(pollTimer);
+    pollTimer = setInterval(() => void pollTickFn(), CHECK_INTERVAL_PUSH_MS);
+  }
+}
+
+if (typeof document !== "undefined") {
+  document.addEventListener("taskmgr-push-subscribed", () => setServerPushRemindersActive(true));
+}
 
 /** @type {ReturnType<typeof setInterval> | null} */
 let pollTimer = null;
@@ -29,26 +51,33 @@ let audioCtx = null;
 let activeReminderKey = null;
 
 function loadFiredKeys() {
+  const merged = new Set(firedKeysMemory);
   try {
-    const raw = sessionStorage.getItem(STORAGE_KEY);
-    if (!raw) return new Set();
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return merged;
     const arr = JSON.parse(raw);
-    return new Set(Array.isArray(arr) ? arr : []);
+    if (Array.isArray(arr)) {
+      for (const k of arr) merged.add(k);
+    }
   } catch {
-    return new Set();
+    /* ignore */
   }
+  return merged;
 }
 
 function saveFiredKeys(set) {
+  for (const k of set) firedKeysMemory.add(k);
   try {
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify([...set]));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify([...set]));
   } catch {
     /* ignore quota */
   }
 }
 
 function reminderKey(task, slot) {
-  return `${task.id}:${task.dueAt}:${slot}`;
+  const dueMs = new Date(task.dueAt).getTime();
+  const duePart = Number.isFinite(dueMs) ? String(dueMs) : String(task.dueAt);
+  return `${task.id}:${duePart}:${slot}`;
 }
 
 function formatDueTime(dueAt) {
@@ -218,7 +247,7 @@ async function ensureNotificationPermission(showToast) {
  * @param {number} now
  * @returns {{ slot: string, eyebrow: string, toast: string, notify: string } | null}
  */
-function dueReminderToFire(task, now) {
+function dueReminderToFire(task, now, fired) {
   const due = new Date(task.dueAt).getTime();
   if (!Number.isFinite(due)) return null;
 
@@ -227,6 +256,7 @@ function dueReminderToFire(task, now) {
   const msUntil = due - now;
 
   if (now >= firstAt && msUntil > 0 && msUntil <= REMINDER_BEFORE_MS) {
+    if (fired.has(reminderKey(task, SLOT_BEFORE))) return null;
     const minutesLeft = Math.max(1, Math.ceil(msUntil / 60_000));
     return {
       slot: SLOT_BEFORE,
@@ -237,6 +267,7 @@ function dueReminderToFire(task, now) {
   }
 
   if (now >= followupAt) {
+    if (fired.has(reminderKey(task, SLOT_FOLLOWUP))) return null;
     const overdueMin = Math.max(1, Math.ceil((now - due) / 60_000));
     const overdueLine =
       now > due ? `overdue by about ${overdueMin} min` : "deadline passed — please submit";
@@ -267,6 +298,8 @@ function fireDueReminder(task, plan, fired, showToast) {
 }
 
 export function checkDueReminders(tasks, getMyAssignment, showToast) {
+  if (serverPushActive) return;
+
   const now = Date.now();
   const fired = loadFiredKeys();
 
@@ -275,7 +308,7 @@ export function checkDueReminders(tasks, getMyAssignment, showToast) {
     const me = getMyAssignment(task);
     if (!me || me.assigneeDone) continue;
 
-    const plan = dueReminderToFire(task, now);
+    const plan = dueReminderToFire(task, now, fired);
     if (!plan) continue;
 
     if (fireDueReminder(task, plan, fired, showToast)) return;
@@ -332,17 +365,25 @@ export function startEmployeeReminders(reloadTasks, getTasks, getMyAssignment, s
       if (granted && userId && apiFetch) {
         await setupEmployeePushRegistration(apiFetch, showToast);
       }
-    } else if (userId && Notification.permission === "granted" && apiFetch) {
+    } else if (userId && Notification.permission === "granted" && apiFetch && !pushSyncedToServer) {
       const localSub = await getLocalPushSubscription();
       if (localSub) {
-        await syncPushSubscriptionToServer(apiFetch);
+        const sync = await syncPushSubscriptionToServer(apiFetch);
+        if (sync.ok) {
+          pushSyncedToServer = true;
+          setServerPushRemindersActive(true);
+        }
       }
     }
     checkDueReminders(tasks, getMyAssignment, showToast);
   };
 
+  pollTickFn = tick;
   void tick();
-  pollTimer = setInterval(() => void tick(), CHECK_INTERVAL_MS);
+  pollTimer = setInterval(
+    () => void tick(),
+    serverPushActive ? CHECK_INTERVAL_PUSH_MS : CHECK_INTERVAL_MS
+  );
 
   document.addEventListener("visibilitychange", onVisibility);
   function onVisibility() {
@@ -357,6 +398,8 @@ export function stopEmployeeReminders() {
     clearInterval(pollTimer);
     pollTimer = null;
   }
+  pollTickFn = null;
+  pushSyncedToServer = false;
   const fn = startEmployeeReminders._onVisibility;
   if (fn) document.removeEventListener("visibilitychange", fn);
   stopTaskAlarm();
@@ -366,7 +409,9 @@ export function stopEmployeeReminders() {
 /** Call when a task is marked complete so a new due date can alert again. */
 export function clearReminderForTask(taskId, dueAt) {
   if (!dueAt) return;
-  const prefix = `${taskId}:${dueAt}`;
+  const dueMs = new Date(dueAt).getTime();
+  const duePart = Number.isFinite(dueMs) ? String(dueMs) : String(dueAt);
+  const prefix = `${taskId}:${duePart}`;
   const fired = loadFiredKeys();
   let changed = false;
   for (const k of [...fired]) {
