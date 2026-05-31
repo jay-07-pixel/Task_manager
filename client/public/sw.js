@@ -10,6 +10,7 @@ function alarmUrl(data) {
   if (data?.title) p.set("title", data.title);
   if (data?.dueAt) p.set("dueAt", data.dueAt);
   if (data?.slot) p.set("slot", data.slot);
+  p.set("from", "notify");
   return `/alarm.html?${p.toString()}`;
 }
 
@@ -114,7 +115,16 @@ self.addEventListener("push", (event) => {
   } catch {
     /* use defaults */
   }
-  event.waitUntil(showNotificationFromPayload(payload));
+  const data = payload.payload || payload;
+  event.waitUntil(
+    (async () => {
+      await showNotificationFromPayload(payload);
+      const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      for (const client of clients) {
+        client.postMessage({ type: "taskmgr-push-reminder", payload: data });
+      }
+    })()
+  );
 });
 
 self.addEventListener("notificationclick", (event) => {

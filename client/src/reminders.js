@@ -92,6 +92,24 @@ function formatDueTime(dueAt) {
   });
 }
 
+/** @type {HTMLAudioElement | null} */
+let alarmHtmlAudio = null;
+
+function getAlarmHtmlAudio() {
+  if (!alarmHtmlAudio) {
+    alarmHtmlAudio = new Audio("/sounds/alarm-beep.wav");
+    alarmHtmlAudio.loop = true;
+    alarmHtmlAudio.preload = "auto";
+  }
+  return alarmHtmlAudio;
+}
+
+function stopHtmlAlarmAudio() {
+  if (!alarmHtmlAudio) return;
+  alarmHtmlAudio.pause();
+  alarmHtmlAudio.currentTime = 0;
+}
+
 function stopAlarmSound() {
   if (beepTimer) {
     clearInterval(beepTimer);
@@ -101,6 +119,7 @@ function stopAlarmSound() {
     audioCtx.close().catch(() => {});
     audioCtx = null;
   }
+  stopHtmlAlarmAudio();
 }
 
 export function stopTaskAlarm() {
@@ -119,15 +138,24 @@ async function ensureAudio() {
 
 /** Alternating square-wave beeps (alarm-clock style). */
 export async function playTaskAlarm() {
-  const ctx = await ensureAudio();
-  if (!ctx) return;
-
   stopAlarmSound();
-  audioCtx = ctx;
 
+  const htmlAudio = getAlarmHtmlAudio();
+  htmlAudio.volume = 1;
+  try {
+    await htmlAudio.play();
+    return true;
+  } catch {
+    /* fall through to Web Audio */
+  }
+
+  const ctx = await ensureAudio();
+  if (!ctx) return false;
+
+  audioCtx = ctx;
   let highTone = true;
   const master = ctx.createGain();
-  master.gain.value = 0.4;
+  master.gain.value = 0.5;
   master.connect(ctx.destination);
 
   const playBeep = () => {
@@ -138,7 +166,7 @@ export async function playTaskAlarm() {
     highTone = !highTone;
     const t = ctx.currentTime;
     g.gain.setValueAtTime(0.001, t);
-    g.gain.exponentialRampToValueAtTime(0.55, t + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.65, t + 0.03);
     g.gain.exponentialRampToValueAtTime(0.001, t + 0.38);
     osc.connect(g);
     g.connect(master);
@@ -148,12 +176,10 @@ export async function playTaskAlarm() {
 
   playBeep();
   beepTimer = setInterval(playBeep, 480);
-  setTimeout(() => {
-    if (beepTimer) stopAlarmSound();
-  }, AUTO_STOP_MS);
+  return true;
 }
 
-function showReminderBanner(task, eyebrowText) {
+function showReminderBanner(task, eyebrowText, showToast) {
   document.getElementById("task-reminder-banner")?.remove();
   stopAlarmSound();
   activeReminderKey = null;
@@ -173,14 +199,25 @@ function showReminderBanner(task, eyebrowText) {
         <p class="task-reminder-banner__meta mb-0 small">${escapeHtml(formatDueTime(task.dueAt))}</p>
       </div>
       <div class="task-reminder-banner__actions">
+        <button type="button" class="btn btn-warning btn-sm fw-semibold me-2" id="task-reminder-sound">Tap for alarm sound</button>
         <button type="button" class="btn btn-light btn-sm fw-semibold" id="task-reminder-stop">Stop alarm and dismiss</button>
       </div>
     </div>`;
 
   document.body.appendChild(banner);
   banner.querySelector("#task-reminder-stop")?.addEventListener("click", () => stopTaskAlarm());
+  banner.querySelector("#task-reminder-sound")?.addEventListener("click", () => {
+    void playTaskAlarm();
+  });
+  banner.querySelector(".task-reminder-banner__inner")?.addEventListener("pointerdown", () => {
+    void playTaskAlarm();
+  });
 
-  void playTaskAlarm();
+  void playTaskAlarm().then((ok) => {
+    if (!ok) {
+      showToast?.("Tap the banner or “Tap for alarm sound” if you hear no beeping.", "warning");
+    }
+  });
 }
 
 function escapeHtml(s) {
@@ -293,8 +330,23 @@ function fireDueReminder(task, plan, fired, showToast) {
   tryBrowserNotification(task, plan.slot, plan.notify);
   openFullscreenAlarmPage(task, plan.slot);
   showToast(plan.toast, "warning");
-  showReminderBanner(task, plan.eyebrow);
+  showReminderBanner(task, plan.eyebrow, showToast);
   return true;
+}
+
+/** Play alarm in open tab when a server push arrives (site may be in background). */
+export function handlePushReminderMessage(payload, showToast) {
+  if (!payload) return;
+  const task = {
+    id: payload.taskId || "",
+    title: payload.title || "Your task",
+    dueAt: payload.dueAt || null,
+  };
+  const eyebrow =
+    payload.slot === "followup1h" ? "Still not submitted — follow-up reminder" : "Task due soon";
+  openFullscreenAlarmPage(task, payload.slot);
+  showReminderBanner(task, eyebrow, showToast);
+  if (navigator.vibrate) navigator.vibrate([500, 150, 500, 150, 500]);
 }
 
 export function checkDueReminders(tasks, getMyAssignment, showToast) {
@@ -349,6 +401,16 @@ export function startEmployeeReminders(reloadTasks, getTasks, getMyAssignment, s
   stopEmployeeReminders();
   wireEmployeeInteractionOnce(apiFetch, showToast);
 
+  if (!startEmployeeReminders._swMessage && "serviceWorker" in navigator) {
+    const onSwMessage = (event) => {
+      if (event.data?.type === "taskmgr-push-reminder") {
+        handlePushReminderMessage(event.data.payload, showToast);
+      }
+    };
+    navigator.serviceWorker.addEventListener("message", onSwMessage);
+    startEmployeeReminders._swMessage = onSwMessage;
+  }
+
   let permissionAsked = false;
 
   const tick = async () => {
@@ -402,6 +464,11 @@ export function stopEmployeeReminders() {
   pushSyncedToServer = false;
   const fn = startEmployeeReminders._onVisibility;
   if (fn) document.removeEventListener("visibilitychange", fn);
+  const swFn = startEmployeeReminders._swMessage;
+  if (swFn && "serviceWorker" in navigator) {
+    navigator.serviceWorker.removeEventListener("message", swFn);
+    startEmployeeReminders._swMessage = null;
+  }
   stopTaskAlarm();
   void cancelBackgroundAlarms();
 }
