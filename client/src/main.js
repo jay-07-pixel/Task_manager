@@ -7,7 +7,14 @@ import {
   stopEmployeeReminders,
   stopTaskAlarm,
 } from "./reminders.js";
-import { registerServiceWorker, requestNotificationPermissionForAlarms, subscribeToPush } from "./sw-register.js";
+import {
+  getLocalPushSubscription,
+  registerServiceWorker,
+  requestNotificationPermissionForAlarms,
+  subscribeToPush,
+  syncPushSubscriptionToServer,
+  wirePushSubscribeOnGesture,
+} from "./sw-register.js";
 
 const app = document.getElementById("app");
 const toastHost = document.getElementById("toastHost");
@@ -383,6 +390,15 @@ function renderAuthForm() {
         body: JSON.stringify({ email: fd.get("email"), password: fd.get("password") }),
       });
       await refreshMe();
+      if (state.user?.role === "employee" && "serviceWorker" in navigator) {
+        const perm = await requestNotificationPermissionForAlarms();
+        if (perm === "granted") {
+          const push = await subscribeToPush((path, options) => api(path, options));
+          if (!push.ok && push.reason === "subscribe-failed") {
+            wirePushSubscribeOnGesture((path, options) => api(path, options));
+          }
+        }
+      }
       render();
     } catch (err) {
       showToast(err.message, "danger");
@@ -2198,7 +2214,25 @@ async function render() {
     if ("serviceWorker" in navigator) {
       await registerServiceWorker();
       const perm = await requestNotificationPermissionForAlarms();
-      const push = await subscribeToPush((path, options) => api(path, options));
+      let push = { ok: false, reason: "skipped" };
+      if (perm === "granted") {
+        const localSub = await getLocalPushSubscription();
+        if (localSub) {
+          push = await syncPushSubscriptionToServer((path, options) => api(path, options));
+        } else {
+          push = await subscribeToPush((path, options) => api(path, options));
+          if (!push.ok && push.reason === "subscribe-failed") {
+            wirePushSubscribeOnGesture((path, options) => api(path, options), (result) => {
+              if (result.ok) {
+                showToast(
+                  "Phone reminders on: the server will notify you ~10 min before tasks, even in other apps.",
+                  "primary"
+                );
+              }
+            });
+          }
+        }
+      }
       if (!sessionStorage.getItem("taskmgr-alarm-hint")) {
         sessionStorage.setItem("taskmgr-alarm-hint", "1");
         if (push.ok) {
@@ -2206,6 +2240,8 @@ async function render() {
             "Phone reminders on: the server will notify you ~10 min before tasks, even in other apps (Android Chrome).",
             "primary"
           );
+        } else if (perm === "granted" && push.reason === "subscribe-failed") {
+          showToast("Tap anywhere on the screen once to enable phone reminders.", "primary");
         } else if (perm === "granted") {
           showToast(
             "Allow notifications and ensure the server has VAPID keys for background phone alerts.",

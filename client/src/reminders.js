@@ -1,7 +1,10 @@
 import {
   cancelBackgroundAlarms,
+  getLocalPushSubscription,
   requestNotificationPermissionForAlarms,
   subscribeToPush,
+  syncPushSubscriptionToServer,
+  wirePushSubscribeOnGesture,
 } from "./sw-register.js";
 
 /** @typedef {{ id: string, title: string, dueAt: string | null, assignees?: { id: string, assigneeDone?: boolean }[] }} ReminderTask */
@@ -296,11 +299,37 @@ function wireAudioUnlockOnce() {
   document.addEventListener("keydown", unlock, { capture: true });
 }
 
+async function ensureEmployeePushRegistration(apiFetch, showToast) {
+  if (!apiFetch || Notification.permission !== "granted") return;
+
+  const localSub = await getLocalPushSubscription();
+  if (localSub) {
+    await syncPushSubscriptionToServer(apiFetch);
+    return;
+  }
+
+  const push = await subscribeToPush(apiFetch);
+  if (push.ok) return;
+
+  if (push.reason === "subscribe-failed" || push.reason === "no-local-subscription") {
+    wirePushSubscribeOnGesture(apiFetch, (result) => {
+      if (result.ok) {
+        showToast("Phone reminders enabled — you will get alerts even in other apps.", "primary");
+      }
+    });
+    if (!sessionStorage.getItem("taskmgr-push-tap-hint")) {
+      sessionStorage.setItem("taskmgr-push-tap-hint", "1");
+      showToast("Tap anywhere on the screen once to enable phone reminders.", "primary");
+    }
+  }
+}
+
 export function startEmployeeReminders(reloadTasks, getTasks, getMyAssignment, showToast, getUserId, apiFetch) {
   stopEmployeeReminders();
   wireAudioUnlockOnce();
 
   let permissionAsked = false;
+  let pushSetupDone = false;
 
   const tick = async () => {
     try {
@@ -312,10 +341,19 @@ export function startEmployeeReminders(reloadTasks, getTasks, getMyAssignment, s
     const userId = getUserId?.();
     if (!permissionAsked) {
       permissionAsked = true;
-      await ensureNotificationPermission(showToast);
-    }
-    if (userId && Notification.permission === "granted" && apiFetch) {
-      await subscribeToPush(apiFetch).catch(() => {});
+      const granted = await ensureNotificationPermission(showToast);
+      if (granted && userId && apiFetch && !pushSetupDone) {
+        pushSetupDone = true;
+        await ensureEmployeePushRegistration(apiFetch, showToast);
+      }
+    } else if (userId && Notification.permission === "granted" && apiFetch) {
+      const localSub = await getLocalPushSubscription();
+      if (localSub) {
+        await syncPushSubscriptionToServer(apiFetch);
+      } else if (!pushSetupDone) {
+        pushSetupDone = true;
+        await ensureEmployeePushRegistration(apiFetch, showToast);
+      }
     }
     checkDueReminders(tasks, getMyAssignment, showToast);
   };
