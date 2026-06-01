@@ -1,4 +1,4 @@
-import "dotenv/config";
+import "./load-env.js";
 import fs from "fs";
 import express from "express";
 import "express-async-errors";
@@ -17,6 +17,7 @@ import pushRoutes from "./routes/push.js";
 import { prisma } from "./lib/prisma.js";
 import { initPush } from "./lib/push.js";
 import { startReminderScheduler } from "./lib/reminderScheduler.js";
+import { getTurnstileSiteKey } from "./lib/turnstile.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const sessionsDir = path.join(__dirname, "..", "sessions");
@@ -110,6 +111,11 @@ app.use((err, _req, res, _next) => {
 
 const server = app.listen(PORT, () => {
   console.log(`API listening on http://localhost:${PORT}`);
+  if (getTurnstileSiteKey()) {
+    console.log("[turnstile] CAPTCHA configured");
+  } else {
+    console.warn("[turnstile] TURNSTILE_SITE_KEY missing — registration CAPTCHA disabled");
+  }
   initPush();
   startReminderScheduler();
 });
