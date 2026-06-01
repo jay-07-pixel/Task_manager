@@ -240,6 +240,95 @@ function isPublicAuthPath(path) {
 
 let registerOtpCountdownTimer = null;
 
+const registerGate = { otpVerified: false, turnstileToken: null };
+let turnstileScriptPromise = null;
+let turnstileWidgetId = null;
+
+function updateRegisterSubmitButton() {
+  const submitBtn = document.getElementById("btn-register-submit");
+  if (submitBtn) submitBtn.disabled = !registerGate.otpVerified;
+}
+
+function updateSendOtpButton() {
+  const sendBtn = document.getElementById("btn-send-otp");
+  if (sendBtn) sendBtn.disabled = !registerGate.turnstileToken;
+}
+
+function clearTurnstileToken() {
+  registerGate.turnstileToken = null;
+  updateSendOtpButton();
+}
+
+function loadTurnstileScript() {
+  if (window.turnstile) return Promise.resolve();
+  if (turnstileScriptPromise) return turnstileScriptPromise;
+  turnstileScriptPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Could not load CAPTCHA."));
+    document.head.appendChild(script);
+  });
+  return turnstileScriptPromise;
+}
+
+function resetTurnstileWidget() {
+  if (window.turnstile && turnstileWidgetId != null) {
+    try {
+      window.turnstile.remove(turnstileWidgetId);
+    } catch {
+      /* ignore */
+    }
+    turnstileWidgetId = null;
+  }
+  clearTurnstileToken();
+}
+
+async function wireRegisterTurnstile() {
+  resetTurnstileWidget();
+  const container = document.getElementById("reg-turnstile");
+  if (!container) return;
+
+  let siteKey;
+  try {
+    const data = await api("/api/auth/turnstile-site-key");
+    siteKey = data.siteKey;
+  } catch {
+    container.innerHTML =
+      '<p class="form-text text-danger mb-0">Security check unavailable. Contact your administrator.</p>';
+    return;
+  }
+
+  try {
+    await loadTurnstileScript();
+  } catch {
+    container.innerHTML =
+      '<p class="form-text text-danger mb-0">Could not load CAPTCHA. Check your network and refresh.</p>';
+    return;
+  }
+
+  container.innerHTML = "";
+  turnstileWidgetId = window.turnstile.render(container, {
+    sitekey: siteKey,
+    callback(token) {
+      registerGate.turnstileToken = token;
+      updateSendOtpButton();
+      const hint = document.getElementById("reg-turnstile-hint");
+      if (hint) hint.classList.add("d-none");
+    },
+    "expired-callback"() {
+      clearTurnstileToken();
+      showToast("CAPTCHA expired. Please complete it again.", "warning");
+    },
+    "error-callback"() {
+      clearTurnstileToken();
+      showToast("CAPTCHA error. Please try again.", "warning");
+    },
+  });
+  updateSendOtpButton();
+}
+
 function clearRegisterOtpTimer() {
   if (registerOtpCountdownTimer) {
     clearInterval(registerOtpCountdownTimer);
@@ -268,11 +357,10 @@ function wireRegisterOtp() {
   if (!emailEl || !otpSection || !sendBtn) return;
 
   let otpExpiresAt = 0;
-  let emailVerified = false;
 
   const setVerified = (verified) => {
-    emailVerified = verified;
-    if (submitBtn) submitBtn.disabled = !verified;
+    registerGate.otpVerified = verified;
+    updateRegisterSubmitButton();
     if (statusEl) {
       statusEl.textContent = verified ? "Email verified — you can create your account." : "";
       statusEl.classList.toggle("text-success", verified);
@@ -292,18 +380,20 @@ function wireRegisterOtp() {
       return;
     }
     countdownEl.textContent = `Code expires in ${formatCountdown(left)}`;
-    if (resendBtn) resendBtn.disabled = left > 0 && !emailVerified;
+    if (resendBtn) resendBtn.disabled = left > 0 && !registerGate.otpVerified;
   };
 
   const startCountdown = (expiresInSeconds) => {
     otpExpiresAt = Date.now() + expiresInSeconds * 1000;
-    otpSection.classList.remove("d-none");
+    if (otpEl) otpEl.disabled = false;
+    if (verifyBtn) verifyBtn.disabled = false;
+    if (resendBtn) resendBtn.disabled = true;
     updateCountdown();
     clearRegisterOtpTimer();
     registerOtpCountdownTimer = setInterval(updateCountdown, 1000);
     if (resendBtn) resendBtn.disabled = true;
     setTimeout(() => {
-      if (resendBtn && !emailVerified) resendBtn.disabled = false;
+      if (resendBtn && !registerGate.otpVerified) resendBtn.disabled = false;
     }, 60_000);
   };
 
@@ -316,12 +406,19 @@ function wireRegisterOtp() {
       showToast("Enter a valid email address first.", "warning");
       return;
     }
+    if (!registerGate.turnstileToken) {
+      showToast("Please complete CAPTCHA before sending OTP.", "warning");
+      const hint = document.getElementById("reg-turnstile-hint");
+      if (hint) hint.classList.remove("d-none");
+      return;
+    }
+    const turnstileToken = registerGate.turnstileToken;
     sendBtn.disabled = true;
     if (resendBtn) resendBtn.disabled = true;
     try {
       const data = await api("/api/auth/send-otp", {
         method: "POST",
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, turnstileToken }),
       });
       setVerified(false);
       if (otpEl) {
@@ -331,10 +428,14 @@ function wireRegisterOtp() {
       if (verifyBtn) verifyBtn.disabled = false;
       startCountdown(data.expiresInSeconds ?? 600);
       showToast(isResend ? "New code sent." : "Verification code sent to your email.", "success");
+      resetTurnstileWidget();
+      void wireRegisterTurnstile();
     } catch (err) {
       showToast(err.message, "danger");
+      resetTurnstileWidget();
+      void wireRegisterTurnstile();
     } finally {
-      sendBtn.disabled = false;
+      updateSendOtpButton();
     }
   };
 
@@ -389,9 +490,21 @@ function wireRegisterOtp() {
   }
 
   emailEl.addEventListener("change", () => {
-    setVerified(false);
-    otpSection.classList.add("d-none");
+    registerGate.otpVerified = false;
+    updateRegisterSubmitButton();
     clearRegisterOtpTimer();
+    resetTurnstileWidget();
+    void wireRegisterTurnstile();
+    if (statusEl) statusEl.classList.add("d-none");
+    const captchaHint = document.getElementById("reg-turnstile-hint");
+    if (captchaHint) captchaHint.classList.add("d-none");
+    if (otpEl) {
+      otpEl.value = "";
+      otpEl.disabled = true;
+    }
+    if (verifyBtn) verifyBtn.disabled = true;
+    if (resendBtn) resendBtn.disabled = true;
+    if (countdownEl) countdownEl.textContent = "Send OTP above, then enter the code from your email.";
   });
 
   setVerified(false);
@@ -493,6 +606,48 @@ function renderAuthForm() {
                       </div>
                     </div>
                     <div class="mb-3">
+                      <label class="auth-field-label" for="reg-email">Email</label>
+                      <div class="input-group auth-input-group">
+                        <span class="input-group-text"><i class="bi bi-envelope" aria-hidden="true"></i></span>
+                        <input class="form-control" id="reg-email" name="email" type="email" autocomplete="email" placeholder="you@company.com" required />
+                      </div>
+                      <div class="reg-turnstile-wrap mt-2" id="reg-turnstile-wrap">
+                        <label class="auth-field-label">Security check</label>
+                        <div id="reg-turnstile" class="reg-turnstile"></div>
+                        <p class="form-text text-danger d-none mb-0 mt-2" id="reg-turnstile-hint" role="alert">
+                          Please complete CAPTCHA before sending OTP.
+                        </p>
+                      </div>
+                      <button class="btn btn-outline-primary w-100 mt-2" type="button" id="btn-send-otp" disabled>
+                        <i class="bi bi-envelope-check me-1" aria-hidden="true"></i>Send OTP
+                      </button>
+                    </div>
+                    <div class="mb-3 reg-otp-panel" id="reg-otp-section">
+                      <label class="auth-field-label" for="reg-otp">Email verification</label>
+                      <div class="input-group auth-input-group mb-2">
+                        <span class="input-group-text"><i class="bi bi-shield-check" aria-hidden="true"></i></span>
+                        <input
+                          class="form-control font-monospace"
+                          id="reg-otp"
+                          name="otp"
+                          type="text"
+                          inputmode="numeric"
+                          autocomplete="one-time-code"
+                          maxlength="6"
+                          pattern="[0-9]{6}"
+                          placeholder="6-digit code"
+                          title="6-digit code"
+                          disabled
+                        />
+                        <button class="btn btn-primary" type="button" id="btn-verify-otp" disabled>Verify</button>
+                      </div>
+                      <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                        <small class="text-muted" id="reg-otp-countdown">Send OTP above, then enter the code from your email.</small>
+                        <button class="btn btn-link btn-sm p-0" type="button" id="btn-resend-otp" disabled>Resend OTP</button>
+                      </div>
+                      <div class="form-text text-success d-none mt-1" id="reg-otp-status" role="status"></div>
+                    </div>
+                    <div class="mb-3">
                       <label class="auth-field-label" for="reg-phone">Phone</label>
                       <div class="input-group auth-input-group">
                         <span class="input-group-text"><i class="bi bi-telephone" aria-hidden="true"></i></span>
@@ -514,39 +669,6 @@ function renderAuthForm() {
                       <div class="form-text">10 digits only. No letters, spaces, or symbols.</div>
                     </div>
                     <div class="mb-3">
-                      <label class="auth-field-label" for="reg-email">Email</label>
-                      <div class="input-group auth-input-group">
-                        <span class="input-group-text"><i class="bi bi-envelope" aria-hidden="true"></i></span>
-                        <input class="form-control" id="reg-email" name="email" type="email" autocomplete="email" placeholder="you@company.com" required />
-                        <button class="btn btn-outline-primary" type="button" id="btn-send-otp">Send OTP</button>
-                      </div>
-                      <div class="form-text">We will email a 6-digit code to verify this address.</div>
-                    </div>
-                    <div class="mb-3 d-none" id="reg-otp-section">
-                      <label class="auth-field-label" for="reg-otp">Verification code</label>
-                      <div class="input-group auth-input-group mb-2">
-                        <span class="input-group-text"><i class="bi bi-shield-check" aria-hidden="true"></i></span>
-                        <input
-                          class="form-control font-monospace"
-                          id="reg-otp"
-                          name="otp"
-                          type="text"
-                          inputmode="numeric"
-                          autocomplete="one-time-code"
-                          maxlength="6"
-                          pattern="[0-9]{6}"
-                          placeholder="000000"
-                          title="6-digit code"
-                        />
-                        <button class="btn btn-primary" type="button" id="btn-verify-otp">Verify OTP</button>
-                      </div>
-                      <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
-                        <small class="text-muted" id="reg-otp-countdown"></small>
-                        <button class="btn btn-link btn-sm p-0" type="button" id="btn-resend-otp">Resend OTP</button>
-                      </div>
-                      <div class="form-text text-success d-none mt-1" id="reg-otp-status" role="status"></div>
-                    </div>
-                    <div class="mb-3">
                       <label class="auth-field-label" for="reg-password">Password</label>
                       <div class="input-group auth-input-group">
                         <span class="input-group-text"><i class="bi bi-shield-lock" aria-hidden="true"></i></span>
@@ -554,7 +676,7 @@ function renderAuthForm() {
                       </div>
                     </div>
                     <button class="btn btn-primary w-100 auth-submit" type="submit" id="btn-register-submit" disabled>Create account</button>
-                    <p class="form-text text-center mb-0 mt-2">Verify your email with OTP before creating an account.</p>
+                    <p class="form-text text-center mb-0 mt-2">Complete CAPTCHA, verify email with OTP, then create your account.</p>
                   </form>
                 </div>
               </div>
@@ -618,10 +740,13 @@ function renderAuthForm() {
   document.getElementById("form-register").addEventListener("submit", async (e) => {
     e.preventDefault();
     const submitBtn = document.getElementById("btn-register-submit");
-    if (submitBtn?.disabled) {
+
+    if (!registerGate.otpVerified) {
       showToast("Verify your email with the OTP code first.", "warning");
       return;
     }
+    if (submitBtn?.disabled) return;
+
     const fd = new FormData(e.target);
     try {
       await api("/api/auth/register", {
@@ -641,8 +766,11 @@ function renderAuthForm() {
     }
   });
 
+  registerGate.otpVerified = false;
+  registerGate.turnstileToken = null;
   wireRegisterPhoneDigits();
   wireRegisterOtp();
+  void wireRegisterTurnstile();
   wireThemeIconToggles();
   warmupPushInfrastructure((path, options) => api(path, options));
 }

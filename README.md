@@ -25,6 +25,7 @@ A full-stack task management app for a **list owner** and **assigned employees**
 - Email + password sign-in
 - Registration (defaults to **employee**; first **owner** can register if none exists)
 - **Email OTP verification** before account creation (6-digit code, 10-minute expiry)
+- **Cloudflare Turnstile CAPTCHA** before Send OTP (verified server-side)
 - Phone: **10 digits** on register (validated client and server)
 - Session-based API auth (cookie)
 
@@ -74,6 +75,8 @@ SESSION_SECRET="change-this-to-a-long-random-string"
 Optional: `PORT` (default **3000**).
 
 For registration OTP emails, configure Brevo in `server/.env` (`BREVO_API_KEY`, `BREVO_SENDER_NAME`, `BREVO_SENDER_EMAIL` — see `server/.env.example`). Without Brevo in development, the OTP is printed in the API server log only.
+
+For registration CAPTCHA, add `TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY` from the [Cloudflare Turnstile dashboard](https://dash.cloudflare.com/?to=/:account/turnstile). CAPTCHA is verified when the user clicks **Send OTP** (and **Resend OTP**).
 
 ### 3. Migrate and seed
 
@@ -241,13 +244,13 @@ If login fails on a server like `http://YOUR_IP:3000`:
 
 2. **On the server**, from the project folder:
    ```bash
+   git pull origin main
    npm install --prefix server
-   npm run db:generate --prefix server
    npm run db:migrate --prefix server
-   npm run db:seed --prefix server
    npm run build
-   NODE_ENV=production npm run start
+   pm2 restart taskmanager
    ```
+   **Important:** `client/dist` is not in git. You must run **`npm run build`** after every `git pull` or the site will show an old UI (no OTP buttons). Or use `npm start`, which rebuilds the client automatically before starting the API.
 
 3. **`server/.env` must include:**
    ```env
@@ -257,6 +260,11 @@ If login fails on a server like `http://YOUR_IP:3000`:
    VAPID_PUBLIC_KEY="..."
    VAPID_PRIVATE_KEY="..."
    VAPID_SUBJECT="mailto:admin@yourdomain.com"
+   BREVO_API_KEY="..."
+   BREVO_SENDER_NAME="Task Manager"
+   BREVO_SENDER_EMAIL="noreply@yourdomain.com"
+   TURNSTILE_SITE_KEY="..."
+   TURNSTILE_SECRET_KEY="..."
    ```
    Use `COOKIE_SECURE=false` when using **HTTP** (not HTTPS). Without this, login succeeds but the session cookie is dropped and you stay on the sign-in screen.
 

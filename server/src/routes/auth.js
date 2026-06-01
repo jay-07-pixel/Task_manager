@@ -5,6 +5,7 @@ import { prisma } from "../lib/prisma.js";
 import { requireAuth } from "../middleware/auth.js";
 import { createRateLimiter } from "../middleware/otpRateLimit.js";
 import { sendOtpEmail } from "../lib/mail.js";
+import { getTurnstileSiteKey, verifyTurnstileToken } from "../lib/turnstile.js";
 import {
   generateOtpCode,
   hashOtp,
@@ -48,8 +49,17 @@ const registerSchema = z.object({
   role: z.enum(["owner", "employee"]).optional(),
 });
 
+router.get("/turnstile-site-key", (_req, res) => {
+  const siteKey = getTurnstileSiteKey();
+  if (!siteKey) {
+    return res.status(503).json({ error: "CAPTCHA is not configured on this server." });
+  }
+  res.json({ siteKey });
+});
+
 const sendOtpSchema = z.object({
   email: emailSchema,
+  turnstileToken: z.string().min(1, "Please complete CAPTCHA"),
 });
 
 const verifyOtpSchema = z.object({
@@ -64,7 +74,19 @@ router.post("/send-otp", sendOtpLimiter, async (req, res) => {
   try {
     const parsed = sendOtpSchema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ error: "Invalid email address" });
+      const flat = parsed.error.flatten();
+      const firstField = Object.values(flat.fieldErrors).flat()[0];
+      return res.status(400).json({
+        error: firstField || "Invalid email address",
+      });
+    }
+
+    const captcha = await verifyTurnstileToken(
+      parsed.data.turnstileToken,
+      req.ip || req.socket?.remoteAddress
+    );
+    if (!captcha.ok) {
+      return res.status(400).json({ error: captcha.error || "CAPTCHA verification failed." });
     }
 
     const email = normalizeEmail(parsed.data.email);
@@ -217,14 +239,18 @@ async function isEmailVerifiedForRegistration(email) {
 router.post("/register", async (req, res) => {
   const parsed = registerSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ error: parsed.error.flatten() });
+    const flat = parsed.error.flatten();
+    const firstField = Object.values(flat.fieldErrors).flat()[0];
+    return res.status(400).json({
+      error: firstField || "Invalid registration data",
+    });
   }
   const { email, password, displayName, phone, role } = parsed.data;
   const normalizedEmail = normalizeEmail(email);
 
   const verified = await isEmailVerifiedForRegistration(normalizedEmail);
   if (!verified) {
-    return res.status(403).json({
+    return res.status(400).json({
       error: "Verify your email with the OTP code before creating an account.",
     });
   }

@@ -1139,6 +1139,29 @@
   line-height: 1.4;
 }
 
+.reg-otp-panel {
+  padding: 0.85rem;
+  border-radius: 0.5rem;
+  background: rgba(var(--bs-primary-rgb), 0.06);
+  border: 1px solid rgba(var(--bs-primary-rgb), 0.15);
+}
+
+[data-bs-theme="dark"] .reg-otp-panel {
+  background: rgba(var(--bs-primary-rgb), 0.1);
+  border-color: rgba(var(--bs-primary-rgb), 0.22);
+}
+
+.reg-turnstile-wrap {
+  padding: 0.85rem;
+  border-radius: 0.5rem;
+  background: rgba(var(--bs-secondary-rgb), 0.06);
+  border: 1px dashed rgba(var(--bs-secondary-rgb), 0.25);
+}
+
+.reg-turnstile {
+  min-height: 65px;
+}
+
 .auth-card .auth-submit.btn-primary:focus-visible {
   box-shadow: none;
   outline: 2px solid rgba(255, 255, 255, 0.45);
