@@ -6,7 +6,13 @@ import { Router } from "express";
 import multer from "multer";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
-import { computeNextDueAt, shouldRollOnEmployeeComplete } from "../lib/recurrenceRoll.js";
+import {
+  bumpedRecurrenceRuleJson,
+  computeNextDueAt,
+  recurrenceEndsAfterThisCompletion,
+  recurrenceNextDueExceedsEndOn,
+  shouldRollOnEmployeeComplete,
+} from "../lib/recurrenceRoll.js";
 import { requireAuth, requireOwner } from "../middleware/auth.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -25,20 +31,42 @@ const taskAssigneeInclude = {
 
 const taskListSelect = { list: { select: { id: true, title: true } } };
 
+async function endRecurrenceSeries(taskId) {
+  await prisma.task.update({
+    where: { id: taskId },
+    data: { recurrence: "none", recurrenceRule: null },
+  });
+}
+
 async function maybeRollRecurringAfterEmployeeComplete(task, userId) {
   if (!shouldRollOnEmployeeComplete(task.recurrence, task.recurrenceRule)) return;
 
+  if (recurrenceEndsAfterThisCompletion(task.recurrence, task.recurrenceRule)) {
+    await endRecurrenceSeries(task.id);
+    return;
+  }
+
   const nextDue = computeNextDueAt(task.dueAt, task.recurrence, task.allDay, task.recurrenceRule);
   if (!nextDue) return;
+
+  if (recurrenceNextDueExceedsEndOn(nextDue, task.recurrenceRule)) {
+    await endRecurrenceSeries(task.id);
+    return;
+  }
 
   const row = task.assignments.find((a) => a.userId === userId);
   if (row?.completionProofPath) {
     deleteProofFile(row.completionProofPath);
   }
 
+  const updateData = { dueAt: nextDue, completed: false };
+  if (task.recurrence === "custom" && task.recurrenceRule) {
+    updateData.recurrenceRule = bumpedRecurrenceRuleJson(task.recurrenceRule);
+  }
+
   await prisma.task.update({
     where: { id: task.id },
-    data: { dueAt: nextDue, completed: false },
+    data: updateData,
   });
   await prisma.taskAssignee.update({
     where: { taskId_userId: { taskId: task.id, userId } },
@@ -71,6 +99,7 @@ const recurrenceRuleSchema = z
     endType: z.enum(["never", "on", "after"]),
     endOn: z.string().min(1).nullable().optional(),
     endAfterOccurrences: z.number().int().min(1).max(9999).nullable().optional(),
+    occurrencesCompleted: z.number().int().min(0).max(9999).optional(),
   })
   .superRefine((r, ctx) => {
     if (r.endType === "on") {
@@ -368,7 +397,7 @@ router.post("/lists/:listId", requireOwner, async (req, res) => {
     if (!rule) {
       return res.status(400).json({ error: "Invalid custom recurrence rule" });
     }
-    recurrenceRuleStr = JSON.stringify(rule);
+    recurrenceRuleStr = JSON.stringify({ ...rule, occurrencesCompleted: 0 });
   }
 
   const createPayload = {
@@ -510,7 +539,7 @@ router.patch("/:id", requireAuth, async (req, res) => {
         if (!rule) {
           return res.status(400).json({ error: "Invalid custom recurrence rule" });
         }
-        data.recurrenceRule = JSON.stringify(rule);
+        data.recurrenceRule = JSON.stringify({ ...rule, occurrencesCompleted: 0 });
         data.recurrence = "custom";
         clearRecurrenceRule = false;
       }

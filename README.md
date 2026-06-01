@@ -16,6 +16,9 @@ A full-stack task management app for a **list owner** and **assigned employees**
 - Sidebar sections: **Daily**, **Weekly**, **Monthly**, and **Other** (one-time tasks)
 - Tasks appear in the section that matches the owner’s **Repeat** setting on the task
 - Completing a daily/weekly/monthly task advances the deadline and resets it for the next period (tomorrow, +1 week, +1 month)
+- **Yearly** tasks advance by one year on complete
+- **Custom repeat** supports every N days/weeks/months/years; **Ends on** and **After N occurrences** stop the series when reached
+- Custom tasks that repeat daily/weekly/monthly appear in the matching sidebar section
 - Checkbox to complete tasks (optional proof photo upload)
 - List name and deadline on each assignment
 - Mobile-friendly card layout

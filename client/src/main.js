@@ -504,7 +504,7 @@ function wireRegisterOtp() {
     }
     if (verifyBtn) verifyBtn.disabled = true;
     if (resendBtn) resendBtn.disabled = true;
-    if (countdownEl) countdownEl.textContent = "Send OTP above, then enter the code from your email.";
+    if (countdownEl) countdownEl.textContent = "Complete CAPTCHA, then send OTP.";
   });
 
   setVerified(false);
@@ -598,85 +598,104 @@ function renderAuthForm() {
                 </div>
                 <div class="tab-pane fade" id="tab-register" role="tabpanel" aria-labelledby="tab-register-btn" tabindex="0">
                   <form id="form-register" class="auth-form-register">
-                    <div class="mb-3">
-                      <label class="auth-field-label" for="reg-name">Display name</label>
-                      <div class="input-group auth-input-group">
-                        <span class="input-group-text"><i class="bi bi-person" aria-hidden="true"></i></span>
-                        <input class="form-control" id="reg-name" name="displayName" autocomplete="name" placeholder="Your name" required />
+                    <p class="auth-reg-section-title">Account details</p>
+                    <div class="auth-reg-grid auth-reg-grid-fields">
+                      <div class="mb-2">
+                        <label class="auth-field-label" for="reg-name">Display name</label>
+                        <div class="input-group input-group-sm auth-input-group">
+                          <span class="input-group-text"><i class="bi bi-person" aria-hidden="true"></i></span>
+                          <input class="form-control" id="reg-name" name="displayName" autocomplete="name" placeholder="Your name" required />
+                        </div>
+                      </div>
+                      <div class="mb-2">
+                        <label class="auth-field-label" for="reg-email">Email</label>
+                        <div class="input-group input-group-sm auth-input-group">
+                          <span class="input-group-text"><i class="bi bi-envelope" aria-hidden="true"></i></span>
+                          <input class="form-control" id="reg-email" name="email" type="email" autocomplete="email" placeholder="you@company.com" required />
+                        </div>
+                      </div>
+                      <div class="mb-2">
+                        <label class="auth-field-label" for="reg-phone">Phone</label>
+                        <div class="input-group input-group-sm auth-input-group">
+                          <span class="input-group-text"><i class="bi bi-telephone" aria-hidden="true"></i></span>
+                          <input
+                            class="form-control"
+                            id="reg-phone"
+                            name="phone"
+                            type="text"
+                            inputmode="numeric"
+                            autocomplete="tel"
+                            maxlength="10"
+                            minlength="10"
+                            pattern="[0-9]{10}"
+                            placeholder="10 digits"
+                            title="10 digits only"
+                            required
+                          />
+                        </div>
+                      </div>
+                      <div class="mb-2">
+                        <label class="auth-field-label" for="reg-password">Password</label>
+                        <div class="input-group input-group-sm auth-input-group">
+                          <span class="input-group-text"><i class="bi bi-shield-lock" aria-hidden="true"></i></span>
+                          <input class="form-control" id="reg-password" name="password" type="password" minlength="6" autocomplete="new-password" placeholder="Min. 6 characters" required />
+                        </div>
                       </div>
                     </div>
-                    <div class="mb-3">
-                      <label class="auth-field-label" for="reg-email">Email</label>
-                      <div class="input-group auth-input-group">
-                        <span class="input-group-text"><i class="bi bi-envelope" aria-hidden="true"></i></span>
-                        <input class="form-control" id="reg-email" name="email" type="email" autocomplete="email" placeholder="you@company.com" required />
+
+                    <p class="auth-reg-section-title mt-3">Email verification</p>
+                    <div class="auth-reg-verify-card">
+                      <div class="auth-reg-captcha-row">
+                        <div class="reg-turnstile-wrap" id="reg-turnstile-wrap">
+                          <span class="auth-reg-mini-label">Security check</span>
+                          <div id="reg-turnstile" class="reg-turnstile"></div>
+                          <p class="form-text text-danger d-none mb-0" id="reg-turnstile-hint" role="alert">
+                            Complete CAPTCHA before sending OTP.
+                          </p>
+                        </div>
+                        <button class="btn btn-outline-primary auth-reg-action-btn" type="button" id="btn-send-otp" disabled>
+                          Send OTP
+                        </button>
                       </div>
-                      <div class="reg-turnstile-wrap mt-2" id="reg-turnstile-wrap">
-                        <label class="auth-field-label">Security check</label>
-                        <div id="reg-turnstile" class="reg-turnstile"></div>
-                        <p class="form-text text-danger d-none mb-0 mt-2" id="reg-turnstile-hint" role="alert">
-                          Please complete CAPTCHA before sending OTP.
-                        </p>
+                      <div class="auth-reg-divider" aria-hidden="true"></div>
+                      <div class="auth-reg-otp-row" id="reg-otp-section">
+                        <div class="auth-reg-otp-field">
+                          <label class="auth-reg-mini-label" for="reg-otp">Verification code</label>
+                          <div class="input-group input-group-sm auth-input-group">
+                            <span class="input-group-text"><i class="bi bi-shield-check" aria-hidden="true"></i></span>
+                            <input
+                              class="form-control font-monospace text-center"
+                              id="reg-otp"
+                              name="otp"
+                              type="text"
+                              inputmode="numeric"
+                              autocomplete="one-time-code"
+                              maxlength="6"
+                              pattern="[0-9]{6}"
+                              placeholder="000000"
+                              title="6-digit code"
+                              disabled
+                            />
+                          </div>
+                        </div>
+                        <button class="btn btn-primary auth-reg-action-btn" type="button" id="btn-verify-otp" disabled>
+                          Verify
+                        </button>
                       </div>
-                      <button class="btn btn-outline-primary w-100 mt-2" type="button" id="btn-send-otp" disabled>
-                        <i class="bi bi-envelope-check me-1" aria-hidden="true"></i>Send OTP
+                      <div class="auth-reg-otp-meta">
+                        <small class="text-muted" id="reg-otp-countdown">Complete CAPTCHA, then send OTP.</small>
+                        <button class="btn btn-sm btn-outline-secondary auth-reg-resend" type="button" id="btn-resend-otp" disabled>
+                          Resend OTP
+                        </button>
+                      </div>
+                      <div class="form-text text-success d-none mb-0" id="reg-otp-status" role="status"></div>
+                    </div>
+
+                    <div class="auth-reg-submit-wrap">
+                      <button class="btn btn-primary auth-submit auth-reg-create-btn" type="submit" id="btn-register-submit" disabled>
+                        Create account
                       </button>
                     </div>
-                    <div class="mb-3 reg-otp-panel" id="reg-otp-section">
-                      <label class="auth-field-label" for="reg-otp">Email verification</label>
-                      <div class="input-group auth-input-group mb-2">
-                        <span class="input-group-text"><i class="bi bi-shield-check" aria-hidden="true"></i></span>
-                        <input
-                          class="form-control font-monospace"
-                          id="reg-otp"
-                          name="otp"
-                          type="text"
-                          inputmode="numeric"
-                          autocomplete="one-time-code"
-                          maxlength="6"
-                          pattern="[0-9]{6}"
-                          placeholder="6-digit code"
-                          title="6-digit code"
-                          disabled
-                        />
-                        <button class="btn btn-primary" type="button" id="btn-verify-otp" disabled>Verify</button>
-                      </div>
-                      <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
-                        <small class="text-muted" id="reg-otp-countdown">Send OTP above, then enter the code from your email.</small>
-                        <button class="btn btn-link btn-sm p-0" type="button" id="btn-resend-otp" disabled>Resend OTP</button>
-                      </div>
-                      <div class="form-text text-success d-none mt-1" id="reg-otp-status" role="status"></div>
-                    </div>
-                    <div class="mb-3">
-                      <label class="auth-field-label" for="reg-phone">Phone</label>
-                      <div class="input-group auth-input-group">
-                        <span class="input-group-text"><i class="bi bi-telephone" aria-hidden="true"></i></span>
-                        <input
-                          class="form-control"
-                          id="reg-phone"
-                          name="phone"
-                          type="text"
-                          inputmode="numeric"
-                          autocomplete="tel"
-                          maxlength="10"
-                          minlength="10"
-                          pattern="[0-9]{10}"
-                          placeholder="5551234567"
-                          title="10 digits only"
-                          required
-                        />
-                      </div>
-                      <div class="form-text">10 digits only. No letters, spaces, or symbols.</div>
-                    </div>
-                    <div class="mb-3">
-                      <label class="auth-field-label" for="reg-password">Password</label>
-                      <div class="input-group auth-input-group">
-                        <span class="input-group-text"><i class="bi bi-shield-lock" aria-hidden="true"></i></span>
-                        <input class="form-control" id="reg-password" name="password" type="password" minlength="6" autocomplete="new-password" placeholder="6+ chars" required />
-                      </div>
-                    </div>
-                    <button class="btn btn-primary w-100 auth-submit" type="submit" id="btn-register-submit" disabled>Create account</button>
-                    <p class="form-text text-center mb-0 mt-2">Complete CAPTCHA, verify email with OTP, then create your account.</p>
                   </form>
                 </div>
               </div>
@@ -684,10 +703,6 @@ function renderAuthForm() {
                 ${themeIconToggleMarkup()}
               </div>
             </div>
-          </div>
-          <div class="alert alert-secondary auth-hint-banner border-0 mt-3 mb-0 shadow-sm" role="note">
-            <strong class="d-block mb-1">Local prototype</strong>
-            Run MySQL and the API, then try <span class="font-monospace">owner@local.test</span> / <span class="font-monospace">password123</span> after <span class="font-monospace">npm run db:seed</span>.
           </div>
         </div>
       </div>
@@ -857,11 +872,28 @@ const EMP_SECTION_META = {
   },
 };
 
+function taskRecurrenceRolls(task) {
+  if (!task) return false;
+  const r = task.recurrence || "none";
+  if (["daily", "weekly", "monthly", "yearly"].includes(r)) return true;
+  if (r === "custom" && task.recurrenceRule && typeof task.recurrenceRule === "object") {
+    const unit = task.recurrenceRule.unit;
+    return unit === "day" || unit === "week" || unit === "month" || unit === "year";
+  }
+  return false;
+}
+
 function employeeTaskBucket(t) {
   const r = t.recurrence || "none";
   if (r === "daily") return "daily";
   if (r === "weekly") return "weekly";
   if (r === "monthly") return "monthly";
+  if (r === "custom" && t.recurrenceRule && typeof t.recurrenceRule === "object") {
+    const unit = t.recurrenceRule.unit;
+    if (unit === "day") return "daily";
+    if (unit === "week") return "weekly";
+    if (unit === "month") return "monthly";
+  }
   return "other";
 }
 
@@ -2495,12 +2527,7 @@ function renderEmployeeView() {
       bootstrap.Modal.getInstance(completeModalEl)?.hide();
       onEmployeeTaskCompleted(task);
       await loadAssigned();
-      const rolled = task && ["daily", "weekly", "monthly"].includes(task.recurrence);
-      if (rolled) {
-        const updated = state.tasks.find((x) => x.id === id);
-        const next = updated?.dueAt?.slice(0, 10);
-        showToast(next ? `Done — next deadline ${next}` : "Done — next period scheduled", "success");
-      }
+      showEmployeeCompleteToast(task, id);
       renderEmployeeView();
     } catch (err) {
       showToast(err.message, "danger");
@@ -2533,17 +2560,24 @@ function renderEmployeeView() {
       bootstrap.Modal.getInstance(completeModalEl)?.hide();
       onEmployeeTaskCompleted(task);
       await loadAssigned();
-      const rolled = task && ["daily", "weekly", "monthly"].includes(task.recurrence);
-      if (rolled) {
-        const updated = state.tasks.find((x) => x.id === id);
-        const next = updated?.dueAt?.slice(0, 10);
-        showToast(next ? `Done — next deadline ${next}` : "Done — next period scheduled", "success");
-      }
+      showEmployeeCompleteToast(task, id);
       renderEmployeeView();
     } catch (err) {
       showToast(err.message, "danger");
     }
   });
+}
+
+function showEmployeeCompleteToast(taskBefore, taskId) {
+  const wasRepeating = taskRecurrenceRolls(taskBefore);
+  if (!wasRepeating) return;
+  const updated = state.tasks.find((x) => x.id === taskId);
+  if (!taskRecurrenceRolls(updated)) {
+    showToast("Done — repeat schedule finished.", "success");
+    return;
+  }
+  const next = updated?.dueAt?.slice(0, 10);
+  showToast(next ? `Done — next deadline ${next}` : "Done — next period scheduled", "success");
 }
 
 async function render() {

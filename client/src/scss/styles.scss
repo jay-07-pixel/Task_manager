@@ -1107,8 +1107,8 @@
 .auth-page {
   min-height: 100vh;
   display: flex;
-  align-items: center;
-  padding-block: 1.25rem;
+  align-items: flex-start;
+  padding-block: 1rem 1.25rem;
   background: linear-gradient(
     160deg,
     rgba(var(--bs-primary-rgb), 0.11) 0%,
@@ -1119,7 +1119,7 @@
 
 .auth-page .auth-wrap {
   width: 100%;
-  max-width: min(44rem, 100% - 1.5rem);
+  max-width: min(52rem, 100% - 1.5rem);
   margin-inline: auto;
 }
 
@@ -1129,37 +1129,181 @@
 }
 
 .auth-form-register {
-  max-width: 26rem;
-  margin-inline: auto;
+  max-width: none;
+  width: 100%;
+  margin-inline: 0;
 }
 
-.auth-form-register .form-text {
+.auth-reg-section-title {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--bs-secondary-color);
+  margin: 0 0 0.5rem;
+}
+
+.auth-reg-mini-label {
+  display: block;
   font-size: 0.75rem;
-  margin-top: 0.35rem;
-  line-height: 1.4;
+  font-weight: 500;
+  color: var(--bs-body-color);
+  margin-bottom: 0.35rem;
 }
 
-.reg-otp-panel {
-  padding: 0.85rem;
-  border-radius: 0.5rem;
-  background: rgba(var(--bs-primary-rgb), 0.06);
-  border: 1px solid rgba(var(--bs-primary-rgb), 0.15);
+.auth-reg-grid-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 0.85rem;
+  row-gap: 0;
+  align-items: start;
 }
 
-[data-bs-theme="dark"] .reg-otp-panel {
-  background: rgba(var(--bs-primary-rgb), 0.1);
-  border-color: rgba(var(--bs-primary-rgb), 0.22);
+.auth-reg-verify-card {
+  padding: 0.75rem 0.85rem;
+  border-radius: 0.55rem;
+  background: rgba(var(--bs-primary-rgb), 0.05);
+  border: 1px solid rgba(var(--bs-primary-rgb), 0.12);
+}
+
+[data-bs-theme="dark"] .auth-reg-verify-card {
+  background: rgba(var(--bs-primary-rgb), 0.08);
+  border-color: rgba(var(--bs-primary-rgb), 0.2);
+}
+
+.auth-reg-divider {
+  height: 1px;
+  margin: 0.65rem 0;
+  background: var(--bs-border-color);
+  opacity: 0.65;
+}
+
+.auth-reg-captcha-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.65rem 0.75rem;
 }
 
 .reg-turnstile-wrap {
-  padding: 0.85rem;
-  border-radius: 0.5rem;
-  background: rgba(var(--bs-secondary-rgb), 0.06);
-  border: 1px dashed rgba(var(--bs-secondary-rgb), 0.25);
+  flex: 1 1 12rem;
+  min-width: 0;
+  padding: 0.45rem 0.55rem;
+  border-radius: 0.45rem;
+  background: var(--bs-body-bg);
+  border: 1px solid var(--bs-border-color);
 }
 
 .reg-turnstile {
-  min-height: 65px;
+  width: fit-content;
+  max-width: 100%;
+  line-height: 0;
+}
+
+.reg-turnstile iframe {
+  display: block;
+}
+
+.auth-reg-action-btn {
+  flex: 0 0 auto;
+  width: 6.75rem;
+  height: calc(1.5em + 0.5rem + 2px);
+  padding-inline: 0.65rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.auth-reg-otp-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.65rem 0.75rem;
+}
+
+.auth-reg-otp-field {
+  flex: 1 1 10rem;
+  min-width: 0;
+  max-width: 14rem;
+}
+
+.auth-reg-otp-field .form-control {
+  letter-spacing: 0.2em;
+}
+
+.auth-reg-otp-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.25rem 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.auth-reg-otp-meta small {
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.auth-reg-resend {
+  flex: 0 0 auto;
+  padding: 0.22rem 0.6rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.3;
+  border-radius: 0.35rem;
+  white-space: nowrap;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.auth-reg-resend:disabled {
+  opacity: 0.55;
+}
+
+.auth-reg-submit-wrap {
+  display: flex;
+  justify-content: center;
+  margin-top: 1.1rem;
+}
+
+.auth-reg-create-btn {
+  width: 100%;
+  max-width: 16rem;
+  padding-block: 0.5rem;
+  font-weight: 600;
+  font-size: 0.9375rem;
+}
+
+@media (max-width: 575.98px) {
+  .auth-reg-grid-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .auth-reg-captcha-row,
+  .auth-reg-otp-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .auth-reg-action-btn {
+    width: 100%;
+  }
+
+  .auth-reg-otp-field {
+    max-width: none;
+  }
+
+  .auth-reg-create-btn {
+    max-width: none;
+  }
+}
+
+.auth-form-register .form-text {
+  font-size: 0.72rem;
+  margin-top: 0.25rem;
+  line-height: 1.35;
 }
 
 .auth-card .auth-submit.btn-primary:focus-visible {
@@ -1298,13 +1442,6 @@
   font-weight: 600;
   margin-top: 0.15rem;
   font-size: 0.9rem;
-}
-
-.auth-hint-banner {
-  border-radius: 0.45rem;
-  font-size: 0.75rem;
-  line-height: 1.45;
-  padding: 0.65rem 0.85rem;
 }
 
 .auth-theme-row {
