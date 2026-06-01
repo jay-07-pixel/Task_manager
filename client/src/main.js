@@ -309,8 +309,10 @@ async function wireRegisterTurnstile() {
   }
 
   container.innerHTML = "";
+  const turnstileSize = window.matchMedia("(max-width: 575.98px)").matches ? "compact" : "flexible";
   turnstileWidgetId = window.turnstile.render(container, {
     sitekey: siteKey,
+    size: turnstileSize,
     callback(token) {
       registerGate.turnstileToken = token;
       updateSendOtpButton();
@@ -648,7 +650,9 @@ function renderAuthForm() {
                       <div class="auth-reg-captcha-row">
                         <div class="reg-turnstile-wrap" id="reg-turnstile-wrap">
                           <span class="auth-reg-mini-label">Security check</span>
-                          <div id="reg-turnstile" class="reg-turnstile"></div>
+                          <div class="reg-turnstile-viewport">
+                            <div id="reg-turnstile" class="reg-turnstile"></div>
+                          </div>
                           <p class="form-text text-danger d-none mb-0" id="reg-turnstile-hint" role="alert">
                             Complete CAPTCHA before sending OTP.
                           </p>
