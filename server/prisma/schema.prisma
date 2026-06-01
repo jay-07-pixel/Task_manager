@@ -110,3 +110,18 @@ model ReminderSent {
   @@id([taskId, userId, dueAt, slot])
   @@map("reminder_sent")
 }
+
+model EmailVerification {
+  id                String    @id @default(uuid())
+  email             String    @unique
+  otpHash           String?   @map("otp_hash") @db.VarChar(255)
+  expiresAt         DateTime  @map("expires_at")
+  attempts          Int       @default(0)
+  resendCount       Int       @default(0) @map("resend_count")
+  resendWindowStart DateTime  @default(now()) @map("resend_window_start")
+  verified          Boolean   @default(false)
+  verifiedAt        DateTime? @map("verified_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  @@map("email_verification")
+}

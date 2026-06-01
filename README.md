@@ -24,6 +24,7 @@ A full-stack task management app for a **list owner** and **assigned employees**
 ### Auth
 - Email + password sign-in
 - Registration (defaults to **employee**; first **owner** can register if none exists)
+- **Email OTP verification** before account creation (6-digit code, 10-minute expiry)
 - Phone: **10 digits** on register (validated client and server)
 - Session-based API auth (cookie)
 
@@ -71,6 +72,8 @@ SESSION_SECRET="change-this-to-a-long-random-string"
 ```
 
 Optional: `PORT` (default **3000**).
+
+For registration OTP emails, configure Brevo in `server/.env` (`BREVO_API_KEY`, `BREVO_SENDER_NAME`, `BREVO_SENDER_EMAIL` — see `server/.env.example`). Without Brevo in development, the OTP is printed in the API server log only.
 
 ### 3. Migrate and seed
 

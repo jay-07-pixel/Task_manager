@@ -126,13 +126,7 @@ async function api(path, options = {}) {
     data = { error: text };
   }
   if (!res.ok) {
-    if (
-      res.status === 401 &&
-      path !== "/api/auth/login" &&
-      path !== "/api/auth/register" &&
-      !path.startsWith("/api/auth/login?") &&
-      !path.startsWith("/api/auth/register?")
-    ) {
+    if (res.status === 401 && !isPublicAuthPath(path)) {
       const wasLoggedIn = !!state.user;
       state.user = null;
       renderAuthForm();
@@ -177,13 +171,7 @@ async function apiForm(path, formData, method = "POST") {
     data = { error: text };
   }
   if (!res.ok) {
-    if (
-      res.status === 401 &&
-      path !== "/api/auth/login" &&
-      path !== "/api/auth/register" &&
-      !path.startsWith("/api/auth/login?") &&
-      !path.startsWith("/api/auth/register?")
-    ) {
+    if (res.status === 401 && !isPublicAuthPath(path)) {
       const wasLoggedIn = !!state.user;
       state.user = null;
       renderAuthForm();
@@ -237,6 +225,176 @@ async function refreshMe() {
     state.user = null;
     return false;
   }
+}
+
+const PUBLIC_AUTH_PATHS = [
+  "/api/auth/login",
+  "/api/auth/register",
+  "/api/auth/send-otp",
+  "/api/auth/verify-otp",
+];
+
+function isPublicAuthPath(path) {
+  return PUBLIC_AUTH_PATHS.some((p) => path === p || path.startsWith(`${p}?`));
+}
+
+let registerOtpCountdownTimer = null;
+
+function clearRegisterOtpTimer() {
+  if (registerOtpCountdownTimer) {
+    clearInterval(registerOtpCountdownTimer);
+    registerOtpCountdownTimer = null;
+  }
+}
+
+function formatCountdown(seconds) {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function wireRegisterOtp() {
+  clearRegisterOtpTimer();
+
+  const emailEl = document.getElementById("reg-email");
+  const otpSection = document.getElementById("reg-otp-section");
+  const otpEl = document.getElementById("reg-otp");
+  const sendBtn = document.getElementById("btn-send-otp");
+  const verifyBtn = document.getElementById("btn-verify-otp");
+  const resendBtn = document.getElementById("btn-resend-otp");
+  const countdownEl = document.getElementById("reg-otp-countdown");
+  const statusEl = document.getElementById("reg-otp-status");
+  const submitBtn = document.getElementById("btn-register-submit");
+  if (!emailEl || !otpSection || !sendBtn) return;
+
+  let otpExpiresAt = 0;
+  let emailVerified = false;
+
+  const setVerified = (verified) => {
+    emailVerified = verified;
+    if (submitBtn) submitBtn.disabled = !verified;
+    if (statusEl) {
+      statusEl.textContent = verified ? "Email verified — you can create your account." : "";
+      statusEl.classList.toggle("text-success", verified);
+      statusEl.classList.toggle("d-none", !verified);
+    }
+    if (verified && otpEl) otpEl.disabled = true;
+    if (verified && verifyBtn) verifyBtn.disabled = true;
+  };
+
+  const updateCountdown = () => {
+    if (!countdownEl) return;
+    const left = Math.max(0, Math.ceil((otpExpiresAt - Date.now()) / 1000));
+    if (left <= 0) {
+      countdownEl.textContent = "Code expired — resend a new one.";
+      if (resendBtn) resendBtn.disabled = false;
+      clearRegisterOtpTimer();
+      return;
+    }
+    countdownEl.textContent = `Code expires in ${formatCountdown(left)}`;
+    if (resendBtn) resendBtn.disabled = left > 0 && !emailVerified;
+  };
+
+  const startCountdown = (expiresInSeconds) => {
+    otpExpiresAt = Date.now() + expiresInSeconds * 1000;
+    otpSection.classList.remove("d-none");
+    updateCountdown();
+    clearRegisterOtpTimer();
+    registerOtpCountdownTimer = setInterval(updateCountdown, 1000);
+    if (resendBtn) resendBtn.disabled = true;
+    setTimeout(() => {
+      if (resendBtn && !emailVerified) resendBtn.disabled = false;
+    }, 60_000);
+  };
+
+  const getEmail = () => String(emailEl.value || "").trim().toLowerCase();
+
+  const sendOtp = async (isResend) => {
+    const email = getEmail();
+    if (!email || !emailEl.checkValidity()) {
+      emailEl.reportValidity();
+      showToast("Enter a valid email address first.", "warning");
+      return;
+    }
+    sendBtn.disabled = true;
+    if (resendBtn) resendBtn.disabled = true;
+    try {
+      const data = await api("/api/auth/send-otp", {
+        method: "POST",
+        body: JSON.stringify({ email }),
+      });
+      setVerified(false);
+      if (otpEl) {
+        otpEl.value = "";
+        otpEl.disabled = false;
+      }
+      if (verifyBtn) verifyBtn.disabled = false;
+      startCountdown(data.expiresInSeconds ?? 600);
+      showToast(isResend ? "New code sent." : "Verification code sent to your email.", "success");
+    } catch (err) {
+      showToast(err.message, "danger");
+    } finally {
+      sendBtn.disabled = false;
+    }
+  };
+
+  sendBtn.addEventListener("click", (e) => {
+    e.preventDefault();
+    void sendOtp(false);
+  });
+
+  if (resendBtn) {
+    resendBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      void sendOtp(true);
+    });
+  }
+
+  if (verifyBtn) {
+    verifyBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      void (async () => {
+        const email = getEmail();
+        const otp = String(otpEl?.value || "").replace(/\D/g, "").slice(0, 6);
+        if (!email || !emailEl.checkValidity()) {
+          emailEl.reportValidity();
+          return;
+        }
+        if (otp.length !== 6) {
+          showToast("Enter the 6-digit code from your email.", "warning");
+          return;
+        }
+        verifyBtn.disabled = true;
+        try {
+          await api("/api/auth/verify-otp", {
+            method: "POST",
+            body: JSON.stringify({ email, otp }),
+          });
+          setVerified(true);
+          clearRegisterOtpTimer();
+          if (countdownEl) countdownEl.textContent = "Email verified.";
+          showToast("Email verified. Complete the form and create your account.", "success");
+        } catch (err) {
+          showToast(err.message, "danger");
+          verifyBtn.disabled = false;
+        }
+      })();
+    });
+  }
+
+  if (otpEl) {
+    otpEl.addEventListener("input", () => {
+      otpEl.value = otpEl.value.replace(/\D/g, "").slice(0, 6);
+    });
+  }
+
+  emailEl.addEventListener("change", () => {
+    setVerified(false);
+    otpSection.classList.add("d-none");
+    clearRegisterOtpTimer();
+  });
+
+  setVerified(false);
 }
 
 function wireRegisterPhoneDigits() {
@@ -360,7 +518,33 @@ function renderAuthForm() {
                       <div class="input-group auth-input-group">
                         <span class="input-group-text"><i class="bi bi-envelope" aria-hidden="true"></i></span>
                         <input class="form-control" id="reg-email" name="email" type="email" autocomplete="email" placeholder="you@company.com" required />
+                        <button class="btn btn-outline-primary" type="button" id="btn-send-otp">Send OTP</button>
                       </div>
+                      <div class="form-text">We will email a 6-digit code to verify this address.</div>
+                    </div>
+                    <div class="mb-3 d-none" id="reg-otp-section">
+                      <label class="auth-field-label" for="reg-otp">Verification code</label>
+                      <div class="input-group auth-input-group mb-2">
+                        <span class="input-group-text"><i class="bi bi-shield-check" aria-hidden="true"></i></span>
+                        <input
+                          class="form-control font-monospace"
+                          id="reg-otp"
+                          name="otp"
+                          type="text"
+                          inputmode="numeric"
+                          autocomplete="one-time-code"
+                          maxlength="6"
+                          pattern="[0-9]{6}"
+                          placeholder="000000"
+                          title="6-digit code"
+                        />
+                        <button class="btn btn-primary" type="button" id="btn-verify-otp">Verify OTP</button>
+                      </div>
+                      <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                        <small class="text-muted" id="reg-otp-countdown"></small>
+                        <button class="btn btn-link btn-sm p-0" type="button" id="btn-resend-otp">Resend OTP</button>
+                      </div>
+                      <div class="form-text text-success d-none mt-1" id="reg-otp-status" role="status"></div>
                     </div>
                     <div class="mb-3">
                       <label class="auth-field-label" for="reg-password">Password</label>
@@ -369,7 +553,8 @@ function renderAuthForm() {
                         <input class="form-control" id="reg-password" name="password" type="password" minlength="6" autocomplete="new-password" placeholder="6+ chars" required />
                       </div>
                     </div>
-                    <button class="btn btn-primary w-100 auth-submit" type="submit">Create account</button>
+                    <button class="btn btn-primary w-100 auth-submit" type="submit" id="btn-register-submit" disabled>Create account</button>
+                    <p class="form-text text-center mb-0 mt-2">Verify your email with OTP before creating an account.</p>
                   </form>
                 </div>
               </div>
@@ -432,6 +617,11 @@ function renderAuthForm() {
 
   document.getElementById("form-register").addEventListener("submit", async (e) => {
     e.preventDefault();
+    const submitBtn = document.getElementById("btn-register-submit");
+    if (submitBtn?.disabled) {
+      showToast("Verify your email with the OTP code first.", "warning");
+      return;
+    }
     const fd = new FormData(e.target);
     try {
       await api("/api/auth/register", {
@@ -452,6 +642,7 @@ function renderAuthForm() {
   });
 
   wireRegisterPhoneDigits();
+  wireRegisterOtp();
   wireThemeIconToggles();
   warmupPushInfrastructure((path, options) => api(path, options));
 }
