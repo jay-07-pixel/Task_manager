@@ -120,13 +120,17 @@ model EmployeeDevice {
 }
 
 model ReminderSent {
-  taskId String   @map("task_id")
-  userId String   @map("user_id")
-  dueAt  DateTime @map("due_at")
-  slot   String   @db.VarChar(16)
-  sentAt DateTime @default(now()) @map("sent_at")
+  taskId       String   @map("task_id")
+  userId       String   @map("user_id")
+  dueAt        DateTime @map("due_at")
+  slot         String   @db.VarChar(16)
+  channel      String   @default("web_push") @db.VarChar(16)
+  status       String   @default("sent") @db.VarChar(16)
+  messageId    String?  @map("message_id") @db.VarChar(128)
+  errorMessage String?  @map("error_message") @db.Text
+  sentAt       DateTime @default(now()) @map("sent_at")
 
-  @@id([taskId, userId, dueAt, slot])
+  @@id([taskId, userId, dueAt, slot, channel])
   @@map("reminder_sent")
 }
 

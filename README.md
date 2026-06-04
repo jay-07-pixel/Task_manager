@@ -24,7 +24,7 @@ A full-stack task management app for a **list owner** and **assigned employees**
 - Checkbox to complete tasks (optional proof photo upload)
 - List name and deadline on each assignment
 - Mobile-friendly card layout
-- **Due reminders:** ~**10 minutes before** the deadline, then again **1 hour later** if still not submitted. The **server sends Web Push** alerts so reminders can appear while you use other apps (best on **Android Chrome**). Tapping the notification opens the full-screen alarm. **iPhone:** iOS 16.4+, Safari or installed PWA, usually **HTTPS**.
+- **Due reminders:** ~**10 minutes before** the deadline, then again **1 hour later** if still not submitted. The server sends **FCM** to the Android app (title **Task Reminder**, body = task name + due time, `taskId` in payload) and/or **Web Push** in the browser. Web push can open the full-screen alarm screen; FCM is notification-only (no alarm screen yet).
 
 ### Auth & registration
 - Email + password sign-in
@@ -98,7 +98,8 @@ TURNSTILE_SECRET_KEY="your-secret-key"
 | `TURNSTILE_*` | CAPTCHA before Send OTP. Add your hostname in the Turnstile dashboard. |
 | `COOKIE_SECURE` | Set `false` for HTTP VPS; `true` for HTTPS. |
 | `PORT` | API port (default **3000**). |
-| `VAPID_*` | Optional — employee phone push reminders (see below). |
+| `VAPID_*` | Optional — browser Web Push reminders (see below). |
+| `FIREBASE_SERVICE_ACCOUNT_*` | Optional — Android FCM (device register, test push, scheduled reminders). |
 
 **Local Turnstile test keys** (always pass): site `1x00000000000000000000AA`, secret `1x0000000000000000000000000000000AA`.
 
@@ -245,7 +246,7 @@ All JSON routes are under `/api`. Authenticated routes use the session cookie (`
 | Lists | `GET/POST /api/lists`, `PATCH /api/lists/:id`, reorder |
 | Tasks | `GET /api/tasks/lists/:listId`, `POST /api/tasks/lists/:listId`, `PATCH /api/tasks/:id`, `GET /api/tasks/assigned` |
 | Users | `GET /api/users/assignees` (owner employee picker) |
-| Push | `GET /api/push/vapid-public-key`, `POST /api/push/subscribe` |
+| Push | `GET /api/push/vapid-public-key`, `POST /api/push/subscribe`, `POST /api/push/devices/register`, `POST /api/push/test` |
 
 `GET /api/health` — health check (database connectivity).
 
@@ -253,29 +254,77 @@ All JSON routes are under `/api`. Authenticated routes use the session cookie (`
 
 ## Phone push reminders (employees)
 
-Reminders are sent from the **server** (~10 min before due, +1 h follow-up).
+Reminders are sent from the **server every 60 seconds** (~10 min before due, +1 h follow-up if still not submitted). Delivery is tracked in `reminder_sent` (per task, user, due time, slot, and channel).
 
-1. Apply migrations (includes `push_subscription`, `reminder_sent`):
+### Android FCM (Phase 8.3–8.4)
+
+1. Apply migrations (`employee_device`, `reminder_sent` with `channel` / `status`):
 
    ```bash
    npm run db:migrate --prefix server
    ```
 
-2. Generate VAPID keys and add to `server/.env`:
+2. Add Firebase service account to `server/.env`:
+
+   ```env
+   FIREBASE_SERVICE_ACCOUNT_PATH="firebase-service-account.json"
+   ```
+
+   Place the JSON next to `server/.env` (gitignored). Restart the API.
+
+3. Expected logs:
+
+   ```text
+   [fcm] Firebase Admin ready (project: …)
+   [reminder] scheduler started (every 60s) channels: fcm
+   ```
+
+4. Register the device from the Android app (`POST /api/push/devices/register` while logged in).
+
+5. **Test FCM** (manual):
+
+   ```javascript
+   fetch("/api/push/test", { method: "POST", credentials: "include" }).then((r) => r.json()).then(console.log);
+   ```
+
+6. **Test scheduled reminder** (owner assigns task to employee with due time in the next **10 minutes**):
+
+   - Due window: from **10 minutes before** `due_at` until **due_at** (slot `before10`).
+   - Notification title: **Task Reminder**
+   - Body: `{task title} — {formatted due time}`
+   - FCM data: `type=task_reminder`, `taskId`, `slot`, `dueAt` (ISO)
+
+   Optional debug:
+
+   ```bash
+   DEBUG_REMINDERS=true pm2 restart taskmanager
+   ```
+
+   Check delivery:
+
+   ```sql
+   SELECT * FROM reminder_sent WHERE channel = 'fcm' ORDER BY sent_at DESC LIMIT 10;
+   ```
+
+   Slot helper (local):
+
+   ```bash
+   node server/scripts/test-reminder-slot.mjs "2026-06-06T15:10:00.000Z"
+   ```
+
+### Browser Web Push (optional)
+
+1. Generate VAPID keys and add to `server/.env`:
 
    ```bash
    npm run vapid:generate --prefix server
    ```
 
-3. Restart the API. Log should show `[reminder] server push scheduler started` and `[push] VAPID ready`.
+2. Restart the API. Log may show `channels: fcm, web_push` and `[push] VAPID ready`.
 
-### Employee phone
+3. Employee: **Chrome** (Android) or Safari (iOS 16.4+), log in, **Allow notifications**.
 
-1. Open in **Chrome** (Android) or Safari (iOS 16.4+).
-2. Log in as employee and **Allow notifications**.
-3. Optional: **Add to Home screen** (PWA) on iPhone.
-
-**Notes:** **HTTPS** recommended on real devices. **Android Chrome** has the best background push support. If VAPID is missing, in-tab reminders still work while the site is open.
+**Notes:** **HTTPS** recommended on real devices. If neither FCM nor VAPID is configured, in-tab reminders still work while the site is open (`client/src/reminders.js`).
 
 ## Deployed server (VPS) checklist
 
@@ -310,6 +359,8 @@ Reminders are sent from the **server** (~10 min before due, +1 h follow-up).
    VAPID_PUBLIC_KEY="..."
    VAPID_PRIVATE_KEY="..."
    VAPID_SUBJECT="mailto:admin@yourdomain.com"
+
+   FIREBASE_SERVICE_ACCOUNT_PATH="firebase-service-account.json"
    ```
 
    - `COOKIE_SECURE=false` on **HTTP** — required or login cookie is dropped.  
@@ -326,7 +377,7 @@ Reminders are sent from the **server** (~10 min before due, +1 h follow-up).
 
 5. **Demo users** exist only after `npm run db:seed --prefix server` on that server.
 
-6. **Push:** Employees must allow notifications; check `push_subscription` rows in MySQL after login.
+6. **Push:** Android — `employee_device` row after app login; browser — `push_subscription` after allowing notifications. Reminder audit — `reminder_sent` (`channel` = `fcm` or `web_push`, `status` = `sent` or `failed`).
 
 ## Troubleshooting
 

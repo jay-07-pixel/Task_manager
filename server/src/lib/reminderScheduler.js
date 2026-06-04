@@ -1,10 +1,18 @@
 import { prisma } from "./prisma.js";
+import { formatDueTime } from "./formatDueTime.js";
+import { isFcmConfigured } from "./fcm.js";
 import { isPushConfigured, sendPushToSubscription } from "./push.js";
+import { sendFcmTaskReminder } from "../services/fcmReminderService.js";
 
 const REMINDER_BEFORE_MS = 10 * 60 * 1000;
 const FOLLOWUP_AFTER_FIRST_MS = 60 * 60 * 1000;
 /** Follow-up: from 1h after the first reminder until this long past due */
 const FOLLOWUP_GRACE_AFTER_DUE_MS = 24 * 60 * 60 * 1000;
+
+const CHANNEL_WEB = "web_push";
+const CHANNEL_FCM = "fcm";
+const STATUS_SENT = "sent";
+const STATUS_FAILED = "failed";
 
 const DEBUG = process.env.DEBUG_REMINDERS === "1" || process.env.DEBUG_REMINDERS === "true";
 
@@ -46,51 +54,89 @@ export function reminderSlotForDue(dueAt, nowMs = Date.now()) {
   return null;
 }
 
-async function sendReminder(row, slot, title, body) {
-  const dueAt = row.task.dueAt;
-  if (!dueAt) {
-    dbg("sendReminder skip: no dueAt", { taskId: row.taskId, userId: row.userId });
-    return;
-  }
+function reminderSentKey(taskId, userId, dueAt, slot, channel) {
+  return { taskId, userId, dueAt, slot, channel };
+}
 
-  dbg("sendReminder enter", { taskId: row.taskId, userId: row.userId, slot, dueAt: dueAt.toISOString() });
-
-  const existing = await prisma.reminderSent.findUnique({
+async function wasReminderDelivered(taskId, userId, dueAt, slot, channel) {
+  const row = await prisma.reminderSent.findUnique({
     where: {
-      taskId_userId_dueAt_slot: {
-        taskId: row.taskId,
-        userId: row.userId,
-        dueAt,
-        slot,
-      },
+      taskId_userId_dueAt_slot_channel: reminderSentKey(taskId, userId, dueAt, slot, channel),
     },
+    select: { status: true },
   });
-  if (existing) {
-    dbg("sendReminder skip: already sent", { taskId: row.taskId, slot });
+  return row?.status === STATUS_SENT;
+}
+
+async function recordReminderDelivery({
+  taskId,
+  userId,
+  dueAt,
+  slot,
+  channel,
+  status,
+  messageId = null,
+  errorMessage = null,
+}) {
+  const key = reminderSentKey(taskId, userId, dueAt, slot, channel);
+  try {
+    await prisma.reminderSent.upsert({
+      where: { taskId_userId_dueAt_slot_channel: key },
+      create: {
+        ...key,
+        status,
+        messageId,
+        errorMessage,
+      },
+      update: {
+        status,
+        messageId,
+        errorMessage,
+        sentAt: new Date(),
+      },
+    });
+    dbg("reminderSent recorded", { taskId, slot, channel, status });
+  } catch (err) {
+    if (err?.code === "P2002") {
+      dbg("reminderSent race (P2002)", { taskId, slot, channel });
+      return;
+    }
+    throw err;
+  }
+}
+
+async function sendWebPushReminder(row, slot, title, body) {
+  const dueAt = row.task.dueAt;
+  if (!dueAt) return;
+
+  const { taskId, userId } = row;
+  if (await wasReminderDelivered(taskId, userId, dueAt, slot, CHANNEL_WEB)) {
+    dbg("web push skip: already sent", { taskId, slot });
     return;
   }
 
-  const subs = await prisma.pushSubscription.findMany({ where: { userId: row.userId } });
-  dbg("push subscriptions", { userId: row.userId, count: subs.length });
+  const subs = await prisma.pushSubscription.findMany({ where: { userId } });
+  dbg("push subscriptions", { userId, count: subs.length });
   if (!subs.length) {
-    console.warn(`[reminder] no push_subscription for user ${row.userId} — cannot send ${slot}`);
+    console.warn(`[reminder] no push_subscription for user ${userId} — cannot send ${slot}`);
     return;
   }
 
   const payload = {
     title,
     body,
-    tag: `taskmgr-${row.taskId}-${dueAt.toISOString()}-${slot}`,
+    tag: `taskmgr-${taskId}-${dueAt.toISOString()}-${slot}`,
     payload: {
-      taskId: row.taskId,
+      taskId,
       title: row.task.title,
       dueAt: dueAt.toISOString(),
       slot,
-      url: alarmPath(row.taskId, row.task.title, dueAt, slot),
+      url: alarmPath(taskId, row.task.title, dueAt, slot),
     },
   };
 
   let anyOk = false;
+  let lastError = null;
   for (const sub of subs) {
     const result = await sendPushToSubscription(sub, payload);
     dbg("sendPushToSubscription", {
@@ -98,49 +144,117 @@ async function sendReminder(row, slot, title, body) {
       ok: result.ok,
       statusCode: result.statusCode,
       message: result.message,
-      hint: result.hint,
-      endpointHost: result.endpointHost,
     });
     if (result.ok) {
       anyOk = true;
-    } else if (result.gone) {
-      console.warn(`[reminder] removing invalid push_subscription ${sub.id} (${result.message})`);
-      await prisma.pushSubscription.delete({ where: { id: sub.id } }).catch(() => {});
+    } else {
+      lastError = result.message ?? "web push failed";
+      if (result.gone) {
+        console.warn(`[reminder] removing invalid push_subscription ${sub.id} (${result.message})`);
+        await prisma.pushSubscription.delete({ where: { id: sub.id } }).catch(() => {});
+      }
     }
   }
 
   if (!anyOk) {
+    await recordReminderDelivery({
+      taskId,
+      userId,
+      dueAt,
+      slot,
+      channel: CHANNEL_WEB,
+      status: STATUS_FAILED,
+      errorMessage: lastError,
+    });
     console.warn(
-      `[reminder] push failed for all subscriptions (task ${row.taskId}, user ${row.userId}, slot ${slot}). ` +
-        "Check [push] sendNotification failed logs above — usually VAPID mismatch (403) after key rotation."
+      `[reminder] web push failed (task ${taskId}, user ${userId}, slot ${slot}). ` +
+        "Check VAPID keys and subscription rows."
     );
     return;
   }
 
-  try {
-    await prisma.reminderSent.create({
-      data: {
-        taskId: row.taskId,
-        userId: row.userId,
-        dueAt,
-        slot,
-      },
-    });
-    dbg("reminderSent.create ok", { taskId: row.taskId, slot });
-  } catch (err) {
-    if (err?.code === "P2002") {
-      dbg("reminderSent.create race (P2002)", { taskId: row.taskId, slot });
-      return;
-    }
-    throw err;
+  await recordReminderDelivery({
+    taskId,
+    userId,
+    dueAt,
+    slot,
+    channel: CHANNEL_WEB,
+    status: STATUS_SENT,
+  });
+  console.log(`[reminder] web_push sent ${slot} for task ${taskId} → user ${userId}`);
+}
+
+async function sendFcmReminder(row, slot) {
+  const dueAt = row.task.dueAt;
+  if (!dueAt) return;
+
+  const { taskId, userId } = row;
+  if (await wasReminderDelivered(taskId, userId, dueAt, slot, CHANNEL_FCM)) {
+    dbg("fcm skip: already sent", { taskId, slot });
+    return;
   }
 
-  console.log(`[reminder] sent ${slot} for task ${row.taskId} → user ${row.userId}`);
+  const result = await sendFcmTaskReminder({
+    userId,
+    taskId,
+    title: row.task.title,
+    dueAt,
+    allDay: row.task.allDay,
+    slot,
+  });
+
+  if (result.ok) {
+    await recordReminderDelivery({
+      taskId,
+      userId,
+      dueAt,
+      slot,
+      channel: CHANNEL_FCM,
+      status: STATUS_SENT,
+      messageId: result.messageId ?? null,
+    });
+    return;
+  }
+
+  if (result.invalidateDevice && result.deviceId) {
+    await prisma.employeeDevice.delete({ where: { deviceId: result.deviceId } }).catch(() => {});
+    console.warn(`[reminder] removed stale employee_device ${result.deviceId}`);
+  }
+
+  if (result.code === "device/not-found") {
+    dbg("fcm skip: no device", { userId, taskId });
+    return;
+  }
+
+  await recordReminderDelivery({
+    taskId,
+    userId,
+    dueAt,
+    slot,
+    channel: CHANNEL_FCM,
+    status: STATUS_FAILED,
+    errorMessage: result.error ?? result.code ?? "FCM send failed",
+  });
+}
+
+function webPushCopyForSlot(row, slot) {
+  if (slot === "before10") {
+    return {
+      title: "Task due in 10 minutes",
+      body: `${row.task.title}\nTap to open the alarm screen.`,
+    };
+  }
+  return {
+    title: "Task still not submitted",
+    body: `${row.task.title}\nFollow-up reminder — please submit now.`,
+  };
 }
 
 export async function runReminderTick() {
-  if (!isPushConfigured()) {
-    dbg("runReminderTick skip: push not configured");
+  const fcmOn = isFcmConfigured();
+  const webOn = isPushConfigured();
+  if (!fcmOn && !webOn) {
+    dbg("runReminderTick skip: no FCM or web push configured");
     return;
   }
 
@@ -148,14 +262,17 @@ export async function runReminderTick() {
   const rows = await prisma.taskAssignee.findMany({
     where: {
       assigneeDone: false,
-      task: { dueAt: { not: null } },
+      task: {
+        dueAt: { not: null },
+        completed: false,
+      },
     },
     include: {
-      task: { select: { id: true, title: true, dueAt: true } },
+      task: { select: { id: true, title: true, dueAt: true, allDay: true } },
     },
   });
 
-  dbg("tick", { now: new Date(now).toISOString(), rowCount: rows.length });
+  dbg("tick", { now: new Date(now).toISOString(), rowCount: rows.length, fcmOn, webOn });
 
   for (const row of rows) {
     const dueAt = row.task.dueAt;
@@ -164,44 +281,39 @@ export async function runReminderTick() {
     const due = dueAt.getTime();
     if (!Number.isFinite(due)) continue;
 
-    const msUntilDue = Math.round((due - now) / 1000);
-    const firstAt = due - REMINDER_BEFORE_MS;
     const slot = reminderSlotForDue(dueAt, now);
+    if (!slot) continue;
 
     dbg("row", {
       taskId: row.taskId,
       userId: row.userId,
       title: row.task.title,
       dueAt: dueAt.toISOString(),
-      firstAt: new Date(firstAt).toISOString(),
-      now: new Date(now).toISOString(),
-      msUntilDueSec: msUntilDue,
-      slot: slot ?? "none",
+      slot,
     });
 
-    if (slot === "before10") {
-      dbg("entering before10");
-      await sendReminder(
-        row,
-        "before10",
-        "Task due in 10 minutes",
-        `${row.task.title}\nTap to open the alarm screen.`
-      );
-    } else if (slot === "followup1h") {
-      dbg("entering followup1h");
-      await sendReminder(
-        row,
-        "followup1h",
-        "Task still not submitted",
-        `${row.task.title}\nFollow-up reminder — please submit now.`
-      );
+    if (fcmOn) {
+      await sendFcmReminder(row, slot);
+    }
+
+    if (webOn) {
+      const copy = webPushCopyForSlot(row, slot);
+      await sendWebPushReminder(row, slot, copy.title, copy.body);
     }
   }
 }
 
 export function startReminderScheduler() {
-  if (!isPushConfigured()) return null;
-  console.log("[reminder] server push scheduler started (every 60s)");
+  const fcmOn = isFcmConfigured();
+  const webOn = isPushConfigured();
+  if (!fcmOn && !webOn) {
+    console.warn("[reminder] scheduler not started — configure FCM or VAPID push");
+    return null;
+  }
+
+  console.log(
+    `[reminder] scheduler started (every 60s) channels: ${[fcmOn && "fcm", webOn && "web_push"].filter(Boolean).join(", ")}`
+  );
   void runReminderTick();
   return setInterval(() => {
     runReminderTick().catch((err) => console.error("[reminder]", err));
