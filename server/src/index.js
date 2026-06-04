@@ -16,6 +16,7 @@ import userRoutes from "./routes/users.js";
 import pushRoutes from "./routes/push.js";
 import { prisma } from "./lib/prisma.js";
 import { initPush } from "./lib/push.js";
+import { initFcm } from "./lib/fcm.js";
 import { startReminderScheduler } from "./lib/reminderScheduler.js";
 import { getTurnstileSiteKey } from "./lib/turnstile.js";
 
@@ -117,6 +118,7 @@ const server = app.listen(PORT, () => {
     console.warn("[turnstile] TURNSTILE_SITE_KEY missing — registration CAPTCHA disabled");
   }
   initPush();
+  initFcm();
   startReminderScheduler();
 });
 

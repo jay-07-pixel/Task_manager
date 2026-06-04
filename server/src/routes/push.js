@@ -4,6 +4,8 @@ import { prisma } from "../lib/prisma.js";
 import { getVapidPublicKey } from "../lib/push.js";
 import { requireAuth } from "../middleware/auth.js";
 import { registerEmployeeDevice } from "../services/employeeDeviceService.js";
+import { sendTestPushToUser } from "../services/fcmPushService.js";
+import { isFcmConfigured } from "../lib/fcm.js";
 
 const router = Router();
 
@@ -77,6 +79,22 @@ router.post("/devices/register", requireAuth, async (req, res) => {
     console.error("[employee-device] register failed", err?.message ?? err);
     res.status(500).json({ error: "Device registration failed" });
   }
+});
+
+/** Phase 8.3 — send test FCM to the authenticated user's latest employee_device */
+router.post("/test", requireAuth, async (req, res) => {
+  if (!isFcmConfigured()) {
+    return res.status(503).json({
+      ok: false,
+      error:
+        "FCM is not configured. Set FIREBASE_SERVICE_ACCOUNT_PATH or FIREBASE_SERVICE_ACCOUNT_JSON in server/.env.",
+      code: "fcm/not-configured",
+    });
+  }
+
+  const result = await sendTestPushToUser(req.session.userId);
+  const status = result.ok ? 200 : result.code === "device/not-found" ? 404 : 502;
+  res.status(status).json(result);
 });
 
 router.delete("/subscribe", requireAuth, async (req, res) => {
