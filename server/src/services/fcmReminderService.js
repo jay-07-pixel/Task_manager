@@ -9,9 +9,17 @@ const INVALID_TOKEN_CODES = new Set([
 ]);
 
 /**
- * @param {{ userId: string, taskId: string, title: string, dueAt: Date, allDay?: boolean, slot: string }} params
+ * @param {{ userId: string, taskId: string, title: string, dueAt: Date, allDay?: boolean, dueTimeZone?: string | null, slot: string }} params
  */
-export async function sendFcmTaskReminder({ userId, taskId, title, dueAt, allDay = false, slot }) {
+export async function sendFcmTaskReminder({
+  userId,
+  taskId,
+  title,
+  dueAt,
+  allDay = false,
+  dueTimeZone = null,
+  slot,
+}) {
   const device = await getLatestEmployeeDevice(userId);
   if (!device) {
     return {
@@ -21,7 +29,7 @@ export async function sendFcmTaskReminder({ userId, taskId, title, dueAt, allDay
     };
   }
 
-  const dueLabel = formatDueTime(dueAt, allDay);
+  const dueLabel = formatDueTime(dueAt, allDay, dueTimeZone);
   const body = dueLabel ? `${title} — ${dueLabel}` : title;
 
   const result = await sendFcmNotification({

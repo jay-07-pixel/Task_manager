@@ -71,6 +71,7 @@ model Task {
   title           String
   notes           String           @db.Text @default("")
   dueAt           DateTime?        @map("due_at")
+  dueTimeZone     String?          @map("due_time_zone") @db.VarChar(64)
   allDay          Boolean          @default(false) @map("all_day")
   recurrence      TaskRecurrence   @default(none)
   recurrenceRule  String?          @map("recurrence_rule") @db.Text

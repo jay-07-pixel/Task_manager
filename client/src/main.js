@@ -1057,6 +1057,14 @@ function refreshModalRepeatLabels() {
   if ([...sel.options].some((o) => o.value === current)) sel.value = current;
 }
 
+function getBrowserDueTimeZone() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || null;
+  } catch {
+    return null;
+  }
+}
+
 function buildDueAtFromModal() {
   const dateStr = document.getElementById("modal-due").value;
   if (!dateStr) return null;
@@ -1940,6 +1948,7 @@ function wireTaskModal() {
       title: document.getElementById("modal-title").value,
       notes: document.getElementById("modal-notes").value,
       dueAt,
+      dueTimeZone: dueAt ? getBrowserDueTimeZone() : null,
       allDay: document.getElementById("modal-all-day").checked,
       recurrence: rec,
       recurrenceRule,

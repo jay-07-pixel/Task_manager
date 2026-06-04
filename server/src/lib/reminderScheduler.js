@@ -200,6 +200,7 @@ async function sendFcmReminder(row, slot) {
     title: row.task.title,
     dueAt,
     allDay: row.task.allDay,
+    dueTimeZone: row.task.dueTimeZone,
     slot,
   });
 
@@ -268,7 +269,7 @@ export async function runReminderTick() {
       },
     },
     include: {
-      task: { select: { id: true, title: true, dueAt: true, allDay: true } },
+      task: { select: { id: true, title: true, dueAt: true, allDay: true, dueTimeZone: true } },
     },
   });
 

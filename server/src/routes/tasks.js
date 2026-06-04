@@ -202,6 +202,7 @@ export function serializeTask(t) {
     title: t.title,
     notes: t.notes,
     dueAt: t.dueAt?.toISOString() ?? null,
+    dueTimeZone: t.dueTimeZone ?? null,
     allDay: t.allDay,
     recurrence: t.recurrence,
     recurrenceRule,
@@ -362,6 +363,7 @@ const createTaskSchema = z.object({
   notes: z.string().max(20000).optional(),
   starred: z.boolean().optional(),
   dueAt: z.union([z.string().min(1), z.literal(""), z.null()]).optional(),
+  dueTimeZone: z.string().min(1).max(64).optional().nullable(),
   allDay: z.boolean().optional(),
   recurrence: z.enum(["none", "daily", "weekly", "monthly", "yearly", "custom"]).optional(),
   recurrenceRule: z.any().optional(),
@@ -386,8 +388,10 @@ router.post("/lists/:listId", requireOwner, async (req, res) => {
   const sortOrder = (maxOrder._max.sortOrder ?? -1) + 1;
 
   let dueAt = null;
+  let dueTimeZone = null;
   if (parsed.data.dueAt && String(parsed.data.dueAt).length > 0) {
     dueAt = new Date(parsed.data.dueAt);
+    dueTimeZone = parsed.data.dueTimeZone?.trim() || null;
   }
 
   const recurrence = parsed.data.recurrence ?? "none";
@@ -407,6 +411,7 @@ router.post("/lists/:listId", requireOwner, async (req, res) => {
     notes: parsed.data.notes?.trim() ?? "",
     starred: parsed.data.starred ?? false,
     dueAt,
+    dueTimeZone,
     allDay: parsed.data.allDay ?? false,
     recurrence,
     sortOrder,
@@ -434,6 +439,7 @@ const patchTaskSchema = z.object({
   completed: z.boolean().optional(),
   starred: z.boolean().optional(),
   dueAt: z.union([z.string().min(1), z.null()]).optional(),
+  dueTimeZone: z.string().min(1).max(64).optional().nullable(),
   allDay: z.boolean().optional(),
   recurrence: z.enum(["none", "daily", "weekly", "monthly", "yearly", "custom"]).optional(),
   recurrenceRule: z.any().optional(),
@@ -501,6 +507,11 @@ router.patch("/:id", requireAuth, async (req, res) => {
     if (parsed.data.starred != null) data.starred = parsed.data.starred;
     if (parsed.data.dueAt !== undefined) {
       data.dueAt = parsed.data.dueAt ? new Date(parsed.data.dueAt) : null;
+      data.dueTimeZone = parsed.data.dueAt
+        ? parsed.data.dueTimeZone?.trim() || null
+        : null;
+    } else if (parsed.data.dueTimeZone !== undefined) {
+      data.dueTimeZone = parsed.data.dueTimeZone?.trim() || null;
     }
     if (parsed.data.allDay !== undefined) data.allDay = parsed.data.allDay;
 
