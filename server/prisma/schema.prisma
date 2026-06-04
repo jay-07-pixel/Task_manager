@@ -36,6 +36,7 @@ model User {
   createdTasks      Task[]             @relation("CreatedBy")
   taskAssignments   TaskAssignee[]
   pushSubscriptions PushSubscription[]
+  employeeDevices   EmployeeDevice[]
 }
 
 model TaskList {
@@ -98,6 +99,24 @@ model PushSubscription {
 
   @@index([userId])
   @@map("push_subscription")
+}
+
+model EmployeeDevice {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  deviceId   String   @unique @map("device_id") @db.VarChar(64)
+  fcmToken   String   @map("fcm_token") @db.VarChar(512)
+  platform   String   @default("android") @db.VarChar(16)
+  appVersion String   @map("app_version") @db.VarChar(32)
+  lastSeenAt DateTime @default(now()) @map("last_seen_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([fcmToken])
+  @@map("employee_device")
 }
 
 model ReminderSent {

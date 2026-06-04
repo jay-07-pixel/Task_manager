@@ -13,23 +13,26 @@ A full-stack task management app for a **list owner** and **assigned employees**
 - Light / dark theme
 
 ### Employee
-- Sidebar sections: **Daily**, **Weekly**, **Monthly**, and **Other** (one-time tasks)
-- Tasks appear in the section that matches the owner’s **Repeat** setting on the task
-- Completing a daily/weekly/monthly task advances the deadline and resets it for the next period (tomorrow, +1 week, +1 month)
-- **Yearly** tasks advance by one year on complete
-- **Custom repeat** supports every N days/weeks/months/years; **Ends on** and **After N occurrences** stop the series when reached
-- Custom tasks that repeat daily/weekly/monthly appear in the matching sidebar section
+- Sidebar sections: **Daily**, **Weekly**, **Monthly**, and **Other** (one-time or yearly / custom)
+- Tasks appear in the section that matches the owner’s **Repeat** setting (custom day/week/month rules map to the matching section)
+- Completing a repeating task advances the deadline and resets assignee status for the next period:
+  - **Daily** → +1 day  
+  - **Weekly** → +7 days  
+  - **Monthly** → +1 month  
+  - **Yearly** → +1 year  
+  - **Custom** → every N days/weeks/months/years (with optional **Ends on** date or **After N occurrences**)
 - Checkbox to complete tasks (optional proof photo upload)
 - List name and deadline on each assignment
 - Mobile-friendly card layout
-- **Due reminders:** ~**10 minutes before** the deadline, then again **1 hour later** if you still have not submitted. Allow **notifications** when prompted. The **server sends push alerts** so reminders can appear while you use other apps (best on **Android Chrome**). Tapping the notification opens the full-screen alarm. **iPhone:** requires iOS 16.4+, Safari or installed PWA, and usually **HTTPS**.
+- **Due reminders:** ~**10 minutes before** the deadline, then again **1 hour later** if still not submitted. The **server sends Web Push** alerts so reminders can appear while you use other apps (best on **Android Chrome**). Tapping the notification opens the full-screen alarm. **iPhone:** iOS 16.4+, Safari or installed PWA, usually **HTTPS**.
 
-### Auth
+### Auth & registration
 - Email + password sign-in
-- Registration (defaults to **employee**; first **owner** can register if none exists)
-- **Email OTP verification** before account creation (6-digit code, 10-minute expiry)
-- **Cloudflare Turnstile CAPTCHA** before Send OTP (verified server-side)
+- **Registration flow:** Complete CAPTCHA → **Send OTP** → verify code → **Create account**
+- **Cloudflare Turnstile** verified server-side before OTP is sent (rate-limited)
+- **Email OTP** via **Brevo** (6-digit code, 10-minute expiry, max 5 sends/hour and 5 verify attempts per email)
 - Phone: **10 digits** on register (validated client and server)
+- Registration defaults to **employee**; first **owner** can register if none exists
 - Session-based API auth (cookie)
 
 ## Tech stack
@@ -40,12 +43,17 @@ A full-stack task management app for a **list owner** and **assigned employees**
 | Backend  | Node.js, Express, Zod |
 | Database | MySQL, Prisma ORM |
 | Auth     | `express-session` + file store |
+| Email    | Brevo Transactional API |
+| CAPTCHA  | Cloudflare Turnstile |
+| Push     | `web-push` + VAPID |
 
 ## Prerequisites
 
 - **Node.js** 18+ (20+ recommended)
 - **MySQL** 8+ (local or remote)
 - npm (comes with Node)
+- [Brevo](https://www.brevo.com) account (registration OTP emails)
+- [Cloudflare Turnstile](https://dash.cloudflare.com/?to=/:account/turnstile) site (registration CAPTCHA)
 
 ## Quick start
 
@@ -62,24 +70,37 @@ npm install --prefix client
 
 Create a MySQL database (example name: `taskmanager`).
 
-Copy the server env template and edit it:
-
 ```bash
 cp server/.env.example server/.env
 ```
 
-`server/.env`:
+Edit `server/.env` — minimum:
 
 ```env
 DATABASE_URL="mysql://USER:PASSWORD@localhost:3306/taskmanager"
 SESSION_SECRET="change-this-to-a-long-random-string"
 ```
 
-Optional: `PORT` (default **3000**).
+**Registration (recommended for full sign-up flow):**
 
-For registration OTP emails, configure Brevo in `server/.env` (`BREVO_API_KEY`, `BREVO_SENDER_NAME`, `BREVO_SENDER_EMAIL` — see `server/.env.example`). Without Brevo in development, the OTP is printed in the API server log only.
+```env
+BREVO_API_KEY="xkeysib-..."
+BREVO_SENDER_NAME="Task Manager"
+BREVO_SENDER_EMAIL="verified-sender@yourdomain.com"
 
-For registration CAPTCHA, add `TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY` from the [Cloudflare Turnstile dashboard](https://dash.cloudflare.com/?to=/:account/turnstile). CAPTCHA is verified when the user clicks **Send OTP** (and **Resend OTP**).
+TURNSTILE_SITE_KEY="your-site-key"
+TURNSTILE_SECRET_KEY="your-secret-key"
+```
+
+| Variable | Purpose |
+|----------|---------|
+| `BREVO_*` | Sends OTP emails. Without Brevo in dev, OTP is printed in the API console only. |
+| `TURNSTILE_*` | CAPTCHA before Send OTP. Add your hostname in the Turnstile dashboard. |
+| `COOKIE_SECURE` | Set `false` for HTTP VPS; `true` for HTTPS. |
+| `PORT` | API port (default **3000**). |
+| `VAPID_*` | Optional — employee phone push reminders (see below). |
+
+**Local Turnstile test keys** (always pass): site `1x00000000000000000000AA`, secret `1x0000000000000000000000000000000AA`.
 
 ### 3. Migrate and seed
 
@@ -89,7 +110,7 @@ npm run db:migrate --prefix server
 npm run db:seed --prefix server
 ```
 
-If you prefer schema sync without migration history:
+Or sync schema without migration history:
 
 ```bash
 npm run db:push --prefix server
@@ -98,8 +119,6 @@ npm run db:seed --prefix server
 
 ### 4. Run in development
 
-From the project root:
-
 ```bash
 npm run dev
 ```
@@ -107,27 +126,37 @@ npm run dev
 - **Web UI:** http://localhost:5173 (Vite proxies `/api` to the API)
 - **API:** http://localhost:3000
 
+Use **localhost:5173** during development so you always see the latest UI. Port **3000** serves the built `client/dist` only after `npm run build`.
+
 ### Demo accounts (after seed)
 
-| Role     | Email                 | Password     |
-|----------|-----------------------|--------------|
-| Owner    | `owner@local.test`    | `password123` |
-| Employee | `employee1@local.test`| `password123` |
-| Employee | `employee2@local.test`| `password123` |
+| Role     | Email                  | Password      |
+|----------|------------------------|---------------|
+| Owner    | `owner@local.test`     | `password123` |
+| Employee | `employee1@local.test` | `password123` |
+| Employee | `employee2@local.test` | `password123` |
 
 Seed also creates a **My Tasks** list with a **daily** sample task assigned to Employee One.
 
 **Tip for owners:** Set **Repeat** to Daily, Weekly, or Monthly when creating/editing a task so employees see it in the matching section.
 
+## Registration flow (user)
+
+1. Fill **Display name**, **Email**, **Phone**, **Password**
+2. Complete **Security check** (Turnstile)
+3. Click **Send OTP** → enter 6-digit code from email → **Verify**
+4. Click **Create account**
+
 ## npm scripts
 
 ### Root
 
-| Script   | Description |
-|----------|-------------|
-| `npm run dev`   | API + Vite dev servers together |
+| Script | Description |
+|--------|-------------|
+| `npm run dev` | API + Vite dev servers together |
 | `npm run build` | Production client build → `client/dist` |
-| `npm run start` | Production API (serves built client when `NODE_ENV=production`) |
+| `npm run start` | Rebuild client, then start API with `NODE_ENV=production` |
+| `npm run deploy` | `npm install` (server), `db:generate`, `build` — run before restart on VPS |
 
 ### Server (`server/`)
 
@@ -149,44 +178,59 @@ Seed also creates a **My Tasks** list with a **daily** sample task assigned to E
 | `npm run build` | Build static assets |
 | `npm run preview` | Preview production build |
 
-## Production
+## Production (local)
+
+```bash
+npm run start
+```
+
+Or manually:
 
 ```bash
 npm run build
 set NODE_ENV=production
-npm run start
+npm run start --prefix server
 ```
 
-On Unix/macOS:
+On Unix/macOS: `NODE_ENV=production npm run start --prefix server`.
 
-```bash
-npm run build
-NODE_ENV=production npm run start
-```
-
-Open http://localhost:3000 (or your `PORT`). Ensure `SESSION_SECRET` and `DATABASE_URL` are set for production.
+Open http://localhost:3000 (or your `PORT`). Ensure `SESSION_SECRET` and `DATABASE_URL` are set.
 
 ## Project structure
 
 ```
 Task Manager/
-├── client/                 # Vite frontend
+├── client/
 │   ├── src/
-│   │   ├── main.js         # UI and API client
+│   │   ├── main.js           # UI and API client
+│   │   ├── reminders.js      # In-tab employee reminders
+│   │   ├── sw-register.js    # Web Push subscribe
 │   │   └── scss/styles.scss
-│   └── dist/               # Built assets (after npm run build)
+│   ├── public/
+│   │   ├── sw.js             # Service worker (push)
+│   │   └── alarm.html
+│   └── dist/                 # Built assets (not in git — run npm run build)
 ├── server/
 │   ├── prisma/
 │   │   ├── schema.prisma
-│   │   └── seed.js
-│   ├── prisma-client/      # Generated Prisma client
+│   │   ├── seed.js
+│   │   └── migrations/
+│   ├── prisma-client/
 │   ├── src/
 │   │   ├── index.js
-│   │   ├── routes/         # auth, lists, tasks, users
+│   │   ├── load-env.js       # Loads server/.env (works with PM2 any cwd)
+│   │   ├── routes/           # auth, lists, tasks, users, push
+│   │   ├── lib/
+│   │   │   ├── mail.js       # Brevo OTP email
+│   │   │   ├── turnstile.js  # CAPTCHA siteverify
+│   │   │   ├── otp.js        # OTP generate/hash
+│   │   │   ├── recurrenceRoll.js
+│   │   │   ├── push.js
+│   │   │   └── reminderScheduler.js
 │   │   └── middleware/
-│   ├── uploads/            # Completion proof images
-│   └── sessions/           # Session files (dev)
-├── package.json            # Root orchestration scripts
+│   ├── uploads/              # Completion proof images
+│   └── sessions/
+├── package.json
 └── README.md
 ```
 
@@ -194,58 +238,51 @@ Task Manager/
 
 All JSON routes are under `/api`. Authenticated routes use the session cookie (`credentials: include` from the client).
 
-| Area | Examples |
-|------|----------|
+| Area | Endpoints |
+|------|-----------|
 | Auth | `POST /api/auth/login`, `POST /api/auth/register`, `POST /api/auth/logout`, `GET /api/auth/me` |
+| Auth OTP | `GET /api/auth/turnstile-site-key`, `POST /api/auth/send-otp`, `POST /api/auth/verify-otp` |
 | Lists | `GET/POST /api/lists`, `PATCH /api/lists/:id`, reorder |
-| Tasks | `GET /api/tasks/lists/:listId`, `POST /api/tasks/lists/:listId`, `PATCH /api/tasks/:id`, `GET /api/tasks/assigned` (employees) |
-| Users | `GET /api/users/assignees` (owner: employee picker) |
-| Push | `GET /api/push/vapid-public-key`, `POST /api/push/subscribe` (employee phone alerts) |
+| Tasks | `GET /api/tasks/lists/:listId`, `POST /api/tasks/lists/:listId`, `PATCH /api/tasks/:id`, `GET /api/tasks/assigned` |
+| Users | `GET /api/users/assignees` (owner employee picker) |
+| Push | `GET /api/push/vapid-public-key`, `POST /api/push/subscribe` |
 
-`GET /api/health` — health check (includes database connectivity).
+`GET /api/health` — health check (database connectivity).
+
+**Register** requires verified OTP (`email_verification` table) and a valid Turnstile token on `send-otp` only.
 
 ## Phone push reminders (employees)
 
-Reminders are sent from the **server** (~10 min before due, +1 h follow-up) so alerts can appear while the employee uses other apps.
+Reminders are sent from the **server** (~10 min before due, +1 h follow-up).
 
-### Server setup
-
-1. Run the push migration (includes `push_subscription` and `reminder_sent` tables):
+1. Apply migrations (includes `push_subscription`, `reminder_sent`):
 
    ```bash
    npm run db:migrate --prefix server
    ```
 
-2. Generate VAPID keys and add them to `server/.env`:
+2. Generate VAPID keys and add to `server/.env`:
 
    ```bash
    npm run vapid:generate --prefix server
    ```
 
-3. Restart the API. You should see `[reminder] server push scheduler started` in the logs.
+3. Restart the API. Log should show `[reminder] server push scheduler started` and `[push] VAPID ready`.
 
 ### Employee phone
 
-1. Open the app in **Chrome** (Android) or Safari (iOS 16.4+).
-2. Log in as an employee and **Allow notifications** when prompted.
-3. Optional: **Add to Home screen** (PWA) for more reliable delivery on iPhone.
+1. Open in **Chrome** (Android) or Safari (iOS 16.4+).
+2. Log in as employee and **Allow notifications**.
+3. Optional: **Add to Home screen** (PWA) on iPhone.
 
-**Notes**
-
-- **HTTPS** is strongly recommended on real devices (many browsers block push on plain HTTP except localhost).
-- **Android Chrome** has the best support for background push.
-- **iPhone:** push works in Safari / installed PWA on iOS 16.4+; older iOS or in-app browsers may not receive background alerts.
-- If push is not configured (no VAPID keys), in-tab reminders still work while the site is open.
+**Notes:** **HTTPS** recommended on real devices. **Android Chrome** has the best background push support. If VAPID is missing, in-tab reminders still work while the site is open.
 
 ## Deployed server (VPS) checklist
 
-If login fails on a server like `http://YOUR_IP:3000`:
+1. **Health:** `http://YOUR_HOST:3000/api/health` → `"db":"connected"`
 
-1. **Open** `http://YOUR_IP:3000/api/health`  
-   - `"db":"connected"` → database OK  
-   - `"db":"error"` → fix MySQL and `DATABASE_URL` in `server/.env`
+2. **Deploy** (from project folder):
 
-2. **On the server**, from the project folder:
    ```bash
    git pull origin main
    npm install --prefix server
@@ -253,39 +290,60 @@ If login fails on a server like `http://YOUR_IP:3000`:
    npm run build
    pm2 restart taskmanager
    ```
-   **Important:** `client/dist` is not in git. You must run **`npm run build`** after every `git pull` or the site will show an old UI (no OTP buttons). Or use `npm start`, which rebuilds the client automatically before starting the API.
 
-3. **`server/.env` must include:**
+   **`client/dist` is not in git.** Run **`npm run build`** after every `git pull`, or use **`npm run start`** from the repo root (rebuilds then starts the API).
+
+3. **`server/.env` example:**
+
    ```env
    DATABASE_URL="mysql://USER:PASS@localhost:3306/taskmanager"
    SESSION_SECRET="long-random-string"
    COOKIE_SECURE=false
+
+   BREVO_API_KEY="xkeysib-..."
+   BREVO_SENDER_NAME="Task Manager"
+   BREVO_SENDER_EMAIL="noreply@yourdomain.com"
+
+   TURNSTILE_SITE_KEY="..."
+   TURNSTILE_SECRET_KEY="..."
+
    VAPID_PUBLIC_KEY="..."
    VAPID_PRIVATE_KEY="..."
    VAPID_SUBJECT="mailto:admin@yourdomain.com"
-   BREVO_API_KEY="..."
-   BREVO_SENDER_NAME="Task Manager"
-   BREVO_SENDER_EMAIL="noreply@yourdomain.com"
-   TURNSTILE_SITE_KEY="..."
-   TURNSTILE_SECRET_KEY="..."
    ```
-   Use `COOKIE_SECURE=false` when using **HTTP** (not HTTPS). Without this, login succeeds but the session cookie is dropped and you stay on the sign-in screen.
 
-   Generate VAPID keys with `npm run vapid:generate --prefix server`. For **phone push while in other apps**, use **HTTPS** on the VPS when possible—plain HTTP often blocks push on mobile (localhost is the exception).
+   - `COOKIE_SECURE=false` on **HTTP** — required or login cookie is dropped.  
+   - Turnstile: add your **VPS hostname** (e.g. `aromawrap.duckdns.org`) in the Cloudflare widget domains.  
+   - Brevo: sender email must be **verified** in Brevo.
 
-4. **Demo users** (`owner@local.test` / `password123`) exist only **after** `db:seed` on **that** server’s database—not automatically from your laptop.
+4. **Verify after restart:**
 
-5. **Phone reminders:** After deploy, log in as an employee on the phone, allow notifications, and confirm the API log shows `[reminder] server push scheduler started`.
+   ```bash
+   curl -s http://localhost:3000/api/auth/turnstile-site-key
+   ```
+
+   Should return `{"siteKey":"..."}`. If **503**, Turnstile env vars are missing or `load-env` path is wrong.
+
+5. **Demo users** exist only after `npm run db:seed --prefix server` on that server.
+
+6. **Push:** Employees must allow notifications; check `push_subscription` rows in MySQL after login.
 
 ## Troubleshooting
 
-- **`401` on `/api/auth/me` before login:** Normal — you are not signed in yet.
-- **`401` on `/api/auth/login`:** Wrong email/password, or user not seeded on this server.
-- **`400` on login:** Invalid email format or empty fields.
-- **`500` on login:** Database error — check `/api/health` and server logs.
-- **Prisma / EPERM on Windows:** Stop the dev server, close tools using the DB folder, then rerun `npm run db:generate --prefix server`.
-- **API errors from the UI:** Confirm MySQL is running and `DATABASE_URL` in `server/.env` is correct.
-- **Login fails after seed:** Run `npm run db:seed --prefix server` again; use the demo emails above.
+| Issue | What to try |
+|-------|-------------|
+| `401` on `/api/auth/me` before login | Normal — not signed in |
+| `401` on login | Wrong credentials or user not seeded on this server |
+| `403` on register | OTP not verified — complete Send OTP → Verify first |
+| `503` on `/api/auth/turnstile-site-key` | Add `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY` to `server/.env` and restart API |
+| Turnstile “Unable to connect to website” | Add site hostname in Cloudflare Turnstile dashboard |
+| No OTP email | Check Brevo keys and verified sender; in dev, read API console log |
+| Old UI on VPS (no OTP/CAPTCHA) | Run `npm run build` after `git pull` |
+| Login works but session lost | Set `COOKIE_SECURE=false` on HTTP |
+| `500` / health `db:error` | MySQL running, correct `DATABASE_URL`, run migrate + seed |
+| Prisma EPERM on Windows | Stop dev server, rerun `npm run db:generate --prefix server` |
+| Push `invalid JWT` / no background alerts | Regenerate VAPID, clear `push_subscription`, re-login and allow notifications |
+| CAPTCHA overflows on mobile | Pull latest; uses compact Turnstile + stacked layout |
 
 ## License
 

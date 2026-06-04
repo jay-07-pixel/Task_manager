@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { getVapidPublicKey } from "../lib/push.js";
 import { requireAuth } from "../middleware/auth.js";
+import { registerEmployeeDevice } from "../services/employeeDeviceService.js";
 
 const router = Router();
 
@@ -46,6 +47,36 @@ router.post("/subscribe", requireAuth, async (req, res) => {
   });
 
   res.json({ ok: true });
+});
+
+const registerDeviceSchema = z.object({
+  deviceId: z.string().min(1).max(64),
+  fcmToken: z.string().min(1).max(512),
+  appVersion: z.string().min(1).max(32),
+  platform: z.enum(["android", "ios"]).default("android"),
+});
+
+router.post("/devices/register", requireAuth, async (req, res) => {
+  const parsed = registerDeviceSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid device registration" });
+  }
+  const { deviceId, fcmToken, appVersion, platform } = parsed.data;
+  const userId = req.session.userId;
+
+  try {
+    const result = await registerEmployeeDevice({
+      userId,
+      deviceId,
+      fcmToken,
+      appVersion,
+      platform,
+    });
+    res.json({ ok: true, created: result.created, deviceId: result.deviceId });
+  } catch (err) {
+    console.error("[employee-device] register failed", err?.message ?? err);
+    res.status(500).json({ error: "Device registration failed" });
+  }
 });
 
 router.delete("/subscribe", requireAuth, async (req, res) => {
