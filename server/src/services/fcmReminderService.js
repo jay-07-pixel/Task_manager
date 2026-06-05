@@ -1,5 +1,5 @@
 import { formatDueTime } from "../lib/formatDueTime.js";
-import { sendFcmNotification } from "../lib/fcm.js";
+import { sendFcmDataMessage } from "../lib/fcm.js";
 import { getLatestEmployeeDevice } from "./fcmPushService.js";
 
 const LOG = "[fcm-reminder]";
@@ -32,15 +32,15 @@ export async function sendFcmTaskReminder({
   const dueLabel = formatDueTime(dueAt, allDay, dueTimeZone);
   const body = dueLabel ? `${title} — ${dueLabel}` : title;
 
-  const result = await sendFcmNotification({
+  const result = await sendFcmDataMessage({
     token: device.fcmToken,
-    title: "Task Reminder",
-    body,
     data: {
       type: "task_reminder",
       taskId,
+      title,
       slot,
       dueAt: dueAt.toISOString(),
+      body,
     },
   });
 

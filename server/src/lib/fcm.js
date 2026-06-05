@@ -75,6 +75,39 @@ export function isFcmConfigured() {
 /**
  * @param {{ token: string, title: string, body: string, data?: Record<string, string> }} params
  */
+/**
+ * Data-only message so Android {@code onMessageReceived} runs in all app states.
+ * @param {{ token: string, data?: Record<string, string> }} params
+ */
+export async function sendFcmDataMessage({ token, data = {} }) {
+  if (!initFcm()) {
+    return {
+      ok: false,
+      error: "FCM is not configured on this server.",
+      code: "fcm/not-configured",
+    };
+  }
+
+  try {
+    const messageId = await admin.messaging().send({
+      token,
+      data: Object.fromEntries(
+        Object.entries(data).map(([k, v]) => [k, String(v)])
+      ),
+      android: {
+        priority: "high",
+      },
+    });
+
+    return { ok: true, messageId };
+  } catch (err) {
+    const code = err?.code ?? err?.errorInfo?.code ?? "fcm/send-failed";
+    const message = err?.message ?? err?.errorInfo?.message ?? "FCM send failed";
+    console.error("[fcm] data send failed", code, message);
+    return { ok: false, error: message, code };
+  }
+}
+
 export async function sendFcmNotification({ token, title, body, data = {} }) {
   if (!initFcm()) {
     return {
@@ -94,7 +127,7 @@ export async function sendFcmNotification({ token, title, body, data = {} }) {
       android: {
         priority: "high",
         notification: {
-          channelId: "task_reminders",
+          channelId: "task_reminders_alarm",
           sound: "default",
         },
       },
