@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { getVapidPublicKey } from "../lib/push.js";
 import { requireAuth } from "../middleware/auth.js";
-import { registerEmployeeDevice } from "../services/employeeDeviceService.js";
+import { registerEmployeeDevice, unregisterEmployeeDevice } from "../services/employeeDeviceService.js";
 import { sendTestPushToUser } from "../services/fcmPushService.js";
 import { isFcmConfigured } from "../lib/fcm.js";
 
@@ -78,6 +78,27 @@ router.post("/devices/register", requireAuth, async (req, res) => {
   } catch (err) {
     console.error("[employee-device] register failed", err?.message ?? err);
     res.status(500).json({ error: "Device registration failed" });
+  }
+});
+
+const unregisterDeviceSchema = z.object({
+  deviceId: z.string().min(1).max(64),
+});
+
+router.delete("/devices/register", requireAuth, async (req, res) => {
+  const parsed = unregisterDeviceSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid device unregister request" });
+  }
+  const { deviceId } = parsed.data;
+  const userId = req.session.userId;
+
+  try {
+    const result = await unregisterEmployeeDevice({ userId, deviceId });
+    res.json({ ok: true, removed: result.removed, deviceId });
+  } catch (err) {
+    console.error("[employee-device] unregister failed", err?.message ?? err);
+    res.status(500).json({ error: "Device unregister failed" });
   }
 });
 

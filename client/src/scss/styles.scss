@@ -903,6 +903,15 @@
   align-self: flex-start;
 }
 
+.emp-proof-thumb--loading {
+  opacity: 0.45;
+}
+
+.emp-proof-thumb--error {
+  opacity: 0.35;
+  object-fit: none;
+}
+
 .emp-proof-thumb {
   display: block;
   max-height: 3.25rem;

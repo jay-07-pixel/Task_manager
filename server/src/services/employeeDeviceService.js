@@ -1,6 +1,7 @@
 import { prisma } from "../lib/prisma.js";
 
 const LOG = "[employee-device]";
+const MAX_DEVICES_PER_USER = 5;
 
 /**
  * Register or refresh an Android/iOS device for FCM push.
@@ -43,6 +44,7 @@ export async function registerEmployeeDevice({
       `${LOG} updated deviceId=${deviceId} userId=${userId} platform=${platform} ` +
         `appVersion=${appVersion} tokenChanged=${existing.fcmToken !== fcmToken}`
     );
+    await pruneExcessDevices(userId, MAX_DEVICES_PER_USER);
     return { id: device.id, deviceId: device.deviceId, created: false };
   }
 
@@ -59,5 +61,34 @@ export async function registerEmployeeDevice({
   console.log(
     `${LOG} created deviceId=${deviceId} userId=${userId} platform=${platform} appVersion=${appVersion}`
   );
+  await pruneExcessDevices(userId, MAX_DEVICES_PER_USER);
   return { id: device.id, deviceId: device.deviceId, created: true };
+}
+
+/**
+ * Remove this install from push delivery (logout / device replacement).
+ */
+export async function unregisterEmployeeDevice({ userId, deviceId }) {
+  const deleted = await prisma.employeeDevice.deleteMany({
+    where: { userId, deviceId },
+  });
+  if (deleted.count > 0) {
+    console.log(`${LOG} unregistered deviceId=${deviceId} userId=${userId}`);
+  }
+  return { removed: deleted.count > 0 };
+}
+
+async function pruneExcessDevices(userId, maxDevices) {
+  const devices = await prisma.employeeDevice.findMany({
+    where: { userId },
+    orderBy: { lastSeenAt: "desc" },
+    select: { deviceId: true },
+  });
+  if (devices.length <= maxDevices) return;
+
+  const toRemove = devices.slice(maxDevices);
+  for (const row of toRemove) {
+    await prisma.employeeDevice.delete({ where: { deviceId: row.deviceId } }).catch(() => {});
+    console.log(`${LOG} pruned stale deviceId=${row.deviceId} userId=${userId}`);
+  }
 }

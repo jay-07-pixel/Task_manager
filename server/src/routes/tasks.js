@@ -141,6 +141,18 @@ function proofAbsolutePath(storedName) {
   return fs.existsSync(full) ? full : null;
 }
 
+function proofContentType(storedName) {
+  const ext = path.extname(storedName).toLowerCase();
+  const map = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+  };
+  return map[ext] || "application/octet-stream";
+}
+
 const proofUpload = multer({
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => {
@@ -268,6 +280,7 @@ router.get("/:id/completion-proof/:assigneeUserId", requireAuth, async (req, res
   if (!full) {
     return res.status(404).send("Not found");
   }
+  res.type(proofContentType(row.completionProofPath));
   res.sendFile(full);
 });
 

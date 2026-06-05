@@ -8,7 +8,16 @@ const LOG = "[fcm-push]";
  * @param {string} userId
  */
 export async function getLatestEmployeeDevice(userId) {
-  return prisma.employeeDevice.findFirst({
+  const devices = await getEmployeeDevicesForUser(userId);
+  return devices[0] ?? null;
+}
+
+/**
+ * All registered devices for a user (newest activity first).
+ * @param {string} userId
+ */
+export async function getEmployeeDevicesForUser(userId) {
+  return prisma.employeeDevice.findMany({
     where: { userId },
     orderBy: { lastSeenAt: "desc" },
     select: {

@@ -340,6 +340,14 @@ Reminders are sent from the **server every 60 seconds** (~10 min before due, +1 
    pm2 restart taskmanager
    ```
 
+   After deploy, verify Contact API exists (should **not** return SPA HTML):
+
+   ```bash
+   curl -s -o /dev/null -w "%{http_code}" -X POST http://localhost:3000/api/support/contact
+   ```
+
+   Expect **401** (not signed in) or **400** — **not 404**.
+
    **`client/dist` is not in git.** Run **`npm run build`** after every `git pull`, or use **`npm run start`** from the repo root (rebuilds then starts the API).
 
 3. **`server/.env` example:**
@@ -361,6 +369,10 @@ Reminders are sent from the **server every 60 seconds** (~10 min before due, +1 
    VAPID_SUBJECT="mailto:admin@yourdomain.com"
 
    FIREBASE_SERVICE_ACCOUNT_PATH="firebase-service-account.json"
+
+   SUPPORT_SMTP_USER="kalpanik432@gmail.com"
+   SUPPORT_SMTP_PASSWORD="your-gmail-app-password"
+   SUPPORT_SMTP_TO="kalpanik432@gmail.com"
    ```
 
    - `COOKIE_SECURE=false` on **HTTP** — required or login cookie is dropped.  

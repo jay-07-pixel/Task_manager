@@ -96,6 +96,8 @@ export async function sendFcmDataMessage({ token, data = {} }) {
       ),
       android: {
         priority: "high",
+        ttl: 60 * 1000,
+        directBootOk: true,
       },
     });
 

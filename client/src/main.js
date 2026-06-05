@@ -216,6 +216,51 @@ function escapeHtml(s) {
   return d.innerHTML;
 }
 
+/** @type {Set<string>} */
+const proofBlobUrls = new Set();
+
+function revokeProofBlobUrls() {
+  for (const url of proofBlobUrls) URL.revokeObjectURL(url);
+  proofBlobUrls.clear();
+}
+
+async function fetchProofBlobUrl(proofUrl) {
+  const res = await fetch(proofUrl, { credentials: "include" });
+  if (!res.ok) {
+    if (res.status === 401) throw new Error("Sign in again to view proof images.");
+    if (res.status === 403) throw new Error("You do not have permission to view this proof.");
+    if (res.status === 404) throw new Error("Proof image not found on the server.");
+    throw new Error(`Could not load proof (${res.status}).`);
+  }
+  const blob = await res.blob();
+  if (!blob.type.startsWith("image/")) {
+    throw new Error("Proof file is missing or not a valid image.");
+  }
+  const blobUrl = URL.createObjectURL(blob);
+  proofBlobUrls.add(blobUrl);
+  return blobUrl;
+}
+
+async function loadProofThumbnail(img, proofUrl) {
+  img.classList.add("emp-proof-thumb--loading");
+  img.removeAttribute("src");
+  try {
+    img.src = await fetchProofBlobUrl(proofUrl);
+  } catch {
+    img.classList.add("emp-proof-thumb--error");
+    img.alt = "Proof unavailable";
+  } finally {
+    img.classList.remove("emp-proof-thumb--loading");
+  }
+}
+
+function hydrateProofImages(root = document) {
+  root.querySelectorAll("img.js-proof-img[data-proof-url]").forEach((img) => {
+    const url = img.getAttribute("data-proof-url");
+    if (url) void loadProofThumbnail(img, url);
+  });
+}
+
 async function refreshMe() {
   try {
     const { user } = await api("/api/auth/me");
@@ -992,7 +1037,7 @@ function empDoneTaskRowHtml(t) {
                       proofUrl
                         ? `<button type="button" class="emp-proof-open emp-proof-trigger" data-proof-url="${escapeHtml(proofUrl)}" aria-label="View proof for ${escapeHtml(t.title)}">
                             <span class="emp-proof-thumb-wrap">
-                              <img src="${escapeHtml(proofUrl)}?v=${Date.now()}" alt="" class="emp-proof-thumb" loading="lazy" />
+                              <img data-proof-url="${escapeHtml(proofUrl)}" alt="" class="emp-proof-thumb js-proof-img" loading="lazy" />
                             </span>
                             <span class="emp-proof-label"><i class="bi bi-zoom-in" aria-hidden="true"></i> View</span>
                           </button>`
@@ -1723,15 +1768,21 @@ function wireOwnerMarkDoneModal() {
   });
 }
 
-function openProofImageModal(proofUrl, altLabel) {
+async function openProofImageModal(proofUrl, altLabel) {
   if (!proofUrl) return;
   const img = document.getElementById("task-proof-only-img");
   const modalEl = document.getElementById("taskProofOnlyModal");
   if (!img || !modalEl) return;
-  const sep = proofUrl.includes("?") ? "&" : "?";
-  img.src = `${proofUrl}${sep}t=${Date.now()}`;
+  img.removeAttribute("src");
   img.alt = altLabel || "Submission";
-  bootstrap.Modal.getOrCreateInstance(modalEl).show();
+  const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+  modal.show();
+  try {
+    img.src = await fetchProofBlobUrl(proofUrl);
+  } catch (err) {
+    modal.hide();
+    showToast(err.message || "Could not load proof image.", "danger");
+  }
 }
 
 function wireTaskProofOnlyModal() {
@@ -1740,6 +1791,10 @@ function wireTaskProofOnlyModal() {
   modalEl.dataset.wiredProof = "1";
   modalEl.addEventListener("hidden.bs.modal", () => {
     const img = document.getElementById("task-proof-only-img");
+    if (img?.src?.startsWith("blob:")) {
+      URL.revokeObjectURL(img.src);
+      proofBlobUrls.delete(img.src);
+    }
     if (img) img.removeAttribute("src");
   });
 }
@@ -2550,11 +2605,13 @@ function renderEmployeeView() {
   document.querySelectorAll(".emp-proof-open").forEach((btn) => {
     btn.addEventListener("click", () => {
       const url = btn.getAttribute("data-proof-url");
-      openProofImageModal(url, "Your submission");
+      void openProofImageModal(url, "Your submission");
     });
   });
 
   wireTaskProofOnlyModal();
+  revokeProofBlobUrls();
+  hydrateProofImages(app);
 
   document.getElementById("emp-complete-with-photo")?.addEventListener("click", async () => {
     const id = document.getElementById("emp-complete-task-id")?.value;

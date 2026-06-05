@@ -5,9 +5,12 @@ import { isPushConfigured, sendPushToSubscription } from "./push.js";
 import { sendFcmTaskReminder } from "../services/fcmReminderService.js";
 
 const REMINDER_BEFORE_MS = 10 * 60 * 1000;
-const FOLLOWUP_AFTER_FIRST_MS = 60 * 60 * 1000;
-/** Follow-up: from 1h after the first reminder until this long past due */
-const FOLLOWUP_GRACE_AFTER_DUE_MS = 24 * 60 * 60 * 1000;
+/** Missed-task follow-ups after due time (one send per slot via ReminderSent dedup). */
+const FOLLOWUP_1H_AFTER_DUE_MS = 60 * 60 * 1000;
+const FOLLOWUP_6H_AFTER_DUE_MS = 6 * 60 * 60 * 1000;
+const FOLLOWUP_24H_AFTER_DUE_MS = 24 * 60 * 60 * 1000;
+/** Stop missed reminders after the 24h slot (+1h grace for scheduler tick). */
+const FOLLOWUP_STOP_AFTER_DUE_MS = 25 * 60 * 60 * 1000;
 
 const CHANNEL_WEB = "web_push";
 const CHANNEL_FCM = "fcm";
@@ -33,21 +36,27 @@ function alarmPath(taskId, title, dueAt, slot) {
 /**
  * @param {Date} dueAt
  * @param {number} nowMs
- * @returns {"before10" | "followup1h" | null}
+ * @returns {"before10" | "followup1h" | "followup6h" | "followup24h" | null}
  */
 export function reminderSlotForDue(dueAt, nowMs = Date.now()) {
   const due = dueAt.getTime();
   if (!Number.isFinite(due)) return null;
 
   const msUntilDue = due - nowMs;
-  const firstAt = due - REMINDER_BEFORE_MS;
-  const followupAt = firstAt + FOLLOWUP_AFTER_FIRST_MS;
-
   if (msUntilDue > 0 && msUntilDue <= REMINDER_BEFORE_MS) {
     return "before10";
   }
 
-  if (nowMs >= followupAt && nowMs < due + FOLLOWUP_GRACE_AFTER_DUE_MS) {
+  const msAfterDue = nowMs - due;
+  if (msAfterDue < 0) return null;
+
+  if (msAfterDue >= FOLLOWUP_24H_AFTER_DUE_MS && msAfterDue < FOLLOWUP_STOP_AFTER_DUE_MS) {
+    return "followup24h";
+  }
+  if (msAfterDue >= FOLLOWUP_6H_AFTER_DUE_MS && msAfterDue < FOLLOWUP_24H_AFTER_DUE_MS) {
+    return "followup6h";
+  }
+  if (msAfterDue >= FOLLOWUP_1H_AFTER_DUE_MS && msAfterDue < FOLLOWUP_6H_AFTER_DUE_MS) {
     return "followup1h";
   }
 
@@ -217,9 +226,10 @@ async function sendFcmReminder(row, slot) {
     return;
   }
 
-  if (result.invalidateDevice && result.deviceId) {
-    await prisma.employeeDevice.delete({ where: { deviceId: result.deviceId } }).catch(() => {});
-    console.warn(`[reminder] removed stale employee_device ${result.deviceId}`);
+  const staleIds = result.staleDeviceIds ?? (result.invalidateDevice && result.deviceId ? [result.deviceId] : []);
+  for (const staleId of staleIds) {
+    await prisma.employeeDevice.delete({ where: { deviceId: staleId } }).catch(() => {});
+    console.warn(`[reminder] removed stale employee_device ${staleId}`);
   }
 
   if (result.code === "device/not-found") {
@@ -243,6 +253,24 @@ function webPushCopyForSlot(row, slot) {
     return {
       title: "Task due in 10 minutes",
       body: `${row.task.title}\nTap to open the alarm screen.`,
+    };
+  }
+  if (slot === "followup1h") {
+    return {
+      title: "Task overdue — 1 hour",
+      body: `${row.task.title}\nThis task was due 1 hour ago. Please complete it now.`,
+    };
+  }
+  if (slot === "followup6h") {
+    return {
+      title: "Task overdue — 6 hours",
+      body: `${row.task.title}\nThis task was due 6 hours ago. Please complete it now.`,
+    };
+  }
+  if (slot === "followup24h") {
+    return {
+      title: "Task overdue — 24 hours",
+      body: `${row.task.title}\nThis task was due 24 hours ago. Please complete it now.`,
     };
   }
   return {
