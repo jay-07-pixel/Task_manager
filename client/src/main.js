@@ -515,8 +515,8 @@ function renderAuthForm() {
               <div class="auth-brand-row">
                 <div class="auth-brand-icon" aria-hidden="true"><i class="bi bi-kanban-fill"></i></div>
                 <div>
-                  <div class="auth-brand-title text-white">Kalpanik</div>
-                  <p class="auth-brand-sub text-white opacity-90">Admin console &amp; employee registration</p>
+                  <div class="auth-brand-title text-white">Task Manager</div>
+                  <p class="auth-brand-sub text-white">Organize lists, assign people, track what&rsquo;s done.</p>
                 </div>
               </div>
             </div>
@@ -531,6 +531,12 @@ function renderAuthForm() {
               </ul>
               <div class="tab-content">
                 <div class="tab-pane fade show active" id="tab-login" role="tabpanel" aria-labelledby="tab-login-btn" tabindex="0">
+                  <div class="alert alert-primary border-0 py-2 px-3 mb-3 auth-login-hint" role="note">
+                    <div class="d-flex gap-2 align-items-start small mb-0">
+                      <i class="bi bi-phone flex-shrink-0 text-primary" aria-hidden="true"></i>
+                      <span><strong>Employees</strong> — after sign-in you&rsquo;ll be directed to the <strong>Kalpanik Reminder</strong> app for tasks. <strong>Owners</strong> use this dashboard.</span>
+                    </div>
+                  </div>
                   <div class="auth-form-login">
                   <form id="form-login" novalidate>
                     <div class="mb-3">
@@ -732,23 +738,20 @@ async function logout() {
 
 function leftNavInner() {
   return `
-    <div class="owner-sidebar d-flex flex-column h-100">
-      <div class="owner-sidebar-brand">
-        <div class="owner-sidebar-logo" aria-hidden="true"><i class="bi bi-kanban-fill"></i></div>
-        <div class="min-w-0">
-          <span class="owner-sidebar-title">Kalpanik</span>
-          <small class="owner-sidebar-user text-muted text-truncate d-block">${state.user ? escapeHtml(state.user.displayName) : ""}</small>
-        </div>
+    <div class="d-flex flex-column h-100">
+      <div class="pb-2 border-bottom mb-2">
+        <span class="fw-semibold d-block">Task Manager</span>
+        <small class="text-muted">${state.user ? escapeHtml(state.user.displayName) : ""}</small>
       </div>
-      <div class="mb-3">
-        <button type="button" class="btn btn-sm btn-primary w-100 js-new-list owner-nav-primary-btn">
+      <div class="mb-2">
+        <button type="button" class="btn btn-sm btn-outline-primary w-100 js-new-list owner-nav-primary-btn">
           <i class="bi bi-plus-lg me-1"></i> New list
         </button>
       </div>
-      <div class="list-group list-group-flush flex-grow-1 overflow-auto small js-list-host"></div>
-      <div class="pt-3 mt-2 border-top d-flex flex-column align-items-stretch gap-2">
+      <div class="list-group list-group-flush flex-grow-1 overflow-auto small rounded border js-list-host"></div>
+      <div class="pt-2 mt-2 border-top d-flex flex-column align-items-stretch gap-2">
         <div class="d-flex justify-content-center">${themeIconToggleMarkup()}</div>
-        <button type="button" class="btn btn-outline-danger btn-sm w-100 js-logout">Sign out</button>
+        <button type="button" class="btn btn-danger btn-sm w-100 js-logout">Sign out</button>
       </div>
     </div>`;
 }
@@ -1854,7 +1857,7 @@ function ownerTaskGroupTbody(t) {
               <h3 class="owner-task-detail-heading small text-secondary mb-2">Assignees</h3>
               <div class="table-responsive rounded border bg-body-secondary">
                 <table class="table table-hover align-middle mb-0 owner-assignee-panel-table">
-                  <thead class="owner-task-thead">
+                  <thead class="table-light">
                     <tr>
                       <th scope="col" class="px-3 py-2">Employee</th>
                       <th scope="col" class="px-3 py-2 text-center" style="width: 7.5rem;">Status</th>
@@ -1896,33 +1899,26 @@ function renderOwnerMain() {
 
   const tbodyInner =
     !list || allTasks.length === 0
-      ? `<tbody class="owner-task-empty"><tr><td colspan="6">
-          <div class="owner-empty-state">
-            <div class="owner-empty-state-icon" aria-hidden="true"><i class="bi bi-inbox"></i></div>
-            <p class="owner-empty-state-title mb-1">${list ? "No tasks yet" : "Select a list"}</p>
-            <p class="text-muted small mb-0">${list ? "Add your first task below to get started." : "Choose a list from the sidebar to manage tasks."}</p>
-          </div>
-        </td></tr></tbody>`
+      ? `<tbody class="owner-task-empty"><tr><td colspan="6" class="text-center text-muted py-5">${
+          list ? "No tasks yet. Add one below." : "Select a list from the sidebar."
+        }</td></tr></tbody>`
       : allTasks.map((t) => ownerTaskGroupTbody(t)).join("");
 
   main.innerHTML = `
-    <header class="owner-page-header mb-4">
-      <div>
-        <p class="owner-page-eyebrow">Task list</p>
-        <h2 class="owner-page-title">${list ? escapeHtml(list.title) : "Select a list"}</h2>
-      </div>
-      <div class="owner-page-actions d-flex flex-wrap gap-2">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+      <h2 class="h4 mb-0 fw-semibold">${list ? escapeHtml(list.title) : "Select a list"}</h2>
+      <div class="d-flex flex-wrap gap-2">
         <button type="button" class="btn btn-outline-danger btn-sm" id="btn-delete-list" ${!list ? "disabled" : ""}>
-          <i class="bi bi-trash3 me-1" aria-hidden="true"></i>Delete list
+          Delete list
         </button>
         <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-clear-completed" ${!list ? "disabled" : ""}>
-          <i class="bi bi-check2-all me-1" aria-hidden="true"></i>Clear completed
+          Clear completed
         </button>
       </div>
-    </header>
+    </div>
     <div class="table-responsive rounded-3 border owner-task-table-wrap mb-3">
       <table class="table table-hover align-middle mb-0 owner-task-table" id="owner-task-table-sort">
-        <thead class="owner-task-thead">
+        <thead class="table-light">
           <tr>
             <th scope="col" class="owner-task-cell owner-task-cell--grip border-end-0"><span class="visually-hidden">Reorder</span></th>
             <th scope="col" class="owner-task-head owner-task-col--task">Task</th>
@@ -1935,11 +1931,10 @@ function renderOwnerMain() {
         ${tbodyInner}
       </table>
     </div>
-    <div class="owner-quick-add-bar">
+    <div class="rounded-3 border bg-body-secondary p-3 shadow-sm owner-quick-add-bar">
       <div class="input-group">
-        <span class="input-group-text bg-transparent border-end-0 text-muted"><i class="bi bi-plus-circle" aria-hidden="true"></i></span>
-        <input class="form-control border-start-0" id="quick-add-title" placeholder="Add a new task…" ${!list ? "disabled" : ""} />
-        <button class="btn btn-primary" type="button" id="quick-add-btn" ${!list ? "disabled" : ""}>Add task</button>
+        <input class="form-control" id="quick-add-title" placeholder="Add a task" ${!list ? "disabled" : ""} />
+        <button class="btn btn-primary px-4" type="button" id="quick-add-btn" ${!list ? "disabled" : ""}>Add</button>
       </div>
     </div>
   `;
@@ -2058,16 +2053,15 @@ function wireChromeNav() {
 
 function renderOwnerChrome() {
   app.innerHTML = `
-    <div class="app-shell min-h-main">
-      <div class="container-fluid app-shell-inner">
-      <div class="d-lg-none mb-3">
-        <button class="btn btn-outline-secondary owner-mobile-nav-btn" type="button" data-bs-toggle="offcanvas" data-bs-target="#leftNavOffcanvas" aria-label="Open lists">
-          <i class="bi bi-list me-1"></i> Lists
+    <div class="container-fluid py-2 min-h-main">
+      <div class="d-lg-none mb-2">
+        <button class="btn btn-outline-secondary" type="button" data-bs-toggle="offcanvas" data-bs-target="#leftNavOffcanvas" aria-label="Open lists">
+          <i class="bi bi-list"></i> Lists
         </button>
       </div>
-      <div class="row g-3 g-lg-4">
+      <div class="row g-3">
         <aside class="col-lg-3 d-none d-lg-block">
-          <div class="owner-sidebar-panel h-100 sticky-lg-top owner-main-column" style="top:1.25rem; max-height: calc(100vh - 2.5rem);">${leftNavInner()}</div>
+          <div class="bg-body border rounded p-3 h-100 sticky-lg-top owner-main-column" style="top:1rem; max-height: calc(100vh - 2rem);">${leftNavInner()}</div>
         </aside>
         <div class="offcanvas offcanvas-start" tabindex="-1" id="leftNavOffcanvas" aria-labelledby="leftNavLabel">
           <div class="offcanvas-header border-bottom">
@@ -2077,9 +2071,8 @@ function renderOwnerChrome() {
           <div class="offcanvas-body">${leftNavInner()}</div>
         </div>
         <main class="col-12 col-lg-9">
-          <div id="main-column" class="owner-main-panel owner-main-column min-h-main"></div>
+          <div id="main-column" class="bg-body border rounded min-h-main owner-main-column p-3 p-lg-4"></div>
         </main>
-      </div>
       </div>
       ${taskModalHtml()}
       ${customRecurrenceModalHtml()}
@@ -2107,38 +2100,98 @@ function kalpanikPlayStoreUrl() {
 
 function renderEmployeeAppRedirect({ justRegistered = false } = {}) {
   const name = state.user?.displayName ? escapeHtml(state.user.displayName) : "there";
-  const badge = justRegistered ? "Welcome aboard" : "Employee account";
-  const headline = justRegistered ? "You&rsquo;re all set" : `Hello, ${name}`;
+  const email = state.user?.email ? escapeHtml(state.user.email) : "";
   const playStore = kalpanikPlayStoreUrl();
-  const playStoreBtn = playStore
-    ? `<a class="btn btn-primary app-redirect-play-btn" href="${escapeHtml(playStore)}" target="_blank" rel="noopener noreferrer"><i class="bi bi-google-play me-2" aria-hidden="true"></i>Get Kalpanik Reminder</a>`
+
+  const welcomeAlert = justRegistered
+    ? `<div class="alert alert-success d-flex align-items-start gap-2 mb-4 py-2 px-3" role="status">
+        <i class="bi bi-check-circle-fill flex-shrink-0 mt-1" aria-hidden="true"></i>
+        <div class="small mb-0"><strong>Account created.</strong> You can sign in on the app with the same email and password.</div>
+      </div>`
     : "";
+
+  const installCta = playStore
+    ? `<a class="btn btn-primary btn-lg w-100 app-redirect-cta" href="${escapeHtml(playStore)}" target="_blank" rel="noopener noreferrer">
+        <i class="bi bi-google-play me-2" aria-hidden="true"></i>Get Kalpanik Reminder
+      </a>`
+    : `<div class="app-redirect-install-hint rounded-3 p-3 text-center mb-0">
+        <i class="bi bi-download text-primary fs-4 d-block mb-2" aria-hidden="true"></i>
+        <p class="small fw-semibold mb-1">Install the app</p>
+        <p class="small text-muted mb-0">Ask your administrator for the Kalpanik Reminder Android app, then sign in with <strong>${email || "your account email"}</strong>.</p>
+      </div>`;
 
   app.innerHTML = `
     <div class="auth-page app-redirect-page">
       <div class="container px-3">
-        <div class="auth-wrap">
+        <div class="auth-wrap app-redirect-wrap">
           <div class="card auth-card">
-            <div class="card-body p-4 p-md-5 text-center">
-              <span class="app-redirect-badge"><i class="bi bi-phone" aria-hidden="true"></i> ${badge}</span>
-              <div class="app-redirect-icon-wrap mb-4" aria-hidden="true"><i class="bi bi-bell-fill"></i></div>
-              <h1 class="app-redirect-title">${headline}</h1>
-              <p class="text-muted mb-0">
-                Your assigned tasks live in <strong>Kalpanik Reminder</strong> on Android.
-                Use the same email and password you registered with.
-              </p>
-              <ol class="app-redirect-steps">
-                <li><span class="app-redirect-step-num">1</span><span>Install <strong>Kalpanik Reminder</strong> on your phone</span></li>
-                <li><span class="app-redirect-step-num">2</span><span>Sign in with your account credentials</span></li>
-                <li><span class="app-redirect-step-num">3</span><span>Complete tasks, upload proof, and receive reminders</span></li>
+            <div class="auth-card-head">
+              <div class="auth-brand-row">
+                <div class="auth-brand-icon" aria-hidden="true"><i class="bi bi-phone-fill"></i></div>
+                <div>
+                  <div class="auth-brand-title text-white">Kalpanik Reminder</div>
+                  <p class="auth-brand-sub text-white mb-0">Assigned tasks, proof photos, and alarms — on your phone.</p>
+                </div>
+              </div>
+            </div>
+            <div class="auth-card-body app-redirect-body">
+              ${welcomeAlert}
+              <div class="app-redirect-hero text-center mb-4">
+                <div class="app-redirect-icon-ring mx-auto mb-3" aria-hidden="true">
+                  <i class="bi bi-bell-fill"></i>
+                </div>
+                <h1 class="h5 fw-semibold mb-1">${justRegistered ? "You&rsquo;re all set" : `Hello, ${name}`}</h1>
+                <p class="text-muted small mb-0">Use the mobile app for daily task work. This website is only for signing up and admin.</p>
+              </div>
+
+              <p class="app-redirect-steps-label">Next steps</p>
+              <ol class="list-group list-group-numbered app-redirect-steps mb-4">
+                <li class="list-group-item">Install <strong>Kalpanik Reminder</strong> on your phone</li>
+                <li class="list-group-item">Sign in with your account${email ? ` — <span class="text-primary fw-medium">${email}</span>` : ""}</li>
+                <li class="list-group-item">Complete tasks and upload proof when your manager asks</li>
               </ol>
-              ${playStoreBtn}
-              <p class="app-redirect-footnote">
-                This website handles registration and admin only — not daily task work.
-              </p>
-              <div class="app-redirect-actions">
+
+              <div class="row g-2 mb-4 app-redirect-features">
+                <div class="col-6">
+                  <div class="app-redirect-feature">
+                    <i class="bi bi-list-check text-primary" aria-hidden="true"></i>
+                    <span>Assigned tasks</span>
+                  </div>
+                </div>
+                <div class="col-6">
+                  <div class="app-redirect-feature">
+                    <i class="bi bi-camera text-primary" aria-hidden="true"></i>
+                    <span>Proof upload</span>
+                  </div>
+                </div>
+                <div class="col-6">
+                  <div class="app-redirect-feature">
+                    <i class="bi bi-alarm text-primary" aria-hidden="true"></i>
+                    <span>Due reminders</span>
+                  </div>
+                </div>
+                <div class="col-6">
+                  <div class="app-redirect-feature">
+                    <i class="bi bi-headset text-primary" aria-hidden="true"></i>
+                    <span>Support</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="mb-4">${installCta}</div>
+
+              <div class="alert alert-primary border-0 app-redirect-note mb-0" role="note">
+                <div class="d-flex gap-2">
+                  <i class="bi bi-info-circle flex-shrink-0" aria-hidden="true"></i>
+                  <p class="small mb-0">Owners manage lists and review proof on this website. Employees do not use the web dashboard.</p>
+                </div>
+              </div>
+
+              <div class="auth-theme-row app-redirect-footer d-flex flex-column flex-sm-row align-items-center justify-content-between gap-3">
                 ${themeIconToggleMarkup()}
-                <button type="button" class="btn btn-outline-danger btn-sm js-logout">Sign out</button>
+                <button type="button" class="btn btn-outline-danger w-100 w-sm-auto js-logout">
+                  <i class="bi bi-box-arrow-right me-1" aria-hidden="true"></i>Sign out
+                </button>
               </div>
             </div>
           </div>
