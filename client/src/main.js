@@ -2012,10 +2012,10 @@ function renderOwnerMain() {
       </div>
     </header>
     ${kpiRow}
-    <section class="owner-task-panel mb-4" aria-label="Tasks">
+    <section class="owner-task-panel owner-task-panel--grow" aria-label="Tasks">
       ${tableBlock}
     </section>
-    <section class="owner-quick-add-bar" aria-label="Quick add task">
+    <section class="owner-quick-add-bar mt-3 mt-lg-4 flex-shrink-0" aria-label="Quick add task">
       <label class="owner-quick-add-label form-label" for="quick-add-title">Quick add task</label>
       <div class="input-group">
         <span class="input-group-text"><i class="bi bi-plus-lg" aria-hidden="true"></i></span>
@@ -2145,7 +2145,7 @@ function renderOwnerChrome() {
 
   app.innerHTML = `
     <div class="owner-shell min-h-main">
-      <div class="container-fluid owner-shell-inner py-3 py-lg-4">
+      <div class="container-fluid owner-shell-inner py-3 py-lg-4 d-flex flex-column">
         <div class="owner-topbar d-lg-none d-flex align-items-center justify-content-between gap-2 mb-3">
           <button class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="offcanvas" data-bs-target="#leftNavOffcanvas" aria-label="Open lists">
             <i class="bi bi-list me-1" aria-hidden="true"></i>Lists
@@ -2155,9 +2155,9 @@ function renderOwnerChrome() {
             <i class="bi bi-plus-lg" aria-hidden="true"></i>
           </button>
         </div>
-        <div class="row g-3 g-lg-4">
-          <aside class="col-lg-3 d-none d-lg-block">
-            <div class="owner-sidebar-panel sticky-lg-top">${leftNavInner()}</div>
+        <div class="row g-3 g-lg-4 owner-shell-row flex-lg-grow-1">
+          <aside class="col-lg-3 d-none d-lg-flex owner-sidebar-col">
+            <div class="owner-sidebar-panel w-100">${leftNavInner()}</div>
           </aside>
           <div class="offcanvas offcanvas-start owner-offcanvas" tabindex="-1" id="leftNavOffcanvas" aria-labelledby="leftNavLabel">
             <div class="offcanvas-header owner-offcanvas-header border-0">
@@ -2166,8 +2166,8 @@ function renderOwnerChrome() {
             </div>
             <div class="offcanvas-body pt-0">${leftNavInner()}</div>
           </div>
-          <main class="col-12 col-lg-9">
-            <div id="main-column" class="owner-main-panel p-3 p-lg-4"></div>
+          <main class="col-12 col-lg-9 d-flex owner-main-col">
+            <div id="main-column" class="owner-main-panel owner-main-fill p-3 p-lg-4 d-flex flex-column w-100"></div>
           </main>
         </div>
       </div>
