@@ -531,12 +531,6 @@ function renderAuthForm() {
               </ul>
               <div class="tab-content">
                 <div class="tab-pane fade show active" id="tab-login" role="tabpanel" aria-labelledby="tab-login-btn" tabindex="0">
-                  <div class="alert alert-primary border-0 py-2 px-3 mb-3 auth-login-hint" role="note">
-                    <div class="d-flex gap-2 align-items-start small mb-0">
-                      <i class="bi bi-phone flex-shrink-0 text-primary" aria-hidden="true"></i>
-                      <span><strong>Employees</strong> — after sign-in you&rsquo;ll be directed to the <strong>Kalpanik Reminder</strong> app for tasks. <strong>Owners</strong> use this dashboard.</span>
-                    </div>
-                  </div>
                   <div class="auth-form-login">
                   <form id="form-login" novalidate>
                     <div class="mb-3">
@@ -767,6 +761,9 @@ function leftNavInner() {
       <p class="owner-sidebar-label mb-2">Your lists</p>
       <div class="list-group list-group-flush flex-grow-1 overflow-auto owner-list-nav js-list-host"></div>
       <div class="owner-sidebar-footer">
+        <button type="button" class="btn btn-outline-primary w-100 mb-2" data-bs-toggle="modal" data-bs-target="#teamAdminModal">
+          <i class="bi bi-person-badge me-1" aria-hidden="true"></i>Manage admins
+        </button>
         <div class="d-flex justify-content-center mb-2">${themeIconToggleMarkup()}</div>
         <button type="button" class="btn btn-outline-danger w-100 js-logout">
           <i class="bi bi-box-arrow-right me-1" aria-hidden="true"></i>Sign out
@@ -1396,6 +1393,86 @@ function ownerMarkDoneModalHtml() {
     </div>`;
 }
 
+function teamAdminModalHtml() {
+  return `
+    <div class="modal fade" id="teamAdminModal" tabindex="-1" aria-labelledby="teamAdminModalTitle" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-scrollable">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h2 class="modal-title h5 mb-0" id="teamAdminModalTitle">Team &amp; admin access</h2>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <p class="small text-muted mb-3">Promote an employee to admin so they can use this dashboard to manage lists and tasks.</p>
+            <div id="team-admin-list"></div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function refreshTeamAdminList() {
+  const host = document.getElementById("team-admin-list");
+  if (!host) return;
+  host.innerHTML = '<p class="small text-muted mb-0">Loading…</p>';
+  try {
+    const { users } = await api("/api/users/team");
+    if (!users.length) {
+      host.innerHTML = '<p class="small text-muted mb-0">No team members yet.</p>';
+      return;
+    }
+    host.innerHTML = `<div class="list-group list-group-flush border rounded team-admin-list">
+      ${users
+        .map((u) => {
+          const isAdmin = u.role === "owner";
+          const action = isAdmin
+            ? '<span class="badge rounded-pill owner-role-badge flex-shrink-0">Admin</span>'
+            : `<button type="button" class="btn btn-sm btn-primary flex-shrink-0 team-promote-btn" data-user-id="${u.id}" data-user-name="${escapeHtml(
+                u.displayName
+              )}">Make admin</button>`;
+          return `<div class="list-group-item d-flex justify-content-between align-items-center gap-2">
+            <div class="min-w-0">
+              <div class="fw-medium text-truncate">${escapeHtml(u.displayName)}</div>
+              <div class="small text-muted text-truncate">${escapeHtml(u.email)}</div>
+            </div>
+            ${action}
+          </div>`;
+        })
+        .join("")}
+    </div>`;
+    host.querySelectorAll(".team-promote-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = btn.getAttribute("data-user-id");
+        const name = btn.getAttribute("data-user-name");
+        if (!id || !window.confirm(`Make ${name} an admin? They will get full dashboard access on the website.`)) return;
+        btn.disabled = true;
+        try {
+          await api(`/api/users/${id}/role`, { method: "PATCH", body: JSON.stringify({ role: "owner" }) });
+          showToast(`${name} is now an admin.`, "success");
+          await refreshTeamAdminList();
+          await loadAssignees();
+        } catch (err) {
+          showToast(err.message, "danger");
+          btn.disabled = false;
+        }
+      });
+    });
+  } catch (err) {
+    host.innerHTML = `<p class="small text-danger mb-0">${escapeHtml(err.message)}</p>`;
+  }
+}
+
+function wireTeamAdminModal() {
+  const el = document.getElementById("teamAdminModal");
+  if (!el) return;
+  el.addEventListener("show.bs.modal", () => {
+    refreshTeamAdminList();
+  });
+}
+
 function filterOwnerMarkDoneModalList() {
   const q = (document.getElementById("owner-mark-done-search")?.value || "").trim().toLowerCase();
   document.querySelectorAll("#owner-mark-done-list .owner-mark-done-row").forEach((row) => {
@@ -2012,10 +2089,10 @@ function renderOwnerMain() {
       </div>
     </header>
     ${kpiRow}
-    <section class="owner-task-panel owner-task-panel--grow" aria-label="Tasks">
+    <section class="owner-task-panel" aria-label="Tasks">
       ${tableBlock}
     </section>
-    <section class="owner-quick-add-bar mt-3 mt-lg-4 flex-shrink-0" aria-label="Quick add task">
+    <section class="owner-quick-add-bar mt-auto flex-shrink-0" aria-label="Quick add task">
       <label class="owner-quick-add-label form-label" for="quick-add-title">Quick add task</label>
       <div class="input-group">
         <span class="input-group-text"><i class="bi bi-plus-lg" aria-hidden="true"></i></span>
@@ -2176,6 +2253,7 @@ function renderOwnerChrome() {
       ${listNameModalHtml()}
       ${taskProofOnlyModalHtml()}
       ${ownerMarkDoneModalHtml()}
+      ${teamAdminModalHtml()}
     </div>`;
 
   wireChromeNav();
@@ -2186,6 +2264,7 @@ function renderOwnerChrome() {
   wireListNameModal();
   wireTaskProofOnlyModal();
   wireOwnerMarkDoneModal();
+  wireTeamAdminModal();
   wireThemeIconToggles();
 }
 
