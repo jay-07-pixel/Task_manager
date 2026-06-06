@@ -736,22 +736,41 @@ async function logout() {
   renderAuthForm();
 }
 
+function ownerDashboardMetrics() {
+  const tasks = state.tasks;
+  const active = tasks.filter((t) => !t.completed).length;
+  const done = tasks.filter((t) => t.completed).length;
+  let pendingAssignees = 0;
+  for (const t of tasks) {
+    for (const a of t.assignees ?? []) {
+      if (!a.assigneeDone) pendingAssignees += 1;
+    }
+  }
+  return { total: tasks.length, active, done, pendingAssignees };
+}
+
 function leftNavInner() {
+  const displayName = state.user ? escapeHtml(state.user.displayName) : "";
   return `
-    <div class="d-flex flex-column h-100">
-      <div class="pb-2 border-bottom mb-2">
-        <span class="fw-semibold d-block">Task Manager</span>
-        <small class="text-muted">${state.user ? escapeHtml(state.user.displayName) : ""}</small>
+    <div class="owner-sidebar d-flex flex-column h-100">
+      <div class="owner-sidebar-brand">
+        <div class="owner-sidebar-brand-icon" aria-hidden="true"><i class="bi bi-kanban-fill"></i></div>
+        <div class="min-w-0">
+          <div class="owner-sidebar-brand-title">Task Manager</div>
+          <div class="owner-sidebar-brand-user text-truncate">${displayName}</div>
+          <span class="badge rounded-pill owner-role-badge mt-1">Admin</span>
+        </div>
       </div>
-      <div class="mb-2">
-        <button type="button" class="btn btn-sm btn-outline-primary w-100 js-new-list owner-nav-primary-btn">
-          <i class="bi bi-plus-lg me-1"></i> New list
+      <button type="button" class="btn btn-primary w-100 owner-sidebar-new-list js-new-list">
+        <i class="bi bi-plus-lg me-1" aria-hidden="true"></i>New list
+      </button>
+      <p class="owner-sidebar-label mb-2">Your lists</p>
+      <div class="list-group list-group-flush flex-grow-1 overflow-auto owner-list-nav js-list-host"></div>
+      <div class="owner-sidebar-footer">
+        <div class="d-flex justify-content-center mb-2">${themeIconToggleMarkup()}</div>
+        <button type="button" class="btn btn-outline-danger w-100 js-logout">
+          <i class="bi bi-box-arrow-right me-1" aria-hidden="true"></i>Sign out
         </button>
-      </div>
-      <div class="list-group list-group-flush flex-grow-1 overflow-auto small rounded border js-list-host"></div>
-      <div class="pt-2 mt-2 border-top d-flex flex-column align-items-stretch gap-2">
-        <div class="d-flex justify-content-center">${themeIconToggleMarkup()}</div>
-        <button type="button" class="btn btn-danger btn-sm w-100 js-logout">Sign out</button>
       </div>
     </div>`;
 }
@@ -1569,11 +1588,14 @@ function renderListContentOnly() {
   const html = state.lists
     .map(
       (l) => `
-    <button type="button" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center ${
+    <button type="button" class="list-group-item list-group-item-action owner-list-item d-flex justify-content-between align-items-center gap-2 ${
       l.id === state.activeListId ? "active" : ""
     }" data-list-id="${l.id}">
-      <span class="text-truncate list-title-edit" title="Double-click to rename">${escapeHtml(l.title)}</span>
-      <i class="bi bi-grip-vertical grip-handle d-none d-lg-inline" title="Drag to reorder"></i>
+      <span class="d-flex align-items-center gap-2 min-w-0">
+        <i class="bi bi-folder2${l.id === state.activeListId ? "-open" : ""} flex-shrink-0" aria-hidden="true"></i>
+        <span class="text-truncate list-title-edit" title="Double-click to rename">${escapeHtml(l.title)}</span>
+      </span>
+      <i class="bi bi-grip-vertical grip-handle flex-shrink-0" title="Drag to reorder"></i>
     </button>`
     )
     .join("");
@@ -1808,13 +1830,13 @@ function ownerTaskGroupTbody(t) {
   const assigneeMarkDoneControl = `<div class="owner-mark-done-wrap">
       <button
         type="button"
-        class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-2 owner-mark-done-open"
+        class="btn btn-sm btn-primary d-inline-flex align-items-center gap-2 owner-mark-done-open"
         data-task-id="${t.id}"
         aria-haspopup="dialog"
         aria-controls="ownerMarkDoneModal"
       >
-        <i class="bi bi-check-lg text-success" aria-hidden="true"></i>
-        <span>Mark task done</span>
+        <i class="bi bi-check-lg" aria-hidden="true"></i>
+        <span>Mark assignees done</span>
       </button>
     </div>`;
 
@@ -1838,7 +1860,7 @@ function ownerTaskGroupTbody(t) {
       <td class="owner-task-cell owner-task-col--trail align-middle text-end">
         <button
           type="button"
-          class="btn btn-sm btn-outline-secondary owner-task-expand-btn"
+          class="btn btn-sm btn-outline-primary owner-task-expand-btn"
           data-bs-toggle="collapse"
           data-bs-target="#${detailId}"
           aria-expanded="false"
@@ -1897,46 +1919,112 @@ function renderOwnerMain() {
     return (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
   });
 
-  const tbodyInner =
+  const tbodyInner = allTasks.map((t) => ownerTaskGroupTbody(t)).join("");
+
+  const metrics = ownerDashboardMetrics();
+  const kpiRow =
+    list && metrics.total > 0
+      ? `<div class="row g-3 mb-4 owner-kpi-row">
+          <div class="col-6 col-xl-3">
+            <div class="owner-kpi-card">
+              <div class="owner-kpi-icon text-primary"><i class="bi bi-list-task" aria-hidden="true"></i></div>
+              <div>
+                <div class="owner-kpi-value tabular-nums">${metrics.active}</div>
+                <div class="owner-kpi-label">Active tasks</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-xl-3">
+            <div class="owner-kpi-card">
+              <div class="owner-kpi-icon text-success"><i class="bi bi-check-circle" aria-hidden="true"></i></div>
+              <div>
+                <div class="owner-kpi-value tabular-nums">${metrics.done}</div>
+                <div class="owner-kpi-label">Completed</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-xl-3">
+            <div class="owner-kpi-card">
+              <div class="owner-kpi-icon text-warning"><i class="bi bi-hourglass-split" aria-hidden="true"></i></div>
+              <div>
+                <div class="owner-kpi-value tabular-nums">${metrics.pendingAssignees}</div>
+                <div class="owner-kpi-label">Pending submissions</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-xl-3">
+            <div class="owner-kpi-card">
+              <div class="owner-kpi-icon text-info"><i class="bi bi-collection" aria-hidden="true"></i></div>
+              <div>
+                <div class="owner-kpi-value tabular-nums">${metrics.total}</div>
+                <div class="owner-kpi-label">Total in list</div>
+              </div>
+            </div>
+          </div>
+        </div>`
+      : "";
+
+  const emptyMessage = list
+    ? `<div class="owner-empty-state py-5 px-3">
+        <i class="bi bi-clipboard2-plus owner-empty-icon text-primary" aria-hidden="true"></i>
+        <p class="owner-empty-title mb-1">No tasks yet</p>
+        <p class="owner-empty-desc text-muted small mb-0">Use quick add below to create the first task for this list.</p>
+      </div>`
+    : `<div class="owner-empty-state py-5 px-3">
+        <i class="bi bi-folder2-open owner-empty-icon text-primary" aria-hidden="true"></i>
+        <p class="owner-empty-title mb-1">Select a list</p>
+        <p class="owner-empty-desc text-muted small mb-0">Choose a list from the sidebar or create a new one.</p>
+      </div>`;
+
+  const tableBlock =
     !list || allTasks.length === 0
-      ? `<tbody class="owner-task-empty"><tr><td colspan="6" class="text-center text-muted py-5">${
-          list ? "No tasks yet. Add one below." : "Select a list from the sidebar."
-        }</td></tr></tbody>`
-      : allTasks.map((t) => ownerTaskGroupTbody(t)).join("");
+      ? emptyMessage
+      : `<div class="table-responsive owner-task-table-wrap">
+          <table class="table table-hover align-middle mb-0 owner-task-table" id="owner-task-table-sort">
+            <thead>
+              <tr>
+                <th scope="col" class="owner-task-cell owner-task-cell--grip border-end-0"><span class="visually-hidden">Reorder</span></th>
+                <th scope="col" class="owner-task-head owner-task-col--task">Task</th>
+                <th scope="col" class="owner-task-head owner-task-col--deadline text-nowrap">Deadline</th>
+                <th scope="col" class="owner-task-head">Description</th>
+                <th scope="col" class="owner-task-head owner-task-col--employees text-center text-nowrap">Team</th>
+                <th scope="col" class="owner-task-head owner-task-col--trail text-end"><span class="visually-hidden">Details</span></th>
+              </tr>
+            </thead>
+            ${tbodyInner}
+          </table>
+        </div>`;
 
   main.innerHTML = `
-    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
-      <h2 class="h4 mb-0 fw-semibold">${list ? escapeHtml(list.title) : "Select a list"}</h2>
-      <div class="d-flex flex-wrap gap-2">
-        <button type="button" class="btn btn-outline-danger btn-sm" id="btn-delete-list" ${!list ? "disabled" : ""}>
-          Delete list
-        </button>
+    <header class="owner-page-header d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+      <div>
+        <p class="owner-page-eyebrow mb-1">Admin dashboard</p>
+        <h2 class="owner-page-title h4 mb-0">${list ? escapeHtml(list.title) : "Select a list"}</h2>
+        <p class="owner-page-sub text-muted small mb-0 mt-1">Assign tasks, track submissions, and review proof photos.</p>
+      </div>
+      <div class="d-flex flex-wrap gap-2 owner-toolbar">
         <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-clear-completed" ${!list ? "disabled" : ""}>
-          Clear completed
+          <i class="bi bi-archive me-1" aria-hidden="true"></i>Clear completed
+        </button>
+        <button type="button" class="btn btn-outline-danger btn-sm" id="btn-delete-list" ${!list ? "disabled" : ""}>
+          <i class="bi bi-trash me-1" aria-hidden="true"></i>Delete list
         </button>
       </div>
-    </div>
-    <div class="table-responsive rounded-3 border owner-task-table-wrap mb-3">
-      <table class="table table-hover align-middle mb-0 owner-task-table" id="owner-task-table-sort">
-        <thead class="table-light">
-          <tr>
-            <th scope="col" class="owner-task-cell owner-task-cell--grip border-end-0"><span class="visually-hidden">Reorder</span></th>
-            <th scope="col" class="owner-task-head owner-task-col--task">Task</th>
-            <th scope="col" class="owner-task-head owner-task-col--deadline text-nowrap">Deadline</th>
-            <th scope="col" class="owner-task-head">Description</th>
-            <th scope="col" class="owner-task-head owner-task-col--employees text-center text-nowrap">Employees</th>
-            <th scope="col" class="owner-task-head owner-task-col--trail text-end"><span class="visually-hidden">Details</span></th>
-          </tr>
-        </thead>
-        ${tbodyInner}
-      </table>
-    </div>
-    <div class="rounded-3 border bg-body-secondary p-3 shadow-sm owner-quick-add-bar">
+    </header>
+    ${kpiRow}
+    <section class="owner-task-panel mb-4" aria-label="Tasks">
+      ${tableBlock}
+    </section>
+    <section class="owner-quick-add-bar" aria-label="Quick add task">
+      <label class="owner-quick-add-label form-label" for="quick-add-title">Quick add task</label>
       <div class="input-group">
-        <input class="form-control" id="quick-add-title" placeholder="Add a task" ${!list ? "disabled" : ""} />
-        <button class="btn btn-primary px-4" type="button" id="quick-add-btn" ${!list ? "disabled" : ""}>Add</button>
+        <span class="input-group-text"><i class="bi bi-plus-lg" aria-hidden="true"></i></span>
+        <input class="form-control" id="quick-add-title" placeholder="Task title…" ${!list ? "disabled" : ""} />
+        <button class="btn btn-primary px-4" type="button" id="quick-add-btn" ${!list ? "disabled" : ""}>
+          <i class="bi bi-plus-circle me-1 d-none d-sm-inline" aria-hidden="true"></i>Add
+        </button>
       </div>
-    </div>
+    </section>
   `;
 
   document.getElementById("btn-delete-list")?.addEventListener("click", async () => {
@@ -2052,27 +2140,36 @@ function wireChromeNav() {
 }
 
 function renderOwnerChrome() {
+  const activeList = state.lists.find((l) => l.id === state.activeListId);
+  const mobileListTitle = activeList ? escapeHtml(activeList.title) : "Lists";
+
   app.innerHTML = `
-    <div class="container-fluid py-2 min-h-main">
-      <div class="d-lg-none mb-2">
-        <button class="btn btn-outline-secondary" type="button" data-bs-toggle="offcanvas" data-bs-target="#leftNavOffcanvas" aria-label="Open lists">
-          <i class="bi bi-list"></i> Lists
-        </button>
-      </div>
-      <div class="row g-3">
-        <aside class="col-lg-3 d-none d-lg-block">
-          <div class="bg-body border rounded p-3 h-100 sticky-lg-top owner-main-column" style="top:1rem; max-height: calc(100vh - 2rem);">${leftNavInner()}</div>
-        </aside>
-        <div class="offcanvas offcanvas-start" tabindex="-1" id="leftNavOffcanvas" aria-labelledby="leftNavLabel">
-          <div class="offcanvas-header border-bottom">
-            <h2 class="offcanvas-title h5 mb-0" id="leftNavLabel">Lists</h2>
-            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
-          </div>
-          <div class="offcanvas-body">${leftNavInner()}</div>
+    <div class="owner-shell min-h-main">
+      <div class="container-fluid owner-shell-inner py-3 py-lg-4">
+        <div class="owner-topbar d-lg-none d-flex align-items-center justify-content-between gap-2 mb-3">
+          <button class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="offcanvas" data-bs-target="#leftNavOffcanvas" aria-label="Open lists">
+            <i class="bi bi-list me-1" aria-hidden="true"></i>Lists
+          </button>
+          <span class="owner-topbar-title text-truncate fw-semibold small">${mobileListTitle}</span>
+          <button type="button" class="btn btn-primary btn-sm js-new-list" aria-label="New list">
+            <i class="bi bi-plus-lg" aria-hidden="true"></i>
+          </button>
         </div>
-        <main class="col-12 col-lg-9">
-          <div id="main-column" class="bg-body border rounded min-h-main owner-main-column p-3 p-lg-4"></div>
-        </main>
+        <div class="row g-3 g-lg-4">
+          <aside class="col-lg-3 d-none d-lg-block">
+            <div class="owner-sidebar-panel sticky-lg-top">${leftNavInner()}</div>
+          </aside>
+          <div class="offcanvas offcanvas-start owner-offcanvas" tabindex="-1" id="leftNavOffcanvas" aria-labelledby="leftNavLabel">
+            <div class="offcanvas-header owner-offcanvas-header border-0">
+              <h2 class="offcanvas-title h5 mb-0 text-white" id="leftNavLabel">Lists</h2>
+              <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+            </div>
+            <div class="offcanvas-body pt-0">${leftNavInner()}</div>
+          </div>
+          <main class="col-12 col-lg-9">
+            <div id="main-column" class="owner-main-panel p-3 p-lg-4"></div>
+          </main>
+        </div>
       </div>
       ${taskModalHtml()}
       ${customRecurrenceModalHtml()}
