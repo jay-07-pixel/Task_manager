@@ -1,6 +1,6 @@
 # Task Manager
 
-A full-stack task management app for a **list owner** and **assigned employees**. Owners create lists and tasks, assign work, and track completion. Employees see only their assignments, mark tasks done, and can attach optional photo proof.
+A full-stack task management app for a **list owner** and **assigned employees**. **Owners** use the website for lists, tasks, assignees, and proof review. **Employees** register on the website, then use the **Kalpanik Reminder** Android app for daily task work (view, complete, proof, FCM reminders).
 
 ## Features
 
@@ -12,19 +12,13 @@ A full-stack task management app for a **list owner** and **assigned employees**
 - Mark assignees done from a modal; drag-and-drop task ordering
 - Light / dark theme
 
-### Employee
-- Sidebar sections: **Daily**, **Weekly**, **Monthly**, and **Other** (one-time or yearly / custom)
-- Tasks appear in the section that matches the owner’s **Repeat** setting (custom day/week/month rules map to the matching section)
-- Completing a repeating task advances the deadline and resets assignee status for the next period:
-  - **Daily** → +1 day  
-  - **Weekly** → +7 days  
-  - **Monthly** → +1 month  
-  - **Yearly** → +1 year  
-  - **Custom** → every N days/weeks/months/years (with optional **Ends on** date or **After N occurrences**)
-- Checkbox to complete tasks (optional proof photo upload)
-- List name and deadline on each assignment
-- Mobile-friendly card layout
-- **Due reminders:** ~**10 minutes before** the deadline, then again **1 hour later** if still not submitted. The server sends **FCM** to the Android app (title **Task Reminder**, body = task name + due time, `taskId` in payload) and/or **Web Push** in the browser. Web push can open the full-screen alarm screen; FCM is notification-only (no alarm screen yet).
+### Employee (website)
+- **Register only** on the website (OTP + CAPTCHA) — no task dashboard on web
+- After login or registration, employees see a **use the Kalpanik Reminder app** screen
+- Daily task work (view, complete, proof upload, alarms) is in the **Android app** only
+
+### Employee (Android app — Kalpanik Reminder)
+- Assigned tasks, completion, proof upload, FCM reminders/alarms (same backend APIs as the website)
 
 ### Auth & registration
 - Email + password sign-in

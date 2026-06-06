@@ -1,25 +1,6 @@
 import "./scss/styles.scss";
 import * as bootstrap from "bootstrap";
 import Sortable from "sortablejs";
-import {
-  clearReminderForTask,
-  setServerPushRemindersActive,
-  startEmployeeReminders,
-  stopEmployeeReminders,
-  stopTaskAlarm,
-} from "./reminders.js";
-import {
-  beginLocalPushSubscribeDuringGesture,
-  finishPushRegistrationAfterAuth,
-  getLocalPushSubscription,
-  isPushSupported,
-  registerServiceWorker,
-  requestNotificationPermissionForAlarms,
-  setupEmployeePushRegistration,
-  syncPushSubscriptionToServer,
-  warmupPushInfrastructure,
-  wirePushSubscribeOnGesture,
-} from "./sw-register.js";
 
 const app = document.getElementById("app");
 const toastHost = document.getElementById("toastHost");
@@ -31,8 +12,6 @@ let state = {
   activeListId: null,
   tasks: [],
   assignees: [],
-  /** @type {'daily'|'weekly'|'monthly'|'other'} */
-  empSection: "daily",
 };
 
 /** @type {any[]} */
@@ -150,51 +129,6 @@ async function api(path, options = {}) {
   return data;
 }
 
-async function apiForm(path, formData, method = "POST") {
-  let res;
-  try {
-    res = await fetch(path, {
-      method,
-      credentials: "include",
-      body: formData,
-    });
-  } catch {
-    throw new Error(
-      "Network error: could not reach the server. Confirm the API is running (npm run dev) on port 3000."
-    );
-  }
-  const text = await res.text();
-  let data = null;
-  try {
-    data = text ? JSON.parse(text) : null;
-  } catch {
-    data = { error: text };
-  }
-  if (!res.ok) {
-    if (res.status === 401 && !isPublicAuthPath(path)) {
-      const wasLoggedIn = !!state.user;
-      state.user = null;
-      renderAuthForm();
-      if (wasLoggedIn) {
-        showToast("Session expired or you were signed out. Please sign in again.", "warning");
-      }
-    }
-    let msg = data?.error ?? res.statusText;
-    if (typeof msg === "object") msg = JSON.stringify(msg);
-    const s = String(msg || "Request failed");
-    if (
-      (res.status === 500 || res.status === 502 || res.status === 504) &&
-      (s === "Internal Server Error" || s.includes("ECONNREFUSED") || s.toLowerCase().includes("proxy error"))
-    ) {
-      throw new Error(
-        "The API is not responding (it may have crashed — check the dev terminal and restart if needed)."
-      );
-    }
-    throw new Error(s);
-  }
-  return data;
-}
-
 function showToast(message, variant = "secondary") {
   const el = document.createElement("div");
   el.className = `toast align-items-center text-bg-${variant} border-0`;
@@ -219,11 +153,6 @@ function escapeHtml(s) {
 /** @type {Set<string>} */
 const proofBlobUrls = new Set();
 
-function revokeProofBlobUrls() {
-  for (const url of proofBlobUrls) URL.revokeObjectURL(url);
-  proofBlobUrls.clear();
-}
-
 async function fetchProofBlobUrl(proofUrl) {
   const res = await fetch(proofUrl, { credentials: "include" });
   if (!res.ok) {
@@ -239,26 +168,6 @@ async function fetchProofBlobUrl(proofUrl) {
   const blobUrl = URL.createObjectURL(blob);
   proofBlobUrls.add(blobUrl);
   return blobUrl;
-}
-
-async function loadProofThumbnail(img, proofUrl) {
-  img.classList.add("emp-proof-thumb--loading");
-  img.removeAttribute("src");
-  try {
-    img.src = await fetchProofBlobUrl(proofUrl);
-  } catch {
-    img.classList.add("emp-proof-thumb--error");
-    img.alt = "Proof unavailable";
-  } finally {
-    img.classList.remove("emp-proof-thumb--loading");
-  }
-}
-
-function hydrateProofImages(root = document) {
-  root.querySelectorAll("img.js-proof-img[data-proof-url]").forEach((img) => {
-    const url = img.getAttribute("data-proof-url");
-    if (url) void loadProofThumbnail(img, url);
-  });
 }
 
 async function refreshMe() {
@@ -597,7 +506,6 @@ function wireRegisterPhoneDigits() {
 }
 
 function renderAuthForm() {
-  stopEmployeeReminders();
   app.innerHTML = `
     <div class="auth-page">
       <div class="container px-3">
@@ -760,22 +668,6 @@ function renderAuthForm() {
   document.getElementById("form-login").addEventListener("submit", (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
-    const apiFetch = (path, options) => api(path, options);
-
-    // Start push subscribe synchronously while Login click still counts as user gesture.
-    warmupPushInfrastructure(apiFetch);
-    let localPushPromise = null;
-    if (isPushSupported()) {
-      if (Notification.permission === "granted") {
-        localPushPromise = beginLocalPushSubscribeDuringGesture(undefined, apiFetch);
-      } else if (Notification.permission === "default") {
-        localPushPromise = Notification.requestPermission().then((perm) => {
-          if (perm !== "granted") return null;
-          return beginLocalPushSubscribeDuringGesture(undefined, apiFetch);
-        });
-      }
-    }
-
     void (async () => {
       try {
         await api("/api/auth/login", {
@@ -783,17 +675,6 @@ function renderAuthForm() {
           body: JSON.stringify({ email: fd.get("email"), password: fd.get("password") }),
         });
         await refreshMe();
-        if (state.user?.role === "employee" && localPushPromise) {
-          const push = await finishPushRegistrationAfterAuth(apiFetch, localPushPromise);
-          if (push.ok) {
-            setServerPushRemindersActive(true);
-          } else if (!push.ok) {
-            wirePushSubscribeOnGesture(apiFetch);
-          }
-        } else if (state.user?.role === "employee") {
-          const setup = await setupEmployeePushRegistration(apiFetch, showToast);
-          if (setup.ok) setServerPushRemindersActive(true);
-        }
         render();
       } catch (err) {
         showToast(err.message, "danger");
@@ -823,6 +704,7 @@ function renderAuthForm() {
           role: "employee",
         }),
       });
+      sessionStorage.setItem("taskmgr-app-welcome", "1");
       await refreshMe();
       render();
     } catch (err) {
@@ -836,11 +718,9 @@ function renderAuthForm() {
   wireRegisterOtp();
   void wireRegisterTurnstile();
   wireThemeIconToggles();
-  warmupPushInfrastructure((path, options) => api(path, options));
 }
 
 async function logout() {
-  stopEmployeeReminders();
   try {
     await api("/api/auth/logout", { method: "POST" });
   } catch {
@@ -848,27 +728,6 @@ async function logout() {
   }
   state.user = null;
   renderAuthForm();
-}
-
-function employeeReminderAssignment(task) {
-  const me = employeeTaskMe(task);
-  return me ? { assigneeDone: !!me.assigneeDone } : null;
-}
-
-function startEmployeeReminderPolling() {
-  startEmployeeReminders(
-    loadAssigned,
-    () => state.tasks,
-    employeeReminderAssignment,
-    showToast,
-    () => state.user?.id,
-    (path, options) => api(path, options)
-  );
-}
-
-function onEmployeeTaskCompleted(task) {
-  if (task?.id && task?.dueAt) clearReminderForTask(task.id, task.dueAt);
-  stopTaskAlarm();
 }
 
 function leftNavInner() {
@@ -889,162 +748,6 @@ function leftNavInner() {
         <button type="button" class="btn btn-danger btn-sm w-100 js-logout">Sign out</button>
       </div>
     </div>`;
-}
-
-const EMP_SECTIONS = [
-  { id: "daily", label: "Daily", icon: "bi-sun" },
-  { id: "weekly", label: "Weekly", icon: "bi-calendar-week" },
-  { id: "monthly", label: "Monthly", icon: "bi-calendar-month" },
-  { id: "other", label: "Other", icon: "bi-inbox" },
-];
-
-const EMP_SECTION_META = {
-  daily: {
-    title: "Daily",
-    subtitle: "Tasks that repeat every day",
-    hint: "When you finish today\u2019s work, the task moves to tomorrow\u2019s deadline automatically.",
-  },
-  weekly: {
-    title: "Weekly",
-    subtitle: "Tasks that repeat every week",
-    hint: "Completing this week\u2019s task advances the deadline by one week.",
-  },
-  monthly: {
-    title: "Monthly",
-    subtitle: "Tasks that repeat every month",
-    hint: "Completing this month\u2019s task advances the deadline by one month.",
-  },
-  other: {
-    title: "Other",
-    subtitle: "One-time or custom-repeat assignments",
-    hint: "Check off a task when you\u2019re finished\u2014you can add an optional photo for the owner.",
-  },
-};
-
-function taskRecurrenceRolls(task) {
-  if (!task) return false;
-  const r = task.recurrence || "none";
-  if (["daily", "weekly", "monthly", "yearly"].includes(r)) return true;
-  if (r === "custom" && task.recurrenceRule && typeof task.recurrenceRule === "object") {
-    const unit = task.recurrenceRule.unit;
-    return unit === "day" || unit === "week" || unit === "month" || unit === "year";
-  }
-  return false;
-}
-
-function employeeTaskBucket(t) {
-  const r = t.recurrence || "none";
-  if (r === "daily") return "daily";
-  if (r === "weekly") return "weekly";
-  if (r === "monthly") return "monthly";
-  if (r === "custom" && t.recurrenceRule && typeof t.recurrenceRule === "object") {
-    const unit = t.recurrenceRule.unit;
-    if (unit === "day") return "daily";
-    if (unit === "week") return "weekly";
-    if (unit === "month") return "monthly";
-  }
-  return "other";
-}
-
-function employeeSectionTasks(section) {
-  return state.tasks.filter((t) => employeeTaskBucket(t) === section);
-}
-
-function employeeNavInner() {
-  const navItems = EMP_SECTIONS.map((s) => {
-    const open = employeeSectionTasks(s.id).filter((t) => !employeeTaskMe(t)?.assigneeDone).length;
-    const active = state.empSection === s.id;
-    const badge =
-      open > 0
-        ? `<span class="badge rounded-pill bg-primary-subtle text-primary border border-primary-subtle ms-auto tabular-nums">${open}</span>`
-        : "";
-    return `<button
-      type="button"
-      class="list-group-item list-group-item-action d-flex align-items-center gap-2 js-emp-section ${active ? "active" : ""}"
-      data-emp-section="${s.id}"
-      aria-current="${active ? "page" : "false"}"
-    >
-      <i class="bi ${s.icon} flex-shrink-0" aria-hidden="true"></i>
-      <span class="text-start">${s.label}</span>
-      ${badge}
-    </button>`;
-  }).join("");
-
-  return `
-    <div class="d-flex flex-column h-100">
-      <div class="pb-2 border-bottom mb-2">
-        <span class="fw-semibold d-block">Task Manager</span>
-        <small class="text-muted">${state.user ? escapeHtml(state.user.displayName) : ""}</small>
-      </div>
-      <nav class="list-group list-group-flush small mb-3 rounded border" aria-label="Task schedule">
-        ${navItems}
-      </nav>
-      <div class="mb-2 pb-2 border-bottom d-flex justify-content-center">${themeIconToggleMarkup()}</div>
-      <div class="flex-grow-1"></div>
-      <div class="pt-2 mt-2 border-top">
-        <button type="button" class="btn btn-danger btn-sm w-100 js-logout">Sign out</button>
-      </div>
-    </div>`;
-}
-
-function wireEmpSectionNav() {
-  document.querySelectorAll(".js-emp-section").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const section = btn.getAttribute("data-emp-section");
-      if (!section || section === state.empSection) return;
-      state.empSection = section;
-      renderEmployeeView();
-      const oc = document.getElementById("empNavOffcanvas");
-      bootstrap.Offcanvas.getInstance(oc)?.hide();
-    });
-  });
-}
-
-function empActiveTaskRowHtml(t) {
-  return `
-              <tr class="emp-task-row">
-                <td class="emp-col-check align-middle text-center">
-                  <input class="form-check-input emp-complete m-0" type="checkbox" data-id="${t.id}" aria-label="Mark complete: ${escapeHtml(t.title)}" />
-                </td>
-                <td class="align-middle emp-col-task">
-                  <span class="emp-task-title fw-medium text-body">${escapeHtml(t.title)}</span>
-                </td>
-                <td class="align-middle emp-col-list">
-                  <span class="emp-list-badge">${escapeHtml(t.list?.title || "—")}</span>
-                </td>
-                <td class="align-middle emp-col-deadline small tabular-nums">
-                  ${t.dueAt ? `<span class="text-body">${escapeHtml(t.dueAt.slice(0, 10))}</span>` : `<span class="text-muted">&mdash;</span>`}
-                </td>
-              </tr>`;
-}
-
-function empDoneTaskRowHtml(t) {
-  const me = employeeTaskMe(t);
-  const proofUrl = me?.completionProofUrl;
-  return `
-                <tr class="emp-task-row emp-task-row--done">
-                  <td class="emp-col-check align-middle text-center">
-                    <input type="checkbox" class="form-check-input emp-complete m-0" data-id="${t.id}" checked aria-label="Mark not done: ${escapeHtml(t.title)}" />
-                  </td>
-                  <td class="align-middle emp-col-task">
-                    <span class="emp-task-title emp-task-title--done text-body-secondary">${escapeHtml(t.title)}</span>
-                  </td>
-                  <td class="align-middle emp-col-list-done">
-                    <span class="emp-list-badge emp-list-badge--muted">${escapeHtml(t.list?.title || "—")}</span>
-                  </td>
-                  <td class="align-middle emp-col-proof">
-                    ${
-                      proofUrl
-                        ? `<button type="button" class="emp-proof-open emp-proof-trigger" data-proof-url="${escapeHtml(proofUrl)}" aria-label="View proof for ${escapeHtml(t.title)}">
-                            <span class="emp-proof-thumb-wrap">
-                              <img data-proof-url="${escapeHtml(proofUrl)}" alt="" class="emp-proof-thumb js-proof-img" loading="lazy" />
-                            </span>
-                            <span class="emp-proof-label"><i class="bi bi-zoom-in" aria-hidden="true"></i> View</span>
-                          </button>`
-                        : `<span class="text-muted small emp-proof-none">&mdash;</span>`
-                    }
-                  </td>
-                </tr>`;
 }
 
 function pad2(n) {
@@ -1814,11 +1517,6 @@ async function loadTasks(listId) {
   state.tasks = tasks;
 }
 
-async function loadAssigned() {
-  const { tasks } = await api("/api/tasks/assigned");
-  state.tasks = tasks;
-}
-
 async function loadAssignees() {
   try {
     const { users } = await api("/api/users/assignees");
@@ -2060,12 +1758,6 @@ function wireTaskModal() {
   });
 
   updateModalSaveEnabled();
-}
-
-function employeeTaskMe(t) {
-  const uid = state.user?.id;
-  if (!uid) return null;
-  return t.assignees?.find((a) => a.id === uid) ?? null;
 }
 
 function ownerTaskGroupTbody(t) {
@@ -2394,260 +2086,49 @@ function renderOwnerChrome() {
   wireThemeIconToggles();
 }
 
-function renderEmployeeView() {
-  const section = state.empSection || "daily";
-  const meta = EMP_SECTION_META[section] || EMP_SECTION_META.other;
-  const sectionTasks = employeeSectionTasks(section);
-  const incomplete = sectionTasks.filter((t) => !employeeTaskMe(t)?.assigneeDone);
-  const complete = sectionTasks.filter((t) => employeeTaskMe(t)?.assigneeDone);
-  const nOpen = incomplete.length;
-  const nDone = complete.length;
-  const nSectionTotal = sectionTasks.length;
+/** Optional Play Store link — set VITE_PLAY_STORE_URL at build time when published. */
+function kalpanikPlayStoreUrl() {
+  const url = (import.meta.env.VITE_PLAY_STORE_URL || "").trim();
+  return url;
+}
+
+function renderEmployeeAppRedirect({ justRegistered = false } = {}) {
+  const name = state.user?.displayName ? escapeHtml(state.user.displayName) : "there";
+  const headline = justRegistered ? "Account created" : `Hello, ${name}`;
+  const playStore = kalpanikPlayStoreUrl();
+  const playStoreBtn = playStore
+    ? `<a class="btn btn-primary" href="${escapeHtml(playStore)}" target="_blank" rel="noopener noreferrer"><i class="bi bi-google-play me-1" aria-hidden="true"></i>Get Kalpanik Reminder</a>`
+    : "";
 
   app.innerHTML = `
-    <div class="container-fluid py-2 min-h-main">
-      <div class="d-lg-none mb-2">
-        <button class="btn btn-outline-secondary" type="button" data-bs-toggle="offcanvas" data-bs-target="#empNavOffcanvas" aria-label="Open menu">
-          <i class="bi bi-list"></i> Menu
-        </button>
-      </div>
-      <div class="row g-3">
-        <aside class="col-lg-3 d-none d-lg-block">
-          <div class="bg-body border rounded p-3 h-100 sticky-lg-top owner-main-column" style="top:1rem; max-height: calc(100vh - 2rem);">${employeeNavInner()}</div>
-        </aside>
-        <div class="offcanvas offcanvas-start" tabindex="-1" id="empNavOffcanvas" aria-labelledby="empNavLabel">
-          <div class="offcanvas-header border-bottom">
-            <h2 class="offcanvas-title h5 mb-0" id="empNavLabel">Menu</h2>
-            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
-          </div>
-          <div class="offcanvas-body">${employeeNavInner()}</div>
-        </div>
-        <main class="col-12 col-lg-9">
-          <div id="emp-main-column" class="bg-body border rounded min-h-main owner-main-column p-3 p-lg-4">
-            <div class="emp-shell mx-auto w-100">
-      <header class="mb-4">
-        <h1 class="emp-title h4 mb-1 fw-semibold">${escapeHtml(meta.title)}</h1>
-        <p class="emp-subtitle text-muted small mb-3">${escapeHtml(meta.subtitle)}</p>
-          <div class="emp-kpis" aria-live="polite">
-            <div class="emp-kpi emp-kpi--active" role="status" aria-label="${nOpen} active tasks in ${escapeHtml(meta.title)}">
-              <div class="emp-kpi-icon" aria-hidden="true"><i class="bi bi-list-task"></i></div>
-              <div class="emp-kpi-text">
-                <span class="emp-kpi-value tabular-nums">${nOpen}</span>
-                <span class="emp-kpi-label">Active</span>
-                <span class="emp-kpi-meta">This section</span>
+    <div class="auth-page">
+      <div class="container px-3">
+        <div class="auth-wrap">
+          <div class="card auth-card shadow-sm border-0">
+            <div class="card-body p-4 p-md-5 text-center">
+              <div class="mb-3 text-primary" aria-hidden="true"><i class="bi bi-phone fs-1"></i></div>
+              <h1 class="h4 mb-2 fw-semibold">${headline}</h1>
+              <p class="text-muted mb-4">
+                Your tasks are in the <strong>Kalpanik Reminder</strong> app.
+                Install it, sign in with the same email and password, and complete your assigned tasks there.
+              </p>
+              ${playStoreBtn ? `<div class="d-flex justify-content-center mb-4">${playStoreBtn}</div>` : ""}
+              <p class="small text-muted mb-4">
+                This website is for <strong>registration</strong> and <strong>admin</strong> only.
+                Task completion, proof photos, and reminders are handled in the mobile app.
+              </p>
+              <div class="d-flex flex-column align-items-center gap-3">
+                ${themeIconToggleMarkup()}
+                <button type="button" class="btn btn-outline-danger btn-sm js-logout">Sign out</button>
               </div>
-            </div>
-            <div class="emp-kpi emp-kpi--done" role="status" aria-label="${nDone} completed in ${escapeHtml(meta.title)}">
-              <div class="emp-kpi-icon" aria-hidden="true"><i class="bi bi-patch-check-fill"></i></div>
-              <div class="emp-kpi-text">
-                <span class="emp-kpi-value tabular-nums">${nDone}</span>
-                <span class="emp-kpi-label">Completed</span>
-                <span class="emp-kpi-meta">This section</span>
-              </div>
-            </div>
-          </div>
-          <p class="emp-kpi-footnote small text-muted mb-0 mt-2"><span class="tabular-nums fw-medium text-body-secondary">${nSectionTotal}</span> assigned in this section</p>
-      </header>
-
-      <section class="emp-panel border bg-body mb-4" aria-labelledby="emp-active-heading">
-        <div class="emp-panel-head px-3 px-lg-4 py-3 border-bottom">
-          <h2 id="emp-active-heading" class="emp-panel-title app-table-section-label mb-0">Active</h2>
-          <p class="emp-panel-hint small text-muted mb-0 mt-1">${escapeHtml(meta.hint)}</p>
-        </div>
-        <div class="table-responsive emp-table-responsive">
-          <table class="table table-hover align-middle mb-0 emp-task-table emp-task-table--active">
-            <thead class="table-light">
-              <tr>
-                <th scope="col" class="emp-col-check text-center"><span class="visually-hidden">Done</span></th>
-                <th scope="col" class="emp-col-task">Task</th>
-                <th scope="col" class="emp-col-list">List</th>
-                <th scope="col" class="emp-col-deadline text-nowrap">Deadline</th>
-              </tr>
-            </thead>
-            <tbody id="emp-incomplete-body">
-          ${
-            incomplete.length === 0
-              ? `<tr><td colspan="4" class="emp-empty-cell">
-                <div class="emp-empty">
-                  <i class="bi bi-check2-circle emp-empty-icon" aria-hidden="true"></i>
-                  <p class="emp-empty-title mb-1">You&rsquo;re all caught up</p>
-                  <p class="emp-empty-desc text-muted small mb-0">No open ${escapeHtml(meta.title.toLowerCase())} tasks. Try another section in the menu, or wait for new assignments.</p>
-                </div>
-              </td></tr>`
-              : incomplete.map((t) => empActiveTaskRowHtml(t)).join("")
-          }
-            </tbody>
-          </table>
-        </div>
-      </section>
-      <section class="accordion emp-accordion emp-panel border bg-body overflow-hidden" id="emp-acc" aria-label="Completed tasks">
-        <div class="accordion-item border-0">
-          <h3 class="accordion-header">
-            <button class="accordion-button collapsed emp-accordion-btn px-3 px-lg-4 py-3" type="button" data-bs-toggle="collapse" data-bs-target="#emp-done" aria-expanded="false" aria-controls="emp-done">
-              <span class="d-flex align-items-center gap-2 flex-wrap">
-                <span class="fw-semibold">Completed</span>
-                <span class="badge rounded-pill emp-count-badge fw-normal">${nDone}</span>
-              </span>
-            </button>
-          </h3>
-          <div id="emp-done" class="accordion-collapse collapse">
-            <div class="accordion-body p-0 border-top">
-              <div class="table-responsive emp-table-responsive">
-                <table class="table table-hover align-middle mb-0 emp-task-table emp-task-table--done">
-                  <thead class="table-light">
-                    <tr>
-                      <th scope="col" class="emp-col-check text-center"><span class="visually-hidden">Done</span></th>
-                      <th scope="col" class="emp-col-task">Task</th>
-                      <th scope="col" class="emp-col-list-done">List</th>
-                      <th scope="col" class="emp-col-proof text-nowrap">Proof</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                ${
-                  complete.length === 0
-                    ? `<tr><td colspan="4" class="emp-empty-cell">
-                      <div class="emp-empty emp-empty--compact">
-                        <p class="text-muted small mb-0">Nothing in your completed list yet.</p>
-                      </div>
-                    </td></tr>`
-                    : complete.map((t) => empDoneTaskRowHtml(t)).join("")
-                }
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-            </div>
-          </div>
-        </main>
-      </div>
-
-      <div class="modal fade" id="empCompleteModal" tabindex="-1" aria-labelledby="empCompleteModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-          <div class="modal-content emp-complete-modal shadow">
-            <div class="modal-header border-bottom-0 pb-0">
-              <div>
-                <h2 class="modal-title h5 mb-0" id="empCompleteModalLabel">Mark task complete</h2>
-                <p class="small text-muted mb-0 mt-1">The list owner can see your completion and any proof you attach.</p>
-              </div>
-              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body pt-3">
-              <input type="hidden" id="emp-complete-task-id" />
-              <label class="form-label fw-medium" for="emp-proof-file">Proof photo <span class="fw-normal text-muted">(optional)</span></label>
-              <input type="file" class="form-control" id="emp-proof-file" accept="image/jpeg,image/png,image/gif,image/webp" />
-            </div>
-            <div class="modal-footer flex-wrap gap-2 border-top-0 pt-0">
-              <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-              <button type="button" class="btn btn-outline-secondary" id="emp-complete-skip">Complete without photo</button>
-              <button type="button" class="btn btn-primary" id="emp-complete-with-photo">Complete with photo</button>
             </div>
           </div>
         </div>
       </div>
-      ${taskProofOnlyModalHtml()}
     </div>`;
 
   document.querySelectorAll(".js-logout").forEach((b) => b.addEventListener("click", logout));
   wireThemeIconToggles();
-  wireEmpSectionNav();
-  const completeModalEl = document.getElementById("empCompleteModal");
-
-  document.querySelectorAll(".emp-complete").forEach((el) => {
-    el.addEventListener("change", async () => {
-      const id = el.getAttribute("data-id");
-      const task = state.tasks.find((x) => x.id === id);
-      if (!task || !id) return;
-
-      if (!el.checked) {
-        try {
-          await api(`/api/tasks/${id}`, { method: "PATCH", body: JSON.stringify({ completed: false }) });
-          await loadAssigned();
-          onEmployeeTaskCompleted(task);
-          renderEmployeeView();
-        } catch (err) {
-          showToast(err.message, "danger");
-          el.checked = true;
-        }
-        return;
-      }
-
-      if (!employeeTaskMe(task)?.assigneeDone) {
-        el.checked = false;
-        const hid = document.getElementById("emp-complete-task-id");
-        const fileInput = document.getElementById("emp-proof-file");
-        if (hid) hid.value = id;
-        if (fileInput) fileInput.value = "";
-        bootstrap.Modal.getOrCreateInstance(completeModalEl).show();
-      }
-    });
-  });
-
-  document.getElementById("emp-complete-skip")?.addEventListener("click", async () => {
-    const id = document.getElementById("emp-complete-task-id")?.value;
-    if (!id) return;
-    try {
-      const task = state.tasks.find((x) => x.id === id);
-      await api(`/api/tasks/${id}`, { method: "PATCH", body: JSON.stringify({ completed: true }) });
-      bootstrap.Modal.getInstance(completeModalEl)?.hide();
-      onEmployeeTaskCompleted(task);
-      await loadAssigned();
-      showEmployeeCompleteToast(task, id);
-      renderEmployeeView();
-    } catch (err) {
-      showToast(err.message, "danger");
-    }
-  });
-
-  document.querySelectorAll(".emp-proof-open").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const url = btn.getAttribute("data-proof-url");
-      void openProofImageModal(url, "Your submission");
-    });
-  });
-
-  wireTaskProofOnlyModal();
-  revokeProofBlobUrls();
-  hydrateProofImages(app);
-
-  document.getElementById("emp-complete-with-photo")?.addEventListener("click", async () => {
-    const id = document.getElementById("emp-complete-task-id")?.value;
-    const fileInput = document.getElementById("emp-proof-file");
-    const file = fileInput?.files?.[0];
-    if (!id) return;
-    if (!file) {
-      showToast("Choose an image first, or use “Complete without photo”.", "warning");
-      return;
-    }
-    const fd = new FormData();
-    fd.append("proof", file);
-    try {
-      const task = state.tasks.find((x) => x.id === id);
-      await apiForm(`/api/tasks/${id}/completion-proof`, fd, "POST");
-      bootstrap.Modal.getInstance(completeModalEl)?.hide();
-      onEmployeeTaskCompleted(task);
-      await loadAssigned();
-      showEmployeeCompleteToast(task, id);
-      renderEmployeeView();
-    } catch (err) {
-      showToast(err.message, "danger");
-    }
-  });
-}
-
-function showEmployeeCompleteToast(taskBefore, taskId) {
-  const wasRepeating = taskRecurrenceRolls(taskBefore);
-  if (!wasRepeating) return;
-  const updated = state.tasks.find((x) => x.id === taskId);
-  if (!taskRecurrenceRolls(updated)) {
-    showToast("Done — repeat schedule finished.", "success");
-    return;
-  }
-  const next = updated?.dueAt?.slice(0, 10);
-  showToast(next ? `Done — next deadline ${next}` : "Done — next period scheduled", "success");
 }
 
 async function render() {
@@ -2657,23 +2138,11 @@ async function render() {
     return;
   }
   if (state.user.role === "employee") {
-    await loadAssigned();
-    renderEmployeeView();
-    startEmployeeReminderPolling();
-    const push = await setupEmployeePushRegistration((path, options) => api(path, options), showToast);
-    if (push.ok) setServerPushRemindersActive(true);
-    if (!sessionStorage.getItem("taskmgr-alarm-hint")) {
-      sessionStorage.setItem("taskmgr-alarm-hint", "1");
-      if (push.ok) {
-        showToast(
-          "Phone reminders on: the server will notify you ~10 min before tasks, even in other apps.",
-          "primary"
-        );
-      }
-    }
+    const welcome = sessionStorage.getItem("taskmgr-app-welcome");
+    if (welcome) sessionStorage.removeItem("taskmgr-app-welcome");
+    renderEmployeeAppRedirect({ justRegistered: !!welcome });
     return;
   }
-  stopEmployeeReminders();
   await loadLists();
   await loadAssignees();
   await loadTasks(state.activeListId);
@@ -2681,7 +2150,6 @@ async function render() {
 }
 
 initTheme();
-warmupPushInfrastructure((path, options) => api(path, options));
 render().catch((e) => {
   console.error(e);
   showToast(String(e.message || e), "danger");
