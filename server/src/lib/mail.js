@@ -73,3 +73,118 @@ export async function sendOtpEmail(to, otp) {
 
   return { ok: true, devMode: false };
 }
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/**
+ * @param {{
+ *   to: string;
+ *   recipientName: string;
+ *   admin: { email: string; displayName: string };
+ * }} params
+ */
+export async function sendAdminPromotionEmail(params) {
+  const config = getBrevoConfig();
+  const adminName = params.admin.displayName?.trim() || "An administrator";
+  const adminEmail = params.admin.email?.trim() || "";
+  const recipientName = params.recipientName?.trim() || "there";
+  const signInUrl = process.env.APP_PUBLIC_URL?.trim() || "";
+
+  if (!config) {
+    if (process.env.NODE_ENV !== "production") {
+      console.log(
+        `[mail] Brevo not configured — admin promotion email for ${params.to} (by ${adminEmail}) (dev only, not sent)`
+      );
+      return { ok: true, devMode: true };
+    }
+    throw new Error("Email service is not configured on this server.");
+  }
+
+  const subject = "You've been granted admin access — Task Manager";
+  const textContent = [
+    `Hi ${recipientName},`,
+    "",
+    `${adminName} (${adminEmail}) has granted you admin access to Task Manager.`,
+    "",
+    "You can now sign in on the website to manage lists, assign tasks, review submissions, and promote other team members.",
+    signInUrl ? `Sign in: ${signInUrl}` : null,
+    "",
+    "If you have questions, reply to this email to contact your administrator.",
+    "",
+    "— Task Manager",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const htmlContent = `
+    <div style="font-family:system-ui,-apple-system,Segoe UI,sans-serif;max-width:520px;margin:0 auto;color:#212529;line-height:1.5">
+      <div style="background:#0d6efd;color:#fff;border-radius:10px 10px 0 0;padding:20px 24px">
+        <h1 style="margin:0;font-size:20px;font-weight:700">Task Manager</h1>
+        <p style="margin:8px 0 0;opacity:0.92;font-size:14px">Admin access granted</p>
+      </div>
+      <div style="border:1px solid #dee2e6;border-top:0;border-radius:0 0 10px 10px;padding:24px;background:#fff">
+        <p style="margin:0 0 16px">Hi <strong>${escapeHtml(recipientName)}</strong>,</p>
+        <p style="margin:0 0 16px">
+          <strong>${escapeHtml(adminName)}</strong>
+          (<a href="mailto:${escapeHtml(adminEmail)}" style="color:#0d6efd">${escapeHtml(adminEmail)}</a>)
+          has granted you <strong>admin access</strong> to Task Manager.
+        </p>
+        <p style="margin:0 0 16px">You can now sign in on the website to:</p>
+        <ul style="margin:0 0 20px;padding-left:20px">
+          <li>Manage task lists</li>
+          <li>Assign tasks to employees</li>
+          <li>Review submissions and proof photos</li>
+          <li>Grant admin access to other team members</li>
+        </ul>
+        ${
+          signInUrl
+            ? `<p style="margin:0 0 20px"><a href="${escapeHtml(signInUrl)}" style="display:inline-block;background:#0d6efd;color:#fff;text-decoration:none;padding:10px 18px;border-radius:6px;font-weight:600">Open Task Manager</a></p>`
+            : ""
+        }
+        <p style="margin:0;font-size:13px;color:#6c757d">
+          If you have questions, reply to this email to contact ${escapeHtml(adminName)}.
+        </p>
+      </div>
+      <p style="margin:16px 0 0;font-size:12px;color:#adb5bd;text-align:center">
+        Sent on behalf of ${escapeHtml(adminName)} via Task Manager
+      </p>
+    </div>
+  `;
+
+  const res = await fetch(BREVO_API_URL, {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+      "api-key": config.apiKey,
+    },
+    body: JSON.stringify({
+      sender: { name: adminName, email: config.senderEmail },
+      to: [{ email: params.to, name: recipientName }],
+      replyTo: adminEmail ? { email: adminEmail, name: adminName } : undefined,
+      subject,
+      htmlContent,
+      textContent,
+    }),
+  });
+
+  if (!res.ok) {
+    let detail = res.statusText;
+    try {
+      const errBody = await res.json();
+      detail = errBody?.message || errBody?.error || JSON.stringify(errBody);
+    } catch {
+      /* ignore */
+    }
+    console.error("[mail/brevo] admin promotion", res.status, detail);
+    throw new Error("Failed to send admin promotion email.");
+  }
+
+  return { ok: true, devMode: false };
+}

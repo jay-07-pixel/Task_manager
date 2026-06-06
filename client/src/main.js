@@ -1450,8 +1450,15 @@ async function refreshTeamAdminList() {
         if (!id || !window.confirm(`Make ${name} an admin? They will get full dashboard access on the website.`)) return;
         btn.disabled = true;
         try {
-          await api(`/api/users/${id}/role`, { method: "PATCH", body: JSON.stringify({ role: "owner" }) });
-          showToast(`${name} is now an admin.`, "success");
+          const result = await api(`/api/users/${id}/role`, {
+            method: "PATCH",
+            body: JSON.stringify({ role: "owner" }),
+          });
+          if (result.emailSent) {
+            showToast(`${name} is now an admin. A notification email was sent.`, "success");
+          } else {
+            showToast(`${name} is now an admin, but the notification email could not be sent.`, "warning");
+          }
           await refreshTeamAdminList();
           await loadAssignees();
         } catch (err) {
