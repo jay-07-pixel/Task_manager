@@ -188,3 +188,100 @@ export async function sendAdminPromotionEmail(params) {
 
   return { ok: true, devMode: false };
 }
+
+/**
+ * @param {{
+ *   to: string;
+ *   recipientName: string;
+ *   admin: { email: string; displayName: string };
+ * }} params
+ */
+export async function sendAdminRevocationEmail(params) {
+  const config = getBrevoConfig();
+  const adminName = params.admin.displayName?.trim() || "An administrator";
+  const adminEmail = params.admin.email?.trim() || "";
+  const recipientName = params.recipientName?.trim() || "there";
+
+  if (!config) {
+    if (process.env.NODE_ENV !== "production") {
+      console.log(
+        `[mail] Brevo not configured — admin revocation email for ${params.to} (by ${adminEmail}) (dev only, not sent)`
+      );
+      return { ok: true, devMode: true };
+    }
+    throw new Error("Email service is not configured on this server.");
+  }
+
+  const subject = "Your admin access has been revoked — Task Manager";
+  const textContent = [
+    `Hi ${recipientName},`,
+    "",
+    `${adminName} (${adminEmail}) has revoked your admin access to Task Manager.`,
+    "",
+    "You no longer have access to the admin dashboard on the website. You can still sign in as an employee and use the Kalpanik Reminder mobile app for assigned tasks.",
+    "",
+    "If you believe this was a mistake, reply to this email to contact your administrator.",
+    "",
+    "— Task Manager",
+  ].join("\n");
+
+  const htmlContent = `
+    <div style="font-family:system-ui,-apple-system,Segoe UI,sans-serif;max-width:520px;margin:0 auto;color:#212529;line-height:1.5">
+      <div style="background:#dc3545;color:#fff;border-radius:10px 10px 0 0;padding:20px 24px">
+        <h1 style="margin:0;font-size:20px;font-weight:700">Task Manager</h1>
+        <p style="margin:8px 0 0;opacity:0.92;font-size:14px">Admin access revoked</p>
+      </div>
+      <div style="border:1px solid #dee2e6;border-top:0;border-radius:0 0 10px 10px;padding:24px;background:#fff">
+        <p style="margin:0 0 16px">Hi <strong>${escapeHtml(recipientName)}</strong>,</p>
+        <p style="margin:0 0 16px">
+          <strong>${escapeHtml(adminName)}</strong>
+          (<a href="mailto:${escapeHtml(adminEmail)}" style="color:#0d6efd">${escapeHtml(adminEmail)}</a>)
+          has revoked your <strong>admin access</strong> to Task Manager.
+        </p>
+        <p style="margin:0 0 16px">What this means:</p>
+        <ul style="margin:0 0 20px;padding-left:20px">
+          <li>You can no longer use the admin dashboard on the website</li>
+          <li>You can still sign in as an <strong>employee</strong></li>
+          <li>Assigned tasks remain available in the <strong>Kalpanik Reminder</strong> mobile app</li>
+        </ul>
+        <p style="margin:0;font-size:13px;color:#6c757d">
+          If you believe this was a mistake, reply to this email to contact ${escapeHtml(adminName)}.
+        </p>
+      </div>
+      <p style="margin:16px 0 0;font-size:12px;color:#adb5bd;text-align:center">
+        Sent on behalf of ${escapeHtml(adminName)} via Task Manager
+      </p>
+    </div>
+  `;
+
+  const res = await fetch(BREVO_API_URL, {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+      "api-key": config.apiKey,
+    },
+    body: JSON.stringify({
+      sender: { name: adminName, email: config.senderEmail },
+      to: [{ email: params.to, name: recipientName }],
+      replyTo: adminEmail ? { email: adminEmail, name: adminName } : undefined,
+      subject,
+      htmlContent,
+      textContent,
+    }),
+  });
+
+  if (!res.ok) {
+    let detail = res.statusText;
+    try {
+      const errBody = await res.json();
+      detail = errBody?.message || errBody?.error || JSON.stringify(errBody);
+    } catch {
+      /* ignore */
+    }
+    console.error("[mail/brevo] admin revocation", res.status, detail);
+    throw new Error("Failed to send admin revocation email.");
+  }
+
+  return { ok: true, devMode: false };
+}

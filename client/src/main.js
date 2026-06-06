@@ -1403,7 +1403,7 @@ function teamAdminModalHtml() {
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
           <div class="modal-body">
-            <p class="small text-muted mb-3">Promote an employee to admin so they can use this dashboard to manage lists and tasks.</p>
+            <p class="small text-muted mb-3">Promote employees to admin or revoke admin access. Email notifications are sent automatically.</p>
             <div id="team-admin-list"></div>
           </div>
           <div class="modal-footer">
@@ -1424,15 +1424,27 @@ async function refreshTeamAdminList() {
       host.innerHTML = '<p class="small text-muted mb-0">No team members yet.</p>';
       return;
     }
+    const selfId = state.user?.id || "";
     host.innerHTML = `<div class="list-group list-group-flush border rounded team-admin-list">
       ${users
         .map((u) => {
           const isAdmin = u.role === "owner";
-          const action = isAdmin
-            ? '<span class="badge rounded-pill owner-role-badge flex-shrink-0">Admin</span>'
-            : `<button type="button" class="btn btn-sm btn-primary flex-shrink-0 team-promote-btn" data-user-id="${u.id}" data-user-name="${escapeHtml(
+          const isSelf = u.id === selfId;
+          let action;
+          if (isAdmin) {
+            if (isSelf) {
+              action =
+                '<span class="badge rounded-pill owner-role-badge flex-shrink-0">Admin (you)</span>';
+            } else {
+              action = `<button type="button" class="btn btn-sm btn-outline-danger flex-shrink-0 team-revoke-btn" data-user-id="${u.id}" data-user-name="${escapeHtml(
                 u.displayName
-              )}">Make admin</button>`;
+              )}">Revoke admin</button>`;
+            }
+          } else {
+            action = `<button type="button" class="btn btn-sm btn-primary flex-shrink-0 team-promote-btn" data-user-id="${u.id}" data-user-name="${escapeHtml(
+              u.displayName
+            )}">Make admin</button>`;
+          }
           return `<div class="list-group-item d-flex justify-content-between align-items-center gap-2">
             <div class="min-w-0">
               <div class="fw-medium text-truncate">${escapeHtml(u.displayName)}</div>
@@ -1443,6 +1455,21 @@ async function refreshTeamAdminList() {
         })
         .join("")}
     </div>`;
+
+    async function patchTeamRole(id, role, name, successMsg, warnMsg) {
+      const result = await api(`/api/users/${id}/role`, {
+        method: "PATCH",
+        body: JSON.stringify({ role }),
+      });
+      if (result.emailSent) {
+        showToast(`${successMsg} A notification email was sent.`, "success");
+      } else {
+        showToast(`${warnMsg} The notification email could not be sent.`, "warning");
+      }
+      await refreshTeamAdminList();
+      await loadAssignees();
+    }
+
     host.querySelectorAll(".team-promote-btn").forEach((btn) => {
       btn.addEventListener("click", async () => {
         const id = btn.getAttribute("data-user-id");
@@ -1450,17 +1477,35 @@ async function refreshTeamAdminList() {
         if (!id || !window.confirm(`Make ${name} an admin? They will get full dashboard access on the website.`)) return;
         btn.disabled = true;
         try {
-          const result = await api(`/api/users/${id}/role`, {
-            method: "PATCH",
-            body: JSON.stringify({ role: "owner" }),
-          });
-          if (result.emailSent) {
-            showToast(`${name} is now an admin. A notification email was sent.`, "success");
-          } else {
-            showToast(`${name} is now an admin, but the notification email could not be sent.`, "warning");
-          }
-          await refreshTeamAdminList();
-          await loadAssignees();
+          await patchTeamRole(id, "owner", name, `${name} is now an admin.`, `${name} is now an admin, but`);
+        } catch (err) {
+          showToast(err.message, "danger");
+          btn.disabled = false;
+        }
+      });
+    });
+
+    host.querySelectorAll(".team-revoke-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = btn.getAttribute("data-user-id");
+        const name = btn.getAttribute("data-user-name");
+        if (
+          !id ||
+          !window.confirm(
+            `Revoke admin access for ${name}? They will lose dashboard access and return to employee sign-in.`
+          )
+        ) {
+          return;
+        }
+        btn.disabled = true;
+        try {
+          await patchTeamRole(
+            id,
+            "employee",
+            name,
+            `${name}'s admin access was revoked.`,
+            `${name}'s admin access was revoked, but`
+          );
         } catch (err) {
           showToast(err.message, "danger");
           btn.disabled = false;

@@ -1,13 +1,13 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
-import { sendAdminPromotionEmail } from "../lib/mail.js";
+import { sendAdminPromotionEmail, sendAdminRevocationEmail } from "../lib/mail.js";
 import { requireOwner } from "../middleware/auth.js";
 
 const router = Router();
 
-const promoteRoleSchema = z.object({
-  role: z.literal("owner"),
+const rolePatchSchema = z.object({
+  role: z.enum(["owner", "employee"]),
 });
 
 router.get("/assignees", requireOwner, async (req, res) => {
@@ -28,12 +28,14 @@ router.get("/team", requireOwner, async (req, res) => {
 });
 
 router.patch("/:id/role", requireOwner, async (req, res) => {
-  const parsed = promoteRoleSchema.safeParse(req.body);
+  const parsed = rolePatchSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ error: "Only promotion to admin (owner) is supported." });
+    return res.status(400).json({ error: "Invalid role. Use owner or employee." });
   }
 
-  const [target, promoter] = await Promise.all([
+  const nextRole = parsed.data.role;
+
+  const [target, actor] = await Promise.all([
     prisma.user.findUnique({ where: { id: req.params.id } }),
     prisma.user.findUnique({
       where: { id: req.session.userId },
@@ -44,29 +46,62 @@ router.patch("/:id/role", requireOwner, async (req, res) => {
   if (!target) {
     return res.status(404).json({ error: "User not found" });
   }
-  if (target.role === "owner") {
-    return res.status(400).json({ error: "User is already an admin." });
+  if (!actor?.email) {
+    return res.status(500).json({ error: "Could not identify the acting admin." });
   }
-  if (!promoter?.email) {
-    return res.status(500).json({ error: "Could not identify the promoting admin." });
+  if (target.role === nextRole) {
+    return res.status(400).json({
+      error: nextRole === "owner" ? "User is already an admin." : "User is already an employee.",
+    });
+  }
+
+  if (nextRole === "owner") {
+    const user = await prisma.user.update({
+      where: { id: target.id },
+      data: { role: "owner" },
+      select: { id: true, email: true, displayName: true, role: true },
+    });
+
+    let emailSent = false;
+    try {
+      const mailResult = await sendAdminPromotionEmail({
+        to: user.email,
+        recipientName: user.displayName,
+        admin: actor,
+      });
+      emailSent = !mailResult.devMode;
+    } catch (err) {
+      console.error("[users] admin promotion email failed", err);
+    }
+
+    return res.json({ user, emailSent });
+  }
+
+  if (target.id === req.session.userId) {
+    return res.status(400).json({ error: "You cannot revoke your own admin access." });
+  }
+
+  const ownerCount = await prisma.user.count({ where: { role: "owner" } });
+  if (ownerCount <= 1) {
+    return res.status(400).json({ error: "Cannot revoke the last admin. Promote another admin first." });
   }
 
   const user = await prisma.user.update({
     where: { id: target.id },
-    data: { role: "owner" },
+    data: { role: "employee" },
     select: { id: true, email: true, displayName: true, role: true },
   });
 
   let emailSent = false;
   try {
-    const mailResult = await sendAdminPromotionEmail({
+    const mailResult = await sendAdminRevocationEmail({
       to: user.email,
       recipientName: user.displayName,
-      admin: promoter,
+      admin: actor,
     });
     emailSent = !mailResult.devMode;
   } catch (err) {
-    console.error("[users] admin promotion email failed", err);
+    console.error("[users] admin revocation email failed", err);
   }
 
   res.json({ user, emailSent });
