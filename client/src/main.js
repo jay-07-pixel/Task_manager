@@ -25,6 +25,7 @@ let pendingCustomRecurrence = null;
 let listNameResolve = null;
 
 const THEME_STORAGE_KEY = "task-manager-theme";
+const THEME_TRANSITION_MS = 450;
 
 function getStoredTheme() {
   const v = localStorage.getItem(THEME_STORAGE_KEY);
@@ -36,14 +37,22 @@ function effectiveTheme() {
   return getStoredTheme();
 }
 
-function applyTheme() {
-  document.documentElement.setAttribute("data-bs-theme", effectiveTheme());
+function applyTheme({ animate = false } = {}) {
+  const root = document.documentElement;
+  if (animate) {
+    root.classList.add("theme-switching");
+  }
+  root.setAttribute("data-bs-theme", effectiveTheme());
+  if (animate) {
+    window.setTimeout(() => root.classList.remove("theme-switching"), THEME_TRANSITION_MS);
+  }
 }
 
 function setThemePreference(mode) {
   if (mode !== "light" && mode !== "dark") return;
+  if (mode === getStoredTheme()) return;
   localStorage.setItem(THEME_STORAGE_KEY, mode);
-  applyTheme();
+  applyTheme({ animate: true });
   syncThemeIconButtons();
 }
 
@@ -514,9 +523,7 @@ function kalpanikLogoImg(variant = "auth") {
 function kalpanikAuthBrandMarkup(subtitle = "") {
   return `
     <div class="auth-card-head auth-card-head--kalpanik">
-      <div class="kalpanik-logo-wrap kalpanik-logo-wrap--auth">
-        ${kalpanikLogoImg("auth")}
-      </div>
+      ${kalpanikLogoImg("auth")}
       ${
         subtitle
           ? `<p class="auth-brand-sub text-white mb-0 mt-2 text-center">${subtitle}</p>`
@@ -760,9 +767,7 @@ function leftNavInner() {
   return `
     <div class="owner-sidebar d-flex flex-column h-100">
       <div class="owner-sidebar-brand">
-        <div class="kalpanik-logo-wrap kalpanik-logo-wrap--sidebar w-100">
-          ${kalpanikLogoImg("sidebar")}
-        </div>
+        ${kalpanikLogoImg("sidebar")}
         <div class="owner-sidebar-user-block w-100">
           <div class="owner-sidebar-brand-user text-truncate">${displayName}</div>
           <span class="badge rounded-pill owner-role-badge mt-1">Admin</span>

@@ -2,6 +2,30 @@
 
 @import "bootstrap-icons/font/bootstrap-icons.css";
 
+[data-bs-theme="light"] {
+  color-scheme: light;
+}
+
+[data-bs-theme="dark"] {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background-color: var(--bs-body-bg);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html.theme-switching,
+  html.theme-switching *,
+  html.theme-switching *::before,
+  html.theme-switching *::after {
+    transition-property: background-color, color, border-color, box-shadow, fill, stroke, outline-color;
+    transition-duration: 0.45s;
+    transition-timing-function: ease;
+  }
+}
+
 .task-row .form-check-input {
   width: 1.15rem;
   height: 1.15rem;
@@ -1723,38 +1747,22 @@
   padding: 1.15rem 1.1rem 1rem;
 }
 
-.kalpanik-logo-wrap {
-  background: #000;
-  border-radius: 0.55rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 0;
-  box-shadow: 0 0.15rem 0.5rem rgba(0, 0, 0, 0.2);
-}
-
-.kalpanik-logo-wrap--auth {
-  padding: 0.55rem 0.85rem;
-  width: min(100%, 15.5rem);
-}
-
-.kalpanik-logo-wrap--sidebar {
-  padding: 0.45rem 0.65rem;
-}
-
 .kalpanik-logo {
   display: block;
-  width: 100%;
+  width: auto;
+  max-width: 100%;
   height: auto;
   object-fit: contain;
 }
 
 .kalpanik-logo--auth {
-  max-height: 3.25rem;
+  max-height: 11.25rem;
+  width: min(100%, 23.5rem);
 }
 
 .kalpanik-logo--sidebar {
-  max-height: 2.75rem;
+  max-height: 10.75rem;
+  width: 100%;
 }
 
 .auth-brand-sub {
@@ -1959,6 +1967,11 @@
   justify-content: center;
   border-radius: 0.5rem;
   line-height: 1;
+  transition:
+    background-color 0.35s ease,
+    color 0.35s ease,
+    border-color 0.35s ease,
+    box-shadow 0.35s ease;
 }
 
 .theme-icon-toggles .theme-icon-btn i {
