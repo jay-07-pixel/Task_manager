@@ -126,14 +126,28 @@ body {
 
 .owner-sidebar-brand {
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 0.75rem;
+  align-items: flex-start;
+  gap: 0.85rem;
   margin-bottom: 1.25rem;
 }
 
-.owner-sidebar-user-block {
-  min-width: 0;
+.owner-sidebar-brand-icon {
+  flex-shrink: 0;
+  width: 2.75rem;
+  height: 2.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.65rem;
+  background: rgba(var(--bs-primary-rgb), 0.12);
+  color: var(--bs-primary);
+  font-size: 1.25rem;
+}
+
+.owner-sidebar-brand-title {
+  font-weight: 700;
+  font-size: 1.05rem;
+  line-height: 1.2;
 }
 
 .owner-sidebar-brand-user {
@@ -1739,30 +1753,28 @@ body {
   color: #fff;
 }
 
-.auth-card-head--kalpanik {
+.auth-brand-row {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  text-align: center;
-  padding: 1.15rem 1.1rem 1rem;
+  gap: 0.85rem;
 }
 
-.kalpanik-logo {
-  display: block;
-  width: auto;
-  max-width: 100%;
-  height: auto;
-  object-fit: contain;
+.auth-brand-icon {
+  width: 2.35rem;
+  height: 2.35rem;
+  border-radius: 0.65rem;
+  background: rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.15rem;
 }
 
-.kalpanik-logo--auth {
-  max-height: 11.25rem;
-  width: min(100%, 23.5rem);
-}
-
-.kalpanik-logo--sidebar {
-  max-height: 10.75rem;
-  width: 100%;
+.auth-brand-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
 }
 
 .auth-brand-sub {

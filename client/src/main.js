@@ -514,31 +514,21 @@ function wireRegisterPhoneDigits() {
   });
 }
 
-const KALPANIK_LOGO_SRC = "/icons/kalpanik-logo.png";
-
-function kalpanikLogoImg(variant = "auth") {
-  return `<img src="${KALPANIK_LOGO_SRC}" alt="Kalpanik" class="kalpanik-logo kalpanik-logo--${variant}" decoding="async" />`;
-}
-
-function kalpanikAuthBrandMarkup(subtitle = "") {
-  return `
-    <div class="auth-card-head auth-card-head--kalpanik">
-      ${kalpanikLogoImg("auth")}
-      ${
-        subtitle
-          ? `<p class="auth-brand-sub text-white mb-0 mt-2 text-center">${subtitle}</p>`
-          : ""
-      }
-    </div>`;
-}
-
 function renderAuthForm() {
   app.innerHTML = `
     <div class="auth-page">
       <div class="container px-3">
         <div class="auth-wrap">
           <div class="card auth-card">
-            ${kalpanikAuthBrandMarkup("Organize lists, assign people, track what&rsquo;s done.")}
+            <div class="auth-card-head">
+              <div class="auth-brand-row">
+                <div class="auth-brand-icon" aria-hidden="true"><i class="bi bi-kanban-fill"></i></div>
+                <div>
+                  <div class="auth-brand-title text-white">Task Manager</div>
+                  <p class="auth-brand-sub text-white">Organize lists, assign people, track what&rsquo;s done.</p>
+                </div>
+              </div>
+            </div>
             <div class="auth-card-body">
               <ul class="nav nav-pills auth-tabs" role="tablist">
                 <li class="nav-item" role="presentation">
@@ -767,8 +757,9 @@ function leftNavInner() {
   return `
     <div class="owner-sidebar d-flex flex-column h-100">
       <div class="owner-sidebar-brand">
-        ${kalpanikLogoImg("sidebar")}
-        <div class="owner-sidebar-user-block w-100">
+        <div class="owner-sidebar-brand-icon" aria-hidden="true"><i class="bi bi-kanban-fill"></i></div>
+        <div class="min-w-0">
+          <div class="owner-sidebar-brand-title">Task Manager</div>
           <div class="owner-sidebar-brand-user text-truncate">${displayName}</div>
           <span class="badge rounded-pill owner-role-badge mt-1">Admin</span>
         </div>
@@ -2371,7 +2362,15 @@ function renderEmployeeAppRedirect({ justRegistered = false } = {}) {
       <div class="container px-3">
         <div class="auth-wrap app-redirect-wrap">
           <div class="card auth-card">
-            ${kalpanikAuthBrandMarkup("Assigned tasks, proof photos, and alarms — on your phone.")}
+            <div class="auth-card-head">
+              <div class="auth-brand-row">
+                <div class="auth-brand-icon" aria-hidden="true"><i class="bi bi-phone-fill"></i></div>
+                <div>
+                  <div class="auth-brand-title text-white">Kalpanik Reminder</div>
+                  <p class="auth-brand-sub text-white mb-0">Assigned tasks, proof photos, and alarms — on your phone.</p>
+                </div>
+              </div>
+            </div>
             <div class="auth-card-body app-redirect-body">
               ${welcomeAlert}
               <div class="app-redirect-hero text-center mb-4">

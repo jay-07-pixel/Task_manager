@@ -1,19 +1,13 @@
 {
-  "name": "Kalpanik Task Manager",
-  "short_name": "Kalpanik",
-  "description": "Kalpanik task lists, assignments, and due reminders",
+  "name": "Task Manager",
+  "short_name": "Tasks",
+  "description": "Task lists, assignments, and due reminders",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#000000",
+  "background_color": "#ffffff",
   "theme_color": "#0d6efd",
   "scope": "/",
   "icons": [
-    {
-      "src": "/icons/kalpanik-logo.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
-    },
     {
       "src": "/icons/notification-icon.png",
       "sizes": "96x96",
