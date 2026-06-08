@@ -43,10 +43,6 @@ if (typeof document !== "undefined") {
 
 /** @type {ReturnType<typeof setInterval> | null} */
 let pollTimer = null;
-/** @type {ReturnType<typeof setInterval> | null} */
-let beepTimer = null;
-/** @type {AudioContext | null} */
-let audioCtx = null;
 /** @type {string | null} */
 let activeReminderKey = null;
 
@@ -104,150 +100,9 @@ function formatDueTime(dueAt) {
   });
 }
 
-/** @type {HTMLAudioElement | null} */
-let alarmHtmlAudio = null;
-
-function getAlarmHtmlAudio() {
-  if (!alarmHtmlAudio) {
-    alarmHtmlAudio = new Audio("/sounds/alarm-beep.wav");
-    alarmHtmlAudio.loop = true;
-    alarmHtmlAudio.preload = "auto";
-  }
-  return alarmHtmlAudio;
-}
-
-function stopHtmlAlarmAudio() {
-  if (!alarmHtmlAudio) return;
-  alarmHtmlAudio.pause();
-  alarmHtmlAudio.currentTime = 0;
-}
-
-function stopAlarmSound() {
-  if (beepTimer) {
-    clearInterval(beepTimer);
-    beepTimer = null;
-  }
-  stopHtmlAlarmAudio();
-  if (audioCtx && audioCtx.state === "running") {
-    void audioCtx.suspend();
-  }
-}
-
 export function stopTaskAlarm() {
-  stopAlarmSound();
   activeReminderKey = null;
   document.getElementById("task-reminder-banner")?.remove();
-}
-
-async function ensureAudio() {
-  const Ctx = window.AudioContext || window.webkitAudioContext;
-  if (!Ctx) return null;
-  if (!audioCtx) audioCtx = new Ctx();
-  if (audioCtx.state === "suspended") await audioCtx.resume();
-  return audioCtx;
-}
-
-/** Alternating square-wave beeps (alarm-clock style). */
-export async function playTaskAlarm() {
-  if (beepTimer) {
-    clearInterval(beepTimer);
-    beepTimer = null;
-  }
-  stopHtmlAlarmAudio();
-
-  const tryHtml = async () => {
-    const htmlAudio = getAlarmHtmlAudio();
-    htmlAudio.volume = 1;
-    await htmlAudio.play();
-    return true;
-  };
-
-  try {
-    await tryHtml();
-    return true;
-  } catch {
-    alarmHtmlAudio = null;
-    try {
-      await tryHtml();
-      return true;
-    } catch {
-      /* fall through to Web Audio */
-    }
-  }
-
-  const ctx = await ensureAudio();
-  if (!ctx) return false;
-
-  let highTone = true;
-  const master = ctx.createGain();
-  master.gain.value = 0.5;
-  master.connect(ctx.destination);
-
-  const playBeep = () => {
-    const osc = ctx.createOscillator();
-    const g = ctx.createGain();
-    osc.type = "square";
-    osc.frequency.value = highTone ? 880 : 698;
-    highTone = !highTone;
-    const t = ctx.currentTime;
-    g.gain.setValueAtTime(0.001, t);
-    g.gain.exponentialRampToValueAtTime(0.65, t + 0.03);
-    g.gain.exponentialRampToValueAtTime(0.001, t + 0.38);
-    osc.connect(g);
-    g.connect(master);
-    osc.start(t);
-    osc.stop(t + 0.4);
-  };
-
-  playBeep();
-  beepTimer = setInterval(playBeep, 480);
-  return true;
-}
-
-function showReminderBanner(task, eyebrowText, showToast) {
-  document.getElementById("task-reminder-banner")?.remove();
-  stopAlarmSound();
-
-  const banner = document.createElement("div");
-  banner.id = "task-reminder-banner";
-  banner.className = "task-reminder-banner";
-  banner.setAttribute("role", "alertdialog");
-  banner.setAttribute("aria-labelledby", "task-reminder-title");
-  banner.setAttribute("aria-modal", "true");
-  banner.innerHTML = `
-    <div class="task-reminder-banner__inner">
-      <div class="task-reminder-banner__icon" aria-hidden="true"><i class="bi bi-alarm-fill"></i></div>
-      <div class="task-reminder-banner__text">
-        <p class="task-reminder-banner__eyebrow mb-0">${escapeHtml(eyebrowText)}</p>
-        <p class="task-reminder-banner__title mb-0" id="task-reminder-title">${escapeHtml(task.title)}</p>
-        <p class="task-reminder-banner__meta mb-0 small">${escapeHtml(formatDueTime(task.dueAt))}</p>
-      </div>
-      <div class="task-reminder-banner__actions">
-        <button type="button" class="btn btn-warning btn-sm fw-semibold me-2" id="task-reminder-sound">Tap for alarm sound</button>
-        <button type="button" class="btn btn-light btn-sm fw-semibold" id="task-reminder-stop">Stop alarm and dismiss</button>
-      </div>
-    </div>`;
-
-  document.body.appendChild(banner);
-  banner.querySelector("#task-reminder-stop")?.addEventListener("click", () => stopTaskAlarm());
-  banner.querySelector("#task-reminder-sound")?.addEventListener("click", () => {
-    void playTaskAlarm();
-  });
-  banner.querySelector(".task-reminder-banner__inner")?.addEventListener("pointerdown", () => {
-    void playTaskAlarm();
-  });
-
-  void playTaskAlarm().then((ok) => {
-    if (!ok) {
-      showToast?.("Tap the banner or “Tap for alarm sound” if you hear no beeping.", "warning");
-    }
-  });
-}
-
-function escapeHtml(s) {
-  const d = document.createElement("div");
-  d.textContent = s;
-  return d.innerHTML;
 }
 
 function focusEmployeeTaskReminder(task, slot) {
@@ -258,7 +113,6 @@ function focusEmployeeTaskReminder(task, slot) {
         title: task.title,
         dueAt: task.dueAt,
         slot: slot || SLOT_BEFORE,
-        playSound: true,
       },
     })
   );
@@ -345,12 +199,12 @@ function fireDueReminder(task, plan, fired, showToast) {
 
   markReminderFired(task, plan.slot);
 
-  if (!serverPushActive) {
-    tryBrowserNotification(task, plan.slot, plan.notify);
-    focusEmployeeTaskReminder(task, plan.slot);
-  }
+  /** Server push shows the phone notification — skip in-tab duplicate UI. */
+  if (serverPushActive) return true;
+
+  tryBrowserNotification(task, plan.slot, plan.notify);
+  focusEmployeeTaskReminder(task, plan.slot);
   showToast(plan.toast, "warning");
-  showReminderBanner(task, plan.eyebrow, showToast);
   return true;
 }
 
@@ -368,7 +222,6 @@ export function handlePushReminderMessage(payload, showToast) {
   markReminderFired(task, slot);
 
   focusEmployeeTaskReminder(task, slot);
-  if (navigator.vibrate) navigator.vibrate([500, 150, 500, 150, 500]);
 }
 
 export function checkDueReminders(tasks, getMyAssignment, showToast) {
@@ -402,7 +255,6 @@ function wireEmployeeInteractionOnce(apiFetch, showToast) {
     document.removeEventListener("pointerdown", onFirstInteraction, true);
     document.removeEventListener("click", onFirstInteraction, true);
     document.removeEventListener("keydown", onFirstInteraction, true);
-    void ensureAudio();
     if (Notification.permission === "granted") {
       runPushRegistrationDuringGesture(apiFetch, (result) => {
         if (result.ok) {

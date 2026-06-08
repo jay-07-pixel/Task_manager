@@ -1,12 +1,7 @@
 import "./scss/styles.scss";
 import * as bootstrap from "bootstrap";
 import Sortable from "sortablejs";
-import {
-  startEmployeeReminders,
-  stopEmployeeReminders,
-  clearReminderForTask,
-  playTaskAlarm,
-} from "./reminders.js";
+import { startEmployeeReminders, stopEmployeeReminders, clearReminderForTask } from "./reminders.js";
 import { isPushSupported, runPushRegistrationDuringGesture } from "./sw-register.js";
 
 const app = document.getElementById("app");
@@ -759,7 +754,6 @@ function getEmployeeNotifyParams() {
     title: params.get("title") || "",
     slot: params.get("slot") || "before10",
     dueAt: params.get("dueAt"),
-    playSound: true,
   };
 }
 
@@ -807,13 +801,6 @@ async function focusEmployeeTaskFromNotify(notify) {
   });
 
   showToast(`${slotLabel}: ${title}`, "warning");
-
-  if (notify.playSound) {
-    void playTaskAlarm().then((ok) => {
-      if (!ok) showToast("Tap the screen if you hear no alarm sound.", "warning");
-    });
-  }
-  if (navigator.vibrate) navigator.vibrate([400, 120, 400, 120, 400]);
 }
 
 async function handleEmployeeNotifyDeepLink() {
@@ -838,7 +825,6 @@ function wireEmployeeNotifyHandlers() {
           title: event.data.payload?.title,
           slot: event.data.payload?.slot,
           dueAt: event.data.payload?.dueAt,
-          playSound: true,
         });
       }
     });
@@ -2941,6 +2927,11 @@ function renderEmployeeChrome() {
 async function render() {
   const ok = await refreshMe();
   if (!ok || !state.user) {
+    const notify = getEmployeeNotifyParams();
+    if (notify) {
+      sessionStorage.setItem("taskmgr-pending-notify", JSON.stringify(notify));
+      window.history.replaceState({}, "", window.location.pathname);
+    }
     renderAuthForm();
     return;
   }
@@ -2954,6 +2945,20 @@ async function render() {
     renderEmployeeChrome();
     startEmployeeReminderSystem();
     await handleEmployeeNotifyDeepLink();
+    const pendingNotify = sessionStorage.getItem("taskmgr-pending-notify");
+    if (pendingNotify) {
+      sessionStorage.removeItem("taskmgr-pending-notify");
+      try {
+        await focusEmployeeTaskFromNotify(JSON.parse(pendingNotify));
+      } catch {
+        /* ignore */
+      }
+    }
+    if ("serviceWorker" in navigator) {
+      void navigator.serviceWorker.getRegistrations().then((regs) => {
+        for (const reg of regs) void reg.update();
+      });
+    }
     return;
   }
   await loadLists();
