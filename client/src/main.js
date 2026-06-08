@@ -13,6 +13,7 @@ let state = {
   tasks: [],
   assignees: [],
   empTasks: [],
+  empFilter: "active",
 };
 
 /** @type {any[]} */
@@ -2385,122 +2386,272 @@ async function uploadEmployeeProof(taskId, file) {
   return data;
 }
 
-function empTaskTableRows(tasks, { doneSection = false } = {}) {
-  if (!tasks.length) {
-    return `<tr><td colspan="5" class="emp-empty-cell">
-      <div class="emp-empty ${doneSection ? "emp-empty--compact" : ""}">
-        <i class="bi bi-${doneSection ? "check-circle" : "clipboard-check"} emp-empty-icon" aria-hidden="true"></i>
-        <p class="emp-empty-title mb-1">${doneSection ? "Nothing submitted yet" : "No active tasks"}</p>
-        <p class="emp-empty-desc text-muted small mb-0">${
-          doneSection
-            ? "Completed tasks with proof will appear here."
-            : "When your manager assigns you work, it will show up here."
-        }</p>
-      </div>
-    </td></tr>`;
+function employeeDashboardMetrics() {
+  const tasks = state.empTasks;
+  const active = tasks.filter((t) => !employeeMyAssignee(t)?.assigneeDone).length;
+  const done = tasks.filter((t) => employeeMyAssignee(t)?.assigneeDone).length;
+  const now = Date.now();
+  const dueSoon = tasks.filter((t) => {
+    if (!t.dueAt || employeeMyAssignee(t)?.assigneeDone) return false;
+    const due = new Date(t.dueAt).getTime();
+    return Number.isFinite(due) && due > now && due - now < 24 * 60 * 60 * 1000;
+  }).length;
+  return { total: tasks.length, active, done, dueSoon };
+}
+
+function empFilterLabel(filter) {
+  if (filter === "submitted") return "Submitted tasks";
+  if (filter === "all") return "All assigned tasks";
+  return "Active tasks";
+}
+
+function empFilteredTasks() {
+  if (state.empFilter === "submitted") {
+    return state.empTasks.filter((t) => employeeMyAssignee(t)?.assigneeDone);
   }
-  return tasks
+  if (state.empFilter === "all") return state.empTasks;
+  return state.empTasks.filter((t) => !employeeMyAssignee(t)?.assigneeDone);
+}
+
+function empTaskTableRows(tasks) {
+  const emptyCopy =
+    state.empFilter === "submitted"
+      ? { icon: "check-circle", title: "Nothing submitted yet", desc: "Tasks you complete will appear here." }
+      : state.empFilter === "all"
+        ? { icon: "folder2-open", title: "No assigned tasks", desc: "When your manager assigns work, it will show up here." }
+        : { icon: "clipboard2-plus", title: "No active tasks", desc: "You are all caught up — check Submitted for completed work." };
+
+  if (!tasks.length) {
+    return `<tbody class="owner-task-empty"><tr><td colspan="5">
+      <div class="owner-empty-state py-5 px-3">
+        <i class="bi bi-${emptyCopy.icon} owner-empty-icon text-primary" aria-hidden="true"></i>
+        <p class="owner-empty-title mb-1">${emptyCopy.title}</p>
+        <p class="owner-empty-desc text-muted small mb-0">${emptyCopy.desc}</p>
+      </div>
+    </td></tr></tbody>`;
+  }
+
+  return `<tbody>${tasks
     .map((t) => {
       const me = employeeMyAssignee(t);
       const submitted = me?.assigneeDone ?? false;
       const proofUrl = me?.completionProofUrl;
-      const notes = (t.notes || "").trim();
-      const titleClass = submitted ? "emp-task-title--done" : "";
+      const notesRaw = (t.notes || "").trim().replace(/\s+/g, " ");
+      const notesPreview = notesRaw.length > 100 ? `${notesRaw.slice(0, 97)}…` : notesRaw;
+      const descriptionBox =
+        notesPreview.length > 0
+          ? `<div class="owner-task-desc-box small text-body-secondary text-truncate mb-0" title="${escapeHtml(notesRaw)}">${escapeHtml(notesPreview)}</div>`
+          : `<div class="owner-task-desc-box small text-muted fst-italic mb-0">No description</div>`;
+      const deadlineCell = t.dueAt
+        ? `<span class="text-body tabular-nums">${escapeHtml(t.dueAt.slice(0, 10))}</span>`
+        : `<span class="text-muted">—</span>`;
       const proofCell = proofUrl
         ? `<button type="button" class="btn btn-sm btn-outline-primary emp-view-proof" data-proof-url="${escapeHtml(
             proofUrl
-          )}" data-task-title="${escapeHtml(t.title)}">View</button>`
-        : `<label class="btn btn-sm btn-outline-secondary mb-0 emp-upload-proof">
+          )}" data-task-title="${escapeHtml(t.title)}"><i class="bi bi-eye me-1" aria-hidden="true"></i>View</button>`
+        : `<label class="btn btn-sm btn-primary mb-0 emp-upload-proof">
             <i class="bi bi-camera me-1" aria-hidden="true"></i>Upload
             <input type="file" accept="image/jpeg,image/png,image/gif,image/webp" class="d-none emp-proof-input" data-task-id="${t.id}" />
           </label>`;
-      return `<tr class="emp-task-row ${submitted ? "emp-task-row--done" : ""}" data-task-id="${t.id}">
-        <td class="emp-col-check text-center">
+      const rowDone = submitted ? "owner-task-row--completed" : "";
+      return `<tr class="owner-task-row ${rowDone}" data-task-id="${t.id}">
+        <td class="owner-task-cell text-center align-middle">
           <input type="checkbox" class="form-check-input emp-task-check" data-task-id="${t.id}" ${
         submitted ? "checked" : ""
       } aria-label="Mark ${escapeHtml(t.title)} submitted" />
         </td>
-        <td class="emp-col-task">
-          <div class="fw-semibold ${titleClass}">${escapeHtml(t.title)}</div>
-          ${
-            notes
-              ? `<div class="small text-muted text-truncate mt-1" title="${escapeHtml(notes)}">${escapeHtml(notes)}</div>`
-              : ""
-          }
+        <td class="owner-task-cell owner-task-col--task align-middle">
+          <span class="fw-semibold ${submitted ? "text-muted text-decoration-line-through" : ""}">${escapeHtml(t.title)}</span>
         </td>
-        <td class="emp-col-list${submitted ? "-done" : ""}">
-          <span class="emp-list-badge${submitted ? " emp-list-badge--muted" : ""}">${escapeHtml(t.list?.title || "List")}</span>
-        </td>
-        <td class="emp-col-deadline small text-nowrap tabular-nums">${escapeHtml(formatEmpDue(t.dueAt))}</td>
-        <td class="emp-col-proof text-end">${proofCell}</td>
+        <td class="owner-task-cell owner-task-col--deadline align-middle small text-nowrap">${deadlineCell}</td>
+        <td class="owner-task-cell align-middle">${descriptionBox}</td>
+        <td class="owner-task-cell text-end align-middle">${proofCell}</td>
       </tr>`;
     })
+    .join("")}</tbody>`;
+}
+
+function empLeftNavInner() {
+  const displayName = state.user ? escapeHtml(state.user.displayName) : "";
+  const metrics = employeeDashboardMetrics();
+  const playStore = kalpanikPlayStoreUrl();
+  const appBtn = playStore
+    ? `<a class="btn btn-outline-primary w-100 mb-2" href="${escapeHtml(playStore)}" target="_blank" rel="noopener noreferrer">
+        <i class="bi bi-google-play me-1" aria-hidden="true"></i>Get mobile app
+      </a>`
+    : "";
+
+  return `
+    <div class="owner-sidebar d-flex flex-column h-100">
+      <div class="owner-sidebar-brand">
+        <div class="owner-sidebar-brand-icon" aria-hidden="true"><i class="bi bi-person-workspace"></i></div>
+        <div class="min-w-0">
+          <div class="owner-sidebar-brand-title">Task Manager</div>
+          <div class="owner-sidebar-brand-user text-truncate">${displayName}</div>
+          <span class="badge rounded-pill emp-role-badge mt-1">Employee</span>
+        </div>
+      </div>
+      <button type="button" class="btn btn-primary w-100 owner-sidebar-new-list js-emp-refresh">
+        <i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>Refresh tasks
+      </button>
+      <p class="owner-sidebar-label mb-2">My work</p>
+      <div class="list-group list-group-flush flex-grow-1 overflow-auto owner-list-nav js-emp-nav-host"></div>
+      <div class="owner-sidebar-footer">
+        ${appBtn}
+        <div class="d-flex justify-content-center mb-2">${themeIconToggleMarkup()}</div>
+        <button type="button" class="btn btn-outline-danger w-100 js-logout">
+          <i class="bi bi-box-arrow-right me-1" aria-hidden="true"></i>Sign out
+        </button>
+      </div>
+    </div>`;
+}
+
+function renderEmpListContentOnly() {
+  const metrics = employeeDashboardMetrics();
+  const filters = [
+    { id: "active", label: "Active tasks", icon: "list-task", count: metrics.active },
+    { id: "submitted", label: "Submitted", icon: "check-circle", count: metrics.done },
+    { id: "all", label: "All assigned", icon: "collection", count: metrics.total },
+  ];
+  const html = filters
+    .map((f) => {
+      const active = state.empFilter === f.id;
+      const icon =
+        f.id === "submitted"
+          ? active
+            ? "bi-check-circle-fill"
+            : "bi-check-circle"
+          : f.id === "all"
+            ? "bi-collection"
+            : "bi-list-task";
+      return `
+    <button type="button" class="list-group-item list-group-item-action owner-list-item d-flex justify-content-between align-items-center gap-2 ${
+      active ? "active" : ""
+    }" data-emp-filter="${f.id}">
+      <span class="d-flex align-items-center gap-2 min-w-0">
+        <i class="bi ${icon} flex-shrink-0" aria-hidden="true"></i>
+        <span class="text-truncate">${f.label}</span>
+      </span>
+      <span class="badge rounded-pill bg-body-secondary text-body border tabular-nums flex-shrink-0">${f.count}</span>
+    </button>`;
+    })
     .join("");
+  document.querySelectorAll(".js-emp-nav-host").forEach((host) => {
+    host.innerHTML = html;
+  });
+  bindEmpNavHandlers();
+}
+
+function bindEmpNavHandlers() {
+  document.querySelectorAll(".js-emp-nav-host [data-emp-filter]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      state.empFilter = btn.getAttribute("data-emp-filter") || "active";
+      renderEmpListContentOnly();
+      renderEmployeeMain();
+      const offcanvas = document.getElementById("empNavOffcanvas");
+      if (offcanvas) bootstrap.Offcanvas.getInstance(offcanvas)?.hide();
+    });
+  });
+}
+
+function wireEmpChromeNav() {
+  document.querySelectorAll(".js-logout").forEach((b) => b.addEventListener("click", logout));
+  document.querySelectorAll(".js-emp-refresh").forEach((b) =>
+    b.addEventListener("click", async () => {
+      b.disabled = true;
+      try {
+        await loadEmployeeTasks();
+        renderEmpListContentOnly();
+        renderEmployeeMain();
+        showToast("Tasks refreshed.", "success");
+      } catch (err) {
+        showToast(err.message, "danger");
+      } finally {
+        b.disabled = false;
+      }
+    })
+  );
+  wireThemeIconToggles();
 }
 
 function renderEmployeeMain() {
   const main = document.getElementById("emp-main-column");
   if (!main) return;
 
-  const active = state.empTasks.filter((t) => !employeeMyAssignee(t)?.assigneeDone);
-  const done = state.empTasks.filter((t) => employeeMyAssignee(t)?.assigneeDone);
+  const metrics = employeeDashboardMetrics();
+  const filtered = empFilteredTasks();
+  const filterTitle = empFilterLabel(state.empFilter);
+  const tableBody = empTaskTableRows(filtered);
+
+  const kpiRow =
+    metrics.total > 0
+      ? `<div class="row g-3 mb-4 owner-kpi-row">
+          <div class="col-6 col-xl-3">
+            <div class="owner-kpi-card">
+              <div class="owner-kpi-icon text-primary"><i class="bi bi-list-task" aria-hidden="true"></i></div>
+              <div>
+                <div class="owner-kpi-value tabular-nums">${metrics.active}</div>
+                <div class="owner-kpi-label">Active tasks</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-xl-3">
+            <div class="owner-kpi-card">
+              <div class="owner-kpi-icon text-success"><i class="bi bi-check-circle" aria-hidden="true"></i></div>
+              <div>
+                <div class="owner-kpi-value tabular-nums">${metrics.done}</div>
+                <div class="owner-kpi-label">Submitted</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-xl-3">
+            <div class="owner-kpi-card">
+              <div class="owner-kpi-icon text-warning"><i class="bi bi-alarm" aria-hidden="true"></i></div>
+              <div>
+                <div class="owner-kpi-value tabular-nums">${metrics.dueSoon}</div>
+                <div class="owner-kpi-label">Due in 24h</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-6 col-xl-3">
+            <div class="owner-kpi-card">
+              <div class="owner-kpi-icon text-info"><i class="bi bi-collection" aria-hidden="true"></i></div>
+              <div>
+                <div class="owner-kpi-value tabular-nums">${metrics.total}</div>
+                <div class="owner-kpi-label">Total assigned</div>
+              </div>
+            </div>
+          </div>
+        </div>`
+      : "";
 
   main.innerHTML = `
-    <div class="row g-3 mb-4 emp-kpis">
-      <div class="col-6">
-        <div class="emp-kpi emp-kpi--active h-100">
-          <div class="emp-kpi-icon" aria-hidden="true"><i class="bi bi-list-task"></i></div>
-          <div class="emp-kpi-text">
-            <div class="emp-kpi-value tabular-nums">${active.length}</div>
-            <div class="emp-kpi-label">To do</div>
-          </div>
-        </div>
+    <header class="owner-page-header d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+      <div>
+        <p class="owner-page-eyebrow mb-1">Employee dashboard</p>
+        <h2 class="owner-page-title h4 mb-0">${escapeHtml(filterTitle)}</h2>
+        <p class="owner-page-sub text-muted small mb-0 mt-1">Mark tasks done and upload proof photos. Works here on the web or in the mobile app.</p>
       </div>
-      <div class="col-6">
-        <div class="emp-kpi emp-kpi--done h-100">
-          <div class="emp-kpi-icon" aria-hidden="true"><i class="bi bi-check-circle"></i></div>
-          <div class="emp-kpi-text">
-            <div class="emp-kpi-value tabular-nums">${done.length}</div>
-            <div class="emp-kpi-label">Submitted</div>
-          </div>
-        </div>
+      <div class="d-flex flex-wrap gap-2 owner-toolbar">
+        <button type="button" class="btn btn-outline-secondary btn-sm js-emp-refresh">
+          <i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>Refresh
+        </button>
       </div>
-    </div>
-    <section class="emp-panel border mb-4" aria-label="Active tasks">
-      <div class="emp-panel-head px-3 py-3 border-bottom">
-        <h2 class="h6 emp-panel-title text-uppercase mb-0">Active tasks</h2>
-      </div>
-      <div class="emp-table-responsive table-responsive">
-        <table class="table table-hover align-middle mb-0 emp-task-table">
+    </header>
+    ${kpiRow}
+    <section class="owner-task-panel" aria-label="Assigned tasks">
+      <div class="table-responsive owner-task-table-wrap">
+        <table class="table table-hover align-middle mb-0 owner-task-table emp-owner-task-table">
           <thead>
             <tr>
-              <th class="emp-col-check"><span class="visually-hidden">Done</span></th>
-              <th>Task</th>
-              <th class="emp-col-list">List</th>
-              <th class="emp-col-deadline">Deadline</th>
-              <th class="emp-col-proof text-end">Proof</th>
+              <th scope="col" class="owner-task-head text-center" style="width:3rem;"><span class="visually-hidden">Done</span></th>
+              <th scope="col" class="owner-task-head owner-task-col--task">Task</th>
+              <th scope="col" class="owner-task-head owner-task-col--deadline text-nowrap">Deadline</th>
+              <th scope="col" class="owner-task-head">Description</th>
+              <th scope="col" class="owner-task-head text-end" style="width:7rem;">Proof</th>
             </tr>
           </thead>
-          <tbody>${empTaskTableRows(active)}</tbody>
-        </table>
-      </div>
-    </section>
-    <section class="emp-panel border" aria-label="Submitted tasks">
-      <div class="emp-panel-head px-3 py-3 border-bottom">
-        <h2 class="h6 emp-panel-title text-uppercase mb-0">Submitted</h2>
-      </div>
-      <div class="emp-table-responsive table-responsive">
-        <table class="table table-hover align-middle mb-0 emp-task-table">
-          <thead>
-            <tr>
-              <th class="emp-col-check"><span class="visually-hidden">Done</span></th>
-              <th>Task</th>
-              <th class="emp-col-list-done">List</th>
-              <th class="emp-col-deadline">Deadline</th>
-              <th class="emp-col-proof text-end">Proof</th>
-            </tr>
-          </thead>
-          <tbody>${empTaskTableRows(done, { doneSection: true })}</tbody>
+          ${tableBody}
         </table>
       </div>
     </section>
@@ -2518,11 +2669,28 @@ function renderEmployeeMain() {
           body: JSON.stringify({ completed }),
         });
         await loadEmployeeTasks();
+        renderEmpListContentOnly();
         renderEmployeeMain();
       } catch (err) {
         showToast(err.message, "danger");
         cb.checked = !completed;
         cb.disabled = false;
+      }
+    });
+  });
+
+  main.querySelectorAll(".js-emp-refresh").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      btn.disabled = true;
+      try {
+        await loadEmployeeTasks();
+        renderEmpListContentOnly();
+        renderEmployeeMain();
+        showToast("Tasks refreshed.", "success");
+      } catch (err) {
+        showToast(err.message, "danger");
+      } finally {
+        btn.disabled = false;
       }
     });
   });
@@ -2538,6 +2706,7 @@ function renderEmployeeMain() {
         await uploadEmployeeProof(id, file);
         showToast("Proof uploaded — task marked submitted.", "success");
         await loadEmployeeTasks();
+        renderEmpListContentOnly();
         renderEmployeeMain();
       } catch (err) {
         showToast(err.message, "danger");
@@ -2557,149 +2726,43 @@ function renderEmployeeMain() {
 }
 
 function renderEmployeeChrome() {
-  const displayName = state.user ? escapeHtml(state.user.displayName) : "";
-  const playStore = kalpanikPlayStoreUrl();
-  const appHint = playStore
-    ? `<a class="btn btn-sm btn-outline-primary" href="${escapeHtml(playStore)}" target="_blank" rel="noopener noreferrer"><i class="bi bi-google-play me-1" aria-hidden="true"></i>Get the app</a>`
-    : "";
+  const filterTitle = empFilterLabel(state.empFilter);
 
   app.innerHTML = `
     <div class="owner-shell min-h-main">
-      <div class="container-fluid owner-shell-inner py-3 py-lg-4">
-        <div class="emp-shell">
-          <div class="owner-main-panel p-3 p-lg-4">
-            <header class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
-              <div>
-                <p class="owner-page-eyebrow mb-1">Employee dashboard</p>
-                <h1 class="owner-page-title h4 mb-1">My tasks</h1>
-                <p class="text-muted small mb-0">Hello, <strong>${displayName}</strong> — complete tasks and upload proof photos here or in the mobile app.</p>
-              </div>
-              <div class="d-flex flex-wrap align-items-center gap-2">
-                ${appHint}
-                <button type="button" class="btn btn-outline-danger btn-sm js-logout">
-                  <i class="bi bi-box-arrow-right me-1" aria-hidden="true"></i>Sign out
-                </button>
-              </div>
-            </header>
-            <div id="emp-main-column"></div>
-            <div class="d-flex justify-content-center mt-4 pt-2 border-top">
-              ${themeIconToggleMarkup()}
+      <div class="container-fluid owner-shell-inner py-3 py-lg-4 d-flex flex-column">
+        <div class="owner-topbar d-lg-none d-flex align-items-center justify-content-between gap-2 mb-3">
+          <button class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="offcanvas" data-bs-target="#empNavOffcanvas" aria-label="Open menu">
+            <i class="bi bi-list me-1" aria-hidden="true"></i>Menu
+          </button>
+          <span class="owner-topbar-title text-truncate fw-semibold small">${escapeHtml(filterTitle)}</span>
+          <button type="button" class="btn btn-primary btn-sm js-emp-refresh" aria-label="Refresh tasks">
+            <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
+          </button>
+        </div>
+        <div class="row g-3 g-lg-4 owner-shell-row flex-lg-grow-1">
+          <aside class="col-lg-3 d-none d-lg-flex owner-sidebar-col">
+            <div class="owner-sidebar-panel sticky-lg-top w-100">${empLeftNavInner()}</div>
+          </aside>
+          <div class="offcanvas offcanvas-start owner-offcanvas" tabindex="-1" id="empNavOffcanvas" aria-labelledby="empNavLabel">
+            <div class="offcanvas-header owner-offcanvas-header border-0">
+              <h2 class="offcanvas-title h5 mb-0 text-white" id="empNavLabel">My work</h2>
+              <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Close"></button>
             </div>
+            <div class="offcanvas-body pt-0">${empLeftNavInner()}</div>
           </div>
+          <main class="col-12 col-lg-9 d-flex owner-main-col">
+            <div id="emp-main-column" class="owner-main-panel owner-main-fill p-3 p-lg-4 d-flex flex-column w-100"></div>
+          </main>
         </div>
       </div>
       ${taskProofOnlyModalHtml()}
     </div>`;
 
-  document.querySelectorAll(".js-logout").forEach((b) => b.addEventListener("click", logout));
-  wireThemeIconToggles();
+  wireEmpChromeNav();
+  renderEmpListContentOnly();
   wireTaskProofOnlyModal();
   renderEmployeeMain();
-}
-
-function renderEmployeeAppRedirect({ justRegistered = false } = {}) {
-  const name = state.user?.displayName ? escapeHtml(state.user.displayName) : "there";
-  const email = state.user?.email ? escapeHtml(state.user.email) : "";
-  const playStore = kalpanikPlayStoreUrl();
-
-  const welcomeAlert = justRegistered
-    ? `<div class="alert alert-success d-flex align-items-start gap-2 mb-4 py-2 px-3" role="status">
-        <i class="bi bi-check-circle-fill flex-shrink-0 mt-1" aria-hidden="true"></i>
-        <div class="small mb-0"><strong>Account created.</strong> You can sign in on the app with the same email and password.</div>
-      </div>`
-    : "";
-
-  const installCta = playStore
-    ? `<a class="btn btn-primary btn-lg w-100 app-redirect-cta" href="${escapeHtml(playStore)}" target="_blank" rel="noopener noreferrer">
-        <i class="bi bi-google-play me-2" aria-hidden="true"></i>Get Kalpanik Reminder
-      </a>`
-    : `<div class="app-redirect-install-hint rounded-3 p-3 text-center mb-0">
-        <i class="bi bi-download text-primary fs-4 d-block mb-2" aria-hidden="true"></i>
-        <p class="small fw-semibold mb-1">Install the app</p>
-        <p class="small text-muted mb-0">Ask your administrator for the Kalpanik Reminder Android app, then sign in with <strong>${email || "your account email"}</strong>.</p>
-      </div>`;
-
-  app.innerHTML = `
-    <div class="auth-page app-redirect-page">
-      <div class="container px-3">
-        <div class="auth-wrap app-redirect-wrap">
-          <div class="card auth-card">
-            <div class="auth-card-head">
-              <div class="auth-brand-row">
-                <div class="auth-brand-icon" aria-hidden="true"><i class="bi bi-phone-fill"></i></div>
-                <div>
-                  <div class="auth-brand-title text-white">Kalpanik Reminder</div>
-                  <p class="auth-brand-sub text-white mb-0">Assigned tasks, proof photos, and alarms — on your phone.</p>
-                </div>
-              </div>
-            </div>
-            <div class="auth-card-body app-redirect-body">
-              ${welcomeAlert}
-              <div class="app-redirect-hero text-center mb-4">
-                <div class="app-redirect-icon-ring mx-auto mb-3" aria-hidden="true">
-                  <i class="bi bi-bell-fill"></i>
-                </div>
-                <h1 class="h5 fw-semibold mb-1">${justRegistered ? "You&rsquo;re all set" : `Hello, ${name}`}</h1>
-                <p class="text-muted small mb-0">Use the mobile app for daily task work. This website is only for signing up and admin.</p>
-              </div>
-
-              <p class="app-redirect-steps-label">Next steps</p>
-              <ol class="list-group list-group-numbered app-redirect-steps mb-4">
-                <li class="list-group-item">Install <strong>Kalpanik Reminder</strong> on your phone</li>
-                <li class="list-group-item">Sign in with your account${email ? ` — <span class="text-primary fw-medium">${email}</span>` : ""}</li>
-                <li class="list-group-item">Complete tasks and upload proof when your manager asks</li>
-              </ol>
-
-              <div class="row g-2 mb-4 app-redirect-features">
-                <div class="col-6">
-                  <div class="app-redirect-feature">
-                    <i class="bi bi-list-check text-primary" aria-hidden="true"></i>
-                    <span>Assigned tasks</span>
-                  </div>
-                </div>
-                <div class="col-6">
-                  <div class="app-redirect-feature">
-                    <i class="bi bi-camera text-primary" aria-hidden="true"></i>
-                    <span>Proof upload</span>
-                  </div>
-                </div>
-                <div class="col-6">
-                  <div class="app-redirect-feature">
-                    <i class="bi bi-alarm text-primary" aria-hidden="true"></i>
-                    <span>Due reminders</span>
-                  </div>
-                </div>
-                <div class="col-6">
-                  <div class="app-redirect-feature">
-                    <i class="bi bi-headset text-primary" aria-hidden="true"></i>
-                    <span>Support</span>
-                  </div>
-                </div>
-              </div>
-
-              <div class="mb-4">${installCta}</div>
-
-              <div class="alert alert-primary border-0 app-redirect-note mb-0" role="note">
-                <div class="d-flex gap-2">
-                  <i class="bi bi-info-circle flex-shrink-0" aria-hidden="true"></i>
-                  <p class="small mb-0">Owners manage lists and review proof on this website. Employees do not use the web dashboard.</p>
-                </div>
-              </div>
-
-              <div class="auth-theme-row app-redirect-footer d-flex flex-column flex-sm-row align-items-center justify-content-between gap-3">
-                ${themeIconToggleMarkup()}
-                <button type="button" class="btn btn-outline-danger w-100 w-sm-auto js-logout">
-                  <i class="bi bi-box-arrow-right me-1" aria-hidden="true"></i>Sign out
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>`;
-
-  document.querySelectorAll(".js-logout").forEach((b) => b.addEventListener("click", logout));
-  wireThemeIconToggles();
 }
 
 async function render() {

@@ -166,6 +166,20 @@ body {
   border: 1px solid rgba(var(--bs-primary-rgb), 0.2);
 }
 
+.emp-role-badge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: rgba(var(--bs-success-rgb), 0.12) !important;
+  color: var(--bs-success) !important;
+  border: 1px solid rgba(var(--bs-success-rgb), 0.25);
+}
+
+.emp-owner-task-table .owner-task-col--task {
+  width: 22%;
+}
+
 .owner-sidebar-new-list {
   margin-bottom: 1.25rem;
   font-weight: 600;
