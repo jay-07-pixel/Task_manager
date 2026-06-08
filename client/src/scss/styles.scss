@@ -230,6 +230,54 @@ body {
   resize: vertical;
 }
 
+.emp-submission-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.emp-submission-action-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  width: 100%;
+  min-height: 6.25rem;
+  padding: 0.9rem 0.65rem;
+  border-radius: 0.75rem;
+  text-align: center;
+}
+
+.emp-submission-action-icon {
+  font-size: 1.65rem;
+  line-height: 1;
+}
+
+.emp-submission-action-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+}
+
+.emp-submission-action-line {
+  display: block;
+  font-size: 1.05rem;
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: 0.01em;
+}
+
+.emp-submission-count {
+  font-size: 0.95rem;
+}
+
+.emp-submission-image-name {
+  font-size: 0.95rem;
+  word-break: break-word;
+}
+
 .owner-submission-snippet {
   max-width: 11rem;
 }

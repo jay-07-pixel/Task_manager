@@ -1673,22 +1673,34 @@ function empSubmissionModalHtml() {
               maxlength="${EMP_SUBMISSION_TEXT_MAX}"
               placeholder="Describe what you completed, paste notes, or leave blank if you only upload an image."
             ></textarea>
-            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-2">
-              <button type="button" class="btn btn-sm btn-outline-secondary" id="emp-submission-paste">
-                <i class="bi bi-clipboard me-1" aria-hidden="true"></i>Paste from clipboard
+            <div class="emp-submission-actions mt-3">
+              <button type="button" class="btn btn-outline-primary emp-submission-action-btn" id="emp-submission-paste">
+                <i class="bi bi-clipboard emp-submission-action-icon" aria-hidden="true"></i>
+                <span class="emp-submission-action-text">
+                  <span class="emp-submission-action-line">Paste From</span>
+                  <span class="emp-submission-action-line">clipboard</span>
+                </span>
               </button>
-              <span id="emp-submission-count" class="small text-muted tabular-nums">0 / ${EMP_SUBMISSION_TEXT_MAX}</span>
+              <label class="btn btn-outline-primary emp-submission-action-btn mb-0" for="emp-submission-image">
+                <i class="bi bi-image emp-submission-action-icon" aria-hidden="true"></i>
+                <span class="emp-submission-action-text">
+                  <span class="emp-submission-action-line">Upload</span>
+                  <span class="emp-submission-action-line">image</span>
+                </span>
+                <input
+                  type="file"
+                  class="d-none"
+                  id="emp-submission-image"
+                  accept="image/jpeg,image/png,image/gif,image/webp"
+                />
+              </label>
             </div>
+            <div class="d-flex justify-content-end mt-2">
+              <span id="emp-submission-count" class="text-muted tabular-nums emp-submission-count">0 / ${EMP_SUBMISSION_TEXT_MAX}</span>
+            </div>
+            <p id="emp-submission-image-name" class="text-muted emp-submission-image-name mb-0 mt-2 d-none"></p>
             <p id="emp-submission-error" class="text-danger small mb-0 mt-2 d-none" role="alert"></p>
-            <hr class="my-3" />
-            <label class="form-label" for="emp-submission-image">Submission image <span class="text-muted fw-normal">(optional)</span></label>
-            <input
-              type="file"
-              class="form-control"
-              id="emp-submission-image"
-              accept="image/jpeg,image/png,image/gif,image/webp"
-            />
-            <div id="emp-submission-preview-wrap" class="mt-2 d-none">
+            <div id="emp-submission-preview-wrap" class="mt-3 d-none">
               <img id="emp-submission-preview" src="" alt="Selected image preview" class="submission-preview-thumb rounded border" />
             </div>
           </div>
@@ -2079,10 +2091,15 @@ function resetEmpSubmissionPreview() {
   const input = document.getElementById("emp-submission-image");
   const wrap = document.getElementById("emp-submission-preview-wrap");
   const preview = document.getElementById("emp-submission-preview");
+  const nameEl = document.getElementById("emp-submission-image-name");
   if (input) input.value = "";
   if (preview?.src?.startsWith("blob:")) URL.revokeObjectURL(preview.src);
   if (preview) preview.removeAttribute("src");
   if (wrap) wrap.classList.add("d-none");
+  if (nameEl) {
+    nameEl.textContent = "";
+    nameEl.classList.add("d-none");
+  }
 }
 
 function openEmpSubmissionModal(task) {
@@ -2192,6 +2209,11 @@ function wireEmpSubmissionModal() {
     if (preview.src?.startsWith("blob:")) URL.revokeObjectURL(preview.src);
     preview.src = URL.createObjectURL(file);
     previewWrap.classList.remove("d-none");
+    const nameEl = document.getElementById("emp-submission-image-name");
+    if (nameEl) {
+      nameEl.textContent = file.name;
+      nameEl.classList.remove("d-none");
+    }
   });
 
   submitBtn?.addEventListener("click", async () => {
