@@ -160,7 +160,8 @@ Seed also creates a **My Tasks** list with a **daily** sample task assigned to E
 | `npm run dev` | API with file watch |
 | `npm run start` | API (production) |
 | `npm run db:generate` | Generate Prisma client |
-| `npm run db:migrate` | Apply migrations |
+| `npm run db:migrate` | Apply migrations (local dev) |
+| `npm run db:migrate:deploy` | Apply migrations on production VPS |
 | `npm run db:push` | Push schema to DB |
 | `npm run db:seed` | Seed demo users and sample data |
 | `npm run vapid:generate` | Generate VAPID keys for phone push reminders |
@@ -329,7 +330,8 @@ Reminders are sent from the **server every 60 seconds** (~10 min before due, +1 
    ```bash
    git pull origin main
    npm install --prefix server
-   npm run db:migrate --prefix server
+   npm run db:migrate:deploy --prefix server
+   npm run db:generate --prefix server
    npm run build
    pm2 restart taskmanager
    ```
@@ -402,6 +404,7 @@ Reminders are sent from the **server every 60 seconds** (~10 min before due, +1 
 | Push `invalid JWT` / no background alerts | Regenerate VAPID, clear `push_subscription`, re-login and allow notifications |
 | CAPTCHA overflows on mobile | Pull latest; uses compact Turnstile + stacked layout |
 | Submit task shows **413 Request Entity Too Large** (nginx HTML) | On VPS nginx `server` block add `client_max_body_size 6m;` then `sudo nginx -t && sudo systemctl reload nginx` (see `deploy/nginx-upload-limit.conf.example`) |
+| Submit task shows **Server error** | Run migration on VPS: `npm run db:migrate:deploy --prefix server` then `npm run db:generate --prefix server` and `pm2 restart taskmanager`. Check `pm2 logs taskmanager` for `[completion-proof]` errors. |
 
 ## License
 

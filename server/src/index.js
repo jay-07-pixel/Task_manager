@@ -105,10 +105,21 @@ if (isProd) {
 
 app.use((err, _req, res, _next) => {
   console.error(err);
-  const detail =
-    !isProd && err && typeof err === "object" && "message" in err && typeof err.message === "string"
+  const errMsg =
+    err && typeof err === "object" && "message" in err && typeof err.message === "string"
       ? err.message
-      : "Server error";
+      : "";
+  const errCode = err && typeof err === "object" && "code" in err ? String(err.code) : "";
+  let detail = !isProd && errMsg ? errMsg : "Server error";
+  if (
+    isProd &&
+    (errCode === "P2022" ||
+      /Unknown column|submission_text/i.test(errMsg) ||
+      /column.*does not exist/i.test(errMsg))
+  ) {
+    detail =
+      "Database migration required. On the server run: cd server && npx prisma migrate deploy && npm run db:generate";
+  }
   res.status(500).json({ error: detail });
 });
 

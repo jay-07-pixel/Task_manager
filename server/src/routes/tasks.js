@@ -172,6 +172,37 @@ function proofContentType(storedName) {
   return map[ext] || "application/octet-stream";
 }
 
+/** @param {unknown} err */
+function submissionServerErrorMessage(err) {
+  const msg = String(err && typeof err === "object" && "message" in err ? err.message : err || "");
+  const code = err && typeof err === "object" && "code" in err ? String(err.code) : "";
+  if (
+    code === "P2022" ||
+    /Unknown column|submission_text/i.test(msg) ||
+    /column.*does not exist/i.test(msg)
+  ) {
+    return "Database migration required. On the server run: cd server && npx prisma migrate deploy && npm run db:generate";
+  }
+  if (/ENOENT|EACCES|EPERM/i.test(msg)) {
+    return "Server could not save the upload. Check uploads/completion-proofs permissions on the server.";
+  }
+  return null;
+}
+
+function handleProofUpload(req, res, next) {
+  proofUpload.single("proof")(req, res, (err) => {
+    if (!err) return next();
+    if (err.code === "LIMIT_FILE_SIZE") {
+      return res.status(400).json({ error: "Image must be 5 MB or smaller." });
+    }
+    const msg = err.message || "Upload failed";
+    if (/Only JPEG|images are allowed/i.test(msg)) {
+      return res.status(400).json({ error: msg });
+    }
+    return next(err);
+  });
+}
+
 const proofUpload = multer({
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => {
@@ -304,59 +335,68 @@ router.get("/:id/completion-proof/:assigneeUserId", requireAuth, async (req, res
   res.sendFile(full);
 });
 
-router.post("/:id/completion-proof", requireAuth, proofUpload.single("proof"), async (req, res) => {
-  const task = await prisma.task.findFirst({
-    where: { id: req.params.id },
-    include: { list: true, ...taskAssigneeInclude },
-  });
-  if (!task) {
-    return res.status(404).json({ error: "Task not found" });
-  }
-  const isAssignee = req.session.role === "employee" && taskIsAssignedToUser(task, req.session.userId);
-  if (!isAssignee) {
-    return res.status(403).json({ error: "Only an assigned employee can submit work" });
-  }
-
-  const my = task.assignments.find((a) => a.userId === req.session.userId);
-  const textRaw = typeof req.body?.submissionText === "string" ? req.body.submissionText : "";
-  const submissionText = textRaw.trim();
-  if (submissionText.length > SUBMISSION_TEXT_MAX) {
-    return res.status(400).json({ error: `Submission notes must be ${SUBMISSION_TEXT_MAX} characters or fewer.` });
-  }
-
-  let completionProofPath = my?.completionProofPath ?? null;
-  if (req.file) {
-    if (my?.completionProofPath) {
-      deleteProofFile(my.completionProofPath);
+router.post("/:id/completion-proof", requireAuth, handleProofUpload, async (req, res) => {
+  try {
+    const task = await prisma.task.findFirst({
+      where: { id: req.params.id },
+      include: { list: true, ...taskAssigneeInclude },
+    });
+    if (!task) {
+      return res.status(404).json({ error: "Task not found" });
     }
-    completionProofPath = req.file.filename;
-  }
+    const isAssignee = req.session.role === "employee" && taskIsAssignedToUser(task, req.session.userId);
+    if (!isAssignee) {
+      return res.status(403).json({ error: "Only an assigned employee can submit work" });
+    }
 
-  if (!submissionText && !completionProofPath) {
-    return res.status(400).json({ error: SUBMISSION_REQUIRED_MSG });
-  }
+    const my = task.assignments.find((a) => a.userId === req.session.userId);
+    const textRaw = typeof req.body?.submissionText === "string" ? req.body.submissionText : "";
+    const submissionText = textRaw.trim();
+    if (submissionText.length > SUBMISSION_TEXT_MAX) {
+      return res.status(400).json({ error: `Submission notes must be ${SUBMISSION_TEXT_MAX} characters or fewer.` });
+    }
 
-  await prisma.taskAssignee.update({
-    where: { taskId_userId: { taskId: task.id, userId: req.session.userId } },
-    data: {
-      completionProofPath,
-      submissionText: submissionText || null,
-      assigneeDone: true,
-    },
-  });
-  await syncTaskCompletedFromAssignments(task.id);
-  const fresh = await prisma.task.findFirst({
-    where: { id: task.id },
-    include: { ...taskAssigneeInclude, ...taskListSelect },
-  });
-  if (fresh) {
-    await maybeRollRecurringAfterEmployeeComplete(fresh, req.session.userId);
+    let completionProofPath = my?.completionProofPath ?? null;
+    if (req.file) {
+      if (my?.completionProofPath) {
+        deleteProofFile(my.completionProofPath);
+      }
+      completionProofPath = req.file.filename;
+    }
+
+    if (!submissionText && !completionProofPath) {
+      return res.status(400).json({ error: SUBMISSION_REQUIRED_MSG });
+    }
+
+    await prisma.taskAssignee.update({
+      where: { taskId_userId: { taskId: task.id, userId: req.session.userId } },
+      data: {
+        completionProofPath,
+        submissionText: submissionText || null,
+        assigneeDone: true,
+      },
+    });
+    await syncTaskCompletedFromAssignments(task.id);
+    const fresh = await prisma.task.findFirst({
+      where: { id: task.id },
+      include: { ...taskAssigneeInclude, ...taskListSelect },
+    });
+    if (fresh) {
+      await maybeRollRecurringAfterEmployeeComplete(fresh, req.session.userId);
+    }
+    const updated = await prisma.task.findUnique({
+      where: { id: task.id },
+      include: { ...taskAssigneeInclude, ...taskListSelect },
+    });
+    res.json({ task: serializeTask(updated) });
+  } catch (err) {
+    console.error("[completion-proof]", err);
+    const hint = submissionServerErrorMessage(err);
+    if (hint) {
+      return res.status(500).json({ error: hint });
+    }
+    throw err;
   }
-  const updated = await prisma.task.findUnique({
-    where: { id: task.id },
-    include: { ...taskAssigneeInclude, ...taskListSelect },
-  });
-  res.json({ task: serializeTask(updated) });
 });
 
 const reorderSchema = z.object({

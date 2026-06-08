@@ -9,6 +9,7 @@
     "start": "node src/index.js",
     "db:generate": "node scripts/prisma-generate.mjs",
     "db:migrate": "prisma migrate dev",
+    "db:migrate:deploy": "prisma migrate deploy",
     "db:push": "prisma db push",
     "db:seed": "node prisma/seed.js",
     "db:clear": "node scripts/clear-tasks-lists.mjs",
