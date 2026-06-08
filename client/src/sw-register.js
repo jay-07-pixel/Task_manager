@@ -24,11 +24,49 @@ export function isPushSupported() {
   );
 }
 
+function waitForServiceWorkerState(worker, targetState, timeoutMs = 12000) {
+  return new Promise((resolve) => {
+    if (!worker) {
+      resolve(false);
+      return;
+    }
+    if (worker.state === targetState) {
+      resolve(true);
+      return;
+    }
+    const timer = window.setTimeout(() => resolve(false), timeoutMs);
+    worker.addEventListener("statechange", () => {
+      if (worker.state === targetState) {
+        window.clearTimeout(timer);
+        resolve(true);
+      }
+    });
+  });
+}
+
 export async function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return null;
   try {
     swRegistration = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+    const installing = swRegistration.installing || swRegistration.waiting;
+    if (installing) {
+      await waitForServiceWorkerState(installing, "activated");
+    }
     await navigator.serviceWorker.ready;
+    swRegistration = (await navigator.serviceWorker.getRegistration("/")) || swRegistration;
+    if (!navigator.serviceWorker.controller) {
+      await new Promise((resolve) => {
+        const timer = window.setTimeout(resolve, 5000);
+        navigator.serviceWorker.addEventListener(
+          "controllerchange",
+          () => {
+            window.clearTimeout(timer);
+            resolve();
+          },
+          { once: true }
+        );
+      });
+    }
     return swRegistration;
   } catch (err) {
     console.warn("[push] service worker registration failed:", err);
@@ -40,19 +78,29 @@ export async function registerServiceWorker() {
  * Register SW + cache VAPID key early so subscribe can run quickly during a user gesture.
  * @param {(path: string, options?: RequestInit) => Promise<any>} [apiFetch]
  */
-export function warmupPushInfrastructure(apiFetch) {
+export function warmupPushInfrastructure(apiFetch, { force = false } = {}) {
   if (!isPushSupported() || !apiFetch) return Promise.resolve(false);
+  if (force) warmupPromise = null;
   if (warmupPromise) return warmupPromise;
   warmupPromise = (async () => {
-    await registerServiceWorker();
-    if (cachedVapidPublicKey) return true;
     try {
-      const keyRes = await apiFetch("/api/push/vapid-public-key");
-      cachedVapidPublicKey = keyRes?.publicKey || null;
+      const reg = await registerServiceWorker();
+      if (!reg?.pushManager) {
+        warmupPromise = null;
+        return false;
+      }
+      if (!cachedVapidPublicKey) {
+        const keyRes = await apiFetch("/api/push/vapid-public-key");
+        cachedVapidPublicKey = keyRes?.publicKey || null;
+      }
+      const ok = !!cachedVapidPublicKey && !!swRegistration?.pushManager;
+      if (!ok) warmupPromise = null;
+      return ok;
     } catch (err) {
-      console.warn("[push] could not prefetch VAPID key:", err);
+      console.warn("[push] warmup failed:", err);
+      warmupPromise = null;
+      return false;
     }
-    return !!cachedVapidPublicKey;
   })();
   return warmupPromise;
 }
@@ -101,11 +149,14 @@ async function subscribePushManager(reg, publicKey) {
     return existing;
   }
 
-  try {
-    const sub = await reg.pushManager.subscribe({
+  const subscribeOnce = () =>
+    reg.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(publicKey),
     });
+
+  try {
+    const sub = await subscribeOnce();
     localStorage.setItem(VAPID_STORAGE_KEY, publicKey);
     return sub;
   } catch (err) {
@@ -114,6 +165,23 @@ async function subscribePushManager(reg, publicKey) {
     if (leftover) {
       localStorage.setItem(VAPID_STORAGE_KEY, publicKey);
       return leftover;
+    }
+    if (err?.name === "AbortError") {
+      await registerServiceWorker();
+      const activeReg = swRegistration || (await navigator.serviceWorker.ready);
+      if (activeReg?.pushManager) {
+        await new Promise((r) => window.setTimeout(r, 800));
+        try {
+          const retrySub = await activeReg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(publicKey),
+          });
+          localStorage.setItem(VAPID_STORAGE_KEY, publicKey);
+          return retrySub;
+        } catch (retryErr) {
+          console.warn("[push] subscribe retry failed:", retryErr?.name, retryErr?.message);
+        }
+      }
     }
     throw err;
   }
@@ -124,8 +192,8 @@ export function isPushInfrastructureReady() {
 }
 
 /** Fully load service worker + VAPID before any subscribe attempt (required on mobile). */
-export function preparePushInfrastructure(apiFetch) {
-  return warmupPushInfrastructure(apiFetch);
+export function preparePushInfrastructure(apiFetch, options) {
+  return warmupPushInfrastructure(apiFetch, options);
 }
 
 /**
@@ -176,7 +244,7 @@ function friendlyPushError(err) {
     return "Chrome blocked push. Android Settings → Apps → Chrome → Notifications → Allow.";
   }
   if (name === "AbortError") {
-    return "Push was interrupted. Wait for the page to load, then tap Enable again.";
+    return "Setup was interrupted. Tap Enable once (wait for “Almost done”), then tap Enable again.";
   }
   return err instanceof Error ? err.message : "Could not register push on this device.";
 }

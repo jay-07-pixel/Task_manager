@@ -850,54 +850,51 @@ function startEmployeeReminderSystem() {
   );
 }
 
+function empPushButtonLabel() {
+  return Notification.permission === "granted" ? "Enable Chrome reminders" : "Enable Chrome reminders";
+}
+
 function empRemindersButtonHtml() {
   if (!isPushSupported()) return "";
   const perm = Notification.permission;
   if (perm === "denied") {
     return `<p class="small text-warning mb-2 px-1">Notifications blocked — allow them in Chrome settings for this site.</p>`;
   }
-  const ready = isPushInfrastructureReady();
-  const label = !ready
-    ? "Loading reminders…"
-    : perm === "granted"
-      ? "Confirm Chrome reminders"
-      : "Enable Chrome reminders";
-  return `<button type="button" class="btn btn-outline-warning w-100 mb-2 js-emp-enable-push" ${
-    ready ? "" : "disabled"
-  }>
-    <i class="bi bi-bell me-1" aria-hidden="true"></i><span class="js-emp-push-btn-label">${label}</span>
+  return `<button type="button" class="btn btn-outline-warning w-100 mb-2 js-emp-enable-push">
+    <i class="bi bi-bell me-1" aria-hidden="true"></i><span class="js-emp-push-btn-label">${empPushButtonLabel()}</span>
   </button>
-  <p class="small text-muted mb-2 px-1">Get alerts 10 minutes before deadlines, even when Chrome is closed.</p>`;
+  <p class="small text-muted mb-2 px-1">Tap once to prepare, then tap again to connect. Alerts work when Chrome is closed.</p>`;
 }
 
 function refreshEmpPushButtonLabels() {
   document.querySelectorAll(".js-emp-push-btn-label").forEach((el) => {
-    if (!isPushInfrastructureReady()) {
-      el.textContent = "Loading reminders…";
-      return;
-    }
-    el.textContent =
-      Notification.permission === "granted" ? "Confirm Chrome reminders" : "Enable Chrome reminders";
+    el.textContent = empPushButtonLabel();
   });
   document.querySelectorAll(".js-emp-enable-push").forEach((btn) => {
-    btn.disabled = !isPushInfrastructureReady();
+    btn.disabled = false;
   });
 }
 
 async function prepareEmployeePushOnLogin() {
   if (!isPushSupported()) return;
-  const ready = await preparePushInfrastructure(api);
-  refreshEmpPushButtonLabels();
-  if (!ready) return;
-
-  if (Notification.permission === "granted") {
-    const link = await linkPushSubscriptionToServer(api);
-    if (link.ok) {
-      showToast("Chrome reminders connected on this device.", "success");
-      document.dispatchEvent(new CustomEvent("taskmgr-push-subscribed"));
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const ready = await preparePushInfrastructure(api, { force: attempt > 0 });
+    refreshEmpPushButtonLabels();
+    if (ready) {
+      if (Notification.permission === "granted") {
+        const link = await linkPushSubscriptionToServer(api);
+        if (link.ok) {
+          showToast("Chrome reminders connected on this device.", "success");
+          document.dispatchEvent(new CustomEvent("taskmgr-push-subscribed"));
+        }
+      }
+      return;
     }
+    await new Promise((r) => window.setTimeout(r, 1500));
   }
 }
+
+const EMP_PUSH_PRIMED_KEY = "taskmgr-push-primed";
 
 function wireEmpEnablePush() {
   document.querySelectorAll(".js-emp-enable-push").forEach((btn) => {
@@ -911,52 +908,74 @@ function wireEmpEnablePush() {
         return;
       }
 
+      const label = btn.querySelector(".js-emp-push-btn-label");
       const finish = (result) => {
         refreshEmpPushButtonLabels();
         if (result.ok) {
+          sessionStorage.removeItem(EMP_PUSH_PRIMED_KEY);
           showToast("Chrome reminders are active on this device.", "success");
         } else if (result.reason === "not-ready") {
-          showToast(result.message || "Still loading. Wait a few seconds and tap again.", "warning");
+          showToast(result.message || "Pull down to refresh the page, then tap Enable twice.", "warning");
         } else if (result.reason === "no-vapid") {
           showToast("Server push is not configured. Contact your administrator.", "danger");
         } else if (result.reason === "denied") {
           showToast("Allow notifications to get alerts 10 minutes before deadlines.", "warning");
         } else {
-          showToast(
-            result.message || "Could not enable reminders on this device.",
-            "danger"
-          );
+          showToast(result.message || "Tap Enable one more time.", "warning");
         }
       };
 
-      const startGestureRegister = () => {
-        if (!isPushInfrastructureReady()) {
-          finish({
-            ok: false,
-            reason: "not-ready",
-            message: "Still loading. Wait until the button says Enable, then tap again.",
-          });
-          return;
-        }
+      const primed =
+        sessionStorage.getItem(EMP_PUSH_PRIMED_KEY) === "1" && isPushInfrastructureReady();
+
+      if (primed) {
+        sessionStorage.removeItem(EMP_PUSH_PRIMED_KEY);
         btn.disabled = true;
         runPushRegistrationDuringGesture(api, (result) => {
           btn.disabled = false;
           finish(result);
         });
-      };
-
-      if (Notification.permission !== "granted") {
-        Notification.requestPermission().then((perm) => {
-          if (perm !== "granted") {
-            finish({ ok: false, reason: "denied" });
-            return;
-          }
-          startGestureRegister();
-        });
         return;
       }
 
-      startGestureRegister();
+      btn.disabled = true;
+      if (label) label.textContent = "Setting up…";
+
+      const runSetup = async () => {
+        try {
+          if (Notification.permission !== "granted") {
+            const perm = await Notification.requestPermission();
+            if (perm !== "granted") {
+              finish({ ok: false, reason: "denied" });
+              return;
+            }
+          }
+
+          const ready = await preparePushInfrastructure(api, { force: true });
+          if (!ready) {
+            finish({
+              ok: false,
+              reason: "not-ready",
+              message: "Could not load push setup. Pull down to refresh, then tap Enable again.",
+            });
+            return;
+          }
+
+          const link = await linkPushSubscriptionToServer(api);
+          if (link.ok) {
+            finish({ ok: true });
+            return;
+          }
+
+          sessionStorage.setItem(EMP_PUSH_PRIMED_KEY, "1");
+          showToast("Almost done — tap Enable one more time.", "primary");
+        } finally {
+          btn.disabled = false;
+          refreshEmpPushButtonLabels();
+        }
+      };
+
+      void runSetup();
     });
   });
 }
