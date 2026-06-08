@@ -189,20 +189,6 @@ function submissionServerErrorMessage(err) {
   return null;
 }
 
-function handleProofUpload(req, res, next) {
-  proofUpload.single("proof")(req, res, (err) => {
-    if (!err) return next();
-    if (err.code === "LIMIT_FILE_SIZE") {
-      return res.status(400).json({ error: "Image must be 5 MB or smaller." });
-    }
-    const msg = err.message || "Upload failed";
-    if (/Only JPEG|images are allowed/i.test(msg)) {
-      return res.status(400).json({ error: msg });
-    }
-    return next(err);
-  });
-}
-
 const proofUpload = multer({
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => {
@@ -224,6 +210,38 @@ const proofUpload = multer({
     cb(new Error("Only JPEG, PNG, GIF, or WebP images are allowed"));
   },
 });
+
+function readSubmissionTextFromBody(req) {
+  const body = req.body ?? {};
+  if (typeof body.submissionText === "string") return body.submissionText;
+  if (typeof body.submission_text === "string") return body.submission_text;
+  return "";
+}
+
+/** @param {import("express").Request} req */
+function getProofUploadFile(req) {
+  if (req.file) return req.file;
+  const files = req.files;
+  if (!files) return null;
+  if (Array.isArray(files)) {
+    return files.find((f) => f.fieldname === "proof") ?? null;
+  }
+  return files.proof?.[0] ?? null;
+}
+
+function handleProofUpload(req, res, next) {
+  proofUpload.fields([{ name: "proof", maxCount: 1 }])(req, res, (err) => {
+    if (!err) return next();
+    if (err.code === "LIMIT_FILE_SIZE") {
+      return res.status(400).json({ error: "Image must be 5 MB or smaller." });
+    }
+    const msg = err.message || "Upload failed";
+    if (/Only JPEG|images are allowed/i.test(msg)) {
+      return res.status(400).json({ error: msg });
+    }
+    return next(err);
+  });
+}
 
 async function syncTaskCompletedFromAssignments(taskId) {
   const rows = await prisma.taskAssignee.findMany({
@@ -306,6 +324,50 @@ router.get("/lists/:listId", requireOwner, async (req, res) => {
 });
 
 /** Must be before /:id PATCH so "completion-proof" is not captured as id */
+router.get("/:id/submission", requireAuth, async (req, res) => {
+  const task = await prisma.task.findFirst({
+    where: { id: req.params.id },
+    include: { list: true, assignments: { include: { user: { select: { id: true } } } } },
+  });
+  if (!task) {
+    return res.status(404).json({ error: "Task not found" });
+  }
+
+  const assigneeUserId =
+    req.session.role === "employee"
+      ? req.session.userId
+      : typeof req.query.assigneeUserId === "string"
+        ? req.query.assigneeUserId
+        : null;
+  if (!assigneeUserId) {
+    return res.status(400).json({ error: "assigneeUserId query parameter is required" });
+  }
+
+  const row = task.assignments.find((a) => a.userId === assigneeUserId);
+  if (!row) {
+    return res.status(404).json({ error: "Assignee not found on this task" });
+  }
+
+  const isOwner = task.list.ownerId === req.session.userId;
+  const isSelfEmployee =
+    req.session.role === "employee" &&
+    req.session.userId === assigneeUserId &&
+    taskIsAssignedToUser(task, req.session.userId);
+  if (!isOwner && !isSelfEmployee) {
+    return res.status(403).json({ error: "Not allowed" });
+  }
+
+  const submissionText = (row.submissionText ?? "").trim() || null;
+  res.json({
+    taskTitle: task.title,
+    assigneeUserId,
+    submissionText,
+    completionProofUrl: row.completionProofPath
+      ? `/api/tasks/${task.id}/completion-proof/${assigneeUserId}`
+      : null,
+  });
+});
+
 router.get("/:id/completion-proof/:assigneeUserId", requireAuth, async (req, res) => {
   const assigneeUserId = req.params.assigneeUserId;
   const task = await prisma.task.findFirst({
@@ -350,18 +412,18 @@ router.post("/:id/completion-proof", requireAuth, handleProofUpload, async (req,
     }
 
     const my = task.assignments.find((a) => a.userId === req.session.userId);
-    const textRaw = typeof req.body?.submissionText === "string" ? req.body.submissionText : "";
-    const submissionText = textRaw.trim();
+    const submissionText = readSubmissionTextFromBody(req).trim();
+    const proofFile = getProofUploadFile(req);
     if (submissionText.length > SUBMISSION_TEXT_MAX) {
       return res.status(400).json({ error: `Submission notes must be ${SUBMISSION_TEXT_MAX} characters or fewer.` });
     }
 
     let completionProofPath = my?.completionProofPath ?? null;
-    if (req.file) {
+    if (proofFile) {
       if (my?.completionProofPath) {
         deleteProofFile(my.completionProofPath);
       }
-      completionProofPath = req.file.filename;
+      completionProofPath = proofFile.filename;
     }
 
     if (!submissionText && !completionProofPath) {

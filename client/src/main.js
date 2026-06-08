@@ -2061,6 +2061,19 @@ async function openProofImageModal(proofUrl, altLabel) {
   await openSubmissionDetailModal({ title: altLabel, submissionText: null, proofUrl });
 }
 
+async function openSubmissionDetailForAssignee(taskId, userId) {
+  const q =
+    state.user?.role === "employee"
+      ? ""
+      : `?assigneeUserId=${encodeURIComponent(userId)}`;
+  const data = await api(`/api/tasks/${taskId}/submission${q}`);
+  await openSubmissionDetailModal({
+    title: data.taskTitle,
+    submissionText: data.submissionText,
+    proofUrl: data.completionProofUrl,
+  });
+}
+
 function wireSubmissionDetailModal() {
   const modalEl = document.getElementById("submissionDetailModal");
   if (!modalEl || modalEl.dataset.wiredSubmissionDetail === "1") return;
@@ -2231,9 +2244,14 @@ function wireEmpSubmissionModal() {
     submitBtn.disabled = true;
     try {
       const task = state.empTasks.find((t) => t.id === taskId);
-      await submitEmployeeSubmission(taskId, ta.value, file);
+      const result = await submitEmployeeSubmission(taskId, ta.value, file);
       if (task?.dueAt) clearReminderForTask(taskId, task.dueAt);
       bootstrap.Modal.getInstance(modalEl)?.hide();
+      if (result?.task) {
+        const idx = state.empTasks.findIndex((t) => t.id === taskId);
+        if (idx >= 0) state.empTasks[idx] = result.task;
+        else state.empTasks.push(result.task);
+      }
       showToast("Task submitted.", "success");
       await loadEmployeeTasks();
       renderEmpListContentOnly();
@@ -2806,12 +2824,8 @@ function renderOwnerMain() {
       const taskId = btn.getAttribute("data-view-submission-task-id");
       const userId = btn.getAttribute("data-view-submission-user-id");
       if (!taskId || !userId) return;
-      const sub = lookupAssigneeSubmission(taskId, userId);
-      if (!sub) return;
-      void openSubmissionDetailModal({
-        title: sub.taskTitle,
-        submissionText: sub.submissionText,
-        proofUrl: sub.proofUrl,
+      void openSubmissionDetailForAssignee(taskId, userId).catch((err) => {
+        showToast(err.message || "Could not load submission.", "danger");
       });
     });
   });
@@ -3339,12 +3353,8 @@ function renderEmployeeMain() {
       const taskId = btn.getAttribute("data-task-id");
       const userId = btn.getAttribute("data-user-id") || state.user?.id;
       if (!taskId || !userId) return;
-      const sub = lookupAssigneeSubmission(taskId, userId);
-      if (!sub) return;
-      void openSubmissionDetailModal({
-        title: sub.taskTitle,
-        submissionText: sub.submissionText,
-        proofUrl: sub.proofUrl,
+      void openSubmissionDetailForAssignee(taskId, userId).catch((err) => {
+        showToast(err.message || "Could not load submission.", "danger");
       });
     });
   });
