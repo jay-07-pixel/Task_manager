@@ -1,7 +1,12 @@
 import "./scss/styles.scss";
 import * as bootstrap from "bootstrap";
 import Sortable from "sortablejs";
-import { startEmployeeReminders, stopEmployeeReminders, clearReminderForTask } from "./reminders.js";
+import {
+  startEmployeeReminders,
+  stopEmployeeReminders,
+  clearReminderForTask,
+  playTaskAlarm,
+} from "./reminders.js";
 import { isPushSupported, runPushRegistrationDuringGesture } from "./sw-register.js";
 
 const app = document.getElementById("app");
@@ -744,8 +749,105 @@ async function logout() {
   renderAuthForm();
 }
 
+function getEmployeeNotifyParams() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("from") !== "notify") return null;
+  const taskId = params.get("taskId");
+  if (!taskId) return null;
+  return {
+    taskId,
+    title: params.get("title") || "",
+    slot: params.get("slot") || "before10",
+    dueAt: params.get("dueAt"),
+    playSound: true,
+  };
+}
+
+async function focusEmployeeTaskFromNotify(notify) {
+  if (!notify?.taskId) return;
+
+  if (window.location.search) {
+    window.history.replaceState({}, "", window.location.pathname);
+  }
+
+  if (!state.empTasks.some((t) => t.id === notify.taskId)) {
+    try {
+      await loadEmployeeTasks();
+    } catch {
+      /* keep going */
+    }
+  }
+
+  const task = state.empTasks.find((t) => t.id === notify.taskId);
+  if (task && employeeMyAssignee(task)?.assigneeDone) {
+    state.empFilter = "submitted";
+  } else if (!task) {
+    state.empFilter = "all";
+  } else {
+    state.empFilter = "active";
+  }
+
+  renderEmpListContentOnly();
+  renderEmployeeMain();
+
+  const slotLabel = notify.slot?.startsWith("followup")
+    ? "Task overdue — reminder"
+    : "Due in about 10 minutes";
+  const title = notify.title || task?.title || "Your task";
+
+  requestAnimationFrame(() => {
+    const row = document.querySelector(
+      `tr.owner-task-row[data-task-id="${CSS.escape(notify.taskId)}"]`
+    );
+    if (row) {
+      row.classList.add("owner-task-row--notify-highlight");
+      row.scrollIntoView({ behavior: "smooth", block: "center" });
+      window.setTimeout(() => row.classList.remove("owner-task-row--notify-highlight"), 12000);
+    }
+  });
+
+  showToast(`${slotLabel}: ${title}`, "warning");
+
+  if (notify.playSound) {
+    void playTaskAlarm().then((ok) => {
+      if (!ok) showToast("Tap the screen if you hear no alarm sound.", "warning");
+    });
+  }
+  if (navigator.vibrate) navigator.vibrate([400, 120, 400, 120, 400]);
+}
+
+async function handleEmployeeNotifyDeepLink() {
+  const notify = getEmployeeNotifyParams();
+  if (notify) await focusEmployeeTaskFromNotify(notify);
+}
+
+function wireEmployeeNotifyHandlers() {
+  if (document.documentElement.dataset.taskmgrNotifyWired === "1") return;
+  document.documentElement.dataset.taskmgrNotifyWired = "1";
+
+  document.addEventListener("taskmgr-focus-task", (event) => {
+    if (state.user?.role !== "employee") return;
+    void focusEmployeeTaskFromNotify(event.detail || {});
+  });
+
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.addEventListener("message", (event) => {
+      if (event.data?.type === "taskmgr-open-task" && state.user?.role === "employee") {
+        void focusEmployeeTaskFromNotify({
+          taskId: event.data.payload?.taskId,
+          title: event.data.payload?.title,
+          slot: event.data.payload?.slot,
+          dueAt: event.data.payload?.dueAt,
+          playSound: true,
+        });
+      }
+    });
+  }
+}
+
 function startEmployeeReminderSystem() {
   if (state.user?.role !== "employee") return;
+  wireEmployeeNotifyHandlers();
   startEmployeeReminders(
     loadEmployeeTasks,
     () => state.empTasks,
@@ -2851,6 +2953,7 @@ async function render() {
     await loadEmployeeTasks();
     renderEmployeeChrome();
     startEmployeeReminderSystem();
+    await handleEmployeeNotifyDeepLink();
     return;
   }
   await loadLists();

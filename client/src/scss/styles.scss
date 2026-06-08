@@ -180,6 +180,22 @@ body {
   width: 22%;
 }
 
+.owner-task-row--notify-highlight {
+  animation: owner-task-notify-pulse 1s ease-in-out 8;
+  outline: 2px solid rgba(var(--bs-warning-rgb), 0.65);
+  outline-offset: -2px;
+}
+
+@keyframes owner-task-notify-pulse {
+  0%,
+  100% {
+    background-color: rgba(var(--bs-warning-rgb), 0.1);
+  }
+  50% {
+    background-color: rgba(var(--bs-warning-rgb), 0.28);
+  }
+}
+
 .owner-sidebar-new-list {
   margin-bottom: 1.25rem;
   font-weight: 600;

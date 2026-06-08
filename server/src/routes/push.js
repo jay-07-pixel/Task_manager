@@ -131,7 +131,7 @@ router.post("/test-web", requireAuth, async (req, res) => {
       title: "Test task",
       dueAt: new Date().toISOString(),
       slot: "before10",
-      url: "/",
+      url: "/?from=notify&taskId=test&title=Test%20task&slot=before10",
     },
   };
 

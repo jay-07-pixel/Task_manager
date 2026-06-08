@@ -250,22 +250,18 @@ function escapeHtml(s) {
   return d.innerHTML;
 }
 
-function openFullscreenAlarmPage(task, slot) {
-  const p = new URLSearchParams();
-  p.set("taskId", task.id);
-  p.set("title", task.title);
-  if (task.dueAt) p.set("dueAt", task.dueAt);
-  if (slot) p.set("slot", slot);
-  const url = `/alarm.html?${p.toString()}`;
-  const existing = window.open("", "taskmgr-alarm");
-  if (existing && !existing.closed) {
-    existing.location.href = url;
-    existing.focus();
-    return;
-  }
-  const features = "noopener,noreferrer";
-  const win = window.open(url, "taskmgr-alarm", features);
-  win?.focus();
+function focusEmployeeTaskReminder(task, slot) {
+  document.dispatchEvent(
+    new CustomEvent("taskmgr-focus-task", {
+      detail: {
+        taskId: task.id,
+        title: task.title,
+        dueAt: task.dueAt,
+        slot: slot || SLOT_BEFORE,
+        playSound: true,
+      },
+    })
+  );
 }
 
 function tryBrowserNotification(task, slot, bodyLine) {
@@ -351,7 +347,7 @@ function fireDueReminder(task, plan, fired, showToast) {
 
   if (!serverPushActive) {
     tryBrowserNotification(task, plan.slot, plan.notify);
-    openFullscreenAlarmPage(task, plan.slot);
+    focusEmployeeTaskReminder(task, plan.slot);
   }
   showToast(plan.toast, "warning");
   showReminderBanner(task, plan.eyebrow, showToast);
@@ -371,10 +367,7 @@ export function handlePushReminderMessage(payload, showToast) {
 
   markReminderFired(task, slot);
 
-  const eyebrow =
-    slot === SLOT_FOLLOWUP ? "Still not submitted — follow-up reminder" : "Task due soon";
-  openFullscreenAlarmPage(task, slot);
-  showReminderBanner(task, eyebrow, showToast);
+  focusEmployeeTaskReminder(task, slot);
   if (navigator.vibrate) navigator.vibrate([500, 150, 500, 150, 500]);
 }
 

@@ -30,7 +30,7 @@ function alarmPath(taskId, title, dueAt, slot) {
   p.set("dueAt", dueAt.toISOString());
   p.set("slot", slot);
   p.set("from", "notify");
-  return `/alarm.html?${p.toString()}`;
+  return `/?${p.toString()}`;
 }
 
 /**

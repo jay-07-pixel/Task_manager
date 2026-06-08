@@ -1,45 +1,40 @@
 /* Task Manager — service worker: push notifications (Android-safe) */
 
 const NOTIFICATION_ICON = "/icons/notification-icon.png";
+const NOTIFICATION_SOUND = "/sounds/alarm-beep.wav";
 
-function alarmUrl(data) {
-  if (data?.url) return data.url;
+function taskDashboardUrl(data) {
+  if (data?.url && !String(data.url).includes("alarm.html")) {
+    return data.url.startsWith("/") ? data.url : `/${data.url}`;
+  }
   const p = new URLSearchParams();
   if (data?.taskId) p.set("taskId", data.taskId);
   if (data?.title) p.set("title", data.title);
   if (data?.dueAt) p.set("dueAt", data.dueAt);
   if (data?.slot) p.set("slot", data.slot);
   p.set("from", "notify");
-  return `/alarm.html?${p.toString()}`;
+  return `/?${p.toString()}`;
 }
 
-async function openAppHome() {
+async function openTaskDashboard(data) {
+  const path = taskDashboardUrl(data);
+  const fullUrl = new URL(path, self.registration.scope).href;
   const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+
   for (const client of clients) {
     if (client.url.includes(self.registration.scope) && !client.url.includes("/alarm.html")) {
       await client.focus();
-      return client;
-    }
-  }
-  if (self.clients.openWindow) {
-    return self.clients.openWindow("/");
-  }
-}
-
-async function openAlarmWindow(data) {
-  const url = alarmUrl(data);
-  const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-  for (const client of clients) {
-    if (client.url.includes("/alarm.html")) {
-      await client.focus();
       if ("navigate" in client) {
-        await client.navigate(url);
+        await client.navigate(fullUrl);
+      } else {
+        client.postMessage({ type: "taskmgr-open-task", payload: data || {} });
       }
       return client;
     }
   }
+
   if (self.clients.openWindow) {
-    return self.clients.openWindow(url);
+    return self.clients.openWindow(fullUrl);
   }
 }
 
@@ -76,9 +71,20 @@ async function showNotificationFromPayload(payload) {
     tag,
     requireInteraction: true,
     silent: false,
-    vibrate: [600, 200, 600, 200, 600],
+    vibrate: [600, 200, 600, 200, 600, 200, 600],
     data,
   };
+
+  try {
+    await self.registration.showNotification(title, {
+      ...base,
+      icon: NOTIFICATION_ICON,
+      sound: NOTIFICATION_SOUND,
+    });
+    return;
+  } catch (err) {
+    console.warn("[sw] notification with icon/sound failed:", err);
+  }
 
   try {
     await self.registration.showNotification(title, {
@@ -125,7 +131,7 @@ self.addEventListener("push", (event) => {
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const data = event.notification.data;
-  event.waitUntil(openAlarmWindow(data));
+  event.waitUntil(openTaskDashboard(data));
 });
 
 self.addEventListener("install", (event) => {
