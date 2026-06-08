@@ -1025,13 +1025,7 @@ function ownerDashboardMetrics() {
   const tasks = state.tasks;
   const active = tasks.filter((t) => !t.completed).length;
   const done = tasks.filter((t) => t.completed).length;
-  let pendingAssignees = 0;
-  for (const t of tasks) {
-    for (const a of t.assignees ?? []) {
-      if (!a.assigneeDone) pendingAssignees += 1;
-    }
-  }
-  return { total: tasks.length, active, done, pendingAssignees };
+  return { total: tasks.length, active, done };
 }
 
 function leftNavInner() {
@@ -2809,7 +2803,7 @@ function renderOwnerMain() {
   const kpiRow =
     list && metrics.total > 0
       ? `<div class="row g-3 mb-4 owner-kpi-row">
-          <div class="col-6 col-xl-3">
+          <div class="col-6 col-md-4">
             <div class="owner-kpi-card">
               <div class="owner-kpi-icon text-primary"><i class="bi bi-list-task" aria-hidden="true"></i></div>
               <div>
@@ -2818,7 +2812,7 @@ function renderOwnerMain() {
               </div>
             </div>
           </div>
-          <div class="col-6 col-xl-3">
+          <div class="col-6 col-md-4">
             <div class="owner-kpi-card">
               <div class="owner-kpi-icon text-success"><i class="bi bi-check-circle" aria-hidden="true"></i></div>
               <div>
@@ -2827,16 +2821,7 @@ function renderOwnerMain() {
               </div>
             </div>
           </div>
-          <div class="col-6 col-xl-3">
-            <div class="owner-kpi-card">
-              <div class="owner-kpi-icon text-warning"><i class="bi bi-hourglass-split" aria-hidden="true"></i></div>
-              <div>
-                <div class="owner-kpi-value tabular-nums">${metrics.pendingAssignees}</div>
-                <div class="owner-kpi-label">Pending submissions</div>
-              </div>
-            </div>
-          </div>
-          <div class="col-6 col-xl-3">
+          <div class="col-12 col-md-4">
             <div class="owner-kpi-card">
               <div class="owner-kpi-icon text-info"><i class="bi bi-collection" aria-hidden="true"></i></div>
               <div>
