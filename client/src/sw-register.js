@@ -101,12 +101,84 @@ async function subscribePushManager(reg, publicKey) {
     return existing;
   }
 
-  const sub = await reg.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(publicKey),
-  });
-  localStorage.setItem(VAPID_STORAGE_KEY, publicKey);
-  return sub;
+  try {
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(publicKey),
+    });
+    localStorage.setItem(VAPID_STORAGE_KEY, publicKey);
+    return sub;
+  } catch (err) {
+    console.warn("[push] pushManager.subscribe failed:", err?.name, err?.message);
+    const leftover = await reg.pushManager.getSubscription();
+    if (leftover) {
+      localStorage.setItem(VAPID_STORAGE_KEY, publicKey);
+      return leftover;
+    }
+    throw err;
+  }
+}
+
+export function isPushInfrastructureReady() {
+  return !!(cachedVapidPublicKey && swRegistration);
+}
+
+/** Fully load service worker + VAPID before any subscribe attempt (required on mobile). */
+export function preparePushInfrastructure(apiFetch) {
+  return warmupPushInfrastructure(apiFetch);
+}
+
+/**
+ * Link an existing browser subscription to the server (no user gesture needed).
+ * @param {(path: string, options?: RequestInit) => Promise<any>} apiFetch
+ */
+export async function linkPushSubscriptionToServer(apiFetch) {
+  if (!isPushSupported()) return { ok: false, reason: "unsupported" };
+  if (Notification.permission !== "granted") return { ok: false, reason: "denied" };
+
+  const ready = await preparePushInfrastructure(apiFetch);
+  if (!ready || !cachedVapidPublicKey || !swRegistration?.pushManager) {
+    return {
+      ok: false,
+      reason: "not-ready",
+      message: "Push setup still loading. Wait a few seconds and try again.",
+    };
+  }
+
+  const sub = await swRegistration.pushManager.getSubscription();
+  if (!sub) {
+    return { ok: false, reason: "needs-gesture" };
+  }
+
+  const storedKey = localStorage.getItem(VAPID_STORAGE_KEY);
+  if (storedKey && storedKey !== cachedVapidPublicKey) {
+    return { ok: false, reason: "needs-gesture", message: "Tap Enable once more to refresh push on this phone." };
+  }
+  if (!storedKey) {
+    localStorage.setItem(VAPID_STORAGE_KEY, cachedVapidPublicKey);
+  }
+
+  try {
+    await postSubscriptionToServer(apiFetch, sub);
+    return { ok: true };
+  } catch (err) {
+    return {
+      ok: false,
+      reason: "server-failed",
+      message: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+function friendlyPushError(err) {
+  const name = err?.name || "";
+  if (name === "NotAllowedError") {
+    return "Chrome blocked push. Android Settings → Apps → Chrome → Notifications → Allow.";
+  }
+  if (name === "AbortError") {
+    return "Push was interrupted. Wait for the page to load, then tap Enable again.";
+  }
+  return err instanceof Error ? err.message : "Could not register push on this device.";
 }
 
 /**
@@ -196,33 +268,38 @@ export function runPushRegistrationDuringGesture(apiFetch, onResult) {
     return;
   }
 
-  /** Start subscribe in the same click tick — Chrome requires an active user gesture. */
-  void registerServiceWorker();
-  const subscribePromise = beginLocalPushSubscribeDuringGesture(undefined, apiFetch);
+  if (!isPushInfrastructureReady()) {
+    onResult?.({
+      ok: false,
+      reason: "not-ready",
+      message: "Still loading. Wait a few seconds for the page to finish, then tap again.",
+    });
+    void preparePushInfrastructure(apiFetch);
+    return;
+  }
 
-  subscribePromise
-    .then(async (sub) => {
-      if (!sub) {
-        const existing = await getLocalPushSubscription();
-        if (existing) {
-          const key = cachedVapidPublicKey;
-          if (key) {
-            const storedKey = localStorage.getItem(VAPID_STORAGE_KEY);
-            if (!storedKey || storedKey === key) {
-              if (!storedKey) localStorage.setItem(VAPID_STORAGE_KEY, key);
-              await postSubscriptionToServer(apiFetch, existing);
-              return;
-            }
-          }
+  const reg = swRegistration;
+  const publicKey = cachedVapidPublicKey;
+  if (!reg?.pushManager || !publicKey) {
+    onResult?.({ ok: false, reason: "no-vapid", message: "Push not configured on server." });
+    return;
+  }
+
+  /** Promise chain started in the click tick — required on mobile Chrome. */
+  reg.pushManager
+    .getSubscription()
+    .then((existing) => {
+      if (existing) {
+        const storedKey = localStorage.getItem(VAPID_STORAGE_KEY);
+        if (!storedKey || storedKey === publicKey) {
+          if (!storedKey) localStorage.setItem(VAPID_STORAGE_KEY, publicKey);
+          return postSubscriptionToServer(apiFetch, existing);
         }
-        if (!cachedVapidPublicKey) {
-          const err = new Error("Push not configured on server");
-          err.code = "no-vapid";
-          throw err;
-        }
-        throw new Error("Could not register push — close all Chrome tabs for this site and try again");
       }
-      await postSubscriptionToServer(apiFetch, sub);
+      return subscribePushManager(reg, publicKey).then((sub) => {
+        if (!sub) throw new Error("Subscribe returned empty");
+        return postSubscriptionToServer(apiFetch, sub);
+      });
     })
     .then(() => {
       onResult?.({ ok: true });
@@ -230,11 +307,10 @@ export function runPushRegistrationDuringGesture(apiFetch, onResult) {
     })
     .catch((err) => {
       console.warn("[push] gesture registration failed:", err);
-      const code = err?.code === "no-vapid" ? "no-vapid" : "subscribe-failed";
       onResult?.({
         ok: false,
-        reason: code,
-        message: err instanceof Error ? err.message : String(err),
+        reason: "subscribe-failed",
+        message: friendlyPushError(err),
       });
     });
 }

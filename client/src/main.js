@@ -2,7 +2,13 @@ import "./scss/styles.scss";
 import * as bootstrap from "bootstrap";
 import Sortable from "sortablejs";
 import { startEmployeeReminders, stopEmployeeReminders, clearReminderForTask } from "./reminders.js";
-import { isPushSupported, runPushRegistrationDuringGesture } from "./sw-register.js";
+import {
+  isPushSupported,
+  isPushInfrastructureReady,
+  preparePushInfrastructure,
+  linkPushSubscriptionToServer,
+  runPushRegistrationDuringGesture,
+} from "./sw-register.js";
 
 const app = document.getElementById("app");
 const toastHost = document.getElementById("toastHost");
@@ -850,11 +856,47 @@ function empRemindersButtonHtml() {
   if (perm === "denied") {
     return `<p class="small text-warning mb-2 px-1">Notifications blocked — allow them in Chrome settings for this site.</p>`;
   }
-  const label = perm === "granted" ? "Confirm Chrome reminders" : "Enable Chrome reminders";
-  return `<button type="button" class="btn btn-outline-warning w-100 mb-2 js-emp-enable-push">
-    <i class="bi bi-bell me-1" aria-hidden="true"></i>${label}
+  const ready = isPushInfrastructureReady();
+  const label = !ready
+    ? "Loading reminders…"
+    : perm === "granted"
+      ? "Confirm Chrome reminders"
+      : "Enable Chrome reminders";
+  return `<button type="button" class="btn btn-outline-warning w-100 mb-2 js-emp-enable-push" ${
+    ready ? "" : "disabled"
+  }>
+    <i class="bi bi-bell me-1" aria-hidden="true"></i><span class="js-emp-push-btn-label">${label}</span>
   </button>
   <p class="small text-muted mb-2 px-1">Get alerts 10 minutes before deadlines, even when Chrome is closed.</p>`;
+}
+
+function refreshEmpPushButtonLabels() {
+  document.querySelectorAll(".js-emp-push-btn-label").forEach((el) => {
+    if (!isPushInfrastructureReady()) {
+      el.textContent = "Loading reminders…";
+      return;
+    }
+    el.textContent =
+      Notification.permission === "granted" ? "Confirm Chrome reminders" : "Enable Chrome reminders";
+  });
+  document.querySelectorAll(".js-emp-enable-push").forEach((btn) => {
+    btn.disabled = !isPushInfrastructureReady();
+  });
+}
+
+async function prepareEmployeePushOnLogin() {
+  if (!isPushSupported()) return;
+  const ready = await preparePushInfrastructure(api);
+  refreshEmpPushButtonLabels();
+  if (!ready) return;
+
+  if (Notification.permission === "granted") {
+    const link = await linkPushSubscriptionToServer(api);
+    if (link.ok) {
+      showToast("Chrome reminders connected on this device.", "success");
+      document.dispatchEvent(new CustomEvent("taskmgr-push-subscribed"));
+    }
+  }
 }
 
 function wireEmpEnablePush() {
@@ -869,21 +911,38 @@ function wireEmpEnablePush() {
         return;
       }
 
-      btn.disabled = true;
       const finish = (result) => {
-        btn.disabled = false;
+        refreshEmpPushButtonLabels();
         if (result.ok) {
-          showToast("Chrome reminders are active on this phone.", "success");
+          showToast("Chrome reminders are active on this device.", "success");
+        } else if (result.reason === "not-ready") {
+          showToast(result.message || "Still loading. Wait a few seconds and tap again.", "warning");
         } else if (result.reason === "no-vapid") {
           showToast("Server push is not configured. Contact your administrator.", "danger");
         } else if (result.reason === "denied") {
           showToast("Allow notifications to get alerts 10 minutes before deadlines.", "warning");
         } else {
           showToast(
-            result.message || "Could not enable reminders. Close all site tabs in Chrome and try again.",
+            result.message || "Could not enable reminders on this device.",
             "danger"
           );
         }
+      };
+
+      const startGestureRegister = () => {
+        if (!isPushInfrastructureReady()) {
+          finish({
+            ok: false,
+            reason: "not-ready",
+            message: "Still loading. Wait until the button says Enable, then tap again.",
+          });
+          return;
+        }
+        btn.disabled = true;
+        runPushRegistrationDuringGesture(api, (result) => {
+          btn.disabled = false;
+          finish(result);
+        });
       };
 
       if (Notification.permission !== "granted") {
@@ -892,12 +951,12 @@ function wireEmpEnablePush() {
             finish({ ok: false, reason: "denied" });
             return;
           }
-          runPushRegistrationDuringGesture(api, finish);
+          startGestureRegister();
         });
         return;
       }
 
-      runPushRegistrationDuringGesture(api, finish);
+      startGestureRegister();
     });
   });
 }
@@ -2952,6 +3011,7 @@ async function render() {
     await loadEmployeeTasks();
     renderEmployeeChrome();
     startEmployeeReminderSystem();
+    void prepareEmployeePushOnLogin();
     await handleEmployeeNotifyDeepLink();
     const pendingNotify = sessionStorage.getItem("taskmgr-pending-notify");
     if (pendingNotify) {
