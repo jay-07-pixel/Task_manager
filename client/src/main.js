@@ -22,6 +22,7 @@ let state = {
   assignees: [],
   empTasks: [],
   empFilter: "active",
+  ownerTaskFilter: "active",
 };
 
 /** @type {any[]} */
@@ -1026,6 +1027,18 @@ function ownerDashboardMetrics() {
   const active = tasks.filter((t) => !t.completed).length;
   const done = tasks.filter((t) => t.completed).length;
   return { total: tasks.length, active, done };
+}
+
+function ownerFilteredTasks() {
+  return state.tasks.filter((t) =>
+    state.ownerTaskFilter === "completed" ? t.completed : !t.completed
+  );
+}
+
+function setOwnerTaskFilter(filter) {
+  if (filter !== "active" && filter !== "completed") return;
+  state.ownerTaskFilter = filter;
+  renderOwnerMain();
 }
 
 function leftNavInner() {
@@ -2433,6 +2446,7 @@ function bindListNavHandlers() {
       btn.addEventListener("click", async (e) => {
         if (e.target.closest(".grip-handle")) return;
         state.activeListId = btn.getAttribute("data-list-id");
+        state.ownerTaskFilter = "active";
         await loadTasks(state.activeListId);
         renderOwnerMain();
         renderListContentOnly();
@@ -2792,34 +2806,36 @@ function renderOwnerMain() {
   const list = state.lists.find((l) => l.id === state.activeListId);
   const listId = state.activeListId;
 
-  const allTasks = [...state.tasks].sort((a, b) => {
-    if (a.completed !== b.completed) return a.completed ? 1 : -1;
-    return (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
-  });
+  const filteredTasks = ownerFilteredTasks();
+  const visibleTasks = [...filteredTasks].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
 
-  const tbodyInner = allTasks.map((t) => ownerTaskGroupTbody(t)).join("");
+  const tbodyInner = visibleTasks.map((t) => ownerTaskGroupTbody(t)).join("");
 
   const metrics = ownerDashboardMetrics();
+  const activeKpiClass =
+    state.ownerTaskFilter === "active" ? " owner-kpi-card--active owner-kpi-card--active-primary" : "";
+  const completedKpiClass =
+    state.ownerTaskFilter === "completed" ? " owner-kpi-card--active owner-kpi-card--active-success" : "";
   const kpiRow =
     list && metrics.total > 0
       ? `<div class="row g-3 mb-4 owner-kpi-row">
           <div class="col-6 col-md-4">
-            <div class="owner-kpi-card">
+            <button type="button" class="owner-kpi-card owner-kpi-card--filter w-100 text-start${activeKpiClass}" data-owner-filter="active" aria-pressed="${state.ownerTaskFilter === "active"}">
               <div class="owner-kpi-icon text-primary"><i class="bi bi-list-task" aria-hidden="true"></i></div>
               <div>
                 <div class="owner-kpi-value tabular-nums">${metrics.active}</div>
                 <div class="owner-kpi-label">Active tasks</div>
               </div>
-            </div>
+            </button>
           </div>
           <div class="col-6 col-md-4">
-            <div class="owner-kpi-card">
+            <button type="button" class="owner-kpi-card owner-kpi-card--filter w-100 text-start${completedKpiClass}" data-owner-filter="completed" aria-pressed="${state.ownerTaskFilter === "completed"}">
               <div class="owner-kpi-icon text-success"><i class="bi bi-check-circle" aria-hidden="true"></i></div>
               <div>
                 <div class="owner-kpi-value tabular-nums">${metrics.done}</div>
                 <div class="owner-kpi-label">Completed</div>
               </div>
-            </div>
+            </button>
           </div>
           <div class="col-12 col-md-4">
             <div class="owner-kpi-card">
@@ -2833,20 +2849,32 @@ function renderOwnerMain() {
         </div>`
       : "";
 
-  const emptyMessage = list
+  const emptyMessage = !list
     ? `<div class="owner-empty-state py-5 px-3">
-        <i class="bi bi-clipboard2-plus owner-empty-icon text-primary" aria-hidden="true"></i>
-        <p class="owner-empty-title mb-1">No tasks yet</p>
-        <p class="owner-empty-desc text-muted small mb-0">Use quick add below to create the first task for this list.</p>
-      </div>`
-    : `<div class="owner-empty-state py-5 px-3">
         <i class="bi bi-folder2-open owner-empty-icon text-primary" aria-hidden="true"></i>
         <p class="owner-empty-title mb-1">Select a list</p>
         <p class="owner-empty-desc text-muted small mb-0">Choose a list from the sidebar or create a new one.</p>
-      </div>`;
+      </div>`
+    : metrics.total === 0
+      ? `<div class="owner-empty-state py-5 px-3">
+          <i class="bi bi-clipboard2-plus owner-empty-icon text-primary" aria-hidden="true"></i>
+          <p class="owner-empty-title mb-1">No tasks yet</p>
+          <p class="owner-empty-desc text-muted small mb-0">Use quick add below to create the first task for this list.</p>
+        </div>`
+      : state.ownerTaskFilter === "completed"
+        ? `<div class="owner-empty-state py-5 px-3">
+            <i class="bi bi-check-circle owner-empty-icon text-success" aria-hidden="true"></i>
+            <p class="owner-empty-title mb-1">No completed tasks</p>
+            <p class="owner-empty-desc text-muted small mb-0">Tasks appear here after every assigned employee has submitted.</p>
+          </div>`
+        : `<div class="owner-empty-state py-5 px-3">
+            <i class="bi bi-check2-all owner-empty-icon text-success" aria-hidden="true"></i>
+            <p class="owner-empty-title mb-1">No active tasks</p>
+            <p class="owner-empty-desc text-muted small mb-0">All caught up. Click <strong>Completed</strong> above to review finished tasks.</p>
+          </div>`;
 
   const tableBlock =
-    !list || allTasks.length === 0
+    !list || visibleTasks.length === 0
       ? emptyMessage
       : `<div class="table-responsive owner-task-table-wrap">
           <table class="table table-hover align-middle mb-0 owner-task-table" id="owner-task-table-sort">
@@ -2872,9 +2900,6 @@ function renderOwnerMain() {
         <p class="owner-page-sub text-muted small mb-0 mt-1">Assign tasks, track submissions, and review notes and images.</p>
       </div>
       <div class="d-flex flex-wrap gap-2 owner-toolbar">
-        <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-clear-completed" ${!list ? "disabled" : ""}>
-          <i class="bi bi-archive me-1" aria-hidden="true"></i>Clear completed
-        </button>
         <button type="button" class="btn btn-outline-danger btn-sm" id="btn-delete-list" ${!list ? "disabled" : ""}>
           <i class="bi bi-trash me-1" aria-hidden="true"></i>Delete list
         </button>
@@ -2884,7 +2909,7 @@ function renderOwnerMain() {
     <section class="owner-task-panel" aria-label="Tasks">
       ${tableBlock}
     </section>
-    <section class="owner-quick-add-bar mt-auto flex-shrink-0" aria-label="Quick add task">
+    <section class="owner-quick-add-bar mt-auto flex-shrink-0 ${state.ownerTaskFilter === "completed" ? "d-none" : ""}" aria-label="Quick add task">
       <label class="owner-quick-add-label form-label" for="quick-add-title">Quick add task</label>
       <div class="input-group">
         <span class="input-group-text"><i class="bi bi-plus-lg" aria-hidden="true"></i></span>
@@ -2910,15 +2935,11 @@ function renderOwnerMain() {
     }
   });
 
-  document.getElementById("btn-clear-completed")?.addEventListener("click", async () => {
-    if (!listId || !window.confirm("Remove all completed tasks in this list?")) return;
-    try {
-      await api(`/api/tasks/lists/${listId}/clear-completed`, { method: "POST" });
-      await loadTasks(listId);
-      renderOwnerMain();
-    } catch (err) {
-      showToast(err.message, "danger");
-    }
+  main.querySelectorAll("[data-owner-filter]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const filter = btn.getAttribute("data-owner-filter");
+      if (filter) setOwnerTaskFilter(filter);
+    });
   });
 
   main.querySelectorAll(".owner-mark-done-open").forEach((btn) => {
@@ -2985,7 +3006,11 @@ function renderOwnerMain() {
     }
   });
 
-  initIncompleteSortables(listId);
+  if (state.ownerTaskFilter === "active" && visibleTasks.length > 0) {
+    initIncompleteSortables(listId);
+  } else {
+    destroyTaskSortables();
+  }
 }
 
 function wireChromeNav() {

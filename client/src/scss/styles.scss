@@ -230,54 +230,6 @@ body {
   resize: vertical;
 }
 
-.emp-submission-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.75rem;
-}
-
-.emp-submission-action-btn {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.45rem;
-  width: 100%;
-  min-height: 6.25rem;
-  padding: 0.9rem 0.65rem;
-  border-radius: 0.75rem;
-  text-align: center;
-}
-
-.emp-submission-action-icon {
-  font-size: 1.65rem;
-  line-height: 1;
-}
-
-.emp-submission-action-text {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.1rem;
-}
-
-.emp-submission-action-line {
-  display: block;
-  font-size: 1.05rem;
-  font-weight: 600;
-  line-height: 1.15;
-  letter-spacing: 0.01em;
-}
-
-.emp-submission-count {
-  font-size: 0.95rem;
-}
-
-.emp-submission-image-name {
-  font-size: 0.95rem;
-  word-break: break-word;
-}
-
 .owner-submission-snippet {
   max-width: 11rem;
 }
@@ -389,6 +341,28 @@ body {
   border-radius: 0.65rem;
   box-shadow: 0 0.125rem 0.5rem rgba(0, 0, 0, 0.04);
   height: 100%;
+}
+
+.owner-kpi-card--filter {
+  cursor: pointer;
+  border: 1px solid var(--bs-border-color);
+  color: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.owner-kpi-card--filter:hover {
+  border-color: rgba(var(--bs-primary-rgb), 0.35);
+  box-shadow: 0 0.15rem 0.55rem rgba(0, 0, 0, 0.06);
+}
+
+.owner-kpi-card--filter.owner-kpi-card--active-primary {
+  border-color: rgba(var(--bs-primary-rgb), 0.55);
+  box-shadow: 0 0.15rem 0.65rem rgba(var(--bs-primary-rgb), 0.12);
+}
+
+.owner-kpi-card--filter.owner-kpi-card--active-success {
+  border-color: rgba(var(--bs-success-rgb), 0.55);
+  box-shadow: 0 0.15rem 0.65rem rgba(var(--bs-success-rgb), 0.12);
 }
 
 .owner-kpi-icon {
