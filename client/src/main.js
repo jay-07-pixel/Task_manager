@@ -34,6 +34,11 @@ let pendingCustomRecurrence = null;
 /** @type {((value: string | null) => void) | null} */
 let listNameResolve = null;
 
+const OWNER_SYNC_INTERVAL_MS = 12_000;
+/** @type {number | null} */
+let ownerSyncTimer = null;
+let ownerTasksFingerprint = "";
+
 const THEME_STORAGE_KEY = "task-manager-theme";
 const THEME_TRANSITION_MS = 450;
 
@@ -775,6 +780,7 @@ function renderAuthForm() {
 }
 
 async function logout() {
+  stopOwnerAutoSync();
   stopEmployeeReminders();
   try {
     await api("/api/auth/logout", { method: "POST" });
@@ -2282,13 +2288,140 @@ async function loadLists() {
   if (!state.activeListId && lists.length) state.activeListId = lists[0].id;
 }
 
+function ownerTasksFingerprintFrom(tasks) {
+  return JSON.stringify(
+    (tasks ?? []).map((t) => ({
+      id: t.id,
+      c: t.completed,
+      s: t.sortOrder,
+      a: (t.assignees ?? []).map((x) => [
+        x.id,
+        x.assigneeDone,
+        x.submissionText ?? "",
+        x.completionProofUrl ?? "",
+      ]),
+    }))
+  );
+}
+
+function captureOwnerExpandedTaskIds() {
+  const ids = [];
+  document.querySelectorAll(".owner-task-detail-collapse.show").forEach((el) => {
+    const match = /^owner-task-detail-(.+)$/.exec(el.id || "");
+    if (match) ids.push(match[1]);
+  });
+  return ids;
+}
+
+function restoreOwnerExpandedTaskIds(ids) {
+  for (const id of ids) {
+    const el = document.getElementById(`owner-task-detail-${id}`);
+    if (el && !el.classList.contains("show")) {
+      bootstrap.Collapse.getOrCreateInstance(el).show();
+    }
+  }
+}
+
+function captureOwnerUiState() {
+  const main = document.getElementById("main-column");
+  return {
+    expandedTaskIds: captureOwnerExpandedTaskIds(),
+    quickAddTitle: document.getElementById("quick-add-title")?.value ?? "",
+    scrollTop: main?.scrollTop ?? 0,
+  };
+}
+
+function restoreOwnerUiState(ui) {
+  if (!ui) return;
+  const input = document.getElementById("quick-add-title");
+  if (input && ui.quickAddTitle) input.value = ui.quickAddTitle;
+  const main = document.getElementById("main-column");
+  if (main && ui.scrollTop > 0) main.scrollTop = ui.scrollTop;
+  restoreOwnerExpandedTaskIds(ui.expandedTaskIds);
+}
+
+function isOwnerInteractiveBusy() {
+  for (const id of [
+    "taskModal",
+    "ownerMarkDoneModal",
+    "submissionDetailModal",
+    "listNameModal",
+    "customRecurrenceModal",
+    "teamAdminModal",
+  ]) {
+    const el = document.getElementById(id);
+    if (el?.classList.contains("show")) return true;
+  }
+  return false;
+}
+
+function isOwnerSortableActive() {
+  return !!document.querySelector(".sortable-ghost, .sortable-drag, .sortable-chosen");
+}
+
+function updateOwnerTasksFingerprint() {
+  ownerTasksFingerprint = ownerTasksFingerprintFrom(state.tasks);
+}
+
+async function syncOwnerDashboard({ forceRender = false } = {}) {
+  if (state.user?.role !== "owner") return;
+  if (!state.activeListId) return;
+  if (!document.getElementById("main-column")) return;
+  if (!forceRender && document.hidden) return;
+  if (!forceRender && (isOwnerInteractiveBusy() || isOwnerSortableActive())) return;
+
+  const ui = forceRender ? null : captureOwnerUiState();
+  try {
+    const { tasks } = await api(`/api/tasks/lists/${state.activeListId}`);
+    const fp = ownerTasksFingerprintFrom(tasks);
+    if (!forceRender && fp === ownerTasksFingerprint) return;
+    ownerTasksFingerprint = fp;
+    state.tasks = tasks;
+    renderOwnerMain();
+    restoreOwnerUiState(ui);
+  } catch {
+    /* background sync — ignore transient errors */
+  }
+}
+
+function onOwnerVisibilitySync() {
+  if (!document.hidden) void syncOwnerDashboard();
+}
+
+function onOwnerFocusSync() {
+  void syncOwnerDashboard();
+}
+
+function stopOwnerAutoSync() {
+  if (ownerSyncTimer != null) {
+    window.clearInterval(ownerSyncTimer);
+    ownerSyncTimer = null;
+  }
+  document.removeEventListener("visibilitychange", onOwnerVisibilitySync);
+  window.removeEventListener("focus", onOwnerFocusSync);
+  ownerTasksFingerprint = "";
+}
+
+function startOwnerAutoSync() {
+  stopOwnerAutoSync();
+  if (state.user?.role !== "owner") return;
+  updateOwnerTasksFingerprint();
+  ownerSyncTimer = window.setInterval(() => {
+    void syncOwnerDashboard();
+  }, OWNER_SYNC_INTERVAL_MS);
+  document.addEventListener("visibilitychange", onOwnerVisibilitySync);
+  window.addEventListener("focus", onOwnerFocusSync);
+}
+
 async function loadTasks(listId) {
   if (!listId) {
     state.tasks = [];
+    updateOwnerTasksFingerprint();
     return;
   }
   const { tasks } = await api(`/api/tasks/lists/${listId}`);
   state.tasks = tasks;
+  updateOwnerTasksFingerprint();
 }
 
 async function loadAssignees() {
@@ -2943,6 +3076,7 @@ function renderOwnerChrome() {
   wireOwnerMarkDoneModal();
   wireTeamAdminModal();
   wireThemeIconToggles();
+  startOwnerAutoSync();
 }
 
 /** Optional Play Store link — set VITE_PLAY_STORE_URL at build time when published. */
