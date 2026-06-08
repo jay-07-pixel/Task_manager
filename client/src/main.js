@@ -2,7 +2,13 @@ import "./scss/styles.scss";
 import * as bootstrap from "bootstrap";
 import Sortable from "sortablejs";
 import { startEmployeeReminders, stopEmployeeReminders, clearReminderForTask } from "./reminders.js";
-import { isPushSupported, runPushRegistrationDuringGesture } from "./sw-register.js";
+import {
+  isPushSupported,
+  runPushRegistrationDuringGesture,
+  syncPushSubscriptionToServer,
+  warmupPushInfrastructure,
+  getLocalPushSubscription,
+} from "./sw-register.js";
 
 const app = document.getElementById("app");
 const toastHost = document.getElementById("toastHost");
@@ -877,10 +883,22 @@ function wireEmpEnablePush() {
             return;
           }
         }
+        await warmupPushInfrastructure(api);
+        const existing = await getLocalPushSubscription();
+        if (existing) {
+          const sync = await syncPushSubscriptionToServer(api);
+          if (sync.ok) {
+            showToast("Chrome reminders are already active on this phone.", "success");
+            document.dispatchEvent(new CustomEvent("taskmgr-push-subscribed"));
+            return;
+          }
+        }
         await new Promise((resolve) => {
           runPushRegistrationDuringGesture(api, (result) => {
             if (result.ok) {
               showToast("Chrome reminders enabled — alerts work even in other apps.", "success");
+            } else if (result.reason === "no-vapid") {
+              showToast("Server push is not configured. Contact your administrator.", "danger");
             } else {
               showToast(result.message || "Could not enable reminders. Tap the button again.", "danger");
             }

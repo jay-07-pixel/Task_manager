@@ -96,15 +96,9 @@ async function subscribePushManager(reg, publicKey) {
     } catch {
       /* ignore */
     }
-  } else if (existing && storedKey === publicKey) {
+  } else if (existing && (!storedKey || storedKey === publicKey)) {
+    localStorage.setItem(VAPID_STORAGE_KEY, publicKey);
     return existing;
-  } else if (existing && !storedKey) {
-    /** Unknown binding — refresh subscription so it matches current server key */
-    try {
-      await existing.unsubscribe();
-    } catch {
-      /* ignore */
-    }
   }
 
   const sub = await reg.pushManager.subscribe({
@@ -203,10 +197,20 @@ export function runPushRegistrationDuringGesture(apiFetch, onResult) {
   }
 
   const start = () => {
-    beginLocalPushSubscribeDuringGesture(undefined, apiFetch)
-      .then((sub) => {
-        if (!sub) throw new Error("Could not create push subscription");
-        return postSubscriptionToServer(apiFetch, sub);
+    getLocalPushSubscription()
+      .then((existing) => {
+        if (existing) {
+          const storedKey = localStorage.getItem(VAPID_STORAGE_KEY);
+          const key = cachedVapidPublicKey;
+          if (key && (!storedKey || storedKey === key)) {
+            if (!storedKey) localStorage.setItem(VAPID_STORAGE_KEY, key);
+            return postSubscriptionToServer(apiFetch, existing);
+          }
+        }
+        return beginLocalPushSubscribeDuringGesture(undefined, apiFetch).then((sub) => {
+          if (!sub) throw new Error("Could not create push subscription");
+          return postSubscriptionToServer(apiFetch, sub);
+        });
       })
       .then(() => {
         onResult?.({ ok: true });
@@ -303,9 +307,15 @@ export async function syncPushSubscriptionToServer(apiFetch) {
     return { ok: false, reason: "no-push-manager" };
   }
   let sub = await reg.pushManager.getSubscription();
-  const storedKey = localStorage.getItem(VAPID_STORAGE_KEY);
-  if (!sub || storedKey !== cachedVapidPublicKey) {
+  if (!sub) {
     return { ok: false, reason: "needs-gesture-resubscribe" };
+  }
+  const storedKey = localStorage.getItem(VAPID_STORAGE_KEY);
+  if (storedKey && storedKey !== cachedVapidPublicKey) {
+    return { ok: false, reason: "needs-gesture-resubscribe" };
+  }
+  if (!storedKey) {
+    localStorage.setItem(VAPID_STORAGE_KEY, cachedVapidPublicKey);
   }
   try {
     await postSubscriptionToServer(apiFetch, sub);
