@@ -2681,9 +2681,6 @@ function empTaskTableRows(tasks) {
         notesPreview.length > 0
           ? `<div class="owner-task-desc-box small text-body-secondary text-truncate mb-0" title="${escapeHtml(notesRaw)}">${escapeHtml(notesPreview)}</div>`
           : `<div class="owner-task-desc-box small text-muted fst-italic mb-0">No description</div>`;
-      const deadlineCell = t.dueAt
-        ? `<span class="text-body tabular-nums">${escapeHtml(t.dueAt.slice(0, 10))}</span>`
-        : `<span class="text-muted">—</span>`;
       const proofCell = proofUrl
         ? `<button type="button" class="btn btn-sm btn-outline-primary emp-view-proof" data-proof-url="${escapeHtml(
             proofUrl
@@ -2693,18 +2690,25 @@ function empTaskTableRows(tasks) {
             <input type="file" accept="image/jpeg,image/png,image/gif,image/webp" class="d-none emp-proof-input" data-task-id="${t.id}" />
           </label>`;
       const rowDone = submitted ? "owner-task-row--completed" : "";
-      return `<tr class="owner-task-row ${rowDone}" data-task-id="${t.id}">
-        <td class="owner-task-cell text-center align-middle">
+      const deadlineDisplay = t.dueAt
+        ? `<span class="text-body tabular-nums emp-deadline-full d-none d-md-inline">${escapeHtml(
+            formatEmpDue(t.dueAt)
+          )}</span><span class="text-body tabular-nums emp-deadline-short d-md-none">${escapeHtml(
+            t.dueAt.slice(0, 10)
+          )}</span>`
+        : `<span class="text-muted">—</span>`;
+      return `<tr class="owner-task-row emp-task-row ${rowDone}" data-task-id="${t.id}">
+        <td class="owner-task-cell emp-col-check text-center align-middle">
           <input type="checkbox" class="form-check-input emp-task-check" data-task-id="${t.id}" ${
         submitted ? "checked" : ""
       } aria-label="Mark ${escapeHtml(t.title)} submitted" />
         </td>
-        <td class="owner-task-cell owner-task-col--task align-middle">
-          <span class="fw-semibold ${submitted ? "text-muted text-decoration-line-through" : ""}">${escapeHtml(t.title)}</span>
+        <td class="owner-task-cell owner-task-col--task emp-col-task align-middle">
+          <span class="fw-semibold emp-task-title ${submitted ? "text-muted text-decoration-line-through" : ""}">${escapeHtml(t.title)}</span>
         </td>
-        <td class="owner-task-cell owner-task-col--deadline align-middle small text-nowrap">${deadlineCell}</td>
-        <td class="owner-task-cell align-middle">${descriptionBox}</td>
-        <td class="owner-task-cell text-end align-middle">${proofCell}</td>
+        <td class="owner-task-cell owner-task-col--deadline emp-col-deadline align-middle small">${deadlineDisplay}</td>
+        <td class="owner-task-cell emp-col-desc align-middle">${descriptionBox}</td>
+        <td class="owner-task-cell emp-col-proof text-end align-middle">${proofCell}</td>
       </tr>`;
     })
     .join("")}</tbody>`;
@@ -2746,6 +2750,47 @@ function empLeftNavInner() {
     </div>`;
 }
 
+function syncEmpTopbarTitle() {
+  const title = empFilterLabel(state.empFilter);
+  document.querySelectorAll(".owner-topbar-title").forEach((el) => {
+    el.textContent = title;
+  });
+}
+
+function renderEmpMobileFilters() {
+  const host = document.getElementById("emp-mobile-filters");
+  if (!host) return;
+  const metrics = employeeDashboardMetrics();
+  const filters = [
+    { id: "active", label: "Active", count: metrics.active },
+    { id: "submitted", label: "Submitted", count: metrics.done },
+    { id: "all", label: "All", count: metrics.total },
+  ];
+  host.innerHTML = filters
+    .map((f) => {
+      const active = state.empFilter === f.id;
+      return `<button type="button" class="btn btn-sm emp-filter-chip ${
+        active ? "btn-primary" : "btn-outline-primary"
+      }" data-emp-filter="${f.id}">
+        ${f.label}
+        <span class="badge rounded-pill ms-1 ${
+          active ? "text-bg-light" : "bg-body-secondary text-body border"
+        } tabular-nums">${f.count}</span>
+      </button>`;
+    })
+    .join("");
+  host.querySelectorAll("[data-emp-filter]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      state.empFilter = btn.getAttribute("data-emp-filter") || "active";
+      renderEmpListContentOnly();
+      renderEmployeeMain();
+      syncEmpTopbarTitle();
+      const offcanvas = document.getElementById("empNavOffcanvas");
+      if (offcanvas) bootstrap.Offcanvas.getInstance(offcanvas)?.hide();
+    });
+  });
+}
+
 function renderEmpListContentOnly() {
   const metrics = employeeDashboardMetrics();
   const filters = [
@@ -2780,6 +2825,7 @@ function renderEmpListContentOnly() {
     host.innerHTML = html;
   });
   bindEmpNavHandlers();
+  renderEmpMobileFilters();
 }
 
 function bindEmpNavHandlers() {
@@ -2788,6 +2834,7 @@ function bindEmpNavHandlers() {
       state.empFilter = btn.getAttribute("data-emp-filter") || "active";
       renderEmpListContentOnly();
       renderEmployeeMain();
+      syncEmpTopbarTitle();
       const offcanvas = document.getElementById("empNavOffcanvas");
       if (offcanvas) bootstrap.Offcanvas.getInstance(offcanvas)?.hide();
     });
@@ -2867,13 +2914,13 @@ function renderEmployeeMain() {
       : "";
 
   main.innerHTML = `
-    <header class="owner-page-header d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
-      <div>
-        <p class="owner-page-eyebrow mb-1">Employee dashboard</p>
-        <h2 class="owner-page-title h4 mb-0">${escapeHtml(filterTitle)}</h2>
-        <p class="owner-page-sub text-muted small mb-0 mt-1">Mark tasks done and upload proof photos. Works here on the web or in the mobile app.</p>
+    <header class="owner-page-header emp-page-header d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3 mb-md-4">
+      <div class="min-w-0">
+        <p class="owner-page-eyebrow mb-1 d-none d-md-block">Employee dashboard</p>
+        <h2 class="owner-page-title h4 mb-0 text-truncate d-none d-md-block">${escapeHtml(filterTitle)}</h2>
+        <p class="owner-page-sub text-muted small mb-0 mt-1 d-none d-md-block">Mark tasks done and upload proof photos. Works here on the web or in the mobile app.</p>
       </div>
-      <div class="d-flex flex-wrap gap-2 owner-toolbar">
+      <div class="d-none d-md-flex flex-wrap gap-2 owner-toolbar">
         <button type="button" class="btn btn-outline-secondary btn-sm js-emp-refresh">
           <i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>Refresh
         </button>
@@ -2974,9 +3021,9 @@ function renderEmployeeChrome() {
   const filterTitle = empFilterLabel(state.empFilter);
 
   app.innerHTML = `
-    <div class="owner-shell min-h-main">
-      <div class="container-fluid owner-shell-inner py-3 py-lg-4 d-flex flex-column">
-        <div class="owner-topbar d-lg-none d-flex align-items-center justify-content-between gap-2 mb-3">
+    <div class="owner-shell emp-shell min-h-main">
+      <div class="container-fluid owner-shell-inner py-2 py-md-3 py-lg-4 d-flex flex-column">
+        <div class="owner-topbar d-lg-none d-flex align-items-center justify-content-between gap-2 mb-2">
           <button class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="offcanvas" data-bs-target="#empNavOffcanvas" aria-label="Open menu">
             <i class="bi bi-list me-1" aria-hidden="true"></i>Menu
           </button>
@@ -2985,11 +3032,12 @@ function renderEmployeeChrome() {
             <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
           </button>
         </div>
-        <div class="row g-3 g-lg-4 owner-shell-row flex-lg-grow-1">
+        <div id="emp-mobile-filters" class="emp-mobile-filters d-lg-none mb-2" aria-label="Task filters"></div>
+        <div class="row g-2 g-md-3 g-lg-4 owner-shell-row flex-lg-grow-1">
           <aside class="col-lg-3 d-none d-lg-flex owner-sidebar-col">
             <div class="owner-sidebar-panel sticky-lg-top w-100">${empLeftNavInner()}</div>
           </aside>
-          <div class="offcanvas offcanvas-start owner-offcanvas" tabindex="-1" id="empNavOffcanvas" aria-labelledby="empNavLabel">
+          <div class="offcanvas offcanvas-start owner-offcanvas emp-offcanvas" tabindex="-1" id="empNavOffcanvas" aria-labelledby="empNavLabel">
             <div class="offcanvas-header owner-offcanvas-header border-0">
               <h2 class="offcanvas-title h5 mb-0 text-white" id="empNavLabel">My work</h2>
               <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Close"></button>
@@ -2997,7 +3045,7 @@ function renderEmployeeChrome() {
             <div class="offcanvas-body pt-0">${empLeftNavInner()}</div>
           </div>
           <main class="col-12 col-lg-9 d-flex owner-main-col">
-            <div id="emp-main-column" class="owner-main-panel owner-main-fill p-3 p-lg-4 d-flex flex-column w-100"></div>
+            <div id="emp-main-column" class="owner-main-panel owner-main-fill p-2 p-sm-3 p-lg-4 d-flex flex-column w-100"></div>
           </main>
         </div>
       </div>
