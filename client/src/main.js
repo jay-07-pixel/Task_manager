@@ -173,7 +173,35 @@ function escapeHtml(s) {
 const proofBlobUrls = new Set();
 
 const EMP_SUBMISSION_TEXT_MAX = 2000;
+const EMP_SUBMISSION_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 const EMP_SUBMISSION_REQUIRED_MSG = "Please provide submission text or upload an image.";
+
+function submissionUploadErrorMessage(res, rawText) {
+  if (res.status === 413) {
+    return "Image is too large for the server (max 5 MB). Use a smaller image or submit text only.";
+  }
+  let data = null;
+  try {
+    data = rawText ? JSON.parse(rawText) : null;
+  } catch {
+    if (rawText && /413|entity too large/i.test(rawText)) {
+      return "Upload is too large. Use an image under 5 MB, or ask your admin to raise nginx client_max_body_size.";
+    }
+    return "Submission failed. Please try again.";
+  }
+  return data?.error || "Submission failed";
+}
+
+function validateEmpSubmissionImageFile(file) {
+  if (!file) return null;
+  if (!/^image\/(jpeg|png|gif|webp)$/i.test(file.type)) {
+    return "Only JPEG, PNG, GIF, or WebP images are allowed.";
+  }
+  if (file.size > EMP_SUBMISSION_IMAGE_MAX_BYTES) {
+    return "Image must be 5 MB or smaller.";
+  }
+  return null;
+}
 
 async function fetchProofBlobUrl(proofUrl) {
   const res = await fetch(proofUrl, { credentials: "include" });
@@ -2092,19 +2120,19 @@ async function submitEmployeeSubmission(taskId, submissionText, file) {
     throw new Error("Network error submitting task.");
   }
   const text = await res.text();
-  let data = null;
-  try {
-    data = text ? JSON.parse(text) : null;
-  } catch {
-    data = { error: text };
-  }
   if (!res.ok) {
     if (res.status === 401) {
       state.user = null;
       renderAuthForm();
       throw new Error("Session expired. Please sign in again.");
     }
-    throw new Error(data?.error || "Submission failed");
+    throw new Error(submissionUploadErrorMessage(res, text));
+  }
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = null;
   }
   return data;
 }
@@ -2154,6 +2182,13 @@ function wireEmpSubmissionModal() {
       resetEmpSubmissionPreview();
       return;
     }
+    const fileErr = validateEmpSubmissionImageFile(file);
+    if (fileErr) {
+      showToast(fileErr, "warning");
+      fileInput.value = "";
+      resetEmpSubmissionPreview();
+      return;
+    }
     if (preview.src?.startsWith("blob:")) URL.revokeObjectURL(preview.src);
     preview.src = URL.createObjectURL(file);
     previewWrap.classList.remove("d-none");
@@ -2179,6 +2214,14 @@ function wireEmpSubmissionModal() {
       errEl.textContent = `Submission notes must be ${EMP_SUBMISSION_TEXT_MAX} characters or fewer.`;
       errEl.classList.remove("d-none");
       return;
+    }
+    if (file) {
+      const fileErr = validateEmpSubmissionImageFile(file);
+      if (fileErr) {
+        errEl.textContent = fileErr;
+        errEl.classList.remove("d-none");
+        return;
+      }
     }
 
     submitBtn.disabled = true;

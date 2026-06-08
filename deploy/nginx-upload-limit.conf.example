@@ -1,0 +1,8 @@
+# Include inside the server { } block for your Task Manager site (e.g. sugandhshoppee.kalpanik.in).
+# Nginx default is 1m — image uploads need at least 6m (app limit is 5 MB per file).
+#
+#   sudo nano /etc/nginx/sites-available/YOUR_SITE
+#   add:  client_max_body_size 6m;
+#   sudo nginx -t && sudo systemctl reload nginx
+
+client_max_body_size 6m;
