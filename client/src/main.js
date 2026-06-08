@@ -1,6 +1,8 @@
 import "./scss/styles.scss";
 import * as bootstrap from "bootstrap";
 import Sortable from "sortablejs";
+import { startEmployeeReminders, stopEmployeeReminders, clearReminderForTask } from "./reminders.js";
+import { isPushSupported, runPushRegistrationDuringGesture } from "./sw-register.js";
 
 const app = document.getElementById("app");
 const toastHost = document.getElementById("toastHost");
@@ -732,6 +734,7 @@ function renderAuthForm() {
 }
 
 async function logout() {
+  stopEmployeeReminders();
   try {
     await api("/api/auth/logout", { method: "POST" });
   } catch {
@@ -739,6 +742,68 @@ async function logout() {
   }
   state.user = null;
   renderAuthForm();
+}
+
+function startEmployeeReminderSystem() {
+  if (state.user?.role !== "employee") return;
+  startEmployeeReminders(
+    loadEmployeeTasks,
+    () => state.empTasks,
+    employeeMyAssignee,
+    showToast,
+    () => state.user?.id,
+    api
+  );
+}
+
+function empRemindersButtonHtml() {
+  if (!isPushSupported()) return "";
+  const perm = Notification.permission;
+  if (perm === "denied") {
+    return `<p class="small text-warning mb-2 px-1">Notifications blocked — allow them in Chrome settings for this site.</p>`;
+  }
+  const label = perm === "granted" ? "Confirm Chrome reminders" : "Enable Chrome reminders";
+  return `<button type="button" class="btn btn-outline-warning w-100 mb-2 js-emp-enable-push">
+    <i class="bi bi-bell me-1" aria-hidden="true"></i>${label}
+  </button>
+  <p class="small text-muted mb-2 px-1">Get alerts 10 minutes before deadlines, even when Chrome is closed.</p>`;
+}
+
+function wireEmpEnablePush() {
+  document.querySelectorAll(".js-emp-enable-push").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      if (!isPushSupported()) {
+        showToast("This browser does not support background reminders.", "warning");
+        return;
+      }
+      if (Notification.permission === "denied") {
+        showToast("Notifications blocked — allow them in Chrome site settings.", "warning");
+        return;
+      }
+      btn.disabled = true;
+      try {
+        if (Notification.permission !== "granted") {
+          const perm = await Notification.requestPermission();
+          if (perm !== "granted") {
+            showToast("Allow notifications to get alerts 10 minutes before deadlines.", "warning");
+            return;
+          }
+        }
+        await new Promise((resolve) => {
+          runPushRegistrationDuringGesture(api, (result) => {
+            if (result.ok) {
+              showToast("Chrome reminders enabled — alerts work even in other apps.", "success");
+            } else {
+              showToast(result.message || "Could not enable reminders. Tap the button again.", "danger");
+            }
+            resolve();
+          });
+        });
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  });
 }
 
 function ownerDashboardMetrics() {
@@ -2497,6 +2562,7 @@ function empLeftNavInner() {
       <p class="owner-sidebar-label mb-2">My work</p>
       <div class="list-group list-group-flush flex-grow-1 overflow-auto owner-list-nav js-emp-nav-host"></div>
       <div class="owner-sidebar-footer">
+        ${empRemindersButtonHtml()}
         ${appBtn}
         <div class="d-flex justify-content-center mb-2">${themeIconToggleMarkup()}</div>
         <button type="button" class="btn btn-outline-danger w-100 js-logout">
@@ -2556,6 +2622,7 @@ function bindEmpNavHandlers() {
 
 function wireEmpChromeNav() {
   document.querySelectorAll(".js-logout").forEach((b) => b.addEventListener("click", logout));
+  wireEmpEnablePush();
   document.querySelectorAll(".js-emp-refresh").forEach((b) =>
     b.addEventListener("click", async () => {
       b.disabled = true;
@@ -2661,6 +2728,7 @@ function renderEmployeeMain() {
     cb.addEventListener("change", async () => {
       const id = cb.getAttribute("data-task-id");
       if (!id) return;
+      const task = state.empTasks.find((t) => t.id === id);
       const completed = cb.checked;
       cb.disabled = true;
       try {
@@ -2668,6 +2736,7 @@ function renderEmployeeMain() {
           method: "PATCH",
           body: JSON.stringify({ completed }),
         });
+        if (completed && task?.dueAt) clearReminderForTask(id, task.dueAt);
         await loadEmployeeTasks();
         renderEmpListContentOnly();
         renderEmployeeMain();
@@ -2700,10 +2769,12 @@ function renderEmployeeMain() {
       const file = input.files?.[0];
       const id = input.getAttribute("data-task-id");
       if (!file || !id) return;
+      const task = state.empTasks.find((t) => t.id === id);
       const label = input.closest(".emp-upload-proof");
       if (label) label.classList.add("disabled");
       try {
         await uploadEmployeeProof(id, file);
+        if (task?.dueAt) clearReminderForTask(id, task.dueAt);
         showToast("Proof uploaded — task marked submitted.", "success");
         await loadEmployeeTasks();
         renderEmpListContentOnly();
@@ -2779,6 +2850,7 @@ async function render() {
     }
     await loadEmployeeTasks();
     renderEmployeeChrome();
+    startEmployeeReminderSystem();
     return;
   }
   await loadLists();

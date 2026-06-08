@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
-import { getVapidPublicKey } from "../lib/push.js";
+import { getVapidPublicKey, isPushConfigured, sendPushToSubscription } from "../lib/push.js";
 import { requireAuth } from "../middleware/auth.js";
 import { registerEmployeeDevice, unregisterEmployeeDevice } from "../services/employeeDeviceService.js";
 import { sendTestPushToUser } from "../services/fcmPushService.js";
@@ -100,6 +100,59 @@ router.delete("/devices/register", requireAuth, async (req, res) => {
     console.error("[employee-device] unregister failed", err?.message ?? err);
     res.status(500).json({ error: "Device unregister failed" });
   }
+});
+
+/** Send test Web Push to this browser's push_subscription rows (Chrome background check). */
+router.post("/test-web", requireAuth, async (req, res) => {
+  if (!isPushConfigured()) {
+    return res.status(503).json({
+      ok: false,
+      error: "Web push is not configured. Set VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY in server/.env.",
+      code: "web-push/not-configured",
+    });
+  }
+
+  const userId = req.session.userId;
+  const subs = await prisma.pushSubscription.findMany({ where: { userId } });
+  if (!subs.length) {
+    return res.status(404).json({
+      ok: false,
+      error: "No browser subscription — log in on Chrome, tap Enable Chrome reminders, and allow notifications.",
+      code: "web-push/no-subscription",
+    });
+  }
+
+  const payload = {
+    title: "Test — Task due soon",
+    body: "If you see this while Chrome is closed, background reminders are working.",
+    tag: "taskmgr-test-web",
+    payload: {
+      taskId: "test",
+      title: "Test task",
+      dueAt: new Date().toISOString(),
+      slot: "before10",
+      url: "/",
+    },
+  };
+
+  let sent = 0;
+  let lastError = null;
+  for (const sub of subs) {
+    const result = await sendPushToSubscription(sub, payload);
+    if (result.ok) sent += 1;
+    else lastError = result.message ?? result.hint ?? "send failed";
+  }
+
+  if (!sent) {
+    return res.status(502).json({
+      ok: false,
+      error: lastError || "Web push delivery failed",
+      code: "web-push/send-failed",
+      subscriptions: subs.length,
+    });
+  }
+
+  res.json({ ok: true, sent, subscriptions: subs.length });
 });
 
 /** Phase 8.3 — send test FCM to the authenticated user's latest employee_device */
