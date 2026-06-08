@@ -206,6 +206,34 @@ body {
   vertical-align: middle;
 }
 
+.submission-detail-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.45;
+  max-height: min(40vh, 320px);
+  overflow-y: auto;
+}
+
+.submission-detail-image-frame {
+  min-height: 8rem;
+}
+
+.submission-preview-thumb {
+  max-width: 100%;
+  max-height: 12rem;
+  object-fit: contain;
+  display: block;
+}
+
+.emp-submission-textarea {
+  min-height: 7.5rem;
+  resize: vertical;
+}
+
+.owner-submission-snippet {
+  max-width: 11rem;
+}
+
 .owner-task-row--notify-highlight {
   animation: owner-task-notify-pulse 1s ease-in-out 8;
   outline: 2px solid rgba(var(--bs-warning-rgb), 0.65);
@@ -1047,7 +1075,7 @@ body {
   }
 
   .emp-owner-task-table tbody tr.emp-task-row .emp-col-proof::before {
-    content: "Proof";
+    content: "Submission";
     display: block;
     font-weight: 600;
     font-size: 0.65rem;

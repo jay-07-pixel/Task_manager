@@ -55,6 +55,7 @@ model TaskAssignee {
   taskId              String  @map("task_id")
   userId              String  @map("user_id")
   completionProofPath String? @map("completion_proof_path") @db.VarChar(512)
+  submissionText      String? @map("submission_text") @db.Text
   assigneeDone        Boolean @default(false) @map("assignee_done")
   task                Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
   user                User    @relation(fields: [userId], references: [id], onDelete: Cascade)

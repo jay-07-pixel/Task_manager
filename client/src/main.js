@@ -172,6 +172,9 @@ function escapeHtml(s) {
 /** @type {Set<string>} */
 const proofBlobUrls = new Set();
 
+const EMP_SUBMISSION_TEXT_MAX = 2000;
+const EMP_SUBMISSION_REQUIRED_MSG = "Please provide submission text or upload an image.";
+
 async function fetchProofBlobUrl(proofUrl) {
   const res = await fetch(proofUrl, { credentials: "include" });
   if (!res.ok) {
@@ -1591,14 +1594,81 @@ function taskModalHtml() {
     </div>`;
 }
 
-function taskProofOnlyModalHtml() {
+function submissionDetailModalHtml() {
   return `
-    <div class="modal fade" id="taskProofOnlyModal" tabindex="-1" aria-hidden="true">
-      <div class="modal-dialog modal-dialog-centered modal-xl modal-fullscreen-lg-down">
-        <div class="modal-content bg-black border-0">
-          <button type="button" class="btn-close btn-close-white position-absolute top-0 end-0 m-3 z-3" data-bs-dismiss="modal" aria-label="Close"></button>
-          <div class="modal-body p-0 d-flex align-items-center justify-content-center bg-black">
-            <img id="task-proof-only-img" src="" class="w-100" style="max-height: min(92vh, 920px); object-fit: contain;" alt="Completion proof" />
+    <div class="modal fade" id="submissionDetailModal" tabindex="-1" aria-labelledby="submissionDetailTitle" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable modal-fullscreen-sm-down">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h2 class="modal-title h5 mb-0" id="submissionDetailTitle">Submission</h2>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <div id="submission-detail-text-wrap" class="submission-detail-text-wrap mb-3 d-none">
+              <p class="small text-uppercase text-secondary fw-semibold mb-2">Submission notes</p>
+              <div id="submission-detail-text" class="submission-detail-text border rounded p-3 bg-body-secondary small mb-0"></div>
+            </div>
+            <div id="submission-detail-image-wrap" class="submission-detail-image-wrap d-none">
+              <p class="small text-uppercase text-secondary fw-semibold mb-2">Image</p>
+              <div class="submission-detail-image-frame rounded border bg-black d-flex align-items-center justify-content-center">
+                <img id="submission-detail-img" src="" class="w-100" style="max-height: min(70vh, 720px); object-fit: contain;" alt="Submission image" />
+              </div>
+            </div>
+            <p id="submission-detail-empty" class="text-muted small mb-0 d-none">No submission content.</p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function empSubmissionModalHtml() {
+  return `
+    <div class="modal fade" id="empSubmissionModal" tabindex="-1" aria-labelledby="empSubmissionModalTitle" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable modal-fullscreen-sm-down">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h2 class="modal-title h5 mb-0" id="empSubmissionModalTitle">Submit task</h2>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <input type="hidden" id="emp-submission-task-id" value="" />
+            <p class="fw-medium text-body-secondary mb-1 small text-uppercase text-secondary">Task</p>
+            <p id="emp-submission-task-title" class="fw-semibold mb-3"></p>
+            <label class="form-label" for="emp-submission-text">Submission notes</label>
+            <textarea
+              class="form-control emp-submission-textarea"
+              id="emp-submission-text"
+              rows="5"
+              maxlength="${EMP_SUBMISSION_TEXT_MAX}"
+              placeholder="Describe what you completed, paste notes, or leave blank if you only upload an image."
+            ></textarea>
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-2">
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="emp-submission-paste">
+                <i class="bi bi-clipboard me-1" aria-hidden="true"></i>Paste from clipboard
+              </button>
+              <span id="emp-submission-count" class="small text-muted tabular-nums">0 / ${EMP_SUBMISSION_TEXT_MAX}</span>
+            </div>
+            <p id="emp-submission-error" class="text-danger small mb-0 mt-2 d-none" role="alert"></p>
+            <hr class="my-3" />
+            <label class="form-label" for="emp-submission-image">Submission image <span class="text-muted fw-normal">(optional)</span></label>
+            <input
+              type="file"
+              class="form-control"
+              id="emp-submission-image"
+              accept="image/jpeg,image/png,image/gif,image/webp"
+            />
+            <div id="emp-submission-preview-wrap" class="mt-2 d-none">
+              <img id="emp-submission-preview" src="" alt="Selected image preview" class="submission-preview-thumb rounded border" />
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-primary" id="emp-submission-submit">
+              <i class="bi bi-send me-1" aria-hidden="true"></i>Submit
+            </button>
           </div>
         </div>
       </div>
@@ -1875,34 +1945,269 @@ function wireOwnerMarkDoneModal() {
   });
 }
 
-async function openProofImageModal(proofUrl, altLabel) {
-  if (!proofUrl) return;
-  const img = document.getElementById("task-proof-only-img");
-  const modalEl = document.getElementById("taskProofOnlyModal");
-  if (!img || !modalEl) return;
-  img.removeAttribute("src");
-  img.alt = altLabel || "Submission";
+function submissionPreviewText(text, max = 72) {
+  const t = (text || "").trim().replace(/\s+/g, " ");
+  if (!t) return "";
+  return t.length > max ? `${t.slice(0, max - 1)}…` : t;
+}
+
+function assigneeHasSubmission(a) {
+  if (!a) return false;
+  return !!(a.submissionText?.trim() || a.completionProofUrl);
+}
+
+function lookupAssigneeSubmission(taskId, userId) {
+  const task =
+    state.empTasks.find((t) => t.id === taskId) ?? state.tasks.find((t) => t.id === taskId) ?? null;
+  if (!task) return null;
+  const assignee = (task.assignees ?? []).find((a) => a.id === userId) ?? null;
+  if (!assignee) return null;
+  return {
+    taskTitle: task.title,
+    submissionText: assignee.submissionText?.trim() || "",
+    proofUrl: assignee.completionProofUrl || null,
+  };
+}
+
+function clearSubmissionDetailImage() {
+  const img = document.getElementById("submission-detail-img");
+  if (img?.src?.startsWith("blob:")) {
+    URL.revokeObjectURL(img.src);
+    proofBlobUrls.delete(img.src);
+  }
+  if (img) img.removeAttribute("src");
+}
+
+async function openSubmissionDetailModal({ title, submissionText, proofUrl }) {
+  const modalEl = document.getElementById("submissionDetailModal");
+  const titleEl = document.getElementById("submissionDetailTitle");
+  const textWrap = document.getElementById("submission-detail-text-wrap");
+  const textEl = document.getElementById("submission-detail-text");
+  const imageWrap = document.getElementById("submission-detail-image-wrap");
+  const img = document.getElementById("submission-detail-img");
+  const emptyEl = document.getElementById("submission-detail-empty");
+  if (!modalEl || !titleEl || !textWrap || !textEl || !imageWrap || !img || !emptyEl) return;
+
+  const text = (submissionText || "").trim();
+  const hasText = text.length > 0;
+  const hasImage = !!proofUrl;
+
+  titleEl.textContent = title || "Submission";
+  clearSubmissionDetailImage();
+
+  if (hasText) {
+    textWrap.classList.remove("d-none");
+    textEl.textContent = text;
+  } else {
+    textWrap.classList.add("d-none");
+    textEl.textContent = "";
+  }
+
+  if (hasImage) {
+    imageWrap.classList.remove("d-none");
+    img.alt = title || "Submission image";
+  } else {
+    imageWrap.classList.add("d-none");
+  }
+
+  emptyEl.classList.toggle("d-none", hasText || hasImage);
+
   const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
   modal.show();
-  try {
-    img.src = await fetchProofBlobUrl(proofUrl);
-  } catch (err) {
-    modal.hide();
-    showToast(err.message || "Could not load proof image.", "danger");
+
+  if (hasImage) {
+    try {
+      img.src = await fetchProofBlobUrl(proofUrl);
+    } catch (err) {
+      modal.hide();
+      showToast(err.message || "Could not load submission image.", "danger");
+    }
   }
 }
 
-function wireTaskProofOnlyModal() {
-  const modalEl = document.getElementById("taskProofOnlyModal");
-  if (!modalEl || modalEl.dataset.wiredProof === "1") return;
-  modalEl.dataset.wiredProof = "1";
+async function openProofImageModal(proofUrl, altLabel) {
+  await openSubmissionDetailModal({ title: altLabel, submissionText: null, proofUrl });
+}
+
+function wireSubmissionDetailModal() {
+  const modalEl = document.getElementById("submissionDetailModal");
+  if (!modalEl || modalEl.dataset.wiredSubmissionDetail === "1") return;
+  modalEl.dataset.wiredSubmissionDetail = "1";
   modalEl.addEventListener("hidden.bs.modal", () => {
-    const img = document.getElementById("task-proof-only-img");
-    if (img?.src?.startsWith("blob:")) {
-      URL.revokeObjectURL(img.src);
-      proofBlobUrls.delete(img.src);
+    clearSubmissionDetailImage();
+  });
+}
+
+function syncEmpSubmissionCharCount() {
+  const ta = document.getElementById("emp-submission-text");
+  const counter = document.getElementById("emp-submission-count");
+  if (!ta || !counter) return;
+  const len = ta.value.length;
+  counter.textContent = `${len} / ${EMP_SUBMISSION_TEXT_MAX}`;
+  counter.classList.toggle("text-danger", len >= EMP_SUBMISSION_TEXT_MAX);
+}
+
+function resetEmpSubmissionPreview() {
+  const input = document.getElementById("emp-submission-image");
+  const wrap = document.getElementById("emp-submission-preview-wrap");
+  const preview = document.getElementById("emp-submission-preview");
+  if (input) input.value = "";
+  if (preview?.src?.startsWith("blob:")) URL.revokeObjectURL(preview.src);
+  if (preview) preview.removeAttribute("src");
+  if (wrap) wrap.classList.add("d-none");
+}
+
+function openEmpSubmissionModal(task) {
+  const modalEl = document.getElementById("empSubmissionModal");
+  if (!modalEl || !task) return;
+  const idInput = document.getElementById("emp-submission-task-id");
+  const titleEl = document.getElementById("emp-submission-task-title");
+  const ta = document.getElementById("emp-submission-text");
+  const errEl = document.getElementById("emp-submission-error");
+  if (!idInput || !titleEl || !ta || !errEl) return;
+
+  idInput.value = task.id;
+  titleEl.textContent = task.title;
+  ta.value = "";
+  errEl.textContent = "";
+  errEl.classList.add("d-none");
+  resetEmpSubmissionPreview();
+  syncEmpSubmissionCharCount();
+  bootstrap.Modal.getOrCreateInstance(modalEl).show();
+  window.setTimeout(() => ta.focus(), 300);
+}
+
+async function submitEmployeeSubmission(taskId, submissionText, file) {
+  const fd = new FormData();
+  fd.append("submissionText", submissionText);
+  if (file) fd.append("proof", file);
+  let res;
+  try {
+    res = await fetch(`/api/tasks/${taskId}/completion-proof`, {
+      method: "POST",
+      credentials: "include",
+      body: fd,
+    });
+  } catch {
+    throw new Error("Network error submitting task.");
+  }
+  const text = await res.text();
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = { error: text };
+  }
+  if (!res.ok) {
+    if (res.status === 401) {
+      state.user = null;
+      renderAuthForm();
+      throw new Error("Session expired. Please sign in again.");
     }
-    if (img) img.removeAttribute("src");
+    throw new Error(data?.error || "Submission failed");
+  }
+  return data;
+}
+
+function wireEmpSubmissionModal() {
+  const modalEl = document.getElementById("empSubmissionModal");
+  if (!modalEl || modalEl.dataset.wiredEmpSubmission === "1") return;
+  modalEl.dataset.wiredEmpSubmission = "1";
+
+  const ta = document.getElementById("emp-submission-text");
+  const pasteBtn = document.getElementById("emp-submission-paste");
+  const fileInput = document.getElementById("emp-submission-image");
+  const submitBtn = document.getElementById("emp-submission-submit");
+  const previewWrap = document.getElementById("emp-submission-preview-wrap");
+  const preview = document.getElementById("emp-submission-preview");
+
+  ta?.addEventListener("input", syncEmpSubmissionCharCount);
+
+  pasteBtn?.addEventListener("click", async () => {
+    if (!ta) return;
+    if (!navigator.clipboard?.readText) {
+      showToast("Clipboard paste is not supported in this browser.", "warning");
+      return;
+    }
+    try {
+      const clip = (await navigator.clipboard.readText()).trim();
+      if (!clip) {
+        showToast("Clipboard is empty.", "warning");
+        return;
+      }
+      const room = EMP_SUBMISSION_TEXT_MAX - ta.value.length;
+      if (room <= 0) {
+        showToast(`Notes are limited to ${EMP_SUBMISSION_TEXT_MAX} characters.`, "warning");
+        return;
+      }
+      ta.value = (ta.value + clip).slice(0, EMP_SUBMISSION_TEXT_MAX);
+      syncEmpSubmissionCharCount();
+      showToast("Pasted from clipboard.", "success");
+    } catch {
+      showToast("Could not read clipboard. Allow paste permission and try again.", "warning");
+    }
+  });
+
+  fileInput?.addEventListener("change", () => {
+    const file = fileInput.files?.[0];
+    if (!file || !preview || !previewWrap) {
+      resetEmpSubmissionPreview();
+      return;
+    }
+    if (preview.src?.startsWith("blob:")) URL.revokeObjectURL(preview.src);
+    preview.src = URL.createObjectURL(file);
+    previewWrap.classList.remove("d-none");
+  });
+
+  submitBtn?.addEventListener("click", async () => {
+    const idInput = document.getElementById("emp-submission-task-id");
+    const errEl = document.getElementById("emp-submission-error");
+    const taskId = idInput?.value?.trim();
+    if (!taskId || !ta || !errEl) return;
+
+    const text = ta.value.trim();
+    const file = fileInput?.files?.[0] ?? null;
+    errEl.classList.add("d-none");
+    errEl.textContent = "";
+
+    if (!text && !file) {
+      errEl.textContent = EMP_SUBMISSION_REQUIRED_MSG;
+      errEl.classList.remove("d-none");
+      return;
+    }
+    if (text.length > EMP_SUBMISSION_TEXT_MAX) {
+      errEl.textContent = `Submission notes must be ${EMP_SUBMISSION_TEXT_MAX} characters or fewer.`;
+      errEl.classList.remove("d-none");
+      return;
+    }
+
+    submitBtn.disabled = true;
+    try {
+      const task = state.empTasks.find((t) => t.id === taskId);
+      await submitEmployeeSubmission(taskId, ta.value, file);
+      if (task?.dueAt) clearReminderForTask(taskId, task.dueAt);
+      bootstrap.Modal.getInstance(modalEl)?.hide();
+      showToast("Task submitted.", "success");
+      await loadEmployeeTasks();
+      renderEmpListContentOnly();
+      renderEmployeeMain();
+    } catch (err) {
+      errEl.textContent = err.message || "Submission failed";
+      errEl.classList.remove("d-none");
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
+
+  modalEl.addEventListener("hidden.bs.modal", () => {
+    resetEmpSubmissionPreview();
+    if (ta) ta.value = "";
+    syncEmpSubmissionCharCount();
+    const errEl = document.getElementById("emp-submission-error");
+    if (errEl) {
+      errEl.textContent = "";
+      errEl.classList.add("d-none");
+    }
   });
 }
 
@@ -2190,10 +2495,12 @@ function ownerTaskGroupTbody(t) {
       ? `<tr><td colspan="3" class="text-muted small py-3 px-3">No assignees yet. Edit the task to add people.</td></tr>`
       : assignees
           .map((a) => {
-            const proofCell = a.completionProofUrl
-              ? `<button type="button" class="btn btn-sm btn-outline-primary owner-assignee-proof-btn" data-proof-url="${escapeHtml(
-                  a.completionProofUrl
-                )}" title="View submission" aria-label="View submission for ${escapeHtml(a.displayName)}"><i class="bi bi-eye me-1" aria-hidden="true"></i>View</button>`
+            const preview = submissionPreviewText(a.submissionText);
+            const submissionCell = assigneeHasSubmission(a)
+              ? `<div class="d-flex flex-column align-items-end gap-1">
+                  ${preview ? `<span class="small text-muted text-truncate owner-submission-snippet" title="${escapeHtml((a.submissionText || "").trim())}">${escapeHtml(preview)}</span>` : ""}
+                  <button type="button" class="btn btn-sm btn-outline-primary owner-view-submission-btn" data-view-submission-task-id="${t.id}" data-view-submission-user-id="${escapeHtml(a.id)}" title="View submission" aria-label="View submission for ${escapeHtml(a.displayName)}"><i class="bi bi-eye me-1" aria-hidden="true"></i>View</button>
+                </div>`
               : `<span class="text-muted">—</span>`;
             const doneLabel = a.assigneeDone
               ? `<span class="badge rounded-pill bg-success-subtle text-success border border-success-subtle owner-assignee-status-badge">Submitted</span>`
@@ -2201,7 +2508,7 @@ function ownerTaskGroupTbody(t) {
             return `<tr>
               <td class="px-3 py-2 fw-medium">${escapeHtml(a.displayName)}</td>
               <td class="px-3 py-2 text-center">${doneLabel}</td>
-              <td class="px-3 py-2 text-end">${proofCell}</td>
+              <td class="px-3 py-2 text-end">${submissionCell}</td>
             </tr>`;
           })
           .join("");
@@ -2262,7 +2569,7 @@ function ownerTaskGroupTbody(t) {
                     <tr>
                       <th scope="col" class="px-3 py-2">Employee</th>
                       <th scope="col" class="px-3 py-2 text-center" style="width: 7.5rem;">Status</th>
-                      <th scope="col" class="px-3 py-2 text-end" style="width: 6.5rem;">Proof</th>
+                      <th scope="col" class="px-3 py-2 text-end" style="width: 8.5rem;">Submission</th>
                     </tr>
                   </thead>
                   <tbody>${assigneePanelRows}</tbody>
@@ -2379,7 +2686,7 @@ function renderOwnerMain() {
       <div>
         <p class="owner-page-eyebrow mb-1">Admin dashboard</p>
         <h2 class="owner-page-title h4 mb-0">${list ? escapeHtml(list.title) : "Select a list"}</h2>
-        <p class="owner-page-sub text-muted small mb-0 mt-1">Assign tasks, track submissions, and review proof photos.</p>
+        <p class="owner-page-sub text-muted small mb-0 mt-1">Assign tasks, track submissions, and review notes and images.</p>
       </div>
       <div class="d-flex flex-wrap gap-2 owner-toolbar">
         <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-clear-completed" ${!list ? "disabled" : ""}>
@@ -2446,12 +2753,19 @@ function renderOwnerMain() {
     });
   });
 
-  main.querySelectorAll("[data-proof-url]").forEach((btn) => {
+  main.querySelectorAll(".owner-view-submission-btn").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
-      const url = btn.getAttribute("data-proof-url");
-      const label = btn.getAttribute("aria-label") || "Submission";
-      openProofImageModal(url, label);
+      const taskId = btn.getAttribute("data-view-submission-task-id");
+      const userId = btn.getAttribute("data-view-submission-user-id");
+      if (!taskId || !userId) return;
+      const sub = lookupAssigneeSubmission(taskId, userId);
+      if (!sub) return;
+      void openSubmissionDetailModal({
+        title: sub.taskTitle,
+        submissionText: sub.submissionText,
+        proofUrl: sub.proofUrl,
+      });
     });
   });
 
@@ -2553,7 +2867,7 @@ function renderOwnerChrome() {
       ${taskModalHtml()}
       ${customRecurrenceModalHtml()}
       ${listNameModalHtml()}
-      ${taskProofOnlyModalHtml()}
+      ${submissionDetailModalHtml()}
       ${ownerMarkDoneModalHtml()}
       ${teamAdminModalHtml()}
     </div>`;
@@ -2564,7 +2878,7 @@ function renderOwnerChrome() {
   wireTaskModal();
   wireCustomRecurrenceModal();
   wireListNameModal();
-  wireTaskProofOnlyModal();
+  wireSubmissionDetailModal();
   wireOwnerMarkDoneModal();
   wireTeamAdminModal();
   wireThemeIconToggles();
@@ -2592,37 +2906,6 @@ function formatEmpDue(iso) {
 async function loadEmployeeTasks() {
   const { tasks } = await api("/api/tasks/assigned");
   state.empTasks = tasks;
-}
-
-async function uploadEmployeeProof(taskId, file) {
-  const fd = new FormData();
-  fd.append("proof", file);
-  let res;
-  try {
-    res = await fetch(`/api/tasks/${taskId}/completion-proof`, {
-      method: "POST",
-      credentials: "include",
-      body: fd,
-    });
-  } catch {
-    throw new Error("Network error uploading proof.");
-  }
-  const text = await res.text();
-  let data = null;
-  try {
-    data = text ? JSON.parse(text) : null;
-  } catch {
-    data = { error: text };
-  }
-  if (!res.ok) {
-    if (res.status === 401) {
-      state.user = null;
-      renderAuthForm();
-      throw new Error("Session expired. Please sign in again.");
-    }
-    throw new Error(data?.error || "Upload failed");
-  }
-  return data;
 }
 
 function employeeDashboardMetrics() {
@@ -2674,21 +2957,16 @@ function empTaskTableRows(tasks) {
     .map((t) => {
       const me = employeeMyAssignee(t);
       const submitted = me?.assigneeDone ?? false;
-      const proofUrl = me?.completionProofUrl;
+      const hasSubmission = assigneeHasSubmission(me);
       const notesRaw = (t.notes || "").trim().replace(/\s+/g, " ");
       const notesPreview = notesRaw.length > 100 ? `${notesRaw.slice(0, 97)}…` : notesRaw;
       const descriptionBox =
         notesPreview.length > 0
           ? `<div class="owner-task-desc-box small text-body-secondary text-truncate mb-0" title="${escapeHtml(notesRaw)}">${escapeHtml(notesPreview)}</div>`
           : `<div class="owner-task-desc-box small text-muted fst-italic mb-0">No description</div>`;
-      const proofCell = proofUrl
-        ? `<button type="button" class="btn btn-sm btn-outline-primary emp-view-proof" data-proof-url="${escapeHtml(
-            proofUrl
-          )}" data-task-title="${escapeHtml(t.title)}"><i class="bi bi-eye me-1" aria-hidden="true"></i>View</button>`
-        : `<label class="btn btn-sm btn-primary mb-0 emp-upload-proof">
-            <i class="bi bi-camera me-1" aria-hidden="true"></i>Upload
-            <input type="file" accept="image/jpeg,image/png,image/gif,image/webp" class="d-none emp-proof-input" data-task-id="${t.id}" />
-          </label>`;
+      const submissionCell = submitted && hasSubmission
+        ? `<button type="button" class="btn btn-sm btn-outline-primary emp-view-submission" data-task-id="${t.id}" data-user-id="${escapeHtml(state.user?.id || "")}"><i class="bi bi-eye me-1" aria-hidden="true"></i>View</button>`
+        : `<button type="button" class="btn btn-sm btn-primary emp-open-submit" data-task-id="${t.id}"><i class="bi bi-send me-1" aria-hidden="true"></i>Submit</button>`;
       const rowDone = submitted ? "owner-task-row--completed" : "";
       const deadlineDisplay = t.dueAt
         ? `<span class="text-body tabular-nums emp-deadline-full d-none d-md-inline">${escapeHtml(
@@ -2708,7 +2986,7 @@ function empTaskTableRows(tasks) {
         </td>
         <td class="owner-task-cell owner-task-col--deadline emp-col-deadline align-middle small">${deadlineDisplay}</td>
         <td class="owner-task-cell emp-col-desc align-middle">${descriptionBox}</td>
-        <td class="owner-task-cell emp-col-proof text-end align-middle">${proofCell}</td>
+        <td class="owner-task-cell emp-col-proof text-end align-middle">${submissionCell}</td>
       </tr>`;
     })
     .join("")}</tbody>`;
@@ -2918,7 +3196,7 @@ function renderEmployeeMain() {
       <div class="min-w-0">
         <p class="owner-page-eyebrow mb-1 d-none d-md-block">Employee dashboard</p>
         <h2 class="owner-page-title h4 mb-0 text-truncate d-none d-md-block">${escapeHtml(filterTitle)}</h2>
-        <p class="owner-page-sub text-muted small mb-0 mt-1 d-none d-md-block">Mark tasks done and upload proof photos. Works here on the web or in the mobile app.</p>
+        <p class="owner-page-sub text-muted small mb-0 mt-1 d-none d-md-block">Submit tasks with notes, an image, or both. Works here on the web or in the mobile app.</p>
       </div>
       <div class="d-none d-md-flex flex-wrap gap-2 owner-toolbar">
         <button type="button" class="btn btn-outline-secondary btn-sm js-emp-refresh">
@@ -2936,7 +3214,7 @@ function renderEmployeeMain() {
               <th scope="col" class="owner-task-head owner-task-col--task">Task</th>
               <th scope="col" class="owner-task-head owner-task-col--deadline text-nowrap">Deadline</th>
               <th scope="col" class="owner-task-head">Description</th>
-              <th scope="col" class="owner-task-head text-end" style="width:7rem;">Proof</th>
+              <th scope="col" class="owner-task-head text-end" style="width:7rem;">Submission</th>
             </tr>
           </thead>
           ${tableBody}
@@ -2951,6 +3229,22 @@ function renderEmployeeMain() {
       if (!id) return;
       const task = state.empTasks.find((t) => t.id === id);
       const completed = cb.checked;
+      const me = employeeMyAssignee(task);
+
+      if (completed && !assigneeHasSubmission(me)) {
+        cb.checked = false;
+        if (task) openEmpSubmissionModal(task);
+        return;
+      }
+
+      if (!completed) {
+        const ok = window.confirm("Remove this submission and mark the task as not submitted?");
+        if (!ok) {
+          cb.checked = true;
+          return;
+        }
+      }
+
       cb.disabled = true;
       try {
         await api(`/api/tasks/${id}`, {
@@ -2985,34 +3279,26 @@ function renderEmployeeMain() {
     });
   });
 
-  main.querySelectorAll(".emp-proof-input").forEach((input) => {
-    input.addEventListener("change", async () => {
-      const file = input.files?.[0];
-      const id = input.getAttribute("data-task-id");
-      if (!file || !id) return;
+  main.querySelectorAll(".emp-open-submit").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = btn.getAttribute("data-task-id");
       const task = state.empTasks.find((t) => t.id === id);
-      const label = input.closest(".emp-upload-proof");
-      if (label) label.classList.add("disabled");
-      try {
-        await uploadEmployeeProof(id, file);
-        if (task?.dueAt) clearReminderForTask(id, task.dueAt);
-        showToast("Proof uploaded — task marked submitted.", "success");
-        await loadEmployeeTasks();
-        renderEmpListContentOnly();
-        renderEmployeeMain();
-      } catch (err) {
-        showToast(err.message, "danger");
-        if (label) label.classList.remove("disabled");
-        input.value = "";
-      }
+      if (task) openEmpSubmissionModal(task);
     });
   });
 
-  main.querySelectorAll(".emp-view-proof").forEach((btn) => {
+  main.querySelectorAll(".emp-view-submission").forEach((btn) => {
     btn.addEventListener("click", () => {
-      const url = btn.getAttribute("data-proof-url");
-      const title = btn.getAttribute("data-task-title") || "Proof";
-      if (url) openProofImageModal(url, title);
+      const taskId = btn.getAttribute("data-task-id");
+      const userId = btn.getAttribute("data-user-id") || state.user?.id;
+      if (!taskId || !userId) return;
+      const sub = lookupAssigneeSubmission(taskId, userId);
+      if (!sub) return;
+      void openSubmissionDetailModal({
+        title: sub.taskTitle,
+        submissionText: sub.submissionText,
+        proofUrl: sub.proofUrl,
+      });
     });
   });
 }
@@ -3049,12 +3335,14 @@ function renderEmployeeChrome() {
           </main>
         </div>
       </div>
-      ${taskProofOnlyModalHtml()}
+      ${submissionDetailModalHtml()}
+      ${empSubmissionModalHtml()}
     </div>`;
 
   wireEmpChromeNav();
   renderEmpListContentOnly();
-  wireTaskProofOnlyModal();
+  wireSubmissionDetailModal();
+  wireEmpSubmissionModal();
   renderEmployeeMain();
 }
 

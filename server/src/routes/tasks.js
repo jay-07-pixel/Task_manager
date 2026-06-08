@@ -21,6 +21,25 @@ fs.mkdirSync(uploadsRoot, { recursive: true });
 
 const router = Router();
 
+const SUBMISSION_TEXT_MAX = 2000;
+const SUBMISSION_REQUIRED_MSG = "Please provide submission text or upload an image.";
+
+/** @param {{ submissionText?: string | null, completionProofPath?: string | null } | null | undefined} row */
+function assigneeHasSubmissionContent(row) {
+  if (!row) return false;
+  const text = (row.submissionText ?? "").trim();
+  return text.length > 0 || !!row.completionProofPath;
+}
+
+/** @param {{ completionProofPath?: string | null }} row */
+function clearAssigneeSubmissionUpdate(assigneeDone) {
+  return {
+    assigneeDone,
+    completionProofPath: null,
+    submissionText: null,
+  };
+}
+
 const taskAssigneeInclude = {
   assignments: {
     include: {
@@ -70,7 +89,7 @@ async function maybeRollRecurringAfterEmployeeComplete(task, userId) {
   });
   await prisma.taskAssignee.update({
     where: { taskId_userId: { taskId: task.id, userId } },
-    data: { assigneeDone: false, completionProofPath: null },
+    data: clearAssigneeSubmissionUpdate(false),
   });
   await syncTaskCompletedFromAssignments(task.id);
 }
@@ -202,6 +221,7 @@ export function serializeTask(t) {
     displayName: a.user.displayName,
     email: a.user.email,
     assigneeDone: a.assigneeDone,
+    submissionText: (a.submissionText ?? "").trim() || null,
     completionProofUrl: a.completionProofPath
       ? `/api/tasks/${t.id}/completion-proof/${a.userId}`
       : null,
@@ -294,19 +314,33 @@ router.post("/:id/completion-proof", requireAuth, proofUpload.single("proof"), a
   }
   const isAssignee = req.session.role === "employee" && taskIsAssignedToUser(task, req.session.userId);
   if (!isAssignee) {
-    return res.status(403).json({ error: "Only an assigned employee can upload proof" });
+    return res.status(403).json({ error: "Only an assigned employee can submit work" });
   }
-  if (!req.file) {
-    return res.status(400).json({ error: "Image file (proof) is required" });
-  }
+
   const my = task.assignments.find((a) => a.userId === req.session.userId);
-  if (my?.completionProofPath) {
-    deleteProofFile(my.completionProofPath);
+  const textRaw = typeof req.body?.submissionText === "string" ? req.body.submissionText : "";
+  const submissionText = textRaw.trim();
+  if (submissionText.length > SUBMISSION_TEXT_MAX) {
+    return res.status(400).json({ error: `Submission notes must be ${SUBMISSION_TEXT_MAX} characters or fewer.` });
   }
+
+  let completionProofPath = my?.completionProofPath ?? null;
+  if (req.file) {
+    if (my?.completionProofPath) {
+      deleteProofFile(my.completionProofPath);
+    }
+    completionProofPath = req.file.filename;
+  }
+
+  if (!submissionText && !completionProofPath) {
+    return res.status(400).json({ error: SUBMISSION_REQUIRED_MSG });
+  }
+
   await prisma.taskAssignee.update({
     where: { taskId_userId: { taskId: task.id, userId: req.session.userId } },
     data: {
-      completionProofPath: req.file.filename,
+      completionProofPath,
+      submissionText: submissionText || null,
       assigneeDone: true,
     },
   });
@@ -502,10 +536,7 @@ router.patch("/:id", requireAuth, async (req, res) => {
       }
       await prisma.taskAssignee.update({
         where: { taskId_userId: { taskId: task.id, userId } },
-        data: {
-          assigneeDone,
-          ...(assigneeDone === false ? { completionProofPath: null } : {}),
-        },
+        data: assigneeDone ? { assigneeDone: true } : clearAssigneeSubmissionUpdate(false),
       });
       await syncTaskCompletedFromAssignments(task.id);
       const afterAssignee = await prisma.task.findUnique({
@@ -536,7 +567,7 @@ router.patch("/:id", requireAuth, async (req, res) => {
         }
         await prisma.taskAssignee.updateMany({
           where: { taskId: task.id },
-          data: { assigneeDone: false, completionProofPath: null },
+          data: clearAssigneeSubmissionUpdate(false),
         });
       } else {
         await prisma.taskAssignee.updateMany({
@@ -593,16 +624,21 @@ router.patch("/:id", requireAuth, async (req, res) => {
       return res.status(403).json({ error: "Employees may only set completed" });
     }
     const myRow = task.assignments.find((a) => a.userId === req.session.userId);
+    if (d.completed === true && !assigneeHasSubmissionContent(myRow)) {
+      return res.status(400).json({ error: SUBMISSION_REQUIRED_MSG });
+    }
     const prevPath = myRow?.completionProofPath;
-    await prisma.taskAssignee.update({
-      where: { taskId_userId: { taskId: task.id, userId: req.session.userId } },
-      data: {
-        assigneeDone: d.completed,
-        ...(d.completed === false ? { completionProofPath: null } : {}),
-      },
-    });
-    if (d.completed === false && prevPath) {
-      deleteProofFile(prevPath);
+    if (d.completed === false) {
+      if (prevPath) deleteProofFile(prevPath);
+      await prisma.taskAssignee.update({
+        where: { taskId_userId: { taskId: task.id, userId: req.session.userId } },
+        data: clearAssigneeSubmissionUpdate(false),
+      });
+    } else {
+      await prisma.taskAssignee.update({
+        where: { taskId_userId: { taskId: task.id, userId: req.session.userId } },
+        data: { assigneeDone: true },
+      });
     }
     await syncTaskCompletedFromAssignments(task.id);
     const fresh = await prisma.task.findFirst({
