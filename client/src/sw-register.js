@@ -196,48 +196,47 @@ export function runPushRegistrationDuringGesture(apiFetch, onResult) {
     return;
   }
 
-  const start = () => {
-    getLocalPushSubscription()
-      .then((existing) => {
+  /** Start subscribe in the same click tick — Chrome requires an active user gesture. */
+  void registerServiceWorker();
+  const subscribePromise = beginLocalPushSubscribeDuringGesture(undefined, apiFetch);
+
+  subscribePromise
+    .then(async (sub) => {
+      if (!sub) {
+        const existing = await getLocalPushSubscription();
         if (existing) {
-          const storedKey = localStorage.getItem(VAPID_STORAGE_KEY);
           const key = cachedVapidPublicKey;
-          if (key && (!storedKey || storedKey === key)) {
-            if (!storedKey) localStorage.setItem(VAPID_STORAGE_KEY, key);
-            return postSubscriptionToServer(apiFetch, existing);
+          if (key) {
+            const storedKey = localStorage.getItem(VAPID_STORAGE_KEY);
+            if (!storedKey || storedKey === key) {
+              if (!storedKey) localStorage.setItem(VAPID_STORAGE_KEY, key);
+              await postSubscriptionToServer(apiFetch, existing);
+              return;
+            }
           }
         }
-        return beginLocalPushSubscribeDuringGesture(undefined, apiFetch).then((sub) => {
-          if (!sub) throw new Error("Could not create push subscription");
-          return postSubscriptionToServer(apiFetch, sub);
-        });
-      })
-      .then(() => {
-        onResult?.({ ok: true });
-        document.dispatchEvent(new CustomEvent("taskmgr-push-subscribed"));
-      })
-      .catch((err) => {
-        console.warn("[push] gesture registration failed:", err);
-        onResult?.({
-          ok: false,
-          reason: "subscribe-failed",
-          message: err instanceof Error ? err.message : String(err),
-        });
+        if (!cachedVapidPublicKey) {
+          const err = new Error("Push not configured on server");
+          err.code = "no-vapid";
+          throw err;
+        }
+        throw new Error("Could not register push — close all Chrome tabs for this site and try again");
+      }
+      await postSubscriptionToServer(apiFetch, sub);
+    })
+    .then(() => {
+      onResult?.({ ok: true });
+      document.dispatchEvent(new CustomEvent("taskmgr-push-subscribed"));
+    })
+    .catch((err) => {
+      console.warn("[push] gesture registration failed:", err);
+      const code = err?.code === "no-vapid" ? "no-vapid" : "subscribe-failed";
+      onResult?.({
+        ok: false,
+        reason: code,
+        message: err instanceof Error ? err.message : String(err),
       });
-  };
-
-  if (cachedVapidPublicKey) {
-    start();
-    return;
-  }
-
-  warmupPushInfrastructure(apiFetch).then((ready) => {
-    if (!ready) {
-      onResult?.({ ok: false, reason: "no-vapid" });
-      return;
-    }
-    start();
-  });
+    });
 }
 
 /**

@@ -2,13 +2,7 @@ import "./scss/styles.scss";
 import * as bootstrap from "bootstrap";
 import Sortable from "sortablejs";
 import { startEmployeeReminders, stopEmployeeReminders, clearReminderForTask } from "./reminders.js";
-import {
-  isPushSupported,
-  runPushRegistrationDuringGesture,
-  syncPushSubscriptionToServer,
-  warmupPushInfrastructure,
-  getLocalPushSubscription,
-} from "./sw-register.js";
+import { isPushSupported, runPushRegistrationDuringGesture } from "./sw-register.js";
 
 const app = document.getElementById("app");
 const toastHost = document.getElementById("toastHost");
@@ -865,7 +859,7 @@ function empRemindersButtonHtml() {
 
 function wireEmpEnablePush() {
   document.querySelectorAll(".js-emp-enable-push").forEach((btn) => {
-    btn.addEventListener("click", async () => {
+    btn.addEventListener("click", () => {
       if (!isPushSupported()) {
         showToast("This browser does not support background reminders.", "warning");
         return;
@@ -874,40 +868,36 @@ function wireEmpEnablePush() {
         showToast("Notifications blocked — allow them in Chrome site settings.", "warning");
         return;
       }
+
       btn.disabled = true;
-      try {
-        if (Notification.permission !== "granted") {
-          const perm = await Notification.requestPermission();
-          if (perm !== "granted") {
-            showToast("Allow notifications to get alerts 10 minutes before deadlines.", "warning");
-            return;
-          }
-        }
-        await warmupPushInfrastructure(api);
-        const existing = await getLocalPushSubscription();
-        if (existing) {
-          const sync = await syncPushSubscriptionToServer(api);
-          if (sync.ok) {
-            showToast("Chrome reminders are already active on this phone.", "success");
-            document.dispatchEvent(new CustomEvent("taskmgr-push-subscribed"));
-            return;
-          }
-        }
-        await new Promise((resolve) => {
-          runPushRegistrationDuringGesture(api, (result) => {
-            if (result.ok) {
-              showToast("Chrome reminders enabled — alerts work even in other apps.", "success");
-            } else if (result.reason === "no-vapid") {
-              showToast("Server push is not configured. Contact your administrator.", "danger");
-            } else {
-              showToast(result.message || "Could not enable reminders. Tap the button again.", "danger");
-            }
-            resolve();
-          });
-        });
-      } finally {
+      const finish = (result) => {
         btn.disabled = false;
+        if (result.ok) {
+          showToast("Chrome reminders are active on this phone.", "success");
+        } else if (result.reason === "no-vapid") {
+          showToast("Server push is not configured. Contact your administrator.", "danger");
+        } else if (result.reason === "denied") {
+          showToast("Allow notifications to get alerts 10 minutes before deadlines.", "warning");
+        } else {
+          showToast(
+            result.message || "Could not enable reminders. Close all site tabs in Chrome and try again.",
+            "danger"
+          );
+        }
+      };
+
+      if (Notification.permission !== "granted") {
+        Notification.requestPermission().then((perm) => {
+          if (perm !== "granted") {
+            finish({ ok: false, reason: "denied" });
+            return;
+          }
+          runPushRegistrationDuringGesture(api, finish);
+        });
+        return;
       }
+
+      runPushRegistrationDuringGesture(api, finish);
     });
   });
 }
