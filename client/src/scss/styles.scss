@@ -206,6 +206,22 @@ body {
   vertical-align: middle;
 }
 
+.emp-app-download-bar {
+  border: 1px solid rgba(var(--bs-success-rgb), 0.28);
+  border-radius: 0.65rem;
+  background: linear-gradient(
+    135deg,
+    rgba(var(--bs-success-rgb), 0.09) 0%,
+    rgba(var(--bs-success-rgb), 0.02) 55%,
+    var(--bs-body-bg) 100%
+  );
+  padding: 0.85rem 1rem;
+}
+
+.emp-app-download-actions .btn {
+  white-space: nowrap;
+}
+
 .submission-detail-text {
   white-space: pre-wrap;
   word-break: break-word;

@@ -3095,6 +3095,41 @@ function kalpanikPlayStoreUrl() {
   return url;
 }
 
+/** APK served from client/public/downloads/ after build — override with VITE_APK_DOWNLOAD_URL. */
+function employeeApkDownloadUrl() {
+  const custom = (import.meta.env.VITE_APK_DOWNLOAD_URL || "").trim();
+  return custom || "/downloads/sugandh-reminder.apk";
+}
+
+function empMobileAppButtonsHtml({ block = true, size = "" } = {}) {
+  const apkUrl = employeeApkDownloadUrl();
+  const playStore = kalpanikPlayStoreUrl();
+  const btnClass = `${block ? "w-100 " : ""}btn ${size} btn-outline-success${block ? " mb-2" : ""}`;
+  const apkBtn = `<a class="${btnClass}" href="${escapeHtml(apkUrl)}" download="sugandh-reminder.apk">
+        <i class="bi bi-android2 me-1" aria-hidden="true"></i>Download app (APK)
+      </a>`;
+  const playBtn = playStore
+    ? `<a class="${block ? "w-100 " : ""}btn ${size} btn-outline-primary${block ? " mb-2" : ""}" href="${escapeHtml(playStore)}" target="_blank" rel="noopener noreferrer">
+        <i class="bi bi-google-play me-1" aria-hidden="true"></i>Get on Play Store
+      </a>`
+    : "";
+  return `${apkBtn}${playBtn}`;
+}
+
+function empAppDownloadBannerHtml() {
+  return `<div class="emp-app-download-bar mb-3" role="region" aria-label="Mobile app download">
+      <div class="emp-app-download-inner d-flex flex-wrap align-items-center justify-content-between gap-3">
+        <div class="min-w-0">
+          <div class="fw-semibold"><i class="bi bi-phone me-1 text-success" aria-hidden="true"></i>Sugandh Reminder app</div>
+          <p class="small text-muted mb-0">Download the Android APK for task alerts and reminders on your phone.</p>
+        </div>
+        <div class="emp-app-download-actions d-flex flex-wrap gap-2">
+          ${empMobileAppButtonsHtml({ block: false, size: "btn-sm" })}
+        </div>
+      </div>
+    </div>`;
+}
+
 function employeeMyAssignee(task) {
   const uid = state.user?.id;
   if (!uid) return null;
@@ -3200,12 +3235,7 @@ function empTaskTableRows(tasks) {
 function empLeftNavInner() {
   const displayName = state.user ? escapeHtml(state.user.displayName) : "";
   const metrics = employeeDashboardMetrics();
-  const playStore = kalpanikPlayStoreUrl();
-  const appBtn = playStore
-    ? `<a class="btn btn-outline-primary w-100 mb-2" href="${escapeHtml(playStore)}" target="_blank" rel="noopener noreferrer">
-        <i class="bi bi-google-play me-1" aria-hidden="true"></i>Get mobile app
-      </a>`
-    : "";
+  const appBtn = empMobileAppButtonsHtml();
 
   return `
     <div class="owner-sidebar d-flex flex-column h-100">
@@ -3409,6 +3439,7 @@ function renderEmployeeMain() {
         </button>
       </div>
     </header>
+    ${empAppDownloadBannerHtml()}
     ${kpiRow}
     <section class="owner-task-panel" aria-label="Assigned tasks">
       <div class="table-responsive owner-task-table-wrap">
