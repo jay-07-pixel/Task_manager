@@ -12,6 +12,7 @@ let state = {
   activeListId: null,
   tasks: [],
   assignees: [],
+  empTasks: [],
 };
 
 /** @type {any[]} */
@@ -2335,6 +2336,267 @@ function kalpanikPlayStoreUrl() {
   return url;
 }
 
+function employeeMyAssignee(task) {
+  const uid = state.user?.id;
+  if (!uid) return null;
+  return (task.assignees ?? []).find((a) => a.id === uid) ?? null;
+}
+
+function formatEmpDue(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
+
+async function loadEmployeeTasks() {
+  const { tasks } = await api("/api/tasks/assigned");
+  state.empTasks = tasks;
+}
+
+async function uploadEmployeeProof(taskId, file) {
+  const fd = new FormData();
+  fd.append("proof", file);
+  let res;
+  try {
+    res = await fetch(`/api/tasks/${taskId}/completion-proof`, {
+      method: "POST",
+      credentials: "include",
+      body: fd,
+    });
+  } catch {
+    throw new Error("Network error uploading proof.");
+  }
+  const text = await res.text();
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = { error: text };
+  }
+  if (!res.ok) {
+    if (res.status === 401) {
+      state.user = null;
+      renderAuthForm();
+      throw new Error("Session expired. Please sign in again.");
+    }
+    throw new Error(data?.error || "Upload failed");
+  }
+  return data;
+}
+
+function empTaskTableRows(tasks, { doneSection = false } = {}) {
+  if (!tasks.length) {
+    return `<tr><td colspan="5" class="emp-empty-cell">
+      <div class="emp-empty ${doneSection ? "emp-empty--compact" : ""}">
+        <i class="bi bi-${doneSection ? "check-circle" : "clipboard-check"} emp-empty-icon" aria-hidden="true"></i>
+        <p class="emp-empty-title mb-1">${doneSection ? "Nothing submitted yet" : "No active tasks"}</p>
+        <p class="emp-empty-desc text-muted small mb-0">${
+          doneSection
+            ? "Completed tasks with proof will appear here."
+            : "When your manager assigns you work, it will show up here."
+        }</p>
+      </div>
+    </td></tr>`;
+  }
+  return tasks
+    .map((t) => {
+      const me = employeeMyAssignee(t);
+      const submitted = me?.assigneeDone ?? false;
+      const proofUrl = me?.completionProofUrl;
+      const notes = (t.notes || "").trim();
+      const titleClass = submitted ? "emp-task-title--done" : "";
+      const proofCell = proofUrl
+        ? `<button type="button" class="btn btn-sm btn-outline-primary emp-view-proof" data-proof-url="${escapeHtml(
+            proofUrl
+          )}" data-task-title="${escapeHtml(t.title)}">View</button>`
+        : `<label class="btn btn-sm btn-outline-secondary mb-0 emp-upload-proof">
+            <i class="bi bi-camera me-1" aria-hidden="true"></i>Upload
+            <input type="file" accept="image/jpeg,image/png,image/gif,image/webp" class="d-none emp-proof-input" data-task-id="${t.id}" />
+          </label>`;
+      return `<tr class="emp-task-row ${submitted ? "emp-task-row--done" : ""}" data-task-id="${t.id}">
+        <td class="emp-col-check text-center">
+          <input type="checkbox" class="form-check-input emp-task-check" data-task-id="${t.id}" ${
+        submitted ? "checked" : ""
+      } aria-label="Mark ${escapeHtml(t.title)} submitted" />
+        </td>
+        <td class="emp-col-task">
+          <div class="fw-semibold ${titleClass}">${escapeHtml(t.title)}</div>
+          ${
+            notes
+              ? `<div class="small text-muted text-truncate mt-1" title="${escapeHtml(notes)}">${escapeHtml(notes)}</div>`
+              : ""
+          }
+        </td>
+        <td class="emp-col-list${submitted ? "-done" : ""}">
+          <span class="emp-list-badge${submitted ? " emp-list-badge--muted" : ""}">${escapeHtml(t.list?.title || "List")}</span>
+        </td>
+        <td class="emp-col-deadline small text-nowrap tabular-nums">${escapeHtml(formatEmpDue(t.dueAt))}</td>
+        <td class="emp-col-proof text-end">${proofCell}</td>
+      </tr>`;
+    })
+    .join("");
+}
+
+function renderEmployeeMain() {
+  const main = document.getElementById("emp-main-column");
+  if (!main) return;
+
+  const active = state.empTasks.filter((t) => !employeeMyAssignee(t)?.assigneeDone);
+  const done = state.empTasks.filter((t) => employeeMyAssignee(t)?.assigneeDone);
+
+  main.innerHTML = `
+    <div class="row g-3 mb-4 emp-kpis">
+      <div class="col-6">
+        <div class="emp-kpi emp-kpi--active h-100">
+          <div class="emp-kpi-icon" aria-hidden="true"><i class="bi bi-list-task"></i></div>
+          <div class="emp-kpi-text">
+            <div class="emp-kpi-value tabular-nums">${active.length}</div>
+            <div class="emp-kpi-label">To do</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-6">
+        <div class="emp-kpi emp-kpi--done h-100">
+          <div class="emp-kpi-icon" aria-hidden="true"><i class="bi bi-check-circle"></i></div>
+          <div class="emp-kpi-text">
+            <div class="emp-kpi-value tabular-nums">${done.length}</div>
+            <div class="emp-kpi-label">Submitted</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <section class="emp-panel border mb-4" aria-label="Active tasks">
+      <div class="emp-panel-head px-3 py-3 border-bottom">
+        <h2 class="h6 emp-panel-title text-uppercase mb-0">Active tasks</h2>
+      </div>
+      <div class="emp-table-responsive table-responsive">
+        <table class="table table-hover align-middle mb-0 emp-task-table">
+          <thead>
+            <tr>
+              <th class="emp-col-check"><span class="visually-hidden">Done</span></th>
+              <th>Task</th>
+              <th class="emp-col-list">List</th>
+              <th class="emp-col-deadline">Deadline</th>
+              <th class="emp-col-proof text-end">Proof</th>
+            </tr>
+          </thead>
+          <tbody>${empTaskTableRows(active)}</tbody>
+        </table>
+      </div>
+    </section>
+    <section class="emp-panel border" aria-label="Submitted tasks">
+      <div class="emp-panel-head px-3 py-3 border-bottom">
+        <h2 class="h6 emp-panel-title text-uppercase mb-0">Submitted</h2>
+      </div>
+      <div class="emp-table-responsive table-responsive">
+        <table class="table table-hover align-middle mb-0 emp-task-table">
+          <thead>
+            <tr>
+              <th class="emp-col-check"><span class="visually-hidden">Done</span></th>
+              <th>Task</th>
+              <th class="emp-col-list-done">List</th>
+              <th class="emp-col-deadline">Deadline</th>
+              <th class="emp-col-proof text-end">Proof</th>
+            </tr>
+          </thead>
+          <tbody>${empTaskTableRows(done, { doneSection: true })}</tbody>
+        </table>
+      </div>
+    </section>
+  `;
+
+  main.querySelectorAll(".emp-task-check").forEach((cb) => {
+    cb.addEventListener("change", async () => {
+      const id = cb.getAttribute("data-task-id");
+      if (!id) return;
+      const completed = cb.checked;
+      cb.disabled = true;
+      try {
+        await api(`/api/tasks/${id}`, {
+          method: "PATCH",
+          body: JSON.stringify({ completed }),
+        });
+        await loadEmployeeTasks();
+        renderEmployeeMain();
+      } catch (err) {
+        showToast(err.message, "danger");
+        cb.checked = !completed;
+        cb.disabled = false;
+      }
+    });
+  });
+
+  main.querySelectorAll(".emp-proof-input").forEach((input) => {
+    input.addEventListener("change", async () => {
+      const file = input.files?.[0];
+      const id = input.getAttribute("data-task-id");
+      if (!file || !id) return;
+      const label = input.closest(".emp-upload-proof");
+      if (label) label.classList.add("disabled");
+      try {
+        await uploadEmployeeProof(id, file);
+        showToast("Proof uploaded — task marked submitted.", "success");
+        await loadEmployeeTasks();
+        renderEmployeeMain();
+      } catch (err) {
+        showToast(err.message, "danger");
+        if (label) label.classList.remove("disabled");
+        input.value = "";
+      }
+    });
+  });
+
+  main.querySelectorAll(".emp-view-proof").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const url = btn.getAttribute("data-proof-url");
+      const title = btn.getAttribute("data-task-title") || "Proof";
+      if (url) openProofImageModal(url, title);
+    });
+  });
+}
+
+function renderEmployeeChrome() {
+  const displayName = state.user ? escapeHtml(state.user.displayName) : "";
+  const playStore = kalpanikPlayStoreUrl();
+  const appHint = playStore
+    ? `<a class="btn btn-sm btn-outline-primary" href="${escapeHtml(playStore)}" target="_blank" rel="noopener noreferrer"><i class="bi bi-google-play me-1" aria-hidden="true"></i>Get the app</a>`
+    : "";
+
+  app.innerHTML = `
+    <div class="owner-shell min-h-main">
+      <div class="container-fluid owner-shell-inner py-3 py-lg-4">
+        <div class="emp-shell">
+          <div class="owner-main-panel p-3 p-lg-4">
+            <header class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+              <div>
+                <p class="owner-page-eyebrow mb-1">Employee dashboard</p>
+                <h1 class="owner-page-title h4 mb-1">My tasks</h1>
+                <p class="text-muted small mb-0">Hello, <strong>${displayName}</strong> — complete tasks and upload proof photos here or in the mobile app.</p>
+              </div>
+              <div class="d-flex flex-wrap align-items-center gap-2">
+                ${appHint}
+                <button type="button" class="btn btn-outline-danger btn-sm js-logout">
+                  <i class="bi bi-box-arrow-right me-1" aria-hidden="true"></i>Sign out
+                </button>
+              </div>
+            </header>
+            <div id="emp-main-column"></div>
+            <div class="d-flex justify-content-center mt-4 pt-2 border-top">
+              ${themeIconToggleMarkup()}
+            </div>
+          </div>
+        </div>
+      </div>
+      ${taskProofOnlyModalHtml()}
+    </div>`;
+
+  document.querySelectorAll(".js-logout").forEach((b) => b.addEventListener("click", logout));
+  wireThemeIconToggles();
+  wireTaskProofOnlyModal();
+  renderEmployeeMain();
+}
+
 function renderEmployeeAppRedirect({ justRegistered = false } = {}) {
   const name = state.user?.displayName ? escapeHtml(state.user.displayName) : "there";
   const email = state.user?.email ? escapeHtml(state.user.email) : "";
@@ -2448,8 +2710,12 @@ async function render() {
   }
   if (state.user.role === "employee") {
     const welcome = sessionStorage.getItem("taskmgr-app-welcome");
-    if (welcome) sessionStorage.removeItem("taskmgr-app-welcome");
-    renderEmployeeAppRedirect({ justRegistered: !!welcome });
+    if (welcome) {
+      sessionStorage.removeItem("taskmgr-app-welcome");
+      showToast("Welcome! Your assigned tasks are below.", "success");
+    }
+    await loadEmployeeTasks();
+    renderEmployeeChrome();
     return;
   }
   await loadLists();
