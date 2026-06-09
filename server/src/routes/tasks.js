@@ -263,20 +263,43 @@ async function syncTaskCompletedFromAssignments(taskId) {
   });
 }
 
-async function attachProgressUpdateCounts(tasks) {
+async function attachProgressUpdateMeta(tasks, ownerId = null) {
   if (!tasks.length) return tasks;
   const taskIds = tasks.map((t) => t.id);
-  const rows = await prisma.taskProgressUpdate.groupBy({
+  const countRows = await prisma.taskProgressUpdate.groupBy({
     by: ["taskId", "userId"],
     where: { taskId: { in: taskIds } },
     _count: { _all: true },
   });
-  const countMap = new Map(rows.map((r) => [`${r.taskId}:${r.userId}`, r._count._all]));
+  const countMap = new Map(countRows.map((r) => [`${r.taskId}:${r.userId}`, r._count._all]));
+
+  const unreadMap = new Map();
+  if (ownerId) {
+    const readRows = await prisma.taskProgressUpdateRead.findMany({
+      where: { ownerId, taskId: { in: taskIds } },
+    });
+    const readMap = new Map(
+      readRows.map((r) => [`${r.taskId}:${r.assigneeUserId}`, r.lastReadAt])
+    );
+    const updates = await prisma.taskProgressUpdate.findMany({
+      where: { taskId: { in: taskIds } },
+      select: { taskId: true, userId: true, createdAt: true },
+    });
+    for (const u of updates) {
+      const key = `${u.taskId}:${u.userId}`;
+      const lastRead = readMap.get(key);
+      if (!lastRead || u.createdAt > lastRead) {
+        unreadMap.set(key, (unreadMap.get(key) ?? 0) + 1);
+      }
+    }
+  }
+
   return tasks.map((t) => ({
     ...t,
     assignments: (t.assignments ?? []).map((a) => ({
       ...a,
       progressUpdateCount: countMap.get(`${t.id}:${a.userId}`) ?? 0,
+      unreadProgressUpdateCount: ownerId ? (unreadMap.get(`${t.id}:${a.userId}`) ?? 0) : 0,
     })),
   }));
 }
@@ -311,6 +334,7 @@ export function serializeTask(t) {
       ? `/api/tasks/${t.id}/completion-proof/${a.userId}`
       : null,
     progressUpdateCount: a.progressUpdateCount ?? 0,
+    unreadProgressUpdateCount: a.unreadProgressUpdateCount ?? 0,
   }));
   return {
     id: t.id,
@@ -340,7 +364,7 @@ router.get("/assigned", requireAuth, async (req, res) => {
   if (req.session.role !== "employee") {
     return res.status(403).json({ error: "Employees only" });
   }
-  const tasks = await attachProgressUpdateCounts(
+  const tasks = await attachProgressUpdateMeta(
     await prisma.task.findMany({
       where: { assignments: { some: { userId: req.session.userId } } },
       include: { ...taskAssigneeInclude, list: { select: { id: true, title: true } } },
@@ -354,12 +378,13 @@ router.get("/lists/:listId", requireOwner, async (req, res) => {
   const list = await assertListOwner(req.params.listId, req.session.userId);
   if (!list) return res.status(404).json({ error: "List not found" });
 
-  const roots = await attachProgressUpdateCounts(
+  const roots = await attachProgressUpdateMeta(
     await prisma.task.findMany({
       where: { listId: list.id },
       include: taskAssigneeInclude,
       orderBy: [{ completed: "asc" }, { sortOrder: "asc" }],
-    })
+    }),
+    req.session.userId
   );
   res.json({ tasks: roots.map(serializeTask) });
 });
@@ -444,6 +469,50 @@ router.post("/:id/progress-updates", requireAuth, async (req, res) => {
   });
 
   res.status(201).json({ update: serializeProgressUpdate(row) });
+});
+
+const progressUpdateMarkReadSchema = z.object({
+  assigneeUserId: z.string().uuid(),
+});
+
+router.post("/:id/progress-updates/mark-read", requireOwner, async (req, res) => {
+  const parsed = progressUpdateMarkReadSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.flatten() });
+  }
+
+  const task = await prisma.task.findFirst({
+    where: { id: req.params.id },
+    include: { list: true, assignments: { select: { userId: true } } },
+  });
+  if (!task || task.list.ownerId !== req.session.userId) {
+    return res.status(404).json({ error: "Task not found" });
+  }
+
+  const { assigneeUserId } = parsed.data;
+  if (!task.assignments.some((a) => a.userId === assigneeUserId)) {
+    return res.status(404).json({ error: "Assignee not found on this task" });
+  }
+
+  const now = new Date();
+  await prisma.taskProgressUpdateRead.upsert({
+    where: {
+      taskId_assigneeUserId_ownerId: {
+        taskId: task.id,
+        assigneeUserId,
+        ownerId: req.session.userId,
+      },
+    },
+    create: {
+      taskId: task.id,
+      assigneeUserId,
+      ownerId: req.session.userId,
+      lastReadAt: now,
+    },
+    update: { lastReadAt: now },
+  });
+
+  res.json({ ok: true, lastReadAt: now.toISOString() });
 });
 
 router.get("/:id/submission", requireAuth, async (req, res) => {

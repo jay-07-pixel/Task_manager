@@ -41,10 +41,11 @@ model User {
 
   ownedLists        TaskList[]
   createdTasks      Task[]             @relation("CreatedBy")
-  taskAssignments      TaskAssignee[]
-  pushSubscriptions    PushSubscription[]
-  employeeDevices      EmployeeDevice[]
-  taskProgressUpdates  TaskProgressUpdate[]
+  taskAssignments           TaskAssignee[]
+  pushSubscriptions         PushSubscription[]
+  employeeDevices           EmployeeDevice[]
+  taskProgressUpdates       TaskProgressUpdate[]
+  taskProgressUpdateReads   TaskProgressUpdateRead[]
 }
 
 model TaskList {
@@ -92,8 +93,9 @@ model Task {
 
   list            TaskList             @relation(fields: [listId], references: [id], onDelete: Cascade)
   createdBy       User                 @relation("CreatedBy", fields: [createdById], references: [id])
-  assignments     TaskAssignee[]
-  progressUpdates TaskProgressUpdate[]
+  assignments            TaskAssignee[]
+  progressUpdates        TaskProgressUpdate[]
+  progressUpdateReads    TaskProgressUpdateRead[]
 
   @@index([listId])
 }
@@ -111,6 +113,19 @@ model TaskProgressUpdate {
 
   @@index([taskId, userId])
   @@map("task_progress_update")
+}
+
+model TaskProgressUpdateRead {
+  taskId         String   @map("task_id")
+  assigneeUserId String   @map("assignee_user_id")
+  ownerId        String   @map("owner_id")
+  lastReadAt     DateTime @map("last_read_at")
+
+  task  Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, assigneeUserId, ownerId])
+  @@map("task_progress_update_read")
 }
 
 model PushSubscription {
