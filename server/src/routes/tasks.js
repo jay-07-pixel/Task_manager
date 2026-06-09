@@ -389,6 +389,26 @@ async function attachDelegationsToTasks(tasks) {
   }));
 }
 
+/** Tasks the employee assigned to others — no submission or update content. */
+function serializeTaskIAssigned(t, assignerId) {
+  const myAssignments = (t.assignments ?? []).filter((a) => a.assignedByUserId === assignerId);
+  return {
+    id: t.id,
+    title: t.title,
+    notes: t.notes,
+    dueAt: t.dueAt?.toISOString() ?? null,
+    allDay: t.allDay,
+    completed: t.completed,
+    createdAt: t.createdAt?.toISOString?.() ?? t.createdAt ?? null,
+    assignedTo: myAssignments.map((a) => ({
+      id: a.user.id,
+      displayName: a.user.displayName,
+      assigneeDone: a.assigneeDone,
+      delegatedAt: a.delegatedAt instanceof Date ? a.delegatedAt.toISOString() : (a.delegatedAt ?? null),
+    })),
+  };
+}
+
 export function serializeTask(t) {
   let recurrenceRule = null;
   if (t.recurrenceRule) {
@@ -418,6 +438,7 @@ export function serializeTask(t) {
   const delegations = (t.delegations ?? []).map(serializeDelegation);
   return {
     id: t.id,
+    createdById: t.createdById ?? null,
     listId: t.listId,
     list: t.list ? { id: t.list.id, title: t.list.title } : null,
     assignees,
@@ -474,6 +495,22 @@ router.get("/assigned", requireAuth, async (req, res) => {
     })
   );
   res.json({ tasks: tasks.map(serializeTask) });
+});
+
+router.get("/assigned-by-me", requireAuth, async (req, res) => {
+  if (req.session.role !== "employee") {
+    return res.status(403).json({ error: "Employees only" });
+  }
+  const tasks = await prisma.task.findMany({
+    where: {
+      assignments: { some: { assignedByUserId: req.session.userId } },
+    },
+    include: taskAssigneeInclude,
+    orderBy: [{ updatedAt: "desc" }],
+  });
+  res.json({
+    tasks: tasks.map((t) => serializeTaskIAssigned(t, req.session.userId)),
+  });
 });
 
 router.post("/employee-create", requireAuth, async (req, res) => {

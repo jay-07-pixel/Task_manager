@@ -21,6 +21,7 @@ let state = {
   tasks: [],
   assignees: [],
   empTasks: [],
+  empAssignedByMeTasks: [],
   empFilter: "active",
   ownerTaskFilter: "active",
 };
@@ -939,8 +940,7 @@ function empRemindersButtonHtml() {
   }
   return `<button type="button" class="btn btn-outline-warning w-100 mb-2 js-emp-enable-push">
     <i class="bi bi-bell me-1" aria-hidden="true"></i><span class="js-emp-push-btn-label">${empPushButtonLabel()}</span>
-  </button>
-  <p class="small text-muted mb-2 px-1">Tap once to prepare, then tap again to connect. Alerts work when Chrome is closed.</p>`;
+  </button>`;
 }
 
 function refreshEmpPushButtonLabels() {
@@ -3772,6 +3772,30 @@ async function loadEmployeeTasks() {
   state.empTasks = tasks;
 }
 
+async function loadEmployeeAssignedByMeTasks() {
+  const { tasks } = await api("/api/tasks/assigned-by-me");
+  state.empAssignedByMeTasks = tasks ?? [];
+}
+
+async function loadEmployeeDashboard() {
+  await Promise.all([loadEmployeeTasks(), loadEmployeeAssignedByMeTasks()]);
+}
+
+async function empRefreshDashboard(btn) {
+  if (btn) btn.disabled = true;
+  try {
+    await loadEmployeeDashboard();
+    renderEmpListContentOnly();
+    renderEmployeeMain();
+    syncEmpTopbarTitle();
+    showToast("Tasks refreshed.", "success");
+  } catch (err) {
+    showToast(err.message, "danger");
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 async function loadEmpPeers() {
   const { users } = await api("/api/users/peers");
   state.empPeers = users ?? [];
@@ -3858,6 +3882,11 @@ function wireEmpCreateTaskModal() {
       });
       bootstrap.Modal.getInstance(modalEl)?.hide();
       showToast("Task created and assigned.", "success");
+      await loadEmployeeAssignedByMeTasks();
+      state.empFilter = "assigned-by-me";
+      renderEmpListContentOnly();
+      renderEmployeeMain();
+      syncEmpTopbarTitle();
     } catch (err) {
       errEl.textContent = err.message || "Could not create task.";
       errEl.classList.remove("d-none");
@@ -3928,9 +3957,11 @@ function wireEmpDelegateModal() {
       });
       bootstrap.Modal.getInstance(modalEl)?.hide();
       showToast("Task assigned to colleague.", "success");
-      await loadEmployeeTasks();
+      await loadEmployeeDashboard();
+      state.empFilter = "assigned-by-me";
       renderEmpListContentOnly();
       renderEmployeeMain();
+      syncEmpTopbarTitle();
     } catch (err) {
       errEl.textContent = err.message || "Could not assign task.";
       errEl.classList.remove("d-none");
@@ -3953,10 +3984,48 @@ function employeeDashboardMetrics() {
   return { total: tasks.length, active, done, dueSoon };
 }
 
+function employeeAssignedByMeMetrics() {
+  const tasks = state.empAssignedByMeTasks;
+  const pending = tasks.filter((t) => (t.assignedTo ?? []).some((a) => !a.assigneeDone)).length;
+  const done = tasks.filter((t) => (t.assignedTo ?? []).every((a) => a.assigneeDone)).length;
+  return { total: tasks.length, pending, done };
+}
+
 function empFilterLabel(filter) {
+  if (filter === "assigned-by-me") return "Assigned by me";
   if (filter === "submitted") return "Submitted tasks";
   if (filter === "all") return "All assigned tasks";
   return "Active tasks";
+}
+
+function empFilterSubtitle(filter) {
+  if (filter === "assigned-by-me") {
+    return "Tasks you created or assigned to colleagues. Status only — updates and submissions are visible to admin.";
+  }
+  return "Post progress updates while you work, then submit with notes and/or an image when done.";
+}
+
+function empNavFilterButtonHtml(f, active) {
+  const icon =
+    f.id === "submitted"
+      ? active
+        ? "bi-check-circle-fill"
+        : "bi-check-circle"
+      : f.id === "all"
+        ? "bi-collection"
+        : f.id === "assigned-by-me"
+          ? "bi-person-plus"
+          : "bi-list-task";
+  return `
+    <button type="button" class="list-group-item list-group-item-action owner-list-item d-flex justify-content-between align-items-center gap-2 ${
+      active ? "active" : ""
+    }" data-emp-filter="${f.id}">
+      <span class="d-flex align-items-center gap-2 min-w-0">
+        <i class="bi ${icon} flex-shrink-0" aria-hidden="true"></i>
+        <span class="text-truncate">${f.label}</span>
+      </span>
+      <span class="badge rounded-pill bg-body-secondary text-body border tabular-nums flex-shrink-0">${f.count}</span>
+    </button>`;
 }
 
 function empFilteredTasks() {
@@ -4044,6 +4113,54 @@ function empTaskTableRows(tasks) {
     .join("")}</tbody>`;
 }
 
+function empAssignedByMeTableRows(tasks) {
+  if (!tasks.length) {
+    return `<tbody class="owner-task-empty"><tr><td colspan="5">
+      <div class="owner-empty-state py-5 px-3">
+        <i class="bi bi-person-plus owner-empty-icon text-primary" aria-hidden="true"></i>
+        <p class="owner-empty-title mb-1">Nothing assigned yet</p>
+        <p class="owner-empty-desc text-muted small mb-0">Use <strong>Create & assign task</strong> to assign work to a colleague.</p>
+      </div>
+    </td></tr></tbody>`;
+  }
+
+  return `<tbody>${tasks
+    .map((t) => {
+      const assignees = t.assignedTo ?? [];
+      const assigneeNames = assignees.map((a) => escapeHtml(a.displayName)).join(", ") || "—";
+      const allDone = assignees.length > 0 && assignees.every((a) => a.assigneeDone);
+      const statusClass = allDone ? "text-success" : "text-warning";
+      const statusLabel = allDone ? "Submitted" : "In progress";
+      const notesRaw = (t.notes || "").trim().replace(/\s+/g, " ");
+      const notesPreview = notesRaw.length > 100 ? `${notesRaw.slice(0, 97)}…` : notesRaw;
+      const descriptionBox =
+        notesPreview.length > 0
+          ? `<div class="owner-task-desc-box small text-body-secondary mb-0" title="${escapeHtml(notesRaw)}">${escapeHtml(notesPreview)}</div>`
+          : `<div class="owner-task-desc-box small text-muted fst-italic mb-0">No description</div>`;
+      const assignedWhen = assignees[0]?.delegatedAt
+        ? `<div class="small text-muted tabular-nums">Assigned ${escapeHtml(formatProgressUpdateTime(assignees[0].delegatedAt))}</div>`
+        : "";
+      const deadlineDisplay = t.dueAt
+        ? `<span class="text-body tabular-nums">${escapeHtml(formatEmpDue(t.dueAt))}</span>`
+        : `<span class="text-muted">—</span>`;
+      return `<tr class="owner-task-row emp-assigned-out-row ${allDone ? "owner-task-row--completed" : ""}" data-task-id="${t.id}">
+        <td class="owner-task-cell owner-task-col--task align-middle">
+          <span class="fw-semibold ${allDone ? "text-muted text-decoration-line-through" : ""}">${escapeHtml(t.title)}</span>
+          ${assignedWhen}
+        </td>
+        <td class="owner-task-cell align-middle">
+          <span class="badge rounded-pill text-bg-light border text-body">${assigneeNames}</span>
+        </td>
+        <td class="owner-task-cell owner-task-col--deadline align-middle small">${deadlineDisplay}</td>
+        <td class="owner-task-cell align-middle">${descriptionBox}</td>
+        <td class="owner-task-cell text-end align-middle">
+          <span class="badge rounded-pill ${allDone ? "text-bg-success" : "text-bg-warning"} ${statusClass}">${statusLabel}</span>
+        </td>
+      </tr>`;
+    })
+    .join("")}</tbody>`;
+}
+
 function empLeftNavInner() {
   const displayName = state.user ? escapeHtml(state.user.displayName) : "";
   const metrics = employeeDashboardMetrics();
@@ -4089,10 +4206,12 @@ function renderEmpMobileFilters() {
   const host = document.getElementById("emp-mobile-filters");
   if (!host) return;
   const metrics = employeeDashboardMetrics();
+  const assignedMetrics = employeeAssignedByMeMetrics();
   const filters = [
     { id: "active", label: "Active", count: metrics.active },
     { id: "submitted", label: "Submitted", count: metrics.done },
     { id: "all", label: "All", count: metrics.total },
+    { id: "assigned-by-me", label: "I assigned", count: assignedMetrics.total },
   ];
   host.innerHTML = filters
     .map((f) => {
@@ -4121,34 +4240,22 @@ function renderEmpMobileFilters() {
 
 function renderEmpListContentOnly() {
   const metrics = employeeDashboardMetrics();
-  const filters = [
+  const assignedMetrics = employeeAssignedByMeMetrics();
+  const myWorkFilters = [
     { id: "active", label: "Active tasks", icon: "list-task", count: metrics.active },
     { id: "submitted", label: "Submitted", icon: "check-circle", count: metrics.done },
     { id: "all", label: "All assigned", icon: "collection", count: metrics.total },
   ];
-  const html = filters
-    .map((f) => {
-      const active = state.empFilter === f.id;
-      const icon =
-        f.id === "submitted"
-          ? active
-            ? "bi-check-circle-fill"
-            : "bi-check-circle"
-          : f.id === "all"
-            ? "bi-collection"
-            : "bi-list-task";
-      return `
-    <button type="button" class="list-group-item list-group-item-action owner-list-item d-flex justify-content-between align-items-center gap-2 ${
-      active ? "active" : ""
-    }" data-emp-filter="${f.id}">
-      <span class="d-flex align-items-center gap-2 min-w-0">
-        <i class="bi ${icon} flex-shrink-0" aria-hidden="true"></i>
-        <span class="text-truncate">${f.label}</span>
-      </span>
-      <span class="badge rounded-pill bg-body-secondary text-body border tabular-nums flex-shrink-0">${f.count}</span>
-    </button>`;
-    })
+  const myWorkHtml = myWorkFilters
+    .map((f) => empNavFilterButtonHtml(f, state.empFilter === f.id))
     .join("");
+  const assignedHtml = empNavFilterButtonHtml(
+    { id: "assigned-by-me", label: "Assigned by me", icon: "person-plus", count: assignedMetrics.total },
+    state.empFilter === "assigned-by-me"
+  );
+  const html = `${myWorkHtml}
+    <p class="owner-sidebar-label mb-2 mt-3 px-2">Assigned by me</p>
+    ${assignedHtml}`;
   document.querySelectorAll(".js-emp-nav-host").forEach((host) => {
     host.innerHTML = html;
   });
@@ -4176,19 +4283,7 @@ function wireEmpChromeNav() {
     b.addEventListener("click", () => void openEmpCreateTaskModal())
   );
   document.querySelectorAll(".js-emp-refresh").forEach((b) =>
-    b.addEventListener("click", async () => {
-      b.disabled = true;
-      try {
-        await loadEmployeeTasks();
-        renderEmpListContentOnly();
-        renderEmployeeMain();
-        showToast("Tasks refreshed.", "success");
-      } catch (err) {
-        showToast(err.message, "danger");
-      } finally {
-        b.disabled = false;
-      }
-    })
+    b.addEventListener("click", () => void empRefreshDashboard(b))
   );
   wireThemeIconToggles();
 }
@@ -4197,71 +4292,110 @@ function renderEmployeeMain() {
   const main = document.getElementById("emp-main-column");
   if (!main) return;
 
-  const metrics = employeeDashboardMetrics();
-  const filtered = empFilteredTasks();
+  const isAssignedByMe = state.empFilter === "assigned-by-me";
   const filterTitle = empFilterLabel(state.empFilter);
-  const tableBody = empTaskTableRows(filtered);
+  const filterSubtitle = empFilterSubtitle(state.empFilter);
 
-  const kpiRow =
-    metrics.total > 0
-      ? `<div class="row g-3 mb-4 owner-kpi-row">
-          <div class="col-6 col-xl-3">
-            <div class="owner-kpi-card">
-              <div class="owner-kpi-icon text-primary"><i class="bi bi-list-task" aria-hidden="true"></i></div>
-              <div>
-                <div class="owner-kpi-value tabular-nums">${metrics.active}</div>
-                <div class="owner-kpi-label">Active tasks</div>
-              </div>
-            </div>
-          </div>
-          <div class="col-6 col-xl-3">
-            <div class="owner-kpi-card">
-              <div class="owner-kpi-icon text-success"><i class="bi bi-check-circle" aria-hidden="true"></i></div>
-              <div>
-                <div class="owner-kpi-value tabular-nums">${metrics.done}</div>
-                <div class="owner-kpi-label">Submitted</div>
-              </div>
-            </div>
-          </div>
-          <div class="col-6 col-xl-3">
-            <div class="owner-kpi-card">
-              <div class="owner-kpi-icon text-warning"><i class="bi bi-alarm" aria-hidden="true"></i></div>
-              <div>
-                <div class="owner-kpi-value tabular-nums">${metrics.dueSoon}</div>
-                <div class="owner-kpi-label">Due in 24h</div>
-              </div>
-            </div>
-          </div>
-          <div class="col-6 col-xl-3">
-            <div class="owner-kpi-card">
-              <div class="owner-kpi-icon text-info"><i class="bi bi-collection" aria-hidden="true"></i></div>
-              <div>
-                <div class="owner-kpi-value tabular-nums">${metrics.total}</div>
-                <div class="owner-kpi-label">Total assigned</div>
-              </div>
-            </div>
-          </div>
-        </div>`
-      : "";
+  let kpiRow = "";
+  let tableSection = "";
 
-  main.innerHTML = `
-    <header class="owner-page-header emp-page-header d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3 mb-md-4">
-      <div class="min-w-0">
-        <p class="owner-page-eyebrow mb-1 d-none d-md-block">Employee dashboard</p>
-        <h2 class="owner-page-title h4 mb-0 text-truncate d-none d-md-block">${escapeHtml(filterTitle)}</h2>
-        <p class="owner-page-sub text-muted small mb-0 mt-1 d-none d-md-block">Post progress updates while you work, then submit with notes and/or an image when done.</p>
+  if (isAssignedByMe) {
+    const am = employeeAssignedByMeMetrics();
+    const assignedList = state.empAssignedByMeTasks;
+    kpiRow =
+      am.total > 0
+        ? `<div class="row g-3 mb-4 owner-kpi-row">
+            <div class="col-6 col-md-4">
+              <div class="owner-kpi-card">
+                <div class="owner-kpi-icon text-primary"><i class="bi bi-person-plus" aria-hidden="true"></i></div>
+                <div>
+                  <div class="owner-kpi-value tabular-nums">${am.total}</div>
+                  <div class="owner-kpi-label">Total assigned</div>
+                </div>
+              </div>
+            </div>
+            <div class="col-6 col-md-4">
+              <div class="owner-kpi-card">
+                <div class="owner-kpi-icon text-warning"><i class="bi bi-hourglass-split" aria-hidden="true"></i></div>
+                <div>
+                  <div class="owner-kpi-value tabular-nums">${am.pending}</div>
+                  <div class="owner-kpi-label">In progress</div>
+                </div>
+              </div>
+            </div>
+            <div class="col-6 col-md-4">
+              <div class="owner-kpi-card">
+                <div class="owner-kpi-icon text-success"><i class="bi bi-check-circle" aria-hidden="true"></i></div>
+                <div>
+                  <div class="owner-kpi-value tabular-nums">${am.done}</div>
+                  <div class="owner-kpi-label">Submitted</div>
+                </div>
+              </div>
+            </div>
+          </div>`
+        : "";
+    tableSection = `<section class="owner-task-panel" aria-label="Tasks assigned by me">
+      <div class="table-responsive owner-task-table-wrap">
+        <table class="table table-hover align-middle mb-0 owner-task-table emp-assigned-by-me-table">
+          <thead>
+            <tr>
+              <th scope="col" class="owner-task-head owner-task-col--task">Task</th>
+              <th scope="col" class="owner-task-head">Assigned to</th>
+              <th scope="col" class="owner-task-head owner-task-col--deadline text-nowrap">Deadline</th>
+              <th scope="col" class="owner-task-head">Description</th>
+              <th scope="col" class="owner-task-head text-end">Status</th>
+            </tr>
+          </thead>
+          ${empAssignedByMeTableRows(assignedList)}
+        </table>
       </div>
-      <div class="d-none d-md-flex flex-wrap gap-2 owner-toolbar">
-        <button type="button" class="btn btn-primary btn-sm js-emp-create-task">
-          <i class="bi bi-plus-lg me-1" aria-hidden="true"></i>Create & assign
-        </button>
-        <button type="button" class="btn btn-outline-secondary btn-sm js-emp-refresh">
-          <i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>Refresh
-        </button>
-      </div>
-    </header>
-    ${kpiRow}
-    <section class="owner-task-panel" aria-label="Assigned tasks">
+    </section>`;
+  } else {
+    const metrics = employeeDashboardMetrics();
+    const filtered = empFilteredTasks();
+    const tableBody = empTaskTableRows(filtered);
+    kpiRow =
+      metrics.total > 0
+        ? `<div class="row g-3 mb-4 owner-kpi-row">
+            <div class="col-6 col-xl-3">
+              <div class="owner-kpi-card">
+                <div class="owner-kpi-icon text-primary"><i class="bi bi-list-task" aria-hidden="true"></i></div>
+                <div>
+                  <div class="owner-kpi-value tabular-nums">${metrics.active}</div>
+                  <div class="owner-kpi-label">Active tasks</div>
+                </div>
+              </div>
+            </div>
+            <div class="col-6 col-xl-3">
+              <div class="owner-kpi-card">
+                <div class="owner-kpi-icon text-success"><i class="bi bi-check-circle" aria-hidden="true"></i></div>
+                <div>
+                  <div class="owner-kpi-value tabular-nums">${metrics.done}</div>
+                  <div class="owner-kpi-label">Submitted</div>
+                </div>
+              </div>
+            </div>
+            <div class="col-6 col-xl-3">
+              <div class="owner-kpi-card">
+                <div class="owner-kpi-icon text-warning"><i class="bi bi-alarm" aria-hidden="true"></i></div>
+                <div>
+                  <div class="owner-kpi-value tabular-nums">${metrics.dueSoon}</div>
+                  <div class="owner-kpi-label">Due in 24h</div>
+                </div>
+              </div>
+            </div>
+            <div class="col-6 col-xl-3">
+              <div class="owner-kpi-card">
+                <div class="owner-kpi-icon text-info"><i class="bi bi-collection" aria-hidden="true"></i></div>
+                <div>
+                  <div class="owner-kpi-value tabular-nums">${metrics.total}</div>
+                  <div class="owner-kpi-label">Total assigned</div>
+                </div>
+              </div>
+            </div>
+          </div>`
+        : "";
+    tableSection = `<section class="owner-task-panel" aria-label="Assigned tasks">
       <div class="table-responsive owner-task-table-wrap">
         <table class="table table-hover align-middle mb-0 owner-task-table emp-owner-task-table">
           <thead>
@@ -4276,8 +4410,38 @@ function renderEmployeeMain() {
           ${tableBody}
         </table>
       </div>
-    </section>
+    </section>`;
+  }
+
+  main.innerHTML = `
+    <header class="owner-page-header emp-page-header d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3 mb-md-4">
+      <div class="min-w-0">
+        <p class="owner-page-eyebrow mb-1 d-none d-md-block">Employee dashboard</p>
+        <h2 class="owner-page-title h4 mb-0 text-truncate d-none d-md-block">${escapeHtml(filterTitle)}</h2>
+        <p class="owner-page-sub text-muted small mb-0 mt-1 d-none d-md-block">${escapeHtml(filterSubtitle)}</p>
+      </div>
+      <div class="d-none d-md-flex flex-wrap gap-2 owner-toolbar">
+        <button type="button" class="btn btn-primary btn-sm js-emp-create-task">
+          <i class="bi bi-plus-lg me-1" aria-hidden="true"></i>Create & assign
+        </button>
+        <button type="button" class="btn btn-outline-secondary btn-sm js-emp-refresh">
+          <i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>Refresh
+        </button>
+      </div>
+    </header>
+    ${kpiRow}
+    ${tableSection}
   `;
+
+  if (isAssignedByMe) {
+    main.querySelectorAll(".js-emp-refresh").forEach((btn) => {
+      btn.addEventListener("click", () => void empRefreshDashboard(btn));
+    });
+    main.querySelectorAll(".js-emp-create-task").forEach((btn) => {
+      btn.addEventListener("click", () => void openEmpCreateTaskModal());
+    });
+    return;
+  }
 
   main.querySelectorAll(".emp-task-check").forEach((cb) => {
     cb.addEventListener("change", async () => {
@@ -4320,19 +4484,7 @@ function renderEmployeeMain() {
   });
 
   main.querySelectorAll(".js-emp-refresh").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      btn.disabled = true;
-      try {
-        await loadEmployeeTasks();
-        renderEmpListContentOnly();
-        renderEmployeeMain();
-        showToast("Tasks refreshed.", "success");
-      } catch (err) {
-        showToast(err.message, "danger");
-      } finally {
-        btn.disabled = false;
-      }
-    });
+    btn.addEventListener("click", () => void empRefreshDashboard(btn));
   });
 
   main.querySelectorAll(".js-emp-create-task").forEach((btn) => {
@@ -4441,7 +4593,7 @@ async function render() {
       sessionStorage.removeItem("taskmgr-app-welcome");
       showToast("Welcome! Your assigned tasks are below.", "success");
     }
-    await loadEmployeeTasks();
+    await loadEmployeeDashboard();
     renderEmployeeChrome();
     startEmployeeReminderSystem();
     void prepareEmployeePushOnLogin();
