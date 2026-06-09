@@ -1070,19 +1070,27 @@ function taskIsInReview(task) {
 
 /** Task where an employee assigned work to another employee. */
 function taskHasEmployeeAssignment(task) {
+  if ((task.delegations ?? []).length > 0) return true;
   return (task.assignees ?? []).some((a) => a.assignedBy?.displayName);
 }
 
 function ownerDashboardMetrics() {
   const tasks = state.tasks;
+  const activeList = state.lists.find((l) => l.id === state.activeListId);
   const inReview = tasks.filter(taskIsInReview).length;
   const done = tasks.filter((t) => t.completed).length;
   const active = tasks.filter((t) => !t.completed && !taskIsInReview(t)).length;
-  const employeeAssigned = tasks.filter(taskHasEmployeeAssignment).length;
+  const employeeAssigned = isEmployeeAssignmentsList(activeList)
+    ? tasks.length
+    : tasks.filter(taskHasEmployeeAssignment).length;
   return { total: tasks.length, active, done, inReview, employeeAssigned };
 }
 
 function ownerFilteredTasks() {
+  const activeList = state.lists.find((l) => l.id === state.activeListId);
+  if (isEmployeeAssignmentsList(activeList)) {
+    return state.tasks;
+  }
   if (state.ownerTaskFilter === "completed") {
     return state.tasks.filter((t) => t.completed);
   }

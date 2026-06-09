@@ -64,13 +64,22 @@ const taskListInclude = {
   list: { select: { id: true, title: true } },
 };
 
-/** Move employee-to-employee tasks into the Employee assignments list (fixes older data). */
-async function reconcileEmployeeAssignmentTasks(ownerId, empListId) {
+/** Tasks where one employee assigned work to another (any admin list). */
+function employeeAssignmentTaskWhere() {
+  return {
+    OR: [
+      { assignments: { some: { assignedByUserId: { not: null } } } },
+      { delegations: { some: {} } },
+    ],
+  };
+}
+
+/** Move employee-to-employee tasks into this admin's Employee assignments list. */
+async function reconcileEmployeeAssignmentTasks(empListId) {
   const misplaced = await prisma.task.findMany({
     where: {
-      list: { ownerId },
       listId: { not: empListId },
-      assignments: { some: { assignedByUserId: { not: null } } },
+      ...employeeAssignmentTaskWhere(),
     },
     select: { id: true },
   });
@@ -655,7 +664,7 @@ router.get("/lists/:listId", requireOwner, async (req, res) => {
   if (!list) return res.status(404).json({ error: "List not found" });
 
   if (list.title === EMPLOYEE_ASSIGNMENTS_LIST_TITLE) {
-    await reconcileEmployeeAssignmentTasks(req.session.userId, list.id);
+    await reconcileEmployeeAssignmentTasks(list.id);
   }
 
   const roots = await attachDelegationsToTasks(
@@ -663,10 +672,7 @@ router.get("/lists/:listId", requireOwner, async (req, res) => {
       await prisma.task.findMany({
         where:
           list.title === EMPLOYEE_ASSIGNMENTS_LIST_TITLE
-            ? {
-                list: { ownerId: req.session.userId },
-                assignments: { some: { assignedByUserId: { not: null } } },
-              }
+            ? employeeAssignmentTaskWhere()
             : { listId: list.id },
         include: taskListInclude,
         orderBy: [{ completed: "asc" }, { sortOrder: "asc" }],
