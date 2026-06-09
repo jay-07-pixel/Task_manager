@@ -2601,13 +2601,6 @@ async function openProgressUpdatesForAssignee(taskId, userId, assigneeName) {
   bootstrap.Modal.getOrCreateInstance(modalEl).show();
   try {
     await loadProgressUpdateHistory(taskId, userId);
-    if (state.user?.role === "owner" && state.activeListId) {
-      const ui = captureOwnerUiState();
-      await markProgressUpdatesRead(taskId, userId);
-      await loadTasks(state.activeListId);
-      renderOwnerMain();
-      restoreOwnerUiState(ui);
-    }
   } catch (err) {
     showToast(err.message || "Could not load updates.", "danger");
   }
@@ -3416,14 +3409,17 @@ function renderOwnerMain() {
     });
   });
 
-  main.querySelectorAll(".owner-task-detail-collapse").forEach((el) => {
-    el.addEventListener("shown.bs.collapse", () => {
-      const match = /^owner-task-detail-(.+)$/.exec(el.id || "");
+  main.querySelectorAll(".owner-task-expand-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      if (btn.getAttribute("aria-expanded") === "true") return;
+      const target = btn.getAttribute("data-bs-target") || "";
+      const match = /^#owner-task-detail-(.+)$/.exec(target);
       if (!match) return;
       const taskId = match[1];
       const task = findTaskById(taskId);
       if (!task?.assignees?.some((a) => (a.unreadProgressUpdateCount ?? 0) > 0)) return;
       const ui = captureOwnerUiState();
+      if (!ui.expandedTaskIds.includes(taskId)) ui.expandedTaskIds.push(taskId);
       void (async () => {
         try {
           await markTaskProgressUpdatesRead(taskId);
