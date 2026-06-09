@@ -4423,40 +4423,7 @@ function renderEmployeeMain() {
   let tableSection = "";
 
   if (isAssignedByMe) {
-    const am = employeeAssignedByMeMetrics();
     const assignedList = state.empAssignedByMeTasks;
-    kpiRow =
-      am.total > 0
-        ? `<div class="row g-3 mb-4 owner-kpi-row">
-            <div class="col-6 col-md-4">
-              <div class="owner-kpi-card">
-                <div class="owner-kpi-icon text-primary"><i class="bi bi-person-plus" aria-hidden="true"></i></div>
-                <div>
-                  <div class="owner-kpi-value tabular-nums">${am.total}</div>
-                  <div class="owner-kpi-label">Total assigned</div>
-                </div>
-              </div>
-            </div>
-            <div class="col-6 col-md-4">
-              <div class="owner-kpi-card">
-                <div class="owner-kpi-icon text-warning"><i class="bi bi-hourglass-split" aria-hidden="true"></i></div>
-                <div>
-                  <div class="owner-kpi-value tabular-nums">${am.pending}</div>
-                  <div class="owner-kpi-label">In progress</div>
-                </div>
-              </div>
-            </div>
-            <div class="col-6 col-md-4">
-              <div class="owner-kpi-card">
-                <div class="owner-kpi-icon text-success"><i class="bi bi-check-circle" aria-hidden="true"></i></div>
-                <div>
-                  <div class="owner-kpi-value tabular-nums">${am.done}</div>
-                  <div class="owner-kpi-label">Submitted</div>
-                </div>
-              </div>
-            </div>
-          </div>`
-        : "";
     tableSection = `<section class="owner-task-panel emp-assigned-by-me-panel" aria-label="Tasks assigned by me">
       ${empAssignedByMeCardsHtml(assignedList)}
     </section>`;
