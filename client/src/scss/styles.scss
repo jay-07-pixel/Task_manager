@@ -408,6 +408,17 @@ body {
   box-shadow: 0 0.15rem 0.65rem rgba(var(--bs-danger-rgb), 0.12);
 }
 
+.owner-kpi-card--filter.owner-kpi-card--active-info {
+  border-color: rgba(var(--bs-info-rgb), 0.55);
+  box-shadow: 0 0.15rem 0.65rem rgba(var(--bs-info-rgb), 0.12);
+}
+
+.owner-emp-chain-badge {
+  max-width: 10rem;
+  white-space: normal;
+  line-height: 1.25;
+}
+
 .owner-kpi-icon {
   flex-shrink: 0;
   width: 2.5rem;

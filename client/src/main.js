@@ -1068,12 +1068,18 @@ function taskIsInReview(task) {
   );
 }
 
+/** Task where an employee assigned work to another employee. */
+function taskHasEmployeeAssignment(task) {
+  return (task.assignees ?? []).some((a) => a.assignedBy?.displayName);
+}
+
 function ownerDashboardMetrics() {
   const tasks = state.tasks;
   const inReview = tasks.filter(taskIsInReview).length;
   const done = tasks.filter((t) => t.completed).length;
   const active = tasks.filter((t) => !t.completed && !taskIsInReview(t)).length;
-  return { total: tasks.length, active, done, inReview };
+  const employeeAssigned = tasks.filter(taskHasEmployeeAssignment).length;
+  return { total: tasks.length, active, done, inReview, employeeAssigned };
 }
 
 function ownerFilteredTasks() {
@@ -1083,13 +1089,49 @@ function ownerFilteredTasks() {
   if (state.ownerTaskFilter === "in_review") {
     return state.tasks.filter(taskIsInReview);
   }
+  if (state.ownerTaskFilter === "employee_assigned") {
+    return state.tasks.filter(taskHasEmployeeAssignment);
+  }
   return state.tasks.filter((t) => !t.completed && !taskIsInReview(t));
 }
 
 function setOwnerTaskFilter(filter) {
-  if (filter !== "active" && filter !== "completed" && filter !== "in_review") return;
+  if (
+    filter !== "active" &&
+    filter !== "completed" &&
+    filter !== "in_review" &&
+    filter !== "employee_assigned"
+  ) {
+    return;
+  }
   state.ownerTaskFilter = filter;
   renderOwnerMain();
+}
+
+function ownerEmployeesCellHtml(task) {
+  const assignees = task.assignees ?? [];
+  const empChains = assignees
+    .filter((a) => a.assignedBy?.displayName)
+    .map((a) => ({ from: a.assignedBy.displayName, to: a.displayName }));
+  if (empChains.length) {
+    return `<div class="owner-emp-assign-chains d-flex flex-column align-items-center gap-1">${empChains
+      .map(
+        (c) =>
+          `<span class="badge rounded-pill text-bg-info border small owner-emp-chain-badge" title="Employee assignment">${escapeHtml(c.from)} → ${escapeHtml(c.to)}</span>`
+      )
+      .join("")}</div>`;
+  }
+  const nAssigned = assignees.length;
+  const nDone = assignees.filter((a) => a.assigneeDone).length;
+  return `<span class="text-muted me-1"><i class="bi bi-people" aria-hidden="true"></i></span><span class="tabular-nums">${nDone}\u00a0/\u00a0${nAssigned}</span>`;
+}
+
+function ownerTaskEmployeeAssignLine(task) {
+  if (!taskHasEmployeeAssignment(task)) return "";
+  const chains = (task.assignees ?? [])
+    .filter((a) => a.assignedBy?.displayName)
+    .map((a) => `${a.assignedBy.displayName} → ${a.displayName}`);
+  return `<div class="small text-info owner-emp-assign-line mt-1"><i class="bi bi-person-lines-fill me-1" aria-hidden="true"></i>${escapeHtml(chains.join(", "))}</div>`;
 }
 
 function leftNavInner() {
@@ -2525,30 +2567,6 @@ function ownerAssigneeUpdatesHtml(taskId, assignee) {
     </button>`;
 }
 
-function ownerEmployeeAssignmentChainText(task) {
-  const delegations = task.delegations ?? [];
-  if (delegations.length > 0) {
-    return delegations
-      .map((d) => `${d.fromUserName} → ${d.toUserName}`)
-      .join(" · ");
-  }
-  const withAssigner = (task.assignees ?? []).find((a) => a.assignedBy?.displayName);
-  if (withAssigner?.assignedBy) {
-    return `${withAssigner.assignedBy.displayName} → ${withAssigner.displayName}`;
-  }
-  if (task.createdBy?.role === "employee" && (task.assignees ?? []).length > 0) {
-    const names = task.assignees.map((a) => a.displayName).join(", ");
-    return `${task.createdBy.displayName} → ${names}`;
-  }
-  return "";
-}
-
-function ownerEmployeeAssignmentLineHtml(task) {
-  const chain = ownerEmployeeAssignmentChainText(task);
-  if (!chain) return "";
-  return `<div class="small text-info owner-emp-assignment-line mt-1"><i class="bi bi-arrow-right-short" aria-hidden="true"></i> ${escapeHtml(chain)}</div>`;
-}
-
 function ownerDelegationHistoryHtml(task) {
   const rows = task.delegations ?? [];
   if (!rows.length) return "";
@@ -3285,7 +3303,7 @@ function ownerTaskGroupTbody(t) {
               : "owner-assignee-status--pending";
             const statusLabel = a.assigneeDone ? "Submitted" : "Pending";
             const assignedByNote = a.assignedBy?.displayName
-              ? `<div class="small text-info owner-delegated-by-note"><i class="bi bi-person-plus me-1" aria-hidden="true"></i>Employee assigned by ${escapeHtml(a.assignedBy.displayName)}</div>`
+              ? `<div class="small text-info owner-delegated-by-note"><i class="bi bi-arrow-right-short" aria-hidden="true"></i>${escapeHtml(a.assignedBy.displayName)} → ${escapeHtml(a.displayName)}</div>`
               : "";
             return `<article class="owner-team-card">
                 <div class="owner-team-card-head">
@@ -3337,20 +3355,15 @@ function ownerTaskGroupTbody(t) {
         <span class="task-grip grip-handle d-inline-flex align-items-center justify-content-center rounded p-1" title="Drag to reorder"><i class="bi bi-grip-vertical fs-5"></i></span>
       </td>
       <td class="owner-task-cell owner-task-col--task align-middle">
-        <div class="min-w-0">
-          <button type="button" class="btn btn-link text-start text-body fw-semibold text-decoration-none p-0 owner-task-open-details" data-open-id="${
-            t.id
-          }" aria-label="Open task details">${escapeHtml(t.title)}</button>
-          ${ownerEmployeeAssignmentLineHtml(t)}
-        </div>
+        <button type="button" class="btn btn-link text-start text-body fw-semibold text-decoration-none p-0 owner-task-open-details" data-open-id="${
+          t.id
+        }" aria-label="Open task details">${escapeHtml(t.title)}</button>
+        ${ownerTaskEmployeeAssignLine(t)}
       </td>
       <td class="owner-task-cell owner-task-col--deadline align-middle small text-nowrap tabular-nums">${deadlineCell}</td>
       <td class="owner-task-cell owner-task-col--description align-middle">${descriptionBox}</td>
       <td class="owner-task-cell owner-task-col--employees align-middle text-center small text-nowrap">
-        ${ownerEmployeeAssignmentChainText(t)
-          ? `<div class="small fw-semibold text-info mb-1">${escapeHtml(ownerEmployeeAssignmentChainText(t))}</div>`
-          : ""}
-        <span class="text-muted tabular-nums"><i class="bi bi-people me-1" aria-hidden="true"></i>${progressNumbers}</span>
+        ${ownerEmployeesCellHtml(t)}
       </td>
       <td class="owner-task-cell owner-task-col--trail align-middle text-end">
         <button
@@ -3378,9 +3391,6 @@ function ownerTaskGroupTbody(t) {
                   <i class="bi bi-people me-1" aria-hidden="true"></i>${progressNumbers}
                 </span>
               </div>
-              ${ownerEmployeeAssignmentChainText(t)
-                ? `<div class="owner-emp-assignment-banner small text-info px-1 mb-3"><i class="bi bi-people-fill me-1" aria-hidden="true"></i>Employee assignment: <strong>${escapeHtml(ownerEmployeeAssignmentChainText(t))}</strong></div>`
-                : ""}
               <div class="owner-team-cards">${assigneeCards}</div>
               ${ownerDelegationHistoryHtml(t)}
             </div>
@@ -3418,6 +3428,10 @@ function renderOwnerMain() {
     state.ownerTaskFilter === "active" ? " owner-kpi-card--active owner-kpi-card--active-primary" : "";
   const inReviewKpiClass =
     state.ownerTaskFilter === "in_review" ? " owner-kpi-card--active owner-kpi-card--active-danger" : "";
+  const empAssignedKpiClass =
+    state.ownerTaskFilter === "employee_assigned"
+      ? " owner-kpi-card--active owner-kpi-card--active-info"
+      : "";
   const completedKpiClass =
     state.ownerTaskFilter === "completed" ? " owner-kpi-card--active owner-kpi-card--active-success" : "";
   const kpiRow =
@@ -3451,13 +3465,13 @@ function renderOwnerMain() {
             </button>
           </div>
           <div class="col-6 col-lg-3">
-            <div class="owner-kpi-card">
-              <div class="owner-kpi-icon text-info"><i class="bi bi-collection" aria-hidden="true"></i></div>
+            <button type="button" class="owner-kpi-card owner-kpi-card--filter w-100 text-start${empAssignedKpiClass}" data-owner-filter="employee_assigned" aria-pressed="${state.ownerTaskFilter === "employee_assigned"}">
+              <div class="owner-kpi-icon text-info"><i class="bi bi-person-lines-fill" aria-hidden="true"></i></div>
               <div>
-                <div class="owner-kpi-value tabular-nums">${metrics.total}</div>
-                <div class="owner-kpi-label">Total in list</div>
+                <div class="owner-kpi-value tabular-nums">${metrics.employeeAssigned}</div>
+                <div class="owner-kpi-label">Employee assigned</div>
               </div>
-            </div>
+            </button>
           </div>
         </div>`
       : "";
@@ -3486,7 +3500,13 @@ function renderOwnerMain() {
               <p class="owner-empty-title mb-1">Nothing in review</p>
               <p class="owner-empty-desc text-muted small mb-0">Tasks appear here when an employee posts a progress update and has not submitted yet.</p>
             </div>`
-          : `<div class="owner-empty-state py-5 px-3">
+          : state.ownerTaskFilter === "employee_assigned"
+            ? `<div class="owner-empty-state py-5 px-3">
+                <i class="bi bi-person-lines-fill owner-empty-icon text-info" aria-hidden="true"></i>
+                <p class="owner-empty-title mb-1">No employee assignments</p>
+                <p class="owner-empty-desc text-muted small mb-0">Tasks appear here when an employee creates or assigns work to a colleague. Check the <strong>Employee assignments</strong> list.</p>
+              </div>`
+            : `<div class="owner-empty-state py-5 px-3">
               <i class="bi bi-check2-all owner-empty-icon text-success" aria-hidden="true"></i>
               <p class="owner-empty-title mb-1">No active tasks</p>
               <p class="owner-empty-desc text-muted small mb-0">All caught up. Click <strong>Completed</strong> above to review finished tasks.</p>
@@ -3528,7 +3548,7 @@ function renderOwnerMain() {
     <section class="owner-task-panel" aria-label="Tasks">
       ${tableBlock}
     </section>
-    <section class="owner-quick-add-bar mt-auto flex-shrink-0 ${state.ownerTaskFilter === "completed" || state.ownerTaskFilter === "in_review" ? "d-none" : ""}" aria-label="Quick add task">
+    <section class="owner-quick-add-bar mt-auto flex-shrink-0 ${state.ownerTaskFilter === "completed" || state.ownerTaskFilter === "in_review" || state.ownerTaskFilter === "employee_assigned" ? "d-none" : ""}" aria-label="Quick add task">
       <label class="owner-quick-add-label form-label" for="quick-add-title">Quick add task</label>
       <div class="input-group">
         <span class="input-group-text"><i class="bi bi-plus-lg" aria-hidden="true"></i></span>

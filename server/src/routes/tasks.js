@@ -47,16 +47,18 @@ function clearAssigneeSubmissionUpdate(assigneeDone) {
   };
 }
 
+const EMPLOYEE_ASSIGNMENTS_LIST_TITLE = "Employee assignments";
+
 const taskAssigneeInclude = {
   assignments: {
     include: {
       user: { select: { id: true, displayName: true, email: true } },
-      assignedBy: { select: { id: true, displayName: true } },
+      assignedBy: { select: { id: true, displayName: true, role: true } },
     },
   },
 };
 
-const taskOwnerInclude = {
+const taskListInclude = {
   ...taskAssigneeInclude,
   createdBy: { select: { id: true, displayName: true, role: true } },
 };
@@ -436,7 +438,7 @@ export function serializeTask(t) {
     unreadProgressUpdateCount: a.unreadProgressUpdateCount ?? 0,
     latestProgressUpdate: a.latestProgressUpdate ?? null,
     assignedBy: a.assignedBy
-      ? { id: a.assignedBy.id, displayName: a.assignedBy.displayName }
+      ? { id: a.assignedBy.id, displayName: a.assignedBy.displayName, role: a.assignedBy.role }
       : null,
     delegatedAt: a.delegatedAt instanceof Date ? a.delegatedAt.toISOString() : (a.delegatedAt ?? null),
   }));
@@ -470,10 +472,8 @@ async function assertListOwner(listId, userId) {
   });
 }
 
-const EMPLOYEE_TASK_LIST_TITLE = "Employee assignments";
-
-/** Dedicated owner list for tasks employees create or assign to each other. */
-async function resolveOwnerEmployeeTaskList() {
+/** First owner account's default task list (for employee-created tasks visible to admin). */
+async function resolveOwnerDefaultList() {
   const owner = await prisma.user.findFirst({
     where: { role: "owner" },
     orderBy: { createdAt: "asc" },
@@ -482,7 +482,28 @@ async function resolveOwnerEmployeeTaskList() {
   if (!owner) return null;
 
   let list = await prisma.taskList.findFirst({
-    where: { ownerId: owner.id, title: EMPLOYEE_TASK_LIST_TITLE },
+    where: { ownerId: owner.id },
+    orderBy: { sortOrder: "asc" },
+  });
+  if (!list) {
+    list = await prisma.taskList.create({
+      data: { ownerId: owner.id, title: "Tasks", sortOrder: 0 },
+    });
+  }
+  return { list, ownerId: owner.id };
+}
+
+/** Dedicated list so admin can find tasks employees created or assigned to each other. */
+async function resolveOwnerEmployeeAssignmentsList() {
+  const owner = await prisma.user.findFirst({
+    where: { role: "owner" },
+    orderBy: { createdAt: "asc" },
+    select: { id: true },
+  });
+  if (!owner) return null;
+
+  let list = await prisma.taskList.findFirst({
+    where: { ownerId: owner.id, title: EMPLOYEE_ASSIGNMENTS_LIST_TITLE },
   });
   if (!list) {
     const maxOrder = await prisma.taskList.aggregate({
@@ -492,7 +513,7 @@ async function resolveOwnerEmployeeTaskList() {
     list = await prisma.taskList.create({
       data: {
         ownerId: owner.id,
-        title: EMPLOYEE_TASK_LIST_TITLE,
+        title: EMPLOYEE_ASSIGNMENTS_LIST_TITLE,
         sortOrder: (maxOrder._max.sortOrder ?? -1) + 1,
       },
     });
@@ -553,7 +574,7 @@ router.post("/employee-create", requireAuth, async (req, res) => {
     return res.status(400).json({ error: "Invalid employee" });
   }
 
-  const ownerCtx = await resolveOwnerEmployeeTaskList();
+  const ownerCtx = await resolveOwnerEmployeeAssignmentsList();
   if (!ownerCtx) {
     return res.status(503).json({ error: "No admin account is set up yet" });
   }
@@ -616,7 +637,7 @@ router.get("/lists/:listId", requireOwner, async (req, res) => {
     await attachProgressUpdateMeta(
       await prisma.task.findMany({
         where: { listId: list.id },
-        include: taskOwnerInclude,
+        include: taskListInclude,
         orderBy: [{ completed: "asc" }, { sortOrder: "asc" }],
       }),
       req.session.userId
