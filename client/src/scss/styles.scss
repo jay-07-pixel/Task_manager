@@ -468,10 +468,14 @@ body {
   box-shadow: 0 0.15rem 0.65rem rgba(var(--bs-info-rgb), 0.12);
 }
 
-.owner-emp-chain-badge {
-  max-width: 10rem;
-  white-space: normal;
-  line-height: 1.25;
+.owner-emp-chain-line {
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.owner-emp-chain-arrow {
+  margin: 0 0.15rem;
+  font-weight: 400;
 }
 
 .owner-list-item--pinned {

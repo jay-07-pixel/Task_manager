@@ -1125,21 +1125,13 @@ function ownerEmployeesCellHtml(task) {
     return `<div class="owner-emp-assign-chains d-flex flex-column align-items-center gap-1">${empChains
       .map(
         (c) =>
-          `<span class="badge rounded-pill text-bg-info border small owner-emp-chain-badge" title="Employee assignment">${escapeHtml(c.from)} → ${escapeHtml(c.to)}</span>`
+          `<span class="owner-emp-chain-line small text-nowrap" title="Employee assignment">${escapeHtml(c.from)} <span class="owner-emp-chain-arrow text-muted" aria-hidden="true">→</span> ${escapeHtml(c.to)}</span>`
       )
       .join("")}</div>`;
   }
   const nAssigned = assignees.length;
   const nDone = assignees.filter((a) => a.assigneeDone).length;
   return `<span class="text-muted me-1"><i class="bi bi-people" aria-hidden="true"></i></span><span class="tabular-nums">${nDone}\u00a0/\u00a0${nAssigned}</span>`;
-}
-
-function ownerTaskEmployeeAssignLine(task) {
-  if (!taskHasEmployeeAssignment(task)) return "";
-  const chains = (task.assignees ?? [])
-    .filter((a) => a.assignedBy?.displayName)
-    .map((a) => `${a.assignedBy.displayName} → ${a.displayName}`);
-  return `<div class="small text-info owner-emp-assign-line mt-1"><i class="bi bi-person-lines-fill me-1" aria-hidden="true"></i>${escapeHtml(chains.join(", "))}</div>`;
 }
 
 function leftNavInner() {
@@ -3313,6 +3305,8 @@ function wireTaskModal() {
 }
 
 function ownerTaskGroupTbody(t) {
+  const activeList = state.lists.find((l) => l.id === state.activeListId);
+  const isEmpAssignList = isEmployeeAssignmentsList(activeList);
   const assignees = t.assignees ?? [];
   const nAssigned = assignees.length;
   const nDone = assignees.filter((a) => a.assigneeDone).length;
@@ -3339,9 +3333,10 @@ function ownerTaskGroupTbody(t) {
               ? "owner-assignee-status--done"
               : "owner-assignee-status--pending";
             const statusLabel = a.assigneeDone ? "Submitted" : "Pending";
-            const assignedByNote = a.assignedBy?.displayName
-              ? `<div class="small text-info owner-delegated-by-note"><i class="bi bi-arrow-right-short" aria-hidden="true"></i>${escapeHtml(a.assignedBy.displayName)} → ${escapeHtml(a.displayName)}</div>`
-              : "";
+            const assignedByNote =
+              !isEmpAssignList && a.assignedBy?.displayName
+                ? `<div class="small text-info owner-delegated-by-note"><i class="bi bi-arrow-right-short" aria-hidden="true"></i>${escapeHtml(a.assignedBy.displayName)} → ${escapeHtml(a.displayName)}</div>`
+                : "";
             return `<article class="owner-team-card">
                 <div class="owner-team-card-head">
                   <div class="owner-team-avatar" aria-hidden="true">${escapeHtml(assigneeInitials(a.displayName))}</div>
@@ -3395,7 +3390,6 @@ function ownerTaskGroupTbody(t) {
         <button type="button" class="btn btn-link text-start text-body fw-semibold text-decoration-none p-0 owner-task-open-details" data-open-id="${
           t.id
         }" aria-label="Open task details">${escapeHtml(t.title)}</button>
-        ${ownerTaskEmployeeAssignLine(t)}
       </td>
       <td class="owner-task-cell owner-task-col--deadline align-middle small text-nowrap tabular-nums">${deadlineCell}</td>
       <td class="owner-task-cell owner-task-col--description align-middle">${descriptionBox}</td>
@@ -3429,7 +3423,7 @@ function ownerTaskGroupTbody(t) {
                 </span>
               </div>
               <div class="owner-team-cards">${assigneeCards}</div>
-              ${ownerDelegationHistoryHtml(t)}
+              ${isEmpAssignList ? "" : ownerDelegationHistoryHtml(t)}
             </div>
             <div class="px-3 py-3 mt-2 d-flex flex-wrap align-items-center justify-content-between gap-2 border-top owner-task-detail-actions">
               ${assigneeMarkDoneControl}
