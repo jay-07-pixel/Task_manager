@@ -427,6 +427,7 @@ async function attachDelegationsToTasks(tasks) {
 /** Tasks the employee assigned to others — no submission or update content. */
 function serializeTaskIAssigned(t, assignerId) {
   const myAssignments = (t.assignments ?? []).filter((a) => a.assignedByUserId === assignerId);
+  const canDelete = t.createdById === assignerId && myAssignments.length > 0;
   return {
     id: t.id,
     title: t.title,
@@ -435,6 +436,7 @@ function serializeTaskIAssigned(t, assignerId) {
     allDay: t.allDay,
     completed: t.completed,
     createdAt: t.createdAt?.toISOString?.() ?? t.createdAt ?? null,
+    canDelete,
     assignedTo: myAssignments.map((a) => ({
       id: a.user.id,
       displayName: a.user.displayName,
@@ -1384,14 +1386,31 @@ router.patch("/:id", requireAuth, async (req, res) => {
   res.json({ task: serializeTask(updated) });
 });
 
-router.delete("/:id", requireOwner, async (req, res) => {
+router.delete("/:id", requireAuth, async (req, res) => {
   const task = await prisma.task.findFirst({
     where: { id: req.params.id },
-    include: { list: true, assignments: { select: { completionProofPath: true } } },
+    include: {
+      list: true,
+      assignments: { select: { assignedByUserId: true, completionProofPath: true } },
+    },
   });
-  if (!task || task.list.ownerId !== req.session.userId) {
+  if (!task) {
     return res.status(404).json({ error: "Task not found" });
   }
+
+  if (req.session.role === "owner") {
+    if (task.list.ownerId !== req.session.userId) {
+      return res.status(404).json({ error: "Task not found" });
+    }
+  } else if (req.session.role === "employee") {
+    const assignedByMe = task.assignments.some((a) => a.assignedByUserId === req.session.userId);
+    if (task.createdById !== req.session.userId || !assignedByMe) {
+      return res.status(403).json({ error: "You can only delete tasks you created and assigned to a colleague" });
+    }
+  } else {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
   for (const a of task.assignments) {
     if (a.completionProofPath) deleteProofFile(a.completionProofPath);
   }

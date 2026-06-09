@@ -3960,6 +3960,25 @@ async function empRefreshDashboard(btn) {
   }
 }
 
+async function deleteEmpAssignedTask(btn) {
+  const taskId = btn.getAttribute("data-task-id");
+  const title = btn.getAttribute("data-task-title") || "this task";
+  if (!taskId) return;
+  if (!window.confirm(`Delete "${title}"?\n\nThis removes the task for your colleague too.`)) return;
+  btn.disabled = true;
+  try {
+    await api(`/api/tasks/${taskId}`, { method: "DELETE" });
+    await loadEmployeeAssignedByMeTasks();
+    renderEmpListContentOnly();
+    renderEmployeeMain();
+    syncEmpTopbarTitle();
+    showToast("Task deleted.", "success");
+  } catch (err) {
+    showToast(err.message, "danger");
+    btn.disabled = false;
+  }
+}
+
 async function loadEmpPeers() {
   const { users } = await api("/api/users/peers");
   state.empPeers = users ?? [];
@@ -4302,10 +4321,19 @@ function empAssignedByMeCardsHtml(tasks) {
       const deadlineDisplay = t.dueAt
         ? escapeHtml(formatEmpDue(t.dueAt))
         : `<span class="text-muted">—</span>`;
+      const deleteBtn = t.canDelete
+        ? `<button type="button" class="btn btn-sm btn-outline-danger js-emp-delete-assigned" data-task-id="${t.id}" data-task-title="${escapeHtml(t.title)}" aria-label="Delete task">
+            <i class="bi bi-trash" aria-hidden="true"></i>
+            <span class="d-none d-sm-inline ms-1">Delete</span>
+          </button>`
+        : "";
       return `<article class="emp-assigned-out-card" data-task-id="${t.id}">
         <div class="emp-assigned-out-card-head">
           <h3 class="emp-assigned-out-card-title h6 mb-0">${escapeHtml(t.title)}</h3>
-          ${assignedWhen ? `<time class="emp-assigned-out-card-when small text-muted tabular-nums">Assigned ${assignedWhen}</time>` : ""}
+          <div class="emp-assigned-out-card-meta d-flex flex-wrap align-items-center gap-2">
+            ${assignedWhen ? `<time class="emp-assigned-out-card-when small text-muted tabular-nums">Assigned ${assignedWhen}</time>` : ""}
+            ${deleteBtn}
+          </div>
         </div>
         <div class="emp-assigned-out-card-grid">
           <div class="emp-assigned-out-card-field">
@@ -4558,6 +4586,9 @@ function renderEmployeeMain() {
     });
     main.querySelectorAll(".js-emp-create-task").forEach((btn) => {
       btn.addEventListener("click", () => void openEmpCreateTaskModal());
+    });
+    main.querySelectorAll(".js-emp-delete-assigned").forEach((btn) => {
+      btn.addEventListener("click", () => void deleteEmpAssignedTask(btn));
     });
     return;
   }

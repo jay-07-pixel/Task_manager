@@ -216,12 +216,16 @@ body {
 .emp-assigned-out-card-head {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 0.35rem 1rem;
   margin-bottom: 0.85rem;
   padding-bottom: 0.75rem;
   border-bottom: 1px solid var(--bs-border-color-translucent, var(--bs-border-color));
+}
+
+.emp-assigned-out-card-meta {
+  flex-shrink: 0;
 }
 
 .emp-assigned-out-card-title {
