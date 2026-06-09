@@ -273,6 +273,23 @@ async function attachProgressUpdateMeta(tasks, ownerId = null) {
   });
   const countMap = new Map(countRows.map((r) => [`${r.taskId}:${r.userId}`, r._count._all]));
 
+  const latestMap = new Map();
+  const latestRows = await prisma.taskProgressUpdate.findMany({
+    where: { taskId: { in: taskIds } },
+    orderBy: [{ createdAt: "desc" }],
+    select: {
+      taskId: true,
+      userId: true,
+      message: true,
+      updateType: true,
+      createdAt: true,
+    },
+  });
+  for (const row of latestRows) {
+    const key = `${row.taskId}:${row.userId}`;
+    if (!latestMap.has(key)) latestMap.set(key, row);
+  }
+
   const unreadMap = new Map();
   if (ownerId) {
     const readRows = await prisma.taskProgressUpdateRead.findMany({
@@ -296,11 +313,21 @@ async function attachProgressUpdateMeta(tasks, ownerId = null) {
 
   return tasks.map((t) => ({
     ...t,
-    assignments: (t.assignments ?? []).map((a) => ({
-      ...a,
-      progressUpdateCount: countMap.get(`${t.id}:${a.userId}`) ?? 0,
-      unreadProgressUpdateCount: ownerId ? (unreadMap.get(`${t.id}:${a.userId}`) ?? 0) : 0,
-    })),
+    assignments: (t.assignments ?? []).map((a) => {
+      const latest = latestMap.get(`${t.id}:${a.userId}`) ?? null;
+      return {
+        ...a,
+        progressUpdateCount: countMap.get(`${t.id}:${a.userId}`) ?? 0,
+        unreadProgressUpdateCount: ownerId ? (unreadMap.get(`${t.id}:${a.userId}`) ?? 0) : 0,
+        latestProgressUpdate: latest
+          ? {
+              message: latest.message,
+              updateType: latest.updateType,
+              createdAt: latest.createdAt.toISOString(),
+            }
+          : null,
+      };
+    }),
   }));
 }
 
@@ -335,6 +362,7 @@ export function serializeTask(t) {
       : null,
     progressUpdateCount: a.progressUpdateCount ?? 0,
     unreadProgressUpdateCount: a.unreadProgressUpdateCount ?? 0,
+    latestProgressUpdate: a.latestProgressUpdate ?? null,
   }));
   return {
     id: t.id,

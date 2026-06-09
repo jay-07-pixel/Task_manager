@@ -2392,10 +2392,17 @@ function formatProgressUpdateTime(iso) {
   }
 }
 
+function assigneeInitials(displayName) {
+  const parts = (displayName || "").trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 1).toUpperCase();
+  return `${parts[0].slice(0, 1)}${parts[parts.length - 1].slice(0, 1)}`.toUpperCase();
+}
+
 function ownerProgressUpdateBadgeHtml(assignee) {
   const total = assignee.progressUpdateCount ?? 0;
   const unread = assignee.unreadProgressUpdateCount ?? 0;
-  if (total === 0) return `<span class="text-muted">—</span>`;
+  if (total === 0) return "";
   if (unread > 0) {
     return `<span class="owner-update-unread-badge tabular-nums" aria-label="${unread} unread update${
       unread === 1 ? "" : "s"
@@ -2404,11 +2411,64 @@ function ownerProgressUpdateBadgeHtml(assignee) {
   return `<span class="owner-update-read-dot" aria-label="All updates read" title="All updates read"></span>`;
 }
 
+function ownerLatestUpdateSnippet(message, max = 96) {
+  const text = (message || "").trim().replace(/\s+/g, " ");
+  if (!text) return "";
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
+function ownerAssigneeUpdatesHtml(taskId, assignee) {
+  const latest = assignee.latestProgressUpdate;
+  const total = assignee.progressUpdateCount ?? 0;
+  if (!total || !latest?.message) {
+    return `<span class="owner-assignee-empty-hint text-muted small">No updates yet</span>`;
+  }
+  const snippet = ownerLatestUpdateSnippet(latest.message);
+  const badge = ownerProgressUpdateBadgeHtml(assignee);
+  return `<button
+      type="button"
+      class="owner-assignee-update-preview owner-view-progress-btn"
+      data-view-progress-task-id="${taskId}"
+      data-view-progress-user-id="${escapeHtml(assignee.id)}"
+      data-view-progress-user-name="${escapeHtml(assignee.displayName)}"
+      title="${escapeHtml((latest.message || "").trim())}"
+      aria-label="View all updates for ${escapeHtml(assignee.displayName)}"
+    >
+      ${badge}
+      <span class="owner-assignee-update-text">${escapeHtml(snippet)}</span>
+    </button>`;
+}
+
+function ownerAssigneeSubmissionHtml(taskId, assignee) {
+  if (!assigneeHasSubmission(assignee)) {
+    return `<span class="owner-assignee-empty-hint text-muted small">No submission yet</span>`;
+  }
+  return `<button
+      type="button"
+      class="btn btn-sm btn-outline-primary owner-view-submission-btn owner-assignee-submission-btn"
+      data-view-submission-task-id="${taskId}"
+      data-view-submission-user-id="${escapeHtml(assignee.id)}"
+      title="View submission"
+      aria-label="View submission for ${escapeHtml(assignee.displayName)}"
+    >
+      <i class="bi bi-eye me-1" aria-hidden="true"></i>View submission
+    </button>`;
+}
+
 async function markProgressUpdatesRead(taskId, assigneeUserId) {
   await api(`/api/tasks/${taskId}/progress-updates/mark-read`, {
     method: "POST",
     body: JSON.stringify({ assigneeUserId }),
   });
+}
+
+async function markTaskProgressUpdatesRead(taskId) {
+  const task = findTaskById(taskId);
+  if (!task) return;
+  const unreadAssignees = (task.assignees ?? []).filter((a) => (a.unreadProgressUpdateCount ?? 0) > 0);
+  for (const a of unreadAssignees) {
+    await markProgressUpdatesRead(taskId, a.id);
+  }
 }
 
 function renderProgressUpdateTimeline(updates) {
@@ -2645,6 +2705,8 @@ function ownerTasksFingerprintFrom(tasks) {
         x.completionProofUrl ?? "",
         x.progressUpdateCount ?? 0,
         x.unreadProgressUpdateCount ?? 0,
+        x.latestProgressUpdate?.message ?? "",
+        x.latestProgressUpdate?.createdAt ?? "",
       ]),
     }))
   );
@@ -3036,35 +3098,34 @@ function ownerTaskGroupTbody(t) {
       ? `<div class="owner-task-desc-box small text-body-secondary text-truncate mb-0" title="${escapeHtml(notesRaw)}">${escapeHtml(notesPreview)}</div>`
       : `<div class="owner-task-desc-box small text-muted fst-italic mb-0">No description</div>`;
 
-  const assigneePanelRows =
+  const assigneeCards =
     assignees.length === 0
-      ? `<tr><td colspan="4" class="text-muted small py-3 px-3">No assignees yet. Edit the task to add people.</td></tr>`
+      ? `<p class="owner-assignee-empty text-muted small mb-0 px-1">No assignees yet. Edit the task to add people.</p>`
       : assignees
           .map((a) => {
-            const preview = submissionPreviewText(a.submissionText);
-            const submissionCell = assigneeHasSubmission(a)
-              ? `<div class="d-flex flex-column align-items-end gap-1">
-                  ${preview ? `<span class="small text-muted text-truncate owner-submission-snippet" title="${escapeHtml((a.submissionText || "").trim())}">${escapeHtml(preview)}</span>` : ""}
-                  <button type="button" class="btn btn-sm btn-outline-primary owner-view-submission-btn" data-view-submission-task-id="${t.id}" data-view-submission-user-id="${escapeHtml(a.id)}" title="View submission" aria-label="View submission for ${escapeHtml(a.displayName)}"><i class="bi bi-eye me-1" aria-hidden="true"></i>View</button>
-                </div>`
-              : `<span class="text-muted">—</span>`;
-            const updateCount = a.progressUpdateCount ?? 0;
-            const updatesCell =
-              updateCount > 0
-                ? `<div class="owner-update-cell">
-                    ${ownerProgressUpdateBadgeHtml(a)}
-                    <button type="button" class="btn btn-sm btn-outline-secondary owner-view-progress-btn" data-view-progress-task-id="${t.id}" data-view-progress-user-id="${escapeHtml(a.id)}" data-view-progress-user-name="${escapeHtml(a.displayName)}" title="Review updates" aria-label="Review updates for ${escapeHtml(a.displayName)}"><i class="bi bi-chat-left-dots me-1" aria-hidden="true"></i>Review</button>
-                  </div>`
-                : `<span class="text-muted">—</span>`;
-            const doneLabel = a.assigneeDone
-              ? `<span class="badge rounded-pill bg-success-subtle text-success border border-success-subtle owner-assignee-status-badge">Submitted</span>`
-              : `<span class="badge rounded-pill bg-danger-subtle text-danger border border-danger-subtle owner-assignee-status-badge">Pending</span>`;
-            return `<tr>
-              <td class="px-3 py-2 fw-medium">${escapeHtml(a.displayName)}</td>
-              <td class="px-3 py-2 text-center">${doneLabel}</td>
-              <td class="px-3 py-2 text-end">${updatesCell}</td>
-              <td class="px-3 py-2 text-end">${submissionCell}</td>
-            </tr>`;
+            const statusClass = a.assigneeDone
+              ? "owner-assignee-status--done"
+              : "owner-assignee-status--pending";
+            const statusLabel = a.assigneeDone ? "Submitted" : "Pending";
+            return `<article class="owner-team-card">
+                <div class="owner-team-card-head">
+                  <div class="owner-team-avatar" aria-hidden="true">${escapeHtml(assigneeInitials(a.displayName))}</div>
+                  <div class="owner-team-ident min-w-0">
+                    <div class="owner-team-name text-truncate">${escapeHtml(a.displayName)}</div>
+                    <span class="owner-assignee-status ${statusClass}">${statusLabel}</span>
+                  </div>
+                </div>
+                <div class="owner-team-card-grid">
+                  <div class="owner-team-col">
+                    <span class="owner-team-col-label">Updates</span>
+                    ${ownerAssigneeUpdatesHtml(t.id, a)}
+                  </div>
+                  <div class="owner-team-col">
+                    <span class="owner-team-col-label">Submission</span>
+                    ${ownerAssigneeSubmissionHtml(t.id, a)}
+                  </div>
+                </div>
+              </article>`;
           })
           .join("");
 
@@ -3120,21 +3181,14 @@ function ownerTaskGroupTbody(t) {
       <td colspan="6" class="p-0">
         <div class="collapse owner-task-detail-collapse" id="${detailId}">
           <div class="owner-task-detail-inner">
-            <div class="px-3 pt-3">
-              <h3 class="owner-task-detail-heading small text-secondary mb-2">Assignees</h3>
-              <div class="table-responsive rounded border bg-body-secondary">
-                <table class="table table-hover align-middle mb-0 owner-assignee-panel-table">
-                  <thead class="table-light">
-                    <tr>
-                      <th scope="col" class="px-3 py-2">Employee</th>
-                      <th scope="col" class="px-3 py-2 text-center" style="width: 7.5rem;">Status</th>
-                      <th scope="col" class="px-3 py-2 text-end owner-assignee-col--updates">Updates</th>
-                      <th scope="col" class="px-3 py-2 text-end" style="width: 8.5rem;">Submission</th>
-                    </tr>
-                  </thead>
-                  <tbody>${assigneePanelRows}</tbody>
-                </table>
+            <div class="owner-team-progress px-3 pt-3 pb-2">
+              <div class="owner-team-progress-head d-flex align-items-center justify-content-between gap-2 mb-3">
+                <h3 class="owner-task-detail-heading small text-secondary mb-0">Team progress</h3>
+                <span class="owner-team-count-pill small tabular-nums">
+                  <i class="bi bi-people me-1" aria-hidden="true"></i>${progressNumbers}
+                </span>
               </div>
+              <div class="owner-team-cards">${assigneeCards}</div>
             </div>
             <div class="px-3 py-3 mt-2 d-flex flex-wrap align-items-center justify-content-between gap-2 border-top owner-task-detail-actions">
               ${assigneeMarkDoneControl}
@@ -3333,6 +3387,29 @@ function renderOwnerMain() {
       void openProgressUpdatesForAssignee(taskId, userId, userName).catch((err) => {
         showToast(err.message || "Could not load updates.", "danger");
       });
+    });
+  });
+
+  main.querySelectorAll(".owner-task-detail-collapse").forEach((el) => {
+    el.addEventListener("shown.bs.collapse", () => {
+      const match = /^owner-task-detail-(.+)$/.exec(el.id || "");
+      if (!match) return;
+      const taskId = match[1];
+      const task = findTaskById(taskId);
+      if (!task?.assignees?.some((a) => (a.unreadProgressUpdateCount ?? 0) > 0)) return;
+      const ui = captureOwnerUiState();
+      void (async () => {
+        try {
+          await markTaskProgressUpdatesRead(taskId);
+          if (state.activeListId) {
+            await loadTasks(state.activeListId);
+            renderOwnerMain();
+            restoreOwnerUiState(ui);
+          }
+        } catch {
+          /* ignore */
+        }
+      })();
     });
   });
 

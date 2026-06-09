@@ -588,38 +588,160 @@ body {
   border-top: 1px solid var(--bs-border-color);
 }
 
-.owner-assignee-col--updates {
-  width: 7.5rem;
-}
-
-.owner-update-cell {
+.owner-team-count-pill {
   display: inline-flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 0.4rem;
+  padding: 0.18rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(var(--bs-primary-rgb), 0.1);
+  color: var(--bs-primary);
+  font-weight: 600;
+}
+
+.owner-team-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.owner-team-card {
+  border: 1px solid var(--bs-border-color);
+  border-radius: 0.7rem;
+  background: var(--bs-body-bg);
+  padding: 0.85rem 0.9rem;
+}
+
+.owner-team-card-head {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin-bottom: 0.75rem;
+}
+
+.owner-team-avatar {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--bs-primary);
+  background: rgba(var(--bs-primary-rgb), 0.12);
+  flex-shrink: 0;
+}
+
+.owner-team-name {
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.owner-assignee-status {
+  display: inline-flex;
+  margin-top: 0.15rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
+.owner-assignee-status--pending {
+  color: var(--bs-danger);
+  background: rgba(var(--bs-danger-rgb), 0.1);
+  border: 1px solid rgba(var(--bs-danger-rgb), 0.2);
+}
+
+.owner-assignee-status--done {
+  color: var(--bs-success);
+  background: rgba(var(--bs-success-rgb), 0.1);
+  border: 1px solid rgba(var(--bs-success-rgb), 0.2);
+}
+
+.owner-team-card-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+}
+
+.owner-team-col {
+  border: 1px solid var(--bs-border-color);
+  border-radius: 0.55rem;
+  padding: 0.55rem 0.65rem;
+  background: rgba(var(--bs-secondary-rgb), 0.04);
+  min-width: 0;
+}
+
+.owner-team-col-label {
+  display: block;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--bs-secondary);
+  margin-bottom: 0.4rem;
+}
+
+.owner-assignee-update-preview {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+  color: inherit;
+}
+
+.owner-assignee-update-preview:hover .owner-assignee-update-text {
+  color: var(--bs-primary);
+}
+
+.owner-assignee-update-text {
+  font-size: 0.8rem;
+  line-height: 1.35;
+  word-break: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.owner-assignee-submission-btn {
+  width: 100%;
 }
 
 .owner-update-unread-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 1.2rem;
-  height: 1.2rem;
-  padding: 0 0.3rem;
+  min-width: 1.15rem;
+  height: 1.15rem;
+  padding: 0 0.28rem;
   border-radius: 999px;
   background: var(--bs-danger);
   color: #fff;
-  font-size: 0.68rem;
+  font-size: 0.65rem;
   font-weight: 700;
   line-height: 1;
+  flex-shrink: 0;
+  margin-top: 0.15rem;
 }
 
 .owner-update-read-dot {
-  width: 0.5rem;
-  height: 0.5rem;
+  width: 0.48rem;
+  height: 0.48rem;
   border-radius: 50%;
   background: var(--bs-success);
   flex-shrink: 0;
+  margin-top: 0.35rem;
+}
+
+@media (max-width: 575.98px) {
+  .owner-team-card-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .owner-task-expand-btn {
