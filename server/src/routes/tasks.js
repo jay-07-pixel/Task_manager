@@ -60,6 +60,14 @@ const delegateTaskSchema = z.object({
   employeeId: z.string().uuid(),
 });
 
+const employeeCreateTaskSchema = z.object({
+  title: z.string().min(1).max(500),
+  notes: z.string().max(20000).optional(),
+  dueAt: z.union([z.string().min(1), z.literal(""), z.null()]).optional(),
+  allDay: z.boolean().optional(),
+  assigneeId: z.string().uuid(),
+});
+
 const taskListSelect = { list: { select: { id: true, title: true } } };
 
 async function endRecurrenceSeries(taskId) {
@@ -433,6 +441,27 @@ async function assertListOwner(listId, userId) {
   });
 }
 
+/** First owner account's default task list (for employee-created tasks visible to admin). */
+async function resolveOwnerDefaultList() {
+  const owner = await prisma.user.findFirst({
+    where: { role: "owner" },
+    orderBy: { createdAt: "asc" },
+    select: { id: true },
+  });
+  if (!owner) return null;
+
+  let list = await prisma.taskList.findFirst({
+    where: { ownerId: owner.id },
+    orderBy: { sortOrder: "asc" },
+  });
+  if (!list) {
+    list = await prisma.taskList.create({
+      data: { ownerId: owner.id, title: "Tasks", sortOrder: 0 },
+    });
+  }
+  return { list, ownerId: owner.id };
+}
+
 router.get("/assigned", requireAuth, async (req, res) => {
   if (req.session.role !== "employee") {
     return res.status(403).json({ error: "Employees only" });
@@ -445,6 +474,84 @@ router.get("/assigned", requireAuth, async (req, res) => {
     })
   );
   res.json({ tasks: tasks.map(serializeTask) });
+});
+
+router.post("/employee-create", requireAuth, async (req, res) => {
+  if (req.session.role !== "employee") {
+    return res.status(403).json({ error: "Employees only" });
+  }
+
+  const parsed = employeeCreateTaskSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.flatten() });
+  }
+
+  const { title, notes, dueAt, allDay, assigneeId } = parsed.data;
+  if (assigneeId === req.session.userId) {
+    return res.status(400).json({ error: "Assign the task to another employee, not yourself" });
+  }
+
+  const assignee = await prisma.user.findFirst({
+    where: { id: assigneeId, role: "employee" },
+    select: { id: true },
+  });
+  if (!assignee) {
+    return res.status(400).json({ error: "Invalid employee" });
+  }
+
+  const ownerCtx = await resolveOwnerDefaultList();
+  if (!ownerCtx) {
+    return res.status(503).json({ error: "No admin account is set up yet" });
+  }
+
+  const maxOrder = await prisma.task.aggregate({
+    where: { listId: ownerCtx.list.id },
+    _max: { sortOrder: true },
+  });
+  const sortOrder = (maxOrder._max.sortOrder ?? -1) + 1;
+
+  let dueAtDate = null;
+  if (dueAt && String(dueAt).length > 0) {
+    dueAtDate = new Date(dueAt);
+    if (Number.isNaN(dueAtDate.getTime())) {
+      return res.status(400).json({ error: "Invalid due date" });
+    }
+  }
+
+  const now = new Date();
+  const task = await prisma.$transaction(async (tx) => {
+    const created = await tx.task.create({
+      data: {
+        listId: ownerCtx.list.id,
+        createdById: req.session.userId,
+        title: title.trim(),
+        notes: notes?.trim() ?? "",
+        dueAt: dueAtDate,
+        allDay: allDay ?? false,
+        sortOrder,
+        assignments: {
+          create: {
+            userId: assigneeId,
+            assignedByUserId: req.session.userId,
+            delegatedAt: now,
+          },
+        },
+      },
+      include: taskAssigneeInclude,
+    });
+    await tx.taskDelegation.create({
+      data: {
+        taskId: created.id,
+        fromUserId: req.session.userId,
+        toUserId: assigneeId,
+      },
+    });
+    return created;
+  });
+
+  const withMeta = (await attachProgressUpdateMeta([task]))[0];
+  const withDelegations = (await attachDelegationsToTasks([withMeta]))[0];
+  res.status(201).json({ task: serializeTask(withDelegations) });
 });
 
 router.get("/lists/:listId", requireOwner, async (req, res) => {

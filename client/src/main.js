@@ -1769,6 +1769,40 @@ function progressUpdateModalHtml() {
     </div>`;
 }
 
+function empCreateTaskModalHtml() {
+  return `
+    <div class="modal fade" id="empCreateTaskModal" tabindex="-1" aria-labelledby="empCreateTaskModalTitle" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h2 class="modal-title h5 mb-0" id="empCreateTaskModalTitle">Create & assign task</h2>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <label class="form-label" for="emp-create-title">Task title</label>
+            <input type="text" class="form-control mb-3" id="emp-create-title" maxlength="500" placeholder="What needs to be done?" autocomplete="off" />
+            <label class="form-label" for="emp-create-notes">Description <span class="text-muted fw-normal">(optional)</span></label>
+            <textarea class="form-control mb-3" id="emp-create-notes" rows="3" placeholder="Add details for the assignee"></textarea>
+            <label class="form-label" for="emp-create-due">Deadline <span class="text-muted fw-normal">(optional)</span></label>
+            <input type="datetime-local" class="form-control mb-3" id="emp-create-due" />
+            <label class="form-label" for="emp-create-assignee">Assign to</label>
+            <select class="form-select" id="emp-create-assignee">
+              <option value="">Choose an employee…</option>
+            </select>
+            <p class="small text-muted mt-3 mb-0">The task is added to admin's list. Only admin can see updates and submissions.</p>
+            <p id="emp-create-error" class="text-danger small mb-0 mt-2 d-none" role="alert"></p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-primary" id="emp-create-submit">
+              <i class="bi bi-plus-lg me-1" aria-hidden="true"></i>Create task
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
 function empDelegateModalHtml() {
   return `
     <div class="modal fade" id="empDelegateModal" tabindex="-1" aria-labelledby="empDelegateModalTitle" aria-hidden="true">
@@ -3720,20 +3754,6 @@ function empMobileAppButtonsHtml({ block = true, size = "" } = {}) {
   return `${apkBtn}${playBtn}`;
 }
 
-function empAppDownloadBannerHtml() {
-  return `<div class="emp-app-download-bar mb-3" role="region" aria-label="Mobile app download">
-      <div class="emp-app-download-inner d-flex flex-wrap align-items-center justify-content-between gap-3">
-        <div class="min-w-0">
-          <div class="fw-semibold"><i class="bi bi-phone me-1 text-success" aria-hidden="true"></i>Sugandh Reminder app</div>
-          <p class="small text-muted mb-0">Download the Android APK for task alerts and reminders on your phone.</p>
-        </div>
-        <div class="emp-app-download-actions d-flex flex-wrap gap-2">
-          ${empMobileAppButtonsHtml({ block: false, size: "btn-sm" })}
-        </div>
-      </div>
-    </div>`;
-}
-
 function employeeMyAssignee(task) {
   const uid = state.user?.id;
   if (!uid) return null;
@@ -3756,6 +3776,95 @@ async function loadEmpPeers() {
   const { users } = await api("/api/users/peers");
   state.empPeers = users ?? [];
   return state.empPeers;
+}
+
+async function openEmpCreateTaskModal() {
+  const modalEl = document.getElementById("empCreateTaskModal");
+  if (!modalEl) return;
+  const titleInput = document.getElementById("emp-create-title");
+  const notesInput = document.getElementById("emp-create-notes");
+  const dueInput = document.getElementById("emp-create-due");
+  const select = document.getElementById("emp-create-assignee");
+  const errEl = document.getElementById("emp-create-error");
+  if (!titleInput || !notesInput || !dueInput || !select || !errEl) return;
+
+  titleInput.value = "";
+  notesInput.value = "";
+  dueInput.value = "";
+  errEl.classList.add("d-none");
+  errEl.textContent = "";
+  select.innerHTML = `<option value="">Choose an employee…</option>`;
+
+  try {
+    const peers = state.empPeers?.length ? state.empPeers : await loadEmpPeers();
+    peers.forEach((u) => {
+      const opt = document.createElement("option");
+      opt.value = u.id;
+      opt.textContent = u.displayName;
+      select.appendChild(opt);
+    });
+  } catch (err) {
+    showToast(err.message || "Could not load employees.", "danger");
+    return;
+  }
+
+  bootstrap.Modal.getOrCreateInstance(modalEl).show();
+  window.setTimeout(() => titleInput.focus(), 300);
+}
+
+function wireEmpCreateTaskModal() {
+  const modalEl = document.getElementById("empCreateTaskModal");
+  if (!modalEl || modalEl.dataset.wiredEmpCreate === "1") return;
+  modalEl.dataset.wiredEmpCreate = "1";
+
+  const submitBtn = document.getElementById("emp-create-submit");
+  submitBtn?.addEventListener("click", async () => {
+    const titleInput = document.getElementById("emp-create-title");
+    const notesInput = document.getElementById("emp-create-notes");
+    const dueInput = document.getElementById("emp-create-due");
+    const select = document.getElementById("emp-create-assignee");
+    const errEl = document.getElementById("emp-create-error");
+    if (!titleInput || !notesInput || !dueInput || !select || !errEl) return;
+
+    const title = titleInput.value.trim();
+    const notes = notesInput.value.trim();
+    const dueRaw = dueInput.value.trim();
+    const assigneeId = select.value.trim();
+
+    errEl.classList.add("d-none");
+    errEl.textContent = "";
+    if (!title) {
+      errEl.textContent = "Please enter a task title.";
+      errEl.classList.remove("d-none");
+      return;
+    }
+    if (!assigneeId) {
+      errEl.textContent = "Please choose an employee to assign.";
+      errEl.classList.remove("d-none");
+      return;
+    }
+
+    const body = { title, notes, assigneeId };
+    if (dueRaw) {
+      body.dueAt = new Date(dueRaw).toISOString();
+      body.allDay = false;
+    }
+
+    submitBtn.disabled = true;
+    try {
+      await api("/api/tasks/employee-create", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      bootstrap.Modal.getInstance(modalEl)?.hide();
+      showToast("Task created and assigned.", "success");
+    } catch (err) {
+      errEl.textContent = err.message || "Could not create task.";
+      errEl.classList.remove("d-none");
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
 }
 
 async function openEmpDelegateModal(task) {
@@ -3950,7 +4059,10 @@ function empLeftNavInner() {
           <span class="badge rounded-pill emp-role-badge mt-1">Employee</span>
         </div>
       </div>
-      <button type="button" class="btn btn-primary w-100 owner-sidebar-new-list js-emp-refresh">
+      <button type="button" class="btn btn-primary w-100 owner-sidebar-new-list js-emp-create-task">
+        <i class="bi bi-plus-lg me-1" aria-hidden="true"></i>Create & assign task
+      </button>
+      <button type="button" class="btn btn-outline-primary w-100 mb-2 js-emp-refresh">
         <i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>Refresh tasks
       </button>
       <p class="owner-sidebar-label mb-2">My work</p>
@@ -4060,6 +4172,9 @@ function bindEmpNavHandlers() {
 function wireEmpChromeNav() {
   document.querySelectorAll(".js-logout").forEach((b) => b.addEventListener("click", logout));
   wireEmpEnablePush();
+  document.querySelectorAll(".js-emp-create-task").forEach((b) =>
+    b.addEventListener("click", () => void openEmpCreateTaskModal())
+  );
   document.querySelectorAll(".js-emp-refresh").forEach((b) =>
     b.addEventListener("click", async () => {
       b.disabled = true;
@@ -4137,12 +4252,14 @@ function renderEmployeeMain() {
         <p class="owner-page-sub text-muted small mb-0 mt-1 d-none d-md-block">Post progress updates while you work, then submit with notes and/or an image when done.</p>
       </div>
       <div class="d-none d-md-flex flex-wrap gap-2 owner-toolbar">
+        <button type="button" class="btn btn-primary btn-sm js-emp-create-task">
+          <i class="bi bi-plus-lg me-1" aria-hidden="true"></i>Create & assign
+        </button>
         <button type="button" class="btn btn-outline-secondary btn-sm js-emp-refresh">
           <i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>Refresh
         </button>
       </div>
     </header>
-    ${empAppDownloadBannerHtml()}
     ${kpiRow}
     <section class="owner-task-panel" aria-label="Assigned tasks">
       <div class="table-responsive owner-task-table-wrap">
@@ -4218,6 +4335,10 @@ function renderEmployeeMain() {
     });
   });
 
+  main.querySelectorAll(".js-emp-create-task").forEach((btn) => {
+    btn.addEventListener("click", () => void openEmpCreateTaskModal());
+  });
+
   main.querySelectorAll(".emp-open-submit").forEach((btn) => {
     btn.addEventListener("click", () => {
       const id = btn.getAttribute("data-task-id");
@@ -4290,6 +4411,7 @@ function renderEmployeeChrome() {
       ${empSubmissionModalHtml()}
       ${progressUpdateModalHtml()}
       ${empDelegateModalHtml()}
+      ${empCreateTaskModalHtml()}
     </div>`;
 
   wireEmpChromeNav();
@@ -4298,6 +4420,7 @@ function renderEmployeeChrome() {
   wireEmpSubmissionModal();
   wireProgressUpdateModal();
   wireEmpDelegateModal();
+  wireEmpCreateTaskModal();
   renderEmployeeMain();
 }
 
