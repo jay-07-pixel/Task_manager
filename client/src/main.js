@@ -3516,7 +3516,7 @@ function renderOwnerMain() {
         ? `<div class="owner-empty-state py-5 px-3">
             <i class="bi bi-person-lines-fill owner-empty-icon text-info" aria-hidden="true"></i>
             <p class="owner-empty-title mb-1">No employee assignments yet</p>
-            <p class="owner-empty-desc text-muted small mb-0">When employees use <strong>Create & assign task</strong> or assign a task to a colleague, it will appear here with who assigned whom.</p>
+            <p class="owner-empty-desc text-muted small mb-0">When employees use <strong>Create & assign task</strong> or assign a task to a colleague, it appears here. Click <strong>Refresh</strong> or re-open this list if you expect tasks to show.</p>
           </div>`
         : `<div class="owner-empty-state py-5 px-3">
             <i class="bi bi-clipboard2-plus owner-empty-icon text-primary" aria-hidden="true"></i>

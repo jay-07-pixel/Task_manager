@@ -61,7 +61,26 @@ const taskAssigneeInclude = {
 const taskListInclude = {
   ...taskAssigneeInclude,
   createdBy: { select: { id: true, displayName: true, role: true } },
+  list: { select: { id: true, title: true } },
 };
+
+/** Move employee-to-employee tasks into the Employee assignments list (fixes older data). */
+async function reconcileEmployeeAssignmentTasks(ownerId, empListId) {
+  const misplaced = await prisma.task.findMany({
+    where: {
+      list: { ownerId },
+      listId: { not: empListId },
+      assignments: { some: { assignedByUserId: { not: null } } },
+    },
+    select: { id: true },
+  });
+  if (!misplaced.length) return 0;
+  await prisma.task.updateMany({
+    where: { id: { in: misplaced.map((t) => t.id) } },
+    data: { listId: empListId },
+  });
+  return misplaced.length;
+}
 
 const delegateTaskSchema = z.object({
   employeeId: z.string().uuid(),
@@ -635,10 +654,20 @@ router.get("/lists/:listId", requireOwner, async (req, res) => {
   const list = await assertListOwner(req.params.listId, req.session.userId);
   if (!list) return res.status(404).json({ error: "List not found" });
 
+  if (list.title === EMPLOYEE_ASSIGNMENTS_LIST_TITLE) {
+    await reconcileEmployeeAssignmentTasks(req.session.userId, list.id);
+  }
+
   const roots = await attachDelegationsToTasks(
     await attachProgressUpdateMeta(
       await prisma.task.findMany({
-        where: { listId: list.id },
+        where:
+          list.title === EMPLOYEE_ASSIGNMENTS_LIST_TITLE
+            ? {
+                list: { ownerId: req.session.userId },
+                assignments: { some: { assignedByUserId: { not: null } } },
+              }
+            : { listId: list.id },
         include: taskListInclude,
         orderBy: [{ completed: "asc" }, { sortOrder: "asc" }],
       }),
