@@ -4167,52 +4167,52 @@ function empTaskTableRows(tasks) {
     .join("")}</tbody>`;
 }
 
-function empAssignedByMeTableRows(tasks) {
+function empAssignedByMeCardsHtml(tasks) {
   if (!tasks.length) {
-    return `<tbody class="owner-task-empty"><tr><td colspan="5">
-      <div class="owner-empty-state py-5 px-3">
-        <i class="bi bi-person-plus owner-empty-icon text-primary" aria-hidden="true"></i>
-        <p class="owner-empty-title mb-1">Nothing assigned yet</p>
-        <p class="owner-empty-desc text-muted small mb-0">Use <strong>Create & assign task</strong> to assign work to a colleague.</p>
-      </div>
-    </td></tr></tbody>`;
+    return `<div class="owner-empty-state py-5 px-3">
+      <i class="bi bi-person-plus owner-empty-icon text-primary" aria-hidden="true"></i>
+      <p class="owner-empty-title mb-1">Nothing assigned yet</p>
+      <p class="owner-empty-desc text-muted small mb-0">Use <strong>Create & assign task</strong> to assign work to a colleague.</p>
+    </div>`;
   }
 
-  return `<tbody>${tasks
+  return `<div class="emp-assigned-by-me-cards d-flex flex-column gap-3">${tasks
     .map((t) => {
       const assignees = t.assignedTo ?? [];
       const assigneeNames = assignees.map((a) => escapeHtml(a.displayName)).join(", ") || "—";
-      const allDone = assignees.length > 0 && assignees.every((a) => a.assigneeDone);
-      const statusClass = allDone ? "text-success" : "text-warning";
-      const statusLabel = allDone ? "Submitted" : "In progress";
       const notesRaw = (t.notes || "").trim().replace(/\s+/g, " ");
-      const notesPreview = notesRaw.length > 100 ? `${notesRaw.slice(0, 97)}…` : notesRaw;
-      const descriptionBox =
-        notesPreview.length > 0
-          ? `<div class="owner-task-desc-box small text-body-secondary mb-0" title="${escapeHtml(notesRaw)}">${escapeHtml(notesPreview)}</div>`
-          : `<div class="owner-task-desc-box small text-muted fst-italic mb-0">No description</div>`;
+      const descriptionText =
+        notesRaw.length > 0
+          ? escapeHtml(notesRaw.length > 200 ? `${notesRaw.slice(0, 197)}…` : notesRaw)
+          : `<span class="text-muted fst-italic">No description</span>`;
       const assignedWhen = assignees[0]?.delegatedAt
-        ? `<div class="small text-muted tabular-nums">Assigned ${escapeHtml(formatProgressUpdateTime(assignees[0].delegatedAt))}</div>`
+        ? escapeHtml(formatProgressUpdateTime(assignees[0].delegatedAt))
         : "";
       const deadlineDisplay = t.dueAt
-        ? `<span class="text-body tabular-nums">${escapeHtml(formatEmpDue(t.dueAt))}</span>`
+        ? escapeHtml(formatEmpDue(t.dueAt))
         : `<span class="text-muted">—</span>`;
-      return `<tr class="owner-task-row emp-assigned-out-row ${allDone ? "owner-task-row--completed" : ""}" data-task-id="${t.id}">
-        <td class="owner-task-cell owner-task-col--task align-middle">
-          <span class="fw-semibold ${allDone ? "text-muted text-decoration-line-through" : ""}">${escapeHtml(t.title)}</span>
-          ${assignedWhen}
-        </td>
-        <td class="owner-task-cell align-middle">
-          <span class="badge rounded-pill text-bg-light border text-body">${assigneeNames}</span>
-        </td>
-        <td class="owner-task-cell owner-task-col--deadline align-middle small">${deadlineDisplay}</td>
-        <td class="owner-task-cell align-middle">${descriptionBox}</td>
-        <td class="owner-task-cell text-end align-middle">
-          <span class="badge rounded-pill ${allDone ? "text-bg-success" : "text-bg-warning"} ${statusClass}">${statusLabel}</span>
-        </td>
-      </tr>`;
+      return `<article class="emp-assigned-out-card" data-task-id="${t.id}">
+        <div class="emp-assigned-out-card-head">
+          <h3 class="emp-assigned-out-card-title h6 mb-0">${escapeHtml(t.title)}</h3>
+          ${assignedWhen ? `<time class="emp-assigned-out-card-when small text-muted tabular-nums">Assigned ${assignedWhen}</time>` : ""}
+        </div>
+        <div class="emp-assigned-out-card-grid">
+          <div class="emp-assigned-out-card-field">
+            <span class="emp-assigned-out-card-label">Assigned to</span>
+            <span class="emp-assigned-out-card-value fw-semibold">${assigneeNames}</span>
+          </div>
+          <div class="emp-assigned-out-card-field">
+            <span class="emp-assigned-out-card-label">Deadline</span>
+            <span class="emp-assigned-out-card-value tabular-nums">${deadlineDisplay}</span>
+          </div>
+          <div class="emp-assigned-out-card-field emp-assigned-out-card-field--full">
+            <span class="emp-assigned-out-card-label">Description</span>
+            <span class="emp-assigned-out-card-value small">${descriptionText}</span>
+          </div>
+        </div>
+      </article>`;
     })
-    .join("")}</tbody>`;
+    .join("")}</div>`;
 }
 
 function empLeftNavInner() {
@@ -4388,21 +4388,8 @@ function renderEmployeeMain() {
             </div>
           </div>`
         : "";
-    tableSection = `<section class="owner-task-panel" aria-label="Tasks assigned by me">
-      <div class="table-responsive owner-task-table-wrap">
-        <table class="table table-hover align-middle mb-0 owner-task-table emp-assigned-by-me-table">
-          <thead>
-            <tr>
-              <th scope="col" class="owner-task-head owner-task-col--task">Task</th>
-              <th scope="col" class="owner-task-head">Assigned to</th>
-              <th scope="col" class="owner-task-head owner-task-col--deadline text-nowrap">Deadline</th>
-              <th scope="col" class="owner-task-head">Description</th>
-              <th scope="col" class="owner-task-head text-end">Status</th>
-            </tr>
-          </thead>
-          ${empAssignedByMeTableRows(assignedList)}
-        </table>
-      </div>
+    tableSection = `<section class="owner-task-panel emp-assigned-by-me-panel" aria-label="Tasks assigned by me">
+      ${empAssignedByMeCardsHtml(assignedList)}
     </section>`;
   } else {
     const metrics = employeeDashboardMetrics();
