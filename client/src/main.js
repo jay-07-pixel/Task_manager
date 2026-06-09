@@ -1061,11 +1061,18 @@ function taskHasUnreadProgressUpdates(task) {
   return (task.assignees ?? []).some((a) => (a.unreadProgressUpdateCount ?? 0) > 0);
 }
 
+/** In review = employee posted a progress update and has not submitted the task yet. */
+function taskIsInReview(task) {
+  return (task.assignees ?? []).some(
+    (a) => (a.progressUpdateCount ?? 0) > 0 && !a.assigneeDone
+  );
+}
+
 function ownerDashboardMetrics() {
   const tasks = state.tasks;
-  const active = tasks.filter((t) => !t.completed).length;
+  const inReview = tasks.filter(taskIsInReview).length;
   const done = tasks.filter((t) => t.completed).length;
-  const inReview = tasks.filter(taskHasUnreadProgressUpdates).length;
+  const active = tasks.filter((t) => !t.completed && !taskIsInReview(t)).length;
   return { total: tasks.length, active, done, inReview };
 }
 
@@ -1074,9 +1081,9 @@ function ownerFilteredTasks() {
     return state.tasks.filter((t) => t.completed);
   }
   if (state.ownerTaskFilter === "in_review") {
-    return state.tasks.filter(taskHasUnreadProgressUpdates);
+    return state.tasks.filter(taskIsInReview);
   }
-  return state.tasks.filter((t) => !t.completed);
+  return state.tasks.filter((t) => !t.completed && !taskIsInReview(t));
 }
 
 function setOwnerTaskFilter(filter) {
@@ -2709,6 +2716,7 @@ function ownerTasksFingerprintFrom(tasks) {
         x.unreadProgressUpdateCount ?? 0,
         x.latestProgressUpdate?.message ?? "",
         x.latestProgressUpdate?.createdAt ?? "",
+        x.assigneeDone,
       ]),
     }))
   );
@@ -3132,7 +3140,9 @@ function ownerTaskGroupTbody(t) {
           .join("");
 
   const hasUnreadUpdates = assignees.some((a) => (a.unreadProgressUpdateCount ?? 0) > 0);
-  const expandUnreadClass = hasUnreadUpdates ? " owner-task-expand-btn--unread" : "";
+  const inReviewTask = taskIsInReview(t);
+  const expandUnreadClass =
+    hasUnreadUpdates || inReviewTask ? " owner-task-expand-btn--unread" : "";
 
   const assigneeMarkDoneControl = `<div class="owner-mark-done-wrap">
       <button
@@ -3172,9 +3182,9 @@ function ownerTaskGroupTbody(t) {
           data-bs-target="#${detailId}"
           aria-expanded="false"
           aria-controls="${detailId}"
-          aria-label="Assignees and actions${hasUnreadUpdates ? " — unread updates" : ""}"
+          aria-label="Assignees and actions${hasUnreadUpdates || inReviewTask ? " — in review" : ""}"
         >
-          ${hasUnreadUpdates ? `<span class="owner-task-expand-unread-dot" aria-hidden="true"></span>` : ""}
+          ${hasUnreadUpdates || inReviewTask ? `<span class="owner-task-expand-unread-dot" aria-hidden="true"></span>` : ""}
           <i class="bi bi-chevron-down" aria-hidden="true"></i>
         </button>
       </td>
@@ -3292,7 +3302,7 @@ function renderOwnerMain() {
           ? `<div class="owner-empty-state py-5 px-3">
               <i class="bi bi-chat-left-dots owner-empty-icon text-danger" aria-hidden="true"></i>
               <p class="owner-empty-title mb-1">Nothing in review</p>
-              <p class="owner-empty-desc text-muted small mb-0">Tasks appear here when an employee posts an update you have not opened yet.</p>
+              <p class="owner-empty-desc text-muted small mb-0">Tasks appear here when an employee posts a progress update and has not submitted yet.</p>
             </div>`
           : `<div class="owner-empty-state py-5 px-3">
               <i class="bi bi-check2-all owner-empty-icon text-success" aria-hidden="true"></i>
