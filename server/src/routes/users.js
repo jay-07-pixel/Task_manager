@@ -2,12 +2,24 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { sendAdminPromotionEmail, sendAdminRevocationEmail } from "../lib/mail.js";
-import { requireOwner } from "../middleware/auth.js";
+import { requireAuth, requireOwner } from "../middleware/auth.js";
 
 const router = Router();
 
 const rolePatchSchema = z.object({
   role: z.enum(["owner", "employee"]),
+});
+
+router.get("/peers", requireAuth, async (req, res) => {
+  if (req.session.role !== "employee") {
+    return res.status(403).json({ error: "Employees only" });
+  }
+  const users = await prisma.user.findMany({
+    where: { role: "employee", id: { not: req.session.userId } },
+    select: { id: true, email: true, displayName: true },
+    orderBy: { displayName: "asc" },
+  });
+  res.json({ users });
 });
 
 router.get("/assignees", requireOwner, async (req, res) => {

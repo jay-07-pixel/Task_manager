@@ -51,9 +51,14 @@ const taskAssigneeInclude = {
   assignments: {
     include: {
       user: { select: { id: true, displayName: true, email: true } },
+      assignedBy: { select: { id: true, displayName: true } },
     },
   },
 };
+
+const delegateTaskSchema = z.object({
+  employeeId: z.string().uuid(),
+});
 
 const taskListSelect = { list: { select: { id: true, title: true } } };
 
@@ -342,6 +347,40 @@ function serializeProgressUpdate(row) {
   };
 }
 
+function serializeDelegation(row) {
+  return {
+    id: row.id,
+    fromUserId: row.fromUserId,
+    fromUserName: row.fromUser?.displayName ?? "",
+    toUserId: row.toUserId,
+    toUserName: row.toUser?.displayName ?? "",
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+async function attachDelegationsToTasks(tasks) {
+  if (!tasks.length) return tasks;
+  const taskIds = tasks.map((t) => t.id);
+  const rows = await prisma.taskDelegation.findMany({
+    where: { taskId: { in: taskIds } },
+    include: {
+      fromUser: { select: { id: true, displayName: true } },
+      toUser: { select: { id: true, displayName: true } },
+    },
+    orderBy: [{ createdAt: "asc" }],
+  });
+  const map = new Map();
+  for (const row of rows) {
+    const list = map.get(row.taskId) ?? [];
+    list.push(row);
+    map.set(row.taskId, list);
+  }
+  return tasks.map((t) => ({
+    ...t,
+    delegations: map.get(t.id) ?? [],
+  }));
+}
+
 export function serializeTask(t) {
   let recurrenceRule = null;
   if (t.recurrenceRule) {
@@ -363,12 +402,18 @@ export function serializeTask(t) {
     progressUpdateCount: a.progressUpdateCount ?? 0,
     unreadProgressUpdateCount: a.unreadProgressUpdateCount ?? 0,
     latestProgressUpdate: a.latestProgressUpdate ?? null,
+    assignedBy: a.assignedBy
+      ? { id: a.assignedBy.id, displayName: a.assignedBy.displayName }
+      : null,
+    delegatedAt: a.delegatedAt instanceof Date ? a.delegatedAt.toISOString() : (a.delegatedAt ?? null),
   }));
+  const delegations = (t.delegations ?? []).map(serializeDelegation);
   return {
     id: t.id,
     listId: t.listId,
     list: t.list ? { id: t.list.id, title: t.list.title } : null,
     assignees,
+    delegations,
     title: t.title,
     notes: t.notes,
     dueAt: t.dueAt?.toISOString() ?? null,
@@ -406,13 +451,15 @@ router.get("/lists/:listId", requireOwner, async (req, res) => {
   const list = await assertListOwner(req.params.listId, req.session.userId);
   if (!list) return res.status(404).json({ error: "List not found" });
 
-  const roots = await attachProgressUpdateMeta(
-    await prisma.task.findMany({
-      where: { listId: list.id },
-      include: taskAssigneeInclude,
-      orderBy: [{ completed: "asc" }, { sortOrder: "asc" }],
-    }),
-    req.session.userId
+  const roots = await attachDelegationsToTasks(
+    await attachProgressUpdateMeta(
+      await prisma.task.findMany({
+        where: { listId: list.id },
+        include: taskAssigneeInclude,
+        orderBy: [{ completed: "asc" }, { sortOrder: "asc" }],
+      }),
+      req.session.userId
+    )
   );
   res.json({ tasks: roots.map(serializeTask) });
 });
@@ -445,27 +492,120 @@ router.get("/:id/progress-updates", requireAuth, async (req, res) => {
     return res.status(403).json({ error: "Not allowed" });
   }
 
-  if (isOwner && !assigneeUserId) {
-    return res.status(400).json({ error: "assigneeUserId query parameter is required" });
+  const allUpdates = isOwner && req.query.all === "1";
+
+  if (isOwner && !assigneeUserId && !allUpdates) {
+    return res.status(400).json({
+      error: "assigneeUserId query parameter is required, or pass all=1 for full history",
+    });
   }
 
-  if (!task.assignments.some((a) => a.userId === assigneeUserId)) {
+  if (!allUpdates && !task.assignments.some((a) => a.userId === assigneeUserId)) {
     return res.status(404).json({ error: "Assignee not found on this task" });
   }
 
   const updates = await prisma.taskProgressUpdate.findMany({
-    where: { taskId: task.id, userId: assigneeUserId },
+    where: allUpdates ? { taskId: task.id } : { taskId: task.id, userId: assigneeUserId },
     include: { user: { select: { id: true, displayName: true } } },
     orderBy: [{ createdAt: "desc" }],
   });
 
-  const assignee = task.assignments.find((a) => a.userId === assigneeUserId);
+  const delegations = isOwner
+    ? await prisma.taskDelegation.findMany({
+        where: { taskId: task.id },
+        include: {
+          fromUser: { select: { id: true, displayName: true } },
+          toUser: { select: { id: true, displayName: true } },
+        },
+        orderBy: [{ createdAt: "asc" }],
+      })
+    : [];
+
+  const assignee = assigneeUserId
+    ? task.assignments.find((a) => a.userId === assigneeUserId)
+    : null;
   res.json({
     taskTitle: task.title,
-    assigneeUserId,
+    assigneeUserId: assigneeUserId ?? null,
     assigneeName: assignee?.user?.displayName ?? "",
     updates: updates.map(serializeProgressUpdate),
+    delegations: delegations.map(serializeDelegation),
   });
+});
+
+router.post("/:id/delegate", requireAuth, async (req, res) => {
+  if (req.session.role !== "employee") {
+    return res.status(403).json({ error: "Employees only" });
+  }
+
+  const parsed = delegateTaskSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.flatten() });
+  }
+
+  const { employeeId } = parsed.data;
+  if (employeeId === req.session.userId) {
+    return res.status(400).json({ error: "You cannot delegate a task to yourself" });
+  }
+
+  const target = await prisma.user.findFirst({
+    where: { id: employeeId, role: "employee" },
+    select: { id: true },
+  });
+  if (!target) {
+    return res.status(400).json({ error: "Invalid employee" });
+  }
+
+  const task = await prisma.task.findFirst({
+    where: { id: req.params.id },
+    include: { assignments: true, list: { select: { ownerId: true } } },
+  });
+  if (!task || !taskIsAssignedToUser(task, req.session.userId)) {
+    return res.status(404).json({ error: "Task not found" });
+  }
+
+  const myRow = task.assignments.find((a) => a.userId === req.session.userId);
+  if (!myRow) {
+    return res.status(404).json({ error: "Task not found" });
+  }
+  if (myRow.assigneeDone) {
+    return res.status(400).json({ error: "Cannot delegate a task that is already submitted" });
+  }
+  if (task.assignments.some((a) => a.userId === employeeId)) {
+    return res.status(400).json({ error: "That employee is already assigned to this task" });
+  }
+
+  const now = new Date();
+  await prisma.$transaction([
+    prisma.taskAssignee.delete({
+      where: { taskId_userId: { taskId: task.id, userId: req.session.userId } },
+    }),
+    prisma.taskAssignee.create({
+      data: {
+        taskId: task.id,
+        userId: employeeId,
+        assignedByUserId: req.session.userId,
+        delegatedAt: now,
+      },
+    }),
+    prisma.taskDelegation.create({
+      data: {
+        taskId: task.id,
+        fromUserId: req.session.userId,
+        toUserId: employeeId,
+      },
+    }),
+  ]);
+
+  await syncTaskCompletedFromAssignments(task.id);
+
+  const fresh = await prisma.task.findFirst({
+    where: { id: task.id },
+    include: { ...taskAssigneeInclude, ...taskListSelect },
+  });
+  const withMeta = (await attachProgressUpdateMeta([fresh]))[0];
+  const withDelegations = (await attachDelegationsToTasks([withMeta]))[0];
+  res.json({ task: serializeTask(withDelegations) });
 });
 
 router.post("/:id/progress-updates", requireAuth, async (req, res) => {

@@ -41,7 +41,10 @@ model User {
 
   ownedLists        TaskList[]
   createdTasks      Task[]             @relation("CreatedBy")
-  taskAssignments           TaskAssignee[]
+  taskAssignments           TaskAssignee[]       @relation("TaskAssigneeUser")
+  taskAssignmentsDelegated  TaskAssignee[]       @relation("TaskAssignedBy")
+  delegationsFrom           TaskDelegation[]     @relation("DelegationFrom")
+  delegationsTo             TaskDelegation[]     @relation("DelegationTo")
   pushSubscriptions         PushSubscription[]
   employeeDevices           EmployeeDevice[]
   taskProgressUpdates       TaskProgressUpdate[]
@@ -61,17 +64,35 @@ model TaskList {
 }
 
 model TaskAssignee {
-  taskId              String  @map("task_id")
-  userId              String  @map("user_id")
-  completionProofPath String? @map("completion_proof_path") @db.VarChar(512)
-  submissionText      String? @map("submission_text") @db.Text
-  assigneeDone        Boolean @default(false) @map("assignee_done")
-  task                Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  user                User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskId              String    @map("task_id")
+  userId              String    @map("user_id")
+  assignedByUserId    String?   @map("assigned_by_user_id")
+  delegatedAt         DateTime? @map("delegated_at")
+  completionProofPath String?   @map("completion_proof_path") @db.VarChar(512)
+  submissionText      String?   @map("submission_text") @db.Text
+  assigneeDone        Boolean   @default(false) @map("assignee_done")
+  task                Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user                User      @relation("TaskAssigneeUser", fields: [userId], references: [id], onDelete: Cascade)
+  assignedBy          User?     @relation("TaskAssignedBy", fields: [assignedByUserId], references: [id], onDelete: SetNull)
 
   @@id([taskId, userId])
   @@map("task_assignee")
   @@index([userId])
+}
+
+model TaskDelegation {
+  id         String   @id @default(uuid())
+  taskId     String   @map("task_id")
+  fromUserId String   @map("from_user_id")
+  toUserId   String   @map("to_user_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  task     Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  fromUser User @relation("DelegationFrom", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUser   User @relation("DelegationTo", fields: [toUserId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@map("task_delegation")
 }
 
 model Task {
@@ -94,6 +115,7 @@ model Task {
   list            TaskList             @relation(fields: [listId], references: [id], onDelete: Cascade)
   createdBy       User                 @relation("CreatedBy", fields: [createdById], references: [id])
   assignments            TaskAssignee[]
+  delegations            TaskDelegation[]
   progressUpdates        TaskProgressUpdate[]
   progressUpdateReads    TaskProgressUpdateRead[]
 
@@ -188,4 +210,19 @@ model EmailVerification {
   createdAt         DateTime  @default(now()) @map("created_at")
 
   @@map("email_verification")
+}
+
+model PasswordReset {
+  id                String    @id @default(uuid())
+  email             String    @unique
+  otpHash           String?   @map("otp_hash") @db.VarChar(255)
+  expiresAt         DateTime  @map("expires_at")
+  attempts          Int       @default(0)
+  resendCount       Int       @default(0) @map("resend_count")
+  resendWindowStart DateTime  @default(now()) @map("resend_window_start")
+  verified          Boolean   @default(false)
+  verifiedAt        DateTime? @map("verified_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  @@map("password_reset")
 }

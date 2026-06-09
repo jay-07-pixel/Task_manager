@@ -1769,6 +1769,37 @@ function progressUpdateModalHtml() {
     </div>`;
 }
 
+function empDelegateModalHtml() {
+  return `
+    <div class="modal fade" id="empDelegateModal" tabindex="-1" aria-labelledby="empDelegateModalTitle" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h2 class="modal-title h5 mb-0" id="empDelegateModalTitle">Assign task to colleague</h2>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <input type="hidden" id="emp-delegate-task-id" value="" />
+            <p class="fw-medium text-body-secondary mb-1 small text-uppercase text-secondary">Task</p>
+            <p id="emp-delegate-task-title" class="fw-semibold mb-3"></p>
+            <p class="small text-muted mb-3">The colleague will work on this task. Updates and submission are visible to admin only. You will no longer see this task on your list.</p>
+            <label class="form-label" for="emp-delegate-employee">Assign to</label>
+            <select class="form-select" id="emp-delegate-employee">
+              <option value="">Choose an employee…</option>
+            </select>
+            <p id="emp-delegate-error" class="text-danger small mb-0 mt-2 d-none" role="alert"></p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-primary" id="emp-delegate-submit">
+              <i class="bi bi-person-plus me-1" aria-hidden="true"></i>Assign task
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
 function empSubmissionModalHtml() {
   return `
     <div class="modal fade" id="empSubmissionModal" tabindex="-1" aria-labelledby="empSubmissionModalTitle" aria-hidden="true">
@@ -2460,6 +2491,26 @@ function ownerAssigneeUpdatesHtml(taskId, assignee) {
     </button>`;
 }
 
+function ownerDelegationHistoryHtml(task) {
+  const rows = task.delegations ?? [];
+  if (!rows.length) return "";
+  const items = rows
+    .map((d) => {
+      const when = formatProgressUpdateTime(d.createdAt);
+      return `<li class="owner-delegation-item"><i class="bi bi-arrow-right-short text-primary" aria-hidden="true"></i> ${escapeHtml(
+        d.fromUserName
+      )} assigned to ${escapeHtml(d.toUserName)} <span class="text-muted tabular-nums">· ${escapeHtml(when)}</span></li>`;
+    })
+    .join("");
+  return `<div class="owner-delegation-history mt-3 px-1">
+      <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+        <p class="owner-task-detail-heading small text-secondary mb-0">Assignment history</p>
+        <button type="button" class="btn btn-sm btn-link p-0 owner-view-all-activity" data-task-id="${escapeHtml(task.id)}">View all updates</button>
+      </div>
+      <ul class="list-unstyled small mb-0">${items}</ul>
+    </div>`;
+}
+
 function ownerAssigneeSubmissionHtml(taskId, assignee) {
   if (!assigneeHasSubmission(assignee)) {
     return `<span class="owner-assignee-empty-hint text-muted small">No submission yet</span>`;
@@ -2492,13 +2543,18 @@ async function markTaskProgressUpdatesRead(taskId) {
   }
 }
 
-function renderProgressUpdateTimeline(updates) {
+function renderProgressUpdateTimeline(updates, { showAuthor = false } = {}) {
   if (!updates?.length) return "";
   return updates
     .map((u) => {
       const meta = progressUpdateTypeMeta(u.updateType);
+      const author =
+        showAuthor && u.displayName
+          ? `<span class="small fw-semibold text-body-secondary">${escapeHtml(u.displayName)}</span>`
+          : "";
       return `<article class="progress-update-item">
         <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+          ${author}
           <span class="badge rounded-pill ${meta.badgeClass}">${escapeHtml(meta.badge)}</span>
           <time class="small text-muted tabular-nums" datetime="${escapeHtml(u.createdAt)}">${escapeHtml(
         formatProgressUpdateTime(u.createdAt)
@@ -2542,17 +2598,37 @@ function setProgressUpdateModalReadOnly(readOnly) {
   submitBtn?.classList.toggle("d-none", readOnly);
 }
 
-async function loadProgressUpdateHistory(taskId, userId) {
+function renderDelegationTimeline(delegations) {
+  if (!delegations?.length) return "";
+  const items = delegations
+    .map((d) => {
+      const when = formatProgressUpdateTime(d.createdAt);
+      return `<div class="progress-update-timeline-item owner-delegation-timeline-item small text-muted mb-2">
+        <i class="bi bi-person-lines-fill me-1" aria-hidden="true"></i>
+        ${escapeHtml(d.fromUserName)} assigned to ${escapeHtml(d.toUserName)}
+        <span class="tabular-nums">· ${escapeHtml(when)}</span>
+      </div>`;
+    })
+    .join("");
+  return `<div class="owner-delegation-timeline mb-3 pb-2 border-bottom">${items}</div>`;
+}
+
+async function loadProgressUpdateHistory(taskId, userId, { all = false } = {}) {
   const historyEl = document.getElementById("progress-update-history");
   const emptyEl = document.getElementById("progress-update-history-empty");
   if (!historyEl || !emptyEl) return;
-  const q =
-    state.user?.role === "owner" ? `?assigneeUserId=${encodeURIComponent(userId)}` : "";
+  const q = all
+    ? "?all=1"
+    : state.user?.role === "owner"
+      ? `?assigneeUserId=${encodeURIComponent(userId)}`
+      : "";
   const data = await api(`/api/tasks/${taskId}/progress-updates${q}`);
   const updates = data.updates ?? [];
-  historyEl.innerHTML = renderProgressUpdateTimeline(updates);
-  emptyEl.classList.toggle("d-none", updates.length > 0);
-  historyEl.classList.toggle("d-none", updates.length === 0);
+  const delegationBlock = all ? renderDelegationTimeline(data.delegations ?? []) : "";
+  historyEl.innerHTML = `${delegationBlock}${renderProgressUpdateTimeline(updates, { showAuthor: all })}`;
+  const hasContent = updates.length > 0 || (all && (data.delegations ?? []).length > 0);
+  emptyEl.classList.toggle("d-none", hasContent);
+  historyEl.classList.toggle("d-none", !hasContent);
   return data;
 }
 
@@ -2615,6 +2691,34 @@ async function openProgressUpdatesForAssignee(taskId, userId, assigneeName) {
     await loadProgressUpdateHistory(taskId, userId);
   } catch (err) {
     showToast(err.message || "Could not load updates.", "danger");
+  }
+}
+
+async function openProgressUpdatesAll(taskId) {
+  const modalEl = document.getElementById("progressUpdateModal");
+  if (!modalEl || !taskId) return;
+  const task = state.tasks.find((t) => t.id === taskId);
+  const idInput = document.getElementById("progress-update-task-id");
+  const userInput = document.getElementById("progress-update-user-id");
+  const titleEl = document.getElementById("progress-update-task-title");
+  const assigneeLabel = document.getElementById("progress-update-assignee-label");
+  const modalTitle = document.getElementById("progressUpdateModalTitle");
+  if (!idInput || !userInput || !titleEl) return;
+
+  idInput.value = taskId;
+  userInput.value = "";
+  titleEl.textContent = task?.title ?? "Task";
+  if (assigneeLabel) {
+    assigneeLabel.textContent = "All employees — full activity";
+    assigneeLabel.classList.remove("d-none");
+  }
+  if (modalTitle) modalTitle.textContent = "Full task activity";
+  setProgressUpdateModalReadOnly(true);
+  bootstrap.Modal.getOrCreateInstance(modalEl).show();
+  try {
+    await loadProgressUpdateHistory(taskId, null, { all: true });
+  } catch (err) {
+    showToast(err.message || "Could not load activity.", "danger");
   }
 }
 
@@ -3122,12 +3226,16 @@ function ownerTaskGroupTbody(t) {
               ? "owner-assignee-status--done"
               : "owner-assignee-status--pending";
             const statusLabel = a.assigneeDone ? "Submitted" : "Pending";
+            const assignedByNote = a.assignedBy?.displayName
+              ? `<div class="small text-muted owner-delegated-by-note">Assigned by ${escapeHtml(a.assignedBy.displayName)}</div>`
+              : "";
             return `<article class="owner-team-card">
                 <div class="owner-team-card-head">
                   <div class="owner-team-avatar" aria-hidden="true">${escapeHtml(assigneeInitials(a.displayName))}</div>
                   <div class="owner-team-ident min-w-0">
                     <div class="owner-team-name text-truncate">${escapeHtml(a.displayName)}</div>
                     <span class="owner-assignee-status ${statusClass}">${statusLabel}</span>
+                    ${assignedByNote}
                   </div>
                 </div>
                 <div class="owner-team-card-grid">
@@ -3207,6 +3315,7 @@ function ownerTaskGroupTbody(t) {
                 </span>
               </div>
               <div class="owner-team-cards">${assigneeCards}</div>
+              ${ownerDelegationHistoryHtml(t)}
             </div>
             <div class="px-3 py-3 mt-2 d-flex flex-wrap align-items-center justify-content-between gap-2 border-top owner-task-detail-actions">
               ${assigneeMarkDoneControl}
@@ -3425,6 +3534,17 @@ function renderOwnerMain() {
     });
   });
 
+  main.querySelectorAll(".owner-view-all-activity").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const taskId = btn.getAttribute("data-task-id");
+      if (!taskId) return;
+      void openProgressUpdatesAll(taskId).catch((err) => {
+        showToast(err.message || "Could not load activity.", "danger");
+      });
+    });
+  });
+
   main.querySelectorAll(".owner-task-expand-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       if (btn.getAttribute("aria-expanded") === "true") return;
@@ -3632,6 +3752,85 @@ async function loadEmployeeTasks() {
   state.empTasks = tasks;
 }
 
+async function loadEmpPeers() {
+  const { users } = await api("/api/users/peers");
+  state.empPeers = users ?? [];
+  return state.empPeers;
+}
+
+async function openEmpDelegateModal(task) {
+  const modalEl = document.getElementById("empDelegateModal");
+  if (!modalEl || !task) return;
+  const idInput = document.getElementById("emp-delegate-task-id");
+  const titleEl = document.getElementById("emp-delegate-task-title");
+  const select = document.getElementById("emp-delegate-employee");
+  const errEl = document.getElementById("emp-delegate-error");
+  if (!idInput || !titleEl || !select || !errEl) return;
+
+  idInput.value = task.id;
+  titleEl.textContent = task.title;
+  errEl.classList.add("d-none");
+  errEl.textContent = "";
+  select.innerHTML = `<option value="">Choose an employee…</option>`;
+
+  try {
+    const peers = state.empPeers?.length ? state.empPeers : await loadEmpPeers();
+    peers.forEach((u) => {
+      const opt = document.createElement("option");
+      opt.value = u.id;
+      opt.textContent = u.displayName;
+      select.appendChild(opt);
+    });
+  } catch (err) {
+    showToast(err.message || "Could not load employees.", "danger");
+    return;
+  }
+
+  bootstrap.Modal.getOrCreateInstance(modalEl).show();
+}
+
+function wireEmpDelegateModal() {
+  const modalEl = document.getElementById("empDelegateModal");
+  if (!modalEl || modalEl.dataset.wiredEmpDelegate === "1") return;
+  modalEl.dataset.wiredEmpDelegate = "1";
+
+  const submitBtn = document.getElementById("emp-delegate-submit");
+  submitBtn?.addEventListener("click", async () => {
+    const idInput = document.getElementById("emp-delegate-task-id");
+    const select = document.getElementById("emp-delegate-employee");
+    const errEl = document.getElementById("emp-delegate-error");
+    const taskId = idInput?.value?.trim();
+    const employeeId = select?.value?.trim();
+    if (!taskId || !select || !errEl) return;
+
+    errEl.classList.add("d-none");
+    errEl.textContent = "";
+    if (!employeeId) {
+      errEl.textContent = "Please choose an employee.";
+      errEl.classList.remove("d-none");
+      return;
+    }
+
+    submitBtn.disabled = true;
+    try {
+      await api(`/api/tasks/${taskId}/delegate`, {
+        method: "POST",
+        body: JSON.stringify({ employeeId }),
+      });
+      bootstrap.Modal.getInstance(modalEl)?.hide();
+      showToast("Task assigned to colleague.", "success");
+      await loadEmployeeTasks();
+      renderEmpListContentOnly();
+      renderEmployeeMain();
+    } catch (err) {
+      errEl.textContent = err.message || "Could not assign task.";
+      errEl.classList.remove("d-none");
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
+}
+
 function employeeDashboardMetrics() {
   const tasks = state.empTasks;
   const active = tasks.filter((t) => !employeeMyAssignee(t)?.assigneeDone).length;
@@ -3697,10 +3896,17 @@ function empTaskTableRows(tasks) {
         submitted && hasSubmission
           ? `<button type="button" class="btn btn-sm btn-outline-primary emp-view-submission" data-task-id="${t.id}" data-user-id="${escapeHtml(state.user?.id || "")}"><i class="bi bi-eye me-1" aria-hidden="true"></i>View</button>`
           : `<button type="button" class="btn btn-sm btn-primary emp-open-submit" data-task-id="${t.id}"><i class="bi bi-send me-1" aria-hidden="true"></i>Submit</button>`;
+      const assignedByLine = me?.assignedBy?.displayName
+        ? `<div class="small text-muted emp-assigned-by-line mt-1">From ${escapeHtml(me.assignedBy.displayName)}</div>`
+        : "";
+      const delegateBtn = !submitted
+        ? `<button type="button" class="btn btn-sm btn-outline-info emp-open-delegate" data-task-id="${t.id}"><i class="bi bi-person-plus me-1" aria-hidden="true"></i>Assign</button>`
+        : "";
       const submissionCell = `<div class="d-flex flex-column align-items-end gap-1 emp-task-actions">
           <button type="button" class="btn btn-sm btn-outline-secondary emp-open-progress-update" data-task-id="${t.id}">
             <i class="bi bi-chat-left-dots me-1" aria-hidden="true"></i>Update${updateBadge}
           </button>
+          ${delegateBtn}
           ${submissionBtn}
         </div>`;
       const rowDone = submitted ? "owner-task-row--completed" : "";
@@ -3719,6 +3925,7 @@ function empTaskTableRows(tasks) {
         </td>
         <td class="owner-task-cell owner-task-col--task emp-col-task align-middle">
           <span class="fw-semibold emp-task-title ${submitted ? "text-muted text-decoration-line-through" : ""}">${escapeHtml(t.title)}</span>
+          ${assignedByLine}
         </td>
         <td class="owner-task-cell owner-task-col--deadline emp-col-deadline align-middle small">${deadlineDisplay}</td>
         <td class="owner-task-cell emp-col-desc align-middle">${descriptionBox}</td>
@@ -4027,6 +4234,14 @@ function renderEmployeeMain() {
     });
   });
 
+  main.querySelectorAll(".emp-open-delegate").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = btn.getAttribute("data-task-id");
+      const task = state.empTasks.find((t) => t.id === id);
+      if (task) void openEmpDelegateModal(task);
+    });
+  });
+
   main.querySelectorAll(".emp-view-submission").forEach((btn) => {
     btn.addEventListener("click", () => {
       const taskId = btn.getAttribute("data-task-id");
@@ -4074,6 +4289,7 @@ function renderEmployeeChrome() {
       ${submissionDetailModalHtml()}
       ${empSubmissionModalHtml()}
       ${progressUpdateModalHtml()}
+      ${empDelegateModalHtml()}
     </div>`;
 
   wireEmpChromeNav();
@@ -4081,6 +4297,7 @@ function renderEmployeeChrome() {
   wireSubmissionDetailModal();
   wireEmpSubmissionModal();
   wireProgressUpdateModal();
+  wireEmpDelegateModal();
   renderEmployeeMain();
 }
 
