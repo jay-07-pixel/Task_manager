@@ -474,6 +474,14 @@ body {
   line-height: 1.25;
 }
 
+.owner-list-item--pinned {
+  border-left: 3px solid rgba(var(--bs-info-rgb), 0.55);
+}
+
+.owner-emp-assign-nav .owner-list-item.active {
+  border-left-color: var(--bs-info);
+}
+
 .owner-kpi-icon {
   flex-shrink: 0;
   width: 2.5rem;

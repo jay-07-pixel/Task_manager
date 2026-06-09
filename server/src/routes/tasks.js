@@ -494,12 +494,14 @@ async function resolveOwnerDefaultList() {
 }
 
 /** Dedicated list so admin can find tasks employees created or assigned to each other. */
-async function resolveOwnerEmployeeAssignmentsList() {
-  const owner = await prisma.user.findFirst({
-    where: { role: "owner" },
-    orderBy: { createdAt: "asc" },
-    select: { id: true },
-  });
+async function resolveOwnerEmployeeAssignmentsList(ownerId = null) {
+  const owner = ownerId
+    ? await prisma.user.findFirst({ where: { id: ownerId, role: "owner" }, select: { id: true } })
+    : await prisma.user.findFirst({
+        where: { role: "owner" },
+        orderBy: { createdAt: "asc" },
+        select: { id: true },
+      });
   if (!owner) return null;
 
   let list = await prisma.taskList.findFirst({
@@ -762,8 +764,17 @@ router.post("/:id/delegate", requireAuth, async (req, res) => {
     return res.status(400).json({ error: "That employee is already assigned to this task" });
   }
 
+  const empListCtx = await resolveOwnerEmployeeAssignmentsList(task.list.ownerId);
+  if (!empListCtx) {
+    return res.status(503).json({ error: "No admin account is set up yet" });
+  }
+
   const now = new Date();
   await prisma.$transaction([
+    prisma.task.update({
+      where: { id: task.id },
+      data: { listId: empListCtx.list.id },
+    }),
     prisma.taskAssignee.delete({
       where: { taskId_userId: { taskId: task.id, userId: req.session.userId } },
     }),

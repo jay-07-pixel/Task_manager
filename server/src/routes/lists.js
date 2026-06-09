@@ -5,15 +5,47 @@ import { requireOwner } from "../middleware/auth.js";
 
 const router = Router();
 
+const EMPLOYEE_ASSIGNMENTS_LIST_TITLE = "Employee assignments";
+
 router.use(requireOwner);
 
+async function ensureEmployeeAssignmentsList(ownerId) {
+  let list = await prisma.taskList.findFirst({
+    where: { ownerId, title: EMPLOYEE_ASSIGNMENTS_LIST_TITLE },
+  });
+  if (!list) {
+    const maxOrder = await prisma.taskList.aggregate({
+      where: { ownerId },
+      _max: { sortOrder: true },
+    });
+    list = await prisma.taskList.create({
+      data: {
+        ownerId,
+        title: EMPLOYEE_ASSIGNMENTS_LIST_TITLE,
+        sortOrder: (maxOrder._max.sortOrder ?? -1) + 1,
+      },
+    });
+  }
+  return list;
+}
+
+function listKind(title) {
+  return title === EMPLOYEE_ASSIGNMENTS_LIST_TITLE ? "employee_assignments" : "user";
+}
+
 router.get("/", async (req, res) => {
+  await ensureEmployeeAssignmentsList(req.session.userId);
   const lists = await prisma.taskList.findMany({
     where: { ownerId: req.session.userId },
     orderBy: { sortOrder: "asc" },
     select: { id: true, title: true, sortOrder: true },
   });
-  res.json({ lists });
+  res.json({
+    lists: lists.map((l) => ({
+      ...l,
+      kind: listKind(l.title),
+    })),
+  });
 });
 
 const createListSchema = z.object({
@@ -37,7 +69,9 @@ router.post("/", async (req, res) => {
       sortOrder,
     },
   });
-  res.status(201).json({ list: { id: list.id, title: list.title, sortOrder: list.sortOrder } });
+  res.status(201).json({
+    list: { id: list.id, title: list.title, sortOrder: list.sortOrder, kind: listKind(list.title) },
+  });
 });
 
 const patchListSchema = z.object({
@@ -59,7 +93,14 @@ router.patch("/:id", async (req, res) => {
     where: { id: list.id },
     data,
   });
-  res.json({ list: { id: updated.id, title: updated.title, sortOrder: updated.sortOrder } });
+  res.json({
+    list: {
+      id: updated.id,
+      title: updated.title,
+      sortOrder: updated.sortOrder,
+      kind: listKind(updated.title),
+    },
+  });
 });
 
 router.delete("/:id", async (req, res) => {
@@ -67,6 +108,9 @@ router.delete("/:id", async (req, res) => {
     where: { id: req.params.id, ownerId: req.session.userId },
   });
   if (!list) return res.status(404).json({ error: "List not found" });
+  if (list.title === EMPLOYEE_ASSIGNMENTS_LIST_TITLE) {
+    return res.status(400).json({ error: "The Employee assignments list cannot be deleted" });
+  }
   await prisma.taskList.delete({ where: { id: list.id } });
   res.json({ ok: true });
 });

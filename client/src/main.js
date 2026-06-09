@@ -1149,7 +1149,9 @@ function leftNavInner() {
       <button type="button" class="btn btn-primary w-100 owner-sidebar-new-list js-new-list">
         <i class="bi bi-plus-lg me-1" aria-hidden="true"></i>New list
       </button>
-      <p class="owner-sidebar-label mb-2">Your lists</p>
+      <p class="owner-sidebar-label mb-2">Employee assignments</p>
+      <div class="list-group list-group-flush owner-list-nav owner-emp-assign-nav js-emp-assign-list-host mb-1"></div>
+      <p class="owner-sidebar-label mb-2 mt-2">Your lists</p>
       <div class="list-group list-group-flush flex-grow-1 overflow-auto owner-list-nav js-list-host"></div>
       <div class="owner-sidebar-footer">
         <button type="button" class="btn btn-outline-primary w-100 mb-2" data-bs-toggle="modal" data-bs-target="#teamAdminModal">
@@ -2883,7 +2885,10 @@ function wireProgressUpdateModal() {
 async function loadLists() {
   const { lists } = await api("/api/lists");
   state.lists = lists;
-  if (!state.activeListId && lists.length) state.activeListId = lists[0].id;
+  if (!state.activeListId && lists.length) {
+    const empList = lists.find((l) => isEmployeeAssignmentsList(l));
+    state.activeListId = empList?.id ?? lists[0].id;
+  }
 }
 
 function ownerTasksFingerprintFrom(tasks) {
@@ -3038,12 +3043,14 @@ async function loadAssignees() {
 }
 
 function bindListNavHandlers() {
-  document.querySelectorAll(".js-list-host").forEach((host) => {
+  document.querySelectorAll(".js-list-host, .js-emp-assign-list-host").forEach((host) => {
     host.querySelectorAll("[data-list-id]").forEach((btn) => {
       btn.addEventListener("click", async (e) => {
         if (e.target.closest(".grip-handle")) return;
-        state.activeListId = btn.getAttribute("data-list-id");
-        state.ownerTaskFilter = "active";
+        const listId = btn.getAttribute("data-list-id");
+        state.activeListId = listId;
+        const list = state.lists.find((x) => x.id === listId);
+        state.ownerTaskFilter = isEmployeeAssignmentsList(list) ? "employee_assigned" : "active";
         await loadTasks(state.activeListId);
         renderOwnerMain();
         renderListContentOnly();
@@ -3053,6 +3060,7 @@ function bindListNavHandlers() {
         ev.stopPropagation();
         const id = btn.getAttribute("data-list-id");
         const list = state.lists.find((x) => x.id === id);
+        if (isEmployeeAssignmentsList(list)) return;
         const name = await openListNameModal({
           heading: "Rename list",
           fieldLabel: "List name",
@@ -3071,23 +3079,42 @@ function bindListNavHandlers() {
   });
 }
 
-function renderListContentOnly() {
-  const html = state.lists
-    .map(
-      (l) => `
+function isEmployeeAssignmentsList(list) {
+  return list?.kind === "employee_assignments" || list?.title === "Employee assignments";
+}
+
+function ownerListNavButtonHtml(list, { pinned = false } = {}) {
+  const active = list.id === state.activeListId;
+  const icon = pinned
+    ? "bi-person-lines-fill"
+    : `bi-folder2${active ? "-open" : ""}`;
+  const grip = pinned
+    ? ""
+    : `<i class="bi bi-grip-vertical grip-handle flex-shrink-0" title="Drag to reorder"></i>`;
+  return `
     <button type="button" class="list-group-item list-group-item-action owner-list-item d-flex justify-content-between align-items-center gap-2 ${
-      l.id === state.activeListId ? "active" : ""
-    }" data-list-id="${l.id}">
+      active ? "active" : ""
+    }${pinned ? " owner-list-item--pinned" : ""}" data-list-id="${list.id}"${pinned ? ' data-pinned="1"' : ""}>
       <span class="d-flex align-items-center gap-2 min-w-0">
-        <i class="bi bi-folder2${l.id === state.activeListId ? "-open" : ""} flex-shrink-0" aria-hidden="true"></i>
-        <span class="text-truncate list-title-edit" title="Double-click to rename">${escapeHtml(l.title)}</span>
+        <i class="bi ${icon} flex-shrink-0" aria-hidden="true"></i>
+        <span class="text-truncate ${pinned ? "" : "list-title-edit"}" title="${pinned ? "Tasks assigned between employees" : "Double-click to rename"}">${escapeHtml(list.title)}</span>
       </span>
-      <i class="bi bi-grip-vertical grip-handle flex-shrink-0" title="Drag to reorder"></i>
-    </button>`
-    )
-    .join("");
+      ${grip}
+    </button>`;
+}
+
+function renderListContentOnly() {
+  const pinnedLists = state.lists.filter((l) => isEmployeeAssignmentsList(l));
+  const userLists = state.lists.filter((l) => !isEmployeeAssignmentsList(l));
+  const pinnedHtml = pinnedLists.map((l) => ownerListNavButtonHtml(l, { pinned: true })).join("");
+  const userHtml = userLists.map((l) => ownerListNavButtonHtml(l)).join("");
+  document.querySelectorAll(".js-emp-assign-list-host").forEach((host) => {
+    host.innerHTML =
+      pinnedHtml ||
+      `<div class="list-group-item small text-muted border-0 py-2 px-3">Loading…</div>`;
+  });
   document.querySelectorAll(".js-list-host").forEach((host) => {
-    host.innerHTML = html;
+    host.innerHTML = userHtml;
   });
   bindListNavHandlers();
 }
@@ -3104,10 +3131,12 @@ function destroyListSortable() {
 
 function initListSortable() {
   destroyListSortable();
-  if (state.lists.length < 2) return;
+  const userLists = state.lists.filter((l) => !isEmployeeAssignmentsList(l));
+  if (userLists.length < 2) return;
   document.querySelectorAll(".js-list-host").forEach((host) => {
     const s = Sortable.create(host, {
       handle: ".grip-handle",
+      filter: "[data-pinned]",
       animation: 150,
       onEnd: async () => {
         const orderedIds = [...host.querySelectorAll("[data-list-id]")].map((el) =>
@@ -3483,11 +3512,17 @@ function renderOwnerMain() {
         <p class="owner-empty-desc text-muted small mb-0">Choose a list from the sidebar or create a new one.</p>
       </div>`
     : metrics.total === 0
-      ? `<div class="owner-empty-state py-5 px-3">
-          <i class="bi bi-clipboard2-plus owner-empty-icon text-primary" aria-hidden="true"></i>
-          <p class="owner-empty-title mb-1">No tasks yet</p>
-          <p class="owner-empty-desc text-muted small mb-0">Use quick add below to create the first task for this list.</p>
-        </div>`
+      ? isEmployeeAssignmentsList(list)
+        ? `<div class="owner-empty-state py-5 px-3">
+            <i class="bi bi-person-lines-fill owner-empty-icon text-info" aria-hidden="true"></i>
+            <p class="owner-empty-title mb-1">No employee assignments yet</p>
+            <p class="owner-empty-desc text-muted small mb-0">When employees use <strong>Create & assign task</strong> or assign a task to a colleague, it will appear here with who assigned whom.</p>
+          </div>`
+        : `<div class="owner-empty-state py-5 px-3">
+            <i class="bi bi-clipboard2-plus owner-empty-icon text-primary" aria-hidden="true"></i>
+            <p class="owner-empty-title mb-1">No tasks yet</p>
+            <p class="owner-empty-desc text-muted small mb-0">Use quick add below to create the first task for this list.</p>
+          </div>`
       : state.ownerTaskFilter === "completed"
         ? `<div class="owner-empty-state py-5 px-3">
             <i class="bi bi-check-circle owner-empty-icon text-success" aria-hidden="true"></i>
@@ -3523,7 +3558,7 @@ function renderOwnerMain() {
                 <th scope="col" class="owner-task-head owner-task-col--task">Task</th>
                 <th scope="col" class="owner-task-head owner-task-col--deadline text-nowrap">Deadline</th>
                 <th scope="col" class="owner-task-head">Description</th>
-                <th scope="col" class="owner-task-head owner-task-col--employees text-center text-nowrap">Team</th>
+                <th scope="col" class="owner-task-head owner-task-col--employees text-center text-nowrap">${escapeHtml(teamColLabel)}</th>
                 <th scope="col" class="owner-task-head owner-task-col--trail text-end"><span class="visually-hidden">Details</span></th>
               </tr>
             </thead>
@@ -3531,15 +3566,21 @@ function renderOwnerMain() {
           </table>
         </div>`;
 
+  const isEmpAssignList = isEmployeeAssignmentsList(list);
+  const pageSubtitle = isEmpAssignList
+    ? "Tasks assigned by one employee to another. The Team column shows who assigned whom."
+    : "Assign tasks, review progress updates, and check final submissions.";
+  const teamColLabel = isEmpAssignList ? "Assigned by → to" : "Team";
+
   main.innerHTML = `
     <header class="owner-page-header d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
       <div>
         <p class="owner-page-eyebrow mb-1">Admin dashboard</p>
         <h2 class="owner-page-title h4 mb-0">${list ? escapeHtml(list.title) : "Select a list"}</h2>
-        <p class="owner-page-sub text-muted small mb-0 mt-1">Assign tasks, review progress updates, and check final submissions.</p>
+        <p class="owner-page-sub text-muted small mb-0 mt-1">${escapeHtml(pageSubtitle)}</p>
       </div>
       <div class="d-flex flex-wrap gap-2 owner-toolbar">
-        <button type="button" class="btn btn-outline-danger btn-sm" id="btn-delete-list" ${!list ? "disabled" : ""}>
+        <button type="button" class="btn btn-outline-danger btn-sm" id="btn-delete-list" ${!list || isEmpAssignList ? "disabled" : ""}>
           <i class="bi bi-trash me-1" aria-hidden="true"></i>Delete list
         </button>
       </div>
@@ -3548,7 +3589,7 @@ function renderOwnerMain() {
     <section class="owner-task-panel" aria-label="Tasks">
       ${tableBlock}
     </section>
-    <section class="owner-quick-add-bar mt-auto flex-shrink-0 ${state.ownerTaskFilter === "completed" || state.ownerTaskFilter === "in_review" || state.ownerTaskFilter === "employee_assigned" ? "d-none" : ""}" aria-label="Quick add task">
+    <section class="owner-quick-add-bar mt-auto flex-shrink-0 ${state.ownerTaskFilter === "completed" || state.ownerTaskFilter === "in_review" || state.ownerTaskFilter === "employee_assigned" || isEmpAssignList ? "d-none" : ""}" aria-label="Quick add task">
       <label class="owner-quick-add-label form-label" for="quick-add-title">Quick add task</label>
       <div class="input-group">
         <span class="input-group-text"><i class="bi bi-plus-lg" aria-hidden="true"></i></span>
