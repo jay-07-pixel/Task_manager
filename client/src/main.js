@@ -3140,9 +3140,7 @@ function ownerTaskGroupTbody(t) {
           .join("");
 
   const hasUnreadUpdates = assignees.some((a) => (a.unreadProgressUpdateCount ?? 0) > 0);
-  const inReviewTask = taskIsInReview(t);
-  const expandUnreadClass =
-    hasUnreadUpdates || inReviewTask ? " owner-task-expand-btn--unread" : "";
+  const expandUnreadClass = hasUnreadUpdates ? " owner-task-expand-btn--unread" : "";
 
   const assigneeMarkDoneControl = `<div class="owner-mark-done-wrap">
       <button
@@ -3182,9 +3180,9 @@ function ownerTaskGroupTbody(t) {
           data-bs-target="#${detailId}"
           aria-expanded="false"
           aria-controls="${detailId}"
-          aria-label="Assignees and actions${hasUnreadUpdates || inReviewTask ? " — in review" : ""}"
+          aria-label="Assignees and actions${hasUnreadUpdates ? " — unread updates" : ""}"
         >
-          ${hasUnreadUpdates || inReviewTask ? `<span class="owner-task-expand-unread-dot" aria-hidden="true"></span>` : ""}
+          ${hasUnreadUpdates ? `<span class="owner-task-expand-unread-dot" aria-hidden="true"></span>` : ""}
           <i class="bi bi-chevron-down" aria-hidden="true"></i>
         </button>
       </td>
