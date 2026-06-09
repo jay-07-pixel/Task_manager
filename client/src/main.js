@@ -1142,38 +1142,59 @@ function ownerTaskDescriptionPreview(notes) {
   return { short: `${words.slice(0, 3).join(" ")}…`, full: text, truncated: true };
 }
 
-function ownerTaskDescriptionHtml(notes) {
+function ownerTaskDescriptionHtml(notes, taskTitle = "") {
   const { short, full, truncated } = ownerTaskDescriptionPreview(notes);
   if (!full) {
     return `<span class="owner-task-desc-short small text-muted fst-italic">—</span>`;
   }
   if (!truncated) {
-    return `<span class="owner-task-desc-short small text-body-secondary">${escapeHtml(full)}</span>`;
+    return `<span class="owner-task-desc-box owner-task-desc-box--static small text-body-secondary mb-0">${escapeHtml(full)}</span>`;
   }
-  return `<button type="button" class="btn btn-link btn-sm p-0 text-start owner-task-desc-toggle js-owner-desc-toggle" data-full="${escapeHtml(full)}" aria-expanded="false" aria-label="Show full description">
-    <span class="owner-task-desc-preview small text-body-secondary">${escapeHtml(short)}</span>
+  return `<button type="button" class="owner-task-desc-box owner-task-desc-box--clickable js-owner-desc-popup small text-body-secondary mb-0" data-full="${escapeHtml(full)}" data-task-title="${escapeHtml(taskTitle)}" aria-label="View full description">
+    <span class="owner-task-desc-preview">${escapeHtml(short)}</span>
+    <i class="bi bi-box-arrow-up-right owner-task-desc-popup-icon" aria-hidden="true"></i>
   </button>`;
 }
 
-function bindOwnerDescriptionToggles(root) {
-  root.querySelectorAll(".js-owner-desc-toggle").forEach((btn) => {
+function taskDescriptionModalHtml() {
+  return `
+    <div class="modal fade" id="taskDescriptionModal" tabindex="-1" aria-labelledby="taskDescriptionModalTitle" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h2 class="modal-title h5 mb-0" id="taskDescriptionModalTitle">Description</h2>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <p class="mb-0 owner-task-desc-modal-text text-break" id="taskDescriptionModalBody"></p>
+          </div>
+          <div class="modal-footer border-top-0 pt-0">
+            <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Close</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function openTaskDescriptionModal(fullText, taskTitle = "") {
+  const modalEl = document.getElementById("taskDescriptionModal");
+  const bodyEl = document.getElementById("taskDescriptionModalBody");
+  const titleEl = document.getElementById("taskDescriptionModalTitle");
+  if (!modalEl || !bodyEl) return;
+  bodyEl.textContent = fullText;
+  if (titleEl) {
+    titleEl.textContent = taskTitle ? `Description — ${taskTitle}` : "Description";
+  }
+  bootstrap.Modal.getOrCreateInstance(modalEl).show();
+}
+
+function bindOwnerDescriptionPopups(root) {
+  root.querySelectorAll(".js-owner-desc-popup").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
-      const preview = btn.querySelector(".owner-task-desc-preview");
-      if (!preview) return;
       const full = btn.getAttribute("data-full") || "";
-      const expanded = btn.getAttribute("aria-expanded") === "true";
-      if (expanded) {
-        preview.textContent = ownerTaskDescriptionPreview(full).short;
-        btn.setAttribute("aria-expanded", "false");
-        btn.classList.remove("owner-task-desc-toggle--expanded");
-        btn.setAttribute("aria-label", "Show full description");
-      } else {
-        preview.textContent = full;
-        btn.setAttribute("aria-expanded", "true");
-        btn.classList.add("owner-task-desc-toggle--expanded");
-        btn.setAttribute("aria-label", "Hide full description");
-      }
+      const taskTitle = btn.getAttribute("data-task-title") || "";
+      if (full) openTaskDescriptionModal(full, taskTitle);
     });
   });
 }
@@ -3361,7 +3382,7 @@ function ownerTaskGroupTbody(t) {
     ? `<span class="text-body tabular-nums">${escapeHtml(t.dueAt.slice(0, 10))}</span>`
     : `<span class="text-muted">—</span>`;
 
-  const descriptionBox = ownerTaskDescriptionHtml(t.notes);
+  const descriptionBox = ownerTaskDescriptionHtml(t.notes, t.title);
 
   const assigneeCards =
     assignees.length === 0
@@ -3690,7 +3711,7 @@ function renderOwnerMain() {
     });
   });
 
-  bindOwnerDescriptionToggles(main);
+  bindOwnerDescriptionPopups(main);
 
   main.querySelectorAll(".owner-mark-done-open").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -3871,6 +3892,7 @@ function renderOwnerChrome() {
       ${taskModalHtml()}
       ${customRecurrenceModalHtml()}
       ${listNameModalHtml()}
+      ${taskDescriptionModalHtml()}
       ${submissionDetailModalHtml()}
       ${progressUpdateModalHtml()}
       ${ownerMarkDoneModalHtml()}

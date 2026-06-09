@@ -486,37 +486,60 @@ body {
   font-weight: 400;
 }
 
-.owner-task-desc-short,
-.owner-task-desc-toggle {
+.owner-task-desc-short {
   display: block;
   max-width: 100%;
   line-height: 1.35;
-}
-
-.owner-task-desc-short {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.owner-task-desc-toggle {
-  max-width: 100%;
-  text-decoration: none !important;
-  border: 0;
+.owner-task-desc-box--static {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.owner-task-desc-box--clickable {
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid var(--bs-border-color);
+  background-color: var(--bs-tertiary-bg);
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.owner-task-desc-box--clickable:hover {
+  border-color: rgba(var(--bs-primary-rgb), 0.45);
+  background-color: rgba(var(--bs-primary-rgb), 0.06);
+}
+
+.owner-task-desc-box--clickable:focus-visible {
+  outline: 0;
+  box-shadow: 0 0 0 0.2rem rgba(var(--bs-primary-rgb), 0.25);
+}
+
+.owner-task-desc-box--clickable .owner-task-desc-preview {
+  flex: 1;
   min-width: 0;
-}
-
-.owner-task-desc-toggle .owner-task-desc-preview {
-  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.owner-task-desc-toggle--expanded .owner-task-desc-preview {
-  white-space: normal;
-  word-break: break-word;
-  overflow: visible;
+.owner-task-desc-popup-icon {
+  flex-shrink: 0;
+  font-size: 0.65rem;
+  opacity: 0.55;
+}
+
+.owner-task-desc-modal-text {
+  white-space: pre-wrap;
+  line-height: 1.5;
 }
 
 .owner-list-item--pinned {
