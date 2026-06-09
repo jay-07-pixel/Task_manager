@@ -677,6 +677,14 @@ body {
   min-width: 0;
 }
 
+.owner-team-col-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  margin-bottom: 0.4rem;
+}
+
 .owner-team-col-label {
   display: block;
   font-size: 0.62rem;
@@ -684,7 +692,27 @@ body {
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--bs-secondary);
+  margin-bottom: 0;
+}
+
+.owner-team-col:not(.owner-team-col--updates) .owner-team-col-label {
   margin-bottom: 0.4rem;
+}
+
+.owner-update-total-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.35rem;
+  height: 1.35rem;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: var(--bs-success);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1;
+  flex-shrink: 0;
 }
 
 .owner-assignee-update-preview {

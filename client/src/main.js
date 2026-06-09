@@ -2415,16 +2415,21 @@ function assigneeInitials(displayName) {
   return `${parts[0].slice(0, 1)}${parts[parts.length - 1].slice(0, 1)}`.toUpperCase();
 }
 
+function ownerUpdateTotalCountBadgeHtml(count) {
+  const total = count ?? 0;
+  if (total < 1) return "";
+  return `<span class="owner-update-total-badge tabular-nums" aria-label="${total} update${
+    total === 1 ? "" : "s"
+  } posted">${total}</span>`;
+}
+
 function ownerProgressUpdateBadgeHtml(assignee) {
   const total = assignee.progressUpdateCount ?? 0;
   const unread = assignee.unreadProgressUpdateCount ?? 0;
-  if (total === 0) return "";
-  if (unread > 0) {
-    return `<span class="owner-update-unread-badge tabular-nums" aria-label="${unread} unread update${
-      unread === 1 ? "" : "s"
-    }">${unread}</span>`;
-  }
-  return `<span class="owner-update-read-dot" aria-label="All updates read" title="All updates read"></span>`;
+  if (total === 0 || unread === 0) return "";
+  return `<span class="owner-update-unread-badge tabular-nums" aria-label="${unread} unread update${
+    unread === 1 ? "" : "s"
+  }">${unread}</span>`;
 }
 
 function ownerLatestUpdateSnippet(message, max = 96) {
@@ -3126,11 +3131,14 @@ function ownerTaskGroupTbody(t) {
                   </div>
                 </div>
                 <div class="owner-team-card-grid">
-                  <div class="owner-team-col">
-                    <span class="owner-team-col-label">Updates</span>
+                  <div class="owner-team-col owner-team-col--updates">
+                    <div class="owner-team-col-head">
+                      <span class="owner-team-col-label">Updates</span>
+                      ${ownerUpdateTotalCountBadgeHtml(a.progressUpdateCount ?? 0)}
+                    </div>
                     ${ownerAssigneeUpdatesHtml(t.id, a)}
                   </div>
-                  <div class="owner-team-col">
+                  <div class="owner-team-col owner-team-col--submission">
                     <span class="owner-team-col-label">Submission</span>
                     ${ownerAssigneeSubmissionHtml(t.id, a)}
                   </div>
