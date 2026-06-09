@@ -4130,7 +4130,8 @@ function empTaskTableRows(tasks) {
       const assignedByLine = me?.assignedBy?.displayName
         ? `<div class="small text-muted emp-assigned-by-line mt-1">From ${escapeHtml(me.assignedBy.displayName)}</div>`
         : "";
-      const delegateBtn = !submitted
+      const canReassign = !submitted && !me?.assignedBy;
+      const delegateBtn = canReassign
         ? `<button type="button" class="btn btn-sm btn-outline-info emp-open-delegate" data-task-id="${t.id}"><i class="bi bi-person-plus me-1" aria-hidden="true"></i>Assign</button>`
         : "";
       const submissionCell = `<div class="d-flex flex-column align-items-end gap-1 emp-task-actions">

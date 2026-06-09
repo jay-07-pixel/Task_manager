@@ -753,6 +753,11 @@ router.post("/:id/delegate", requireAuth, async (req, res) => {
   if (myRow.assigneeDone) {
     return res.status(400).json({ error: "Cannot delegate a task that is already submitted" });
   }
+  if (myRow.assignedByUserId) {
+    return res.status(400).json({
+      error: "You cannot re-assign a task that was assigned to you by another employee",
+    });
+  }
   if (task.assignments.some((a) => a.userId === employeeId)) {
     return res.status(400).json({ error: "That employee is already assigned to this task" });
   }
