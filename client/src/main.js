@@ -3460,6 +3460,12 @@ function renderOwnerMain() {
 
   const tbodyInner = visibleTasks.map((t) => ownerTaskGroupTbody(t)).join("");
 
+  const isEmpAssignList = isEmployeeAssignmentsList(list);
+  const pageSubtitle = isEmpAssignList
+    ? "Tasks assigned by one employee to another. The Team column shows who assigned whom."
+    : "Assign tasks, review progress updates, and check final submissions.";
+  const teamColLabel = isEmpAssignList ? "Assigned by → to" : "Team";
+
   const metrics = ownerDashboardMetrics();
   const activeKpiClass =
     state.ownerTaskFilter === "active" ? " owner-kpi-card--active owner-kpi-card--active-primary" : "";
@@ -3574,12 +3580,6 @@ function renderOwnerMain() {
           </table>
         </div>`;
 
-  const isEmpAssignList = isEmployeeAssignmentsList(list);
-  const pageSubtitle = isEmpAssignList
-    ? "Tasks assigned by one employee to another. The Team column shows who assigned whom."
-    : "Assign tasks, review progress updates, and check final submissions.";
-  const teamColLabel = isEmpAssignList ? "Assigned by → to" : "Team";
-
   main.innerHTML = `
     <header class="owner-page-header d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
       <div>
@@ -3588,6 +3588,13 @@ function renderOwnerMain() {
         <p class="owner-page-sub text-muted small mb-0 mt-1">${escapeHtml(pageSubtitle)}</p>
       </div>
       <div class="d-flex flex-wrap gap-2 owner-toolbar">
+        ${
+          isEmpAssignList
+            ? `<button type="button" class="btn btn-outline-primary btn-sm js-owner-refresh-tasks" aria-label="Refresh employee assignments">
+                <i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>Refresh
+              </button>`
+            : ""
+        }
         <button type="button" class="btn btn-outline-danger btn-sm" id="btn-delete-list" ${!list || isEmpAssignList ? "disabled" : ""}>
           <i class="bi bi-trash me-1" aria-hidden="true"></i>Delete list
         </button>
@@ -3621,6 +3628,25 @@ function renderOwnerMain() {
     } catch (err) {
       showToast(err.message, "danger");
     }
+  });
+
+  main.querySelectorAll(".js-owner-refresh-tasks").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      if (!listId) return;
+      btn.disabled = true;
+      try {
+        await loadTasks(listId);
+        renderOwnerMain();
+        showToast(
+          state.tasks.length ? "Employee assignments refreshed." : "No employee assignments found yet.",
+          state.tasks.length ? "success" : "info"
+        );
+      } catch (err) {
+        showToast(err.message, "danger");
+      } finally {
+        btn.disabled = false;
+      }
+    });
   });
 
   main.querySelectorAll("[data-owner-filter]").forEach((btn) => {
