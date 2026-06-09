@@ -22,6 +22,13 @@ enum TaskRecurrence {
   custom
 }
 
+enum TaskProgressUpdateType {
+  started
+  in_progress
+  blocked
+  update
+}
+
 model User {
   id           String   @id @default(uuid())
   email        String   @unique
@@ -34,9 +41,10 @@ model User {
 
   ownedLists        TaskList[]
   createdTasks      Task[]             @relation("CreatedBy")
-  taskAssignments   TaskAssignee[]
-  pushSubscriptions PushSubscription[]
-  employeeDevices   EmployeeDevice[]
+  taskAssignments      TaskAssignee[]
+  pushSubscriptions    PushSubscription[]
+  employeeDevices      EmployeeDevice[]
+  taskProgressUpdates  TaskProgressUpdate[]
 }
 
 model TaskList {
@@ -82,11 +90,27 @@ model Task {
   createdAt       DateTime         @default(now()) @map("created_at")
   updatedAt       DateTime         @updatedAt @map("updated_at")
 
-  list         TaskList       @relation(fields: [listId], references: [id], onDelete: Cascade)
-  createdBy    User           @relation("CreatedBy", fields: [createdById], references: [id])
-  assignments  TaskAssignee[]
+  list            TaskList             @relation(fields: [listId], references: [id], onDelete: Cascade)
+  createdBy       User                 @relation("CreatedBy", fields: [createdById], references: [id])
+  assignments     TaskAssignee[]
+  progressUpdates TaskProgressUpdate[]
 
   @@index([listId])
+}
+
+model TaskProgressUpdate {
+  id         String                 @id @default(uuid())
+  taskId     String                 @map("task_id")
+  userId     String                 @map("user_id")
+  updateType TaskProgressUpdateType @map("update_type")
+  message    String                 @db.Text
+  createdAt  DateTime               @default(now()) @map("created_at")
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, userId])
+  @@map("task_progress_update")
 }
 
 model PushSubscription {

@@ -222,6 +222,28 @@ body {
   white-space: nowrap;
 }
 
+.progress-update-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.progress-update-item {
+  border: 1px solid var(--bs-border-color);
+  border-radius: 0.5rem;
+  padding: 0.75rem 0.85rem;
+  background: var(--bs-body-bg);
+}
+
+.progress-update-item-message {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.emp-task-actions .btn {
+  min-width: 6.5rem;
+}
+
 .submission-detail-text {
   white-space: pre-wrap;
   word-break: break-word;

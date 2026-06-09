@@ -181,6 +181,41 @@ const proofBlobUrls = new Set();
 const EMP_SUBMISSION_TEXT_MAX = 2000;
 const EMP_SUBMISSION_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 const EMP_SUBMISSION_REQUIRED_MSG = "Please provide submission text or upload an image.";
+const PROGRESS_UPDATE_TEXT_MAX = 2000;
+const PROGRESS_UPDATE_TYPES = [
+  {
+    id: "started",
+    label: "Started working",
+    badge: "Started",
+    badgeClass: "text-bg-primary",
+    icon: "play-circle",
+    defaultMsg: "Started working on this task.",
+  },
+  {
+    id: "in_progress",
+    label: "In progress",
+    badge: "In progress",
+    badgeClass: "text-bg-info",
+    icon: "arrow-repeat",
+    defaultMsg: "Still working on this — making progress.",
+  },
+  {
+    id: "blocked",
+    label: "Blocked",
+    badge: "Blocked",
+    badgeClass: "text-bg-warning",
+    icon: "pause-circle",
+    defaultMsg: "Blocked — need help or waiting on something.",
+  },
+  {
+    id: "update",
+    label: "General update",
+    badge: "Update",
+    badgeClass: "text-bg-secondary",
+    icon: "chat-left-text",
+    defaultMsg: "",
+  },
+];
 
 function submissionUploadErrorMessage(res, rawText) {
   if (res.status === 413) {
@@ -1669,6 +1704,55 @@ function submissionDetailModalHtml() {
     </div>`;
 }
 
+function progressUpdateModalHtml() {
+  return `
+    <div class="modal fade" id="progressUpdateModal" tabindex="-1" aria-labelledby="progressUpdateModalTitle" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable modal-fullscreen-sm-down">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h2 class="modal-title h5 mb-0" id="progressUpdateModalTitle">Task update</h2>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <input type="hidden" id="progress-update-task-id" value="" />
+            <input type="hidden" id="progress-update-user-id" value="" />
+            <input type="hidden" id="progress-update-readonly" value="0" />
+            <p class="fw-medium text-body-secondary mb-1 small text-uppercase text-secondary">Task</p>
+            <p id="progress-update-task-title" class="fw-semibold mb-1"></p>
+            <p id="progress-update-assignee-label" class="small text-muted mb-3 d-none"></p>
+            <div id="progress-update-compose-wrap">
+              <p class="small text-uppercase text-secondary fw-semibold mb-2">Update type</p>
+              <div id="progress-update-type-chips" class="d-flex flex-wrap gap-2 mb-3" role="group" aria-label="Update type"></div>
+              <label class="form-label" for="progress-update-message">Your update</label>
+              <textarea
+                class="form-control progress-update-textarea"
+                id="progress-update-message"
+                rows="4"
+                maxlength="${PROGRESS_UPDATE_TEXT_MAX}"
+                placeholder="Share what you are doing, any blockers, or progress on this task."
+              ></textarea>
+              <div class="d-flex justify-content-end mt-1">
+                <span id="progress-update-count" class="small text-muted tabular-nums">0 / ${PROGRESS_UPDATE_TEXT_MAX}</span>
+              </div>
+              <p id="progress-update-error" class="text-danger small mb-0 mt-2 d-none" role="alert"></p>
+            </div>
+            <div id="progress-update-history-wrap" class="mt-3">
+              <p class="small text-uppercase text-secondary fw-semibold mb-2">Update history</p>
+              <div id="progress-update-history" class="progress-update-timeline"></div>
+              <p id="progress-update-history-empty" class="text-muted small mb-0 d-none">No updates yet.</p>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            <button type="button" class="btn btn-primary" id="progress-update-submit">
+              <i class="bi bi-send me-1" aria-hidden="true"></i>Post update
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
 function empSubmissionModalHtml() {
   return `
     <div class="modal fade" id="empSubmissionModal" tabindex="-1" aria-labelledby="empSubmissionModalTitle" aria-hidden="true">
@@ -2289,6 +2373,233 @@ function wireEmpSubmissionModal() {
   });
 }
 
+function progressUpdateTypeMeta(type) {
+  return PROGRESS_UPDATE_TYPES.find((t) => t.id === type) ?? PROGRESS_UPDATE_TYPES[3];
+}
+
+function formatProgressUpdateTime(iso) {
+  if (!iso) return "";
+  try {
+    const d = new Date(iso);
+    return d.toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  } catch {
+    return iso.slice(0, 16).replace("T", " ");
+  }
+}
+
+function renderProgressUpdateTimeline(updates) {
+  if (!updates?.length) return "";
+  return updates
+    .map((u) => {
+      const meta = progressUpdateTypeMeta(u.updateType);
+      return `<article class="progress-update-item">
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+          <span class="badge rounded-pill ${meta.badgeClass}">${escapeHtml(meta.badge)}</span>
+          <time class="small text-muted tabular-nums" datetime="${escapeHtml(u.createdAt)}">${escapeHtml(
+        formatProgressUpdateTime(u.createdAt)
+      )}</time>
+        </div>
+        <p class="progress-update-item-message small mb-0">${escapeHtml(u.message)}</p>
+      </article>`;
+    })
+    .join("");
+}
+
+function syncProgressUpdateCharCount() {
+  const ta = document.getElementById("progress-update-message");
+  const counter = document.getElementById("progress-update-count");
+  if (!ta || !counter) return;
+  counter.textContent = `${ta.value.length} / ${PROGRESS_UPDATE_TEXT_MAX}`;
+}
+
+function renderProgressUpdateTypeChips(selectedType = "started") {
+  const host = document.getElementById("progress-update-type-chips");
+  if (!host) return;
+  host.innerHTML = PROGRESS_UPDATE_TYPES.map((t) => {
+    const active = t.id === selectedType;
+    return `<button
+      type="button"
+      class="btn btn-sm ${active ? "btn-primary" : "btn-outline-primary"} progress-update-type-chip"
+      data-progress-type="${t.id}"
+      aria-pressed="${active}"
+    >
+      <i class="bi bi-${t.icon} me-1" aria-hidden="true"></i>${t.label}
+    </button>`;
+  }).join("");
+}
+
+function setProgressUpdateModalReadOnly(readOnly) {
+  const compose = document.getElementById("progress-update-compose-wrap");
+  const submitBtn = document.getElementById("progress-update-submit");
+  const readonlyInput = document.getElementById("progress-update-readonly");
+  if (readonlyInput) readonlyInput.value = readOnly ? "1" : "0";
+  compose?.classList.toggle("d-none", readOnly);
+  submitBtn?.classList.toggle("d-none", readOnly);
+}
+
+async function loadProgressUpdateHistory(taskId, userId) {
+  const historyEl = document.getElementById("progress-update-history");
+  const emptyEl = document.getElementById("progress-update-history-empty");
+  if (!historyEl || !emptyEl) return;
+  const q =
+    state.user?.role === "owner" ? `?assigneeUserId=${encodeURIComponent(userId)}` : "";
+  const data = await api(`/api/tasks/${taskId}/progress-updates${q}`);
+  const updates = data.updates ?? [];
+  historyEl.innerHTML = renderProgressUpdateTimeline(updates);
+  emptyEl.classList.toggle("d-none", updates.length > 0);
+  historyEl.classList.toggle("d-none", updates.length === 0);
+  return data;
+}
+
+async function openEmpProgressUpdateModal(task) {
+  const modalEl = document.getElementById("progressUpdateModal");
+  if (!modalEl || !task || !state.user?.id) return;
+  const idInput = document.getElementById("progress-update-task-id");
+  const userInput = document.getElementById("progress-update-user-id");
+  const titleEl = document.getElementById("progress-update-task-title");
+  const assigneeLabel = document.getElementById("progress-update-assignee-label");
+  const modalTitle = document.getElementById("progressUpdateModalTitle");
+  const ta = document.getElementById("progress-update-message");
+  const errEl = document.getElementById("progress-update-error");
+  if (!idInput || !userInput || !titleEl || !ta || !errEl) return;
+
+  idInput.value = task.id;
+  userInput.value = state.user.id;
+  titleEl.textContent = task.title;
+  assigneeLabel?.classList.add("d-none");
+  if (modalTitle) modalTitle.textContent = "Post task update";
+  ta.value = "";
+  errEl.textContent = "";
+  errEl.classList.add("d-none");
+  setProgressUpdateModalReadOnly(false);
+  renderProgressUpdateTypeChips("started");
+  const startedMeta = progressUpdateTypeMeta("started");
+  ta.value = startedMeta.defaultMsg;
+  syncProgressUpdateCharCount();
+  bootstrap.Modal.getOrCreateInstance(modalEl).show();
+  try {
+    await loadProgressUpdateHistory(task.id, state.user.id);
+  } catch (err) {
+    showToast(err.message || "Could not load update history.", "danger");
+  }
+  window.setTimeout(() => ta.focus(), 300);
+}
+
+async function openProgressUpdatesForAssignee(taskId, userId, assigneeName) {
+  const modalEl = document.getElementById("progressUpdateModal");
+  if (!modalEl || !taskId || !userId) return;
+  const task = state.tasks.find((t) => t.id === taskId) ?? state.empTasks.find((t) => t.id === taskId);
+  const idInput = document.getElementById("progress-update-task-id");
+  const userInput = document.getElementById("progress-update-user-id");
+  const titleEl = document.getElementById("progress-update-task-title");
+  const assigneeLabel = document.getElementById("progress-update-assignee-label");
+  const modalTitle = document.getElementById("progressUpdateModalTitle");
+  if (!idInput || !userInput || !titleEl) return;
+
+  idInput.value = taskId;
+  userInput.value = userId;
+  titleEl.textContent = task?.title ?? "Task";
+  if (assigneeLabel) {
+    assigneeLabel.textContent = `Employee: ${assigneeName || "Assignee"}`;
+    assigneeLabel.classList.remove("d-none");
+  }
+  if (modalTitle) modalTitle.textContent = "Review task updates";
+  setProgressUpdateModalReadOnly(true);
+  bootstrap.Modal.getOrCreateInstance(modalEl).show();
+  try {
+    await loadProgressUpdateHistory(taskId, userId);
+  } catch (err) {
+    showToast(err.message || "Could not load updates.", "danger");
+  }
+}
+
+function wireProgressUpdateModal() {
+  const modalEl = document.getElementById("progressUpdateModal");
+  if (!modalEl || modalEl.dataset.wiredProgressUpdate === "1") return;
+  modalEl.dataset.wiredProgressUpdate = "1";
+
+  const chipsHost = document.getElementById("progress-update-type-chips");
+  const ta = document.getElementById("progress-update-message");
+  const submitBtn = document.getElementById("progress-update-submit");
+
+  ta?.addEventListener("input", syncProgressUpdateCharCount);
+
+  chipsHost?.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-progress-type]");
+    if (!btn || !ta) return;
+    const type = btn.getAttribute("data-progress-type") || "update";
+    renderProgressUpdateTypeChips(type);
+    const meta = progressUpdateTypeMeta(type);
+    const current = ta.value.trim();
+    const defaults = PROGRESS_UPDATE_TYPES.map((t) => t.defaultMsg).filter(Boolean);
+    if (!current || defaults.includes(current)) {
+      ta.value = meta.defaultMsg;
+      syncProgressUpdateCharCount();
+    }
+  });
+
+  submitBtn?.addEventListener("click", async () => {
+    const idInput = document.getElementById("progress-update-task-id");
+    const errEl = document.getElementById("progress-update-error");
+    const taskId = idInput?.value?.trim();
+    if (!taskId || !ta || !errEl) return;
+
+    const activeChip = chipsHost?.querySelector(".progress-update-type-chip.btn-primary");
+    const updateType = activeChip?.getAttribute("data-progress-type") || "update";
+    const message = ta.value.trim();
+    errEl.classList.add("d-none");
+    errEl.textContent = "";
+
+    if (!message) {
+      errEl.textContent = "Please enter an update message.";
+      errEl.classList.remove("d-none");
+      return;
+    }
+    if (message.length > PROGRESS_UPDATE_TEXT_MAX) {
+      errEl.textContent = `Updates must be ${PROGRESS_UPDATE_TEXT_MAX} characters or fewer.`;
+      errEl.classList.remove("d-none");
+      return;
+    }
+
+    submitBtn.disabled = true;
+    try {
+      await api(`/api/tasks/${taskId}/progress-updates`, {
+        method: "POST",
+        body: JSON.stringify({ updateType, message }),
+      });
+      showToast("Update posted.", "success");
+      ta.value = "";
+      syncProgressUpdateCharCount();
+      const userId = state.user?.id;
+      if (userId) await loadProgressUpdateHistory(taskId, userId);
+      await loadEmployeeTasks();
+      renderEmpListContentOnly();
+      renderEmployeeMain();
+    } catch (err) {
+      errEl.textContent = err.message || "Could not post update.";
+      errEl.classList.remove("d-none");
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
+
+  modalEl.addEventListener("hidden.bs.modal", () => {
+    if (ta) ta.value = "";
+    syncProgressUpdateCharCount();
+    const errEl = document.getElementById("progress-update-error");
+    if (errEl) {
+      errEl.textContent = "";
+      errEl.classList.add("d-none");
+    }
+    setProgressUpdateModalReadOnly(false);
+  });
+}
+
 async function loadLists() {
   const { lists } = await api("/api/lists");
   state.lists = lists;
@@ -2306,6 +2617,7 @@ function ownerTasksFingerprintFrom(tasks) {
         x.assigneeDone,
         x.submissionText ?? "",
         x.completionProofUrl ?? "",
+        x.progressUpdateCount ?? 0,
       ]),
     }))
   );
@@ -2698,7 +3010,7 @@ function ownerTaskGroupTbody(t) {
 
   const assigneePanelRows =
     assignees.length === 0
-      ? `<tr><td colspan="3" class="text-muted small py-3 px-3">No assignees yet. Edit the task to add people.</td></tr>`
+      ? `<tr><td colspan="4" class="text-muted small py-3 px-3">No assignees yet. Edit the task to add people.</td></tr>`
       : assignees
           .map((a) => {
             const preview = submissionPreviewText(a.submissionText);
@@ -2708,12 +3020,21 @@ function ownerTaskGroupTbody(t) {
                   <button type="button" class="btn btn-sm btn-outline-primary owner-view-submission-btn" data-view-submission-task-id="${t.id}" data-view-submission-user-id="${escapeHtml(a.id)}" title="View submission" aria-label="View submission for ${escapeHtml(a.displayName)}"><i class="bi bi-eye me-1" aria-hidden="true"></i>View</button>
                 </div>`
               : `<span class="text-muted">—</span>`;
+            const updateCount = a.progressUpdateCount ?? 0;
+            const updatesCell =
+              updateCount > 0
+                ? `<div class="d-flex flex-column align-items-end gap-1">
+                    <span class="badge rounded-pill text-bg-secondary tabular-nums">${updateCount} update${updateCount === 1 ? "" : "s"}</span>
+                    <button type="button" class="btn btn-sm btn-outline-secondary owner-view-progress-btn" data-view-progress-task-id="${t.id}" data-view-progress-user-id="${escapeHtml(a.id)}" data-view-progress-user-name="${escapeHtml(a.displayName)}" title="Review updates" aria-label="Review updates for ${escapeHtml(a.displayName)}"><i class="bi bi-chat-left-dots me-1" aria-hidden="true"></i>Review</button>
+                  </div>`
+                : `<span class="text-muted">—</span>`;
             const doneLabel = a.assigneeDone
               ? `<span class="badge rounded-pill bg-success-subtle text-success border border-success-subtle owner-assignee-status-badge">Submitted</span>`
               : `<span class="badge rounded-pill bg-danger-subtle text-danger border border-danger-subtle owner-assignee-status-badge">Pending</span>`;
             return `<tr>
               <td class="px-3 py-2 fw-medium">${escapeHtml(a.displayName)}</td>
               <td class="px-3 py-2 text-center">${doneLabel}</td>
+              <td class="px-3 py-2 text-end">${updatesCell}</td>
               <td class="px-3 py-2 text-end">${submissionCell}</td>
             </tr>`;
           })
@@ -2775,6 +3096,7 @@ function ownerTaskGroupTbody(t) {
                     <tr>
                       <th scope="col" class="px-3 py-2">Employee</th>
                       <th scope="col" class="px-3 py-2 text-center" style="width: 7.5rem;">Status</th>
+                      <th scope="col" class="px-3 py-2 text-end" style="width: 8.5rem;">Updates</th>
                       <th scope="col" class="px-3 py-2 text-end" style="width: 8.5rem;">Submission</th>
                     </tr>
                   </thead>
@@ -2897,7 +3219,7 @@ function renderOwnerMain() {
       <div>
         <p class="owner-page-eyebrow mb-1">Admin dashboard</p>
         <h2 class="owner-page-title h4 mb-0">${list ? escapeHtml(list.title) : "Select a list"}</h2>
-        <p class="owner-page-sub text-muted small mb-0 mt-1">Assign tasks, track submissions, and review notes and images.</p>
+        <p class="owner-page-sub text-muted small mb-0 mt-1">Assign tasks, review progress updates, and check final submissions.</p>
       </div>
       <div class="d-flex flex-wrap gap-2 owner-toolbar">
         <button type="button" class="btn btn-outline-danger btn-sm" id="btn-delete-list" ${!list ? "disabled" : ""}>
@@ -2965,6 +3287,19 @@ function renderOwnerMain() {
       if (!taskId || !userId) return;
       void openSubmissionDetailForAssignee(taskId, userId).catch((err) => {
         showToast(err.message || "Could not load submission.", "danger");
+      });
+    });
+  });
+
+  main.querySelectorAll(".owner-view-progress-btn").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const taskId = btn.getAttribute("data-view-progress-task-id");
+      const userId = btn.getAttribute("data-view-progress-user-id");
+      const userName = btn.getAttribute("data-view-progress-user-name") || "";
+      if (!taskId || !userId) return;
+      void openProgressUpdatesForAssignee(taskId, userId, userName).catch((err) => {
+        showToast(err.message || "Could not load updates.", "danger");
       });
     });
   });
@@ -3072,6 +3407,7 @@ function renderOwnerChrome() {
       ${customRecurrenceModalHtml()}
       ${listNameModalHtml()}
       ${submissionDetailModalHtml()}
+      ${progressUpdateModalHtml()}
       ${ownerMarkDoneModalHtml()}
       ${teamAdminModalHtml()}
     </div>`;
@@ -3083,6 +3419,7 @@ function renderOwnerChrome() {
   wireCustomRecurrenceModal();
   wireListNameModal();
   wireSubmissionDetailModal();
+  wireProgressUpdateModal();
   wireOwnerMarkDoneModal();
   wireTeamAdminModal();
   wireThemeIconToggles();
@@ -3204,9 +3541,21 @@ function empTaskTableRows(tasks) {
         notesPreview.length > 0
           ? `<div class="owner-task-desc-box small text-body-secondary text-truncate mb-0" title="${escapeHtml(notesRaw)}">${escapeHtml(notesPreview)}</div>`
           : `<div class="owner-task-desc-box small text-muted fst-italic mb-0">No description</div>`;
-      const submissionCell = submitted && hasSubmission
-        ? `<button type="button" class="btn btn-sm btn-outline-primary emp-view-submission" data-task-id="${t.id}" data-user-id="${escapeHtml(state.user?.id || "")}"><i class="bi bi-eye me-1" aria-hidden="true"></i>View</button>`
-        : `<button type="button" class="btn btn-sm btn-primary emp-open-submit" data-task-id="${t.id}"><i class="bi bi-send me-1" aria-hidden="true"></i>Submit</button>`;
+      const updateCount = me?.progressUpdateCount ?? 0;
+      const updateBadge =
+        updateCount > 0
+          ? `<span class="badge rounded-pill text-bg-secondary ms-1 tabular-nums">${updateCount}</span>`
+          : "";
+      const submissionBtn =
+        submitted && hasSubmission
+          ? `<button type="button" class="btn btn-sm btn-outline-primary emp-view-submission" data-task-id="${t.id}" data-user-id="${escapeHtml(state.user?.id || "")}"><i class="bi bi-eye me-1" aria-hidden="true"></i>View</button>`
+          : `<button type="button" class="btn btn-sm btn-primary emp-open-submit" data-task-id="${t.id}"><i class="bi bi-send me-1" aria-hidden="true"></i>Submit</button>`;
+      const submissionCell = `<div class="d-flex flex-column align-items-end gap-1 emp-task-actions">
+          <button type="button" class="btn btn-sm btn-outline-secondary emp-open-progress-update" data-task-id="${t.id}">
+            <i class="bi bi-chat-left-dots me-1" aria-hidden="true"></i>Update${updateBadge}
+          </button>
+          ${submissionBtn}
+        </div>`;
       const rowDone = submitted ? "owner-task-row--completed" : "";
       const deadlineDisplay = t.dueAt
         ? `<span class="text-body tabular-nums emp-deadline-full d-none d-md-inline">${escapeHtml(
@@ -3431,7 +3780,7 @@ function renderEmployeeMain() {
       <div class="min-w-0">
         <p class="owner-page-eyebrow mb-1 d-none d-md-block">Employee dashboard</p>
         <h2 class="owner-page-title h4 mb-0 text-truncate d-none d-md-block">${escapeHtml(filterTitle)}</h2>
-        <p class="owner-page-sub text-muted small mb-0 mt-1 d-none d-md-block">Submit tasks with notes, an image, or both. Works here on the web or in the mobile app.</p>
+        <p class="owner-page-sub text-muted small mb-0 mt-1 d-none d-md-block">Post progress updates while you work, then submit with notes and/or an image when done.</p>
       </div>
       <div class="d-none d-md-flex flex-wrap gap-2 owner-toolbar">
         <button type="button" class="btn btn-outline-secondary btn-sm js-emp-refresh">
@@ -3450,7 +3799,7 @@ function renderEmployeeMain() {
               <th scope="col" class="owner-task-head owner-task-col--task">Task</th>
               <th scope="col" class="owner-task-head owner-task-col--deadline text-nowrap">Deadline</th>
               <th scope="col" class="owner-task-head">Description</th>
-              <th scope="col" class="owner-task-head text-end" style="width:7rem;">Submission</th>
+              <th scope="col" class="owner-task-head text-end" style="width:9rem;">Actions</th>
             </tr>
           </thead>
           ${tableBody}
@@ -3523,6 +3872,14 @@ function renderEmployeeMain() {
     });
   });
 
+  main.querySelectorAll(".emp-open-progress-update").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = btn.getAttribute("data-task-id");
+      const task = state.empTasks.find((t) => t.id === id);
+      if (task) void openEmpProgressUpdateModal(task);
+    });
+  });
+
   main.querySelectorAll(".emp-view-submission").forEach((btn) => {
     btn.addEventListener("click", () => {
       const taskId = btn.getAttribute("data-task-id");
@@ -3569,12 +3926,14 @@ function renderEmployeeChrome() {
       </div>
       ${submissionDetailModalHtml()}
       ${empSubmissionModalHtml()}
+      ${progressUpdateModalHtml()}
     </div>`;
 
   wireEmpChromeNav();
   renderEmpListContentOnly();
   wireSubmissionDetailModal();
   wireEmpSubmissionModal();
+  wireProgressUpdateModal();
   renderEmployeeMain();
 }
 
