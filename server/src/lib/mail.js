@@ -20,64 +20,6 @@ export function isMailConfigured() {
  * @param {string} to
  * @param {string} otp
  */
-/**
- * @param {string} to
- * @param {string} otp
- */
-export async function sendPasswordResetOtpEmail(to, otp) {
-  const config = getBrevoConfig();
-
-  if (!config) {
-    if (process.env.NODE_ENV !== "production") {
-      console.log(`[mail] Brevo not configured — password reset OTP for ${to}: ${otp} (dev only, not sent)`);
-      return { ok: true, devMode: true };
-    }
-    throw new Error("Email service is not configured on this server.");
-  }
-
-  const subject = "Reset your Kalpanik Reminder password";
-  const textContent = `Your password reset code is ${otp}. It expires in 10 minutes.`;
-  const htmlContent = `
-      <div style="font-family:system-ui,sans-serif;max-width:480px;margin:0 auto">
-        <h2 style="color:#0d6efd">Kalpanik Reminder</h2>
-        <p>Your password reset code is:</p>
-        <p style="font-size:28px;font-weight:700;letter-spacing:6px">${otp}</p>
-        <p style="color:#666">This code expires in <strong>10 minutes</strong>.</p>
-        <p style="color:#999;font-size:12px">If you did not request a password reset, you can ignore this email.</p>
-      </div>
-    `;
-
-  const res = await fetch(BREVO_API_URL, {
-    method: "POST",
-    headers: {
-      accept: "application/json",
-      "content-type": "application/json",
-      "api-key": config.apiKey,
-    },
-    body: JSON.stringify({
-      sender: { name: config.senderName, email: config.senderEmail },
-      to: [{ email: to }],
-      subject,
-      htmlContent,
-      textContent,
-    }),
-  });
-
-  if (!res.ok) {
-    let detail = res.statusText;
-    try {
-      const errBody = await res.json();
-      detail = errBody?.message || errBody?.error || JSON.stringify(errBody);
-    } catch {
-      /* ignore */
-    }
-    console.error("[mail/brevo] password reset", res.status, detail);
-    throw new Error("Failed to send password reset email. Please try again later.");
-  }
-
-  return { ok: true, devMode: false };
-}
-
 export async function sendOtpEmail(to, otp) {
   const config = getBrevoConfig();
 

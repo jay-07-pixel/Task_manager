@@ -4,7 +4,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth } from "../middleware/auth.js";
 import { createRateLimiter } from "../middleware/otpRateLimit.js";
-import { sendOtpEmail, sendPasswordResetOtpEmail } from "../lib/mail.js";
+import { sendOtpEmail } from "../lib/mail.js";
 import { getTurnstileSiteKey, verifyTurnstileToken } from "../lib/turnstile.js";
 import {
   generateOtpCode,
@@ -15,7 +15,6 @@ import {
   MAX_VERIFY_ATTEMPTS,
   MAX_RESEND_PER_HOUR,
   REGISTRATION_WINDOW_MS,
-  PASSWORD_RESET_WINDOW_MS,
   OTP_LENGTH,
 } from "../lib/otp.js";
 
@@ -23,16 +22,6 @@ const router = Router();
 
 const sendOtpLimiter = createRateLimiter({ max: 15, windowMs: 15 * 60 * 1000, keyPrefix: "send-otp" });
 const verifyOtpLimiter = createRateLimiter({ max: 30, windowMs: 15 * 60 * 1000, keyPrefix: "verify-otp" });
-const forgotSendOtpLimiter = createRateLimiter({
-  max: 15,
-  windowMs: 15 * 60 * 1000,
-  keyPrefix: "forgot-send-otp",
-});
-const forgotVerifyOtpLimiter = createRateLimiter({
-  max: 30,
-  windowMs: 15 * 60 * 1000,
-  keyPrefix: "forgot-verify-otp",
-});
 
 function friendlyAuthError(err) {
   const msg = err?.message || String(err);
@@ -301,244 +290,6 @@ router.post("/register", async (req, res) => {
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string(),
-});
-
-const forgotPasswordEmailSchema = z.object({
-  email: emailSchema,
-});
-
-const forgotPasswordVerifySchema = z.object({
-  email: emailSchema,
-  otp: z
-    .string()
-    .trim()
-    .regex(/^\d{6}$/, `OTP must be ${OTP_LENGTH} digits`),
-});
-
-const forgotPasswordResetSchema = z.object({
-  email: emailSchema,
-  password: z.string().min(6, "Password must be at least 6 characters"),
-});
-
-async function isPasswordResetVerified(email) {
-  const normalized = normalizeEmail(email);
-  const record = await prisma.passwordReset.findUnique({ where: { email: normalized } });
-  if (!record?.verified || !record.verifiedAt) return false;
-  const age = Date.now() - new Date(record.verifiedAt).getTime();
-  return age <= PASSWORD_RESET_WINDOW_MS;
-}
-
-router.post("/forgot-password/send-otp", forgotSendOtpLimiter, async (req, res) => {
-  try {
-    const parsed = forgotPasswordEmailSchema.safeParse(req.body);
-    if (!parsed.success) {
-      const flat = parsed.error.flatten();
-      const firstField = Object.values(flat.fieldErrors).flat()[0];
-      return res.status(400).json({
-        error: firstField || "Invalid email address",
-      });
-    }
-
-    const email = normalizeEmail(parsed.data.email);
-    const user = await prisma.user.findUnique({ where: { email } });
-    if (!user) {
-      return res.status(404).json({ error: "No account found with this email." });
-    }
-    if (user.role !== "employee") {
-      return res.status(403).json({
-        error: "Password reset for admin accounts must be done on the website.",
-      });
-    }
-
-    const now = new Date();
-    let record = await prisma.passwordReset.findUnique({ where: { email } });
-
-    if (record) {
-      const windowAge = now.getTime() - new Date(record.resendWindowStart).getTime();
-      const oneHour = 60 * 60 * 1000;
-      if (windowAge >= oneHour) {
-        record = await prisma.passwordReset.update({
-          where: { email },
-          data: { resendCount: 0, resendWindowStart: now },
-        });
-      } else if (record.resendCount >= MAX_RESEND_PER_HOUR) {
-        return res.status(429).json({
-          error: "Too many reset code requests. You can request up to 5 codes per hour for this email.",
-        });
-      }
-    }
-
-    const otp = generateOtpCode();
-    const otpHash = await hashOtp(otp);
-    const expiresAt = new Date(now.getTime() + OTP_EXPIRY_MS);
-
-    await prisma.passwordReset.upsert({
-      where: { email },
-      create: {
-        email,
-        otpHash,
-        expiresAt,
-        attempts: 0,
-        resendCount: 1,
-        resendWindowStart: now,
-        verified: false,
-        verifiedAt: null,
-      },
-      update: {
-        otpHash,
-        expiresAt,
-        attempts: 0,
-        verified: false,
-        verifiedAt: null,
-        resendCount: record ? record.resendCount + 1 : 1,
-        resendWindowStart: record?.resendWindowStart ?? now,
-      },
-    });
-
-    await sendPasswordResetOtpEmail(email, otp);
-
-    res.json({
-      ok: true,
-      expiresInSeconds: Math.floor(OTP_EXPIRY_MS / 1000),
-      message: "Password reset code sent to your email.",
-    });
-  } catch (err) {
-    console.error("[auth/forgot-password/send-otp]", err);
-    res.status(500).json({ error: friendlyAuthError(err) });
-  }
-});
-
-router.post("/forgot-password/verify-otp", forgotVerifyOtpLimiter, async (req, res) => {
-  try {
-    const parsed = forgotPasswordVerifySchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ error: "Invalid email or OTP format" });
-    }
-
-    const email = normalizeEmail(parsed.data.email);
-    const otp = parsed.data.otp;
-
-    const user = await prisma.user.findUnique({ where: { email } });
-    if (!user || user.role !== "employee") {
-      return res.status(404).json({ error: "No employee account found with this email." });
-    }
-
-    const record = await prisma.passwordReset.findUnique({ where: { email } });
-    if (!record || !record.otpHash) {
-      return res.status(400).json({ error: "No reset code found. Send a new code first." });
-    }
-
-    if (record.verified && record.verifiedAt) {
-      const age = Date.now() - new Date(record.verifiedAt).getTime();
-      if (age <= PASSWORD_RESET_WINDOW_MS) {
-        req.session.passwordResetVerifiedEmail = email;
-        return res.json({
-          ok: true,
-          verified: true,
-          resetExpiresInSeconds: Math.floor(PASSWORD_RESET_WINDOW_MS / 1000),
-          message: "Code verified. Set your new password.",
-        });
-      }
-      return res.status(400).json({ error: "Verification expired. Send a new code." });
-    }
-
-    if (new Date(record.expiresAt).getTime() < Date.now()) {
-      return res.status(400).json({ error: "Reset code expired. Send a new code." });
-    }
-
-    if (record.attempts >= MAX_VERIFY_ATTEMPTS) {
-      return res.status(429).json({
-        error: "Too many failed attempts. Send a new reset code.",
-      });
-    }
-
-    const valid = await verifyOtp(otp, record.otpHash);
-    if (!valid) {
-      await prisma.passwordReset.update({
-        where: { email },
-        data: { attempts: record.attempts + 1 },
-      });
-      const remaining = MAX_VERIFY_ATTEMPTS - (record.attempts + 1);
-      return res.status(400).json({
-        error:
-          remaining > 0
-            ? `Invalid code. ${remaining} attempt${remaining === 1 ? "" : "s"} remaining.`
-            : "Invalid code. No attempts remaining — send a new code.",
-      });
-    }
-
-    const verifiedAt = new Date();
-    await prisma.passwordReset.update({
-      where: { email },
-      data: {
-        verified: true,
-        verifiedAt,
-        otpHash: null,
-        attempts: 0,
-      },
-    });
-
-    req.session.passwordResetVerifiedEmail = email;
-
-    res.json({
-      ok: true,
-      verified: true,
-      resetExpiresInSeconds: Math.floor(PASSWORD_RESET_WINDOW_MS / 1000),
-      message: "Code verified. Set your new password.",
-    });
-  } catch (err) {
-    console.error("[auth/forgot-password/verify-otp]", err);
-    res.status(500).json({ error: friendlyAuthError(err) });
-  }
-});
-
-router.post("/forgot-password/reset", async (req, res) => {
-  try {
-    const parsed = forgotPasswordResetSchema.safeParse(req.body);
-    if (!parsed.success) {
-      const flat = parsed.error.flatten();
-      const firstField = Object.values(flat.fieldErrors).flat()[0];
-      return res.status(400).json({
-        error: firstField || "Invalid password reset data",
-      });
-    }
-
-    const email = normalizeEmail(parsed.data.email);
-    const sessionEmail = req.session.passwordResetVerifiedEmail;
-    if (!sessionEmail || sessionEmail !== email) {
-      return res.status(400).json({
-        error: "Verify the reset code before setting a new password.",
-      });
-    }
-
-    const verified = await isPasswordResetVerified(email);
-    if (!verified) {
-      delete req.session.passwordResetVerifiedEmail;
-      return res.status(400).json({ error: "Verification expired. Send a new code." });
-    }
-
-    const user = await prisma.user.findUnique({ where: { email } });
-    if (!user || user.role !== "employee") {
-      return res.status(404).json({ error: "No employee account found with this email." });
-    }
-
-    const passwordHash = await bcrypt.hash(parsed.data.password, 10);
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { passwordHash },
-    });
-
-    await prisma.passwordReset.deleteMany({ where: { email } }).catch(() => {});
-    delete req.session.passwordResetVerifiedEmail;
-
-    res.json({
-      ok: true,
-      message: "Password updated. You can sign in with your new password.",
-    });
-  } catch (err) {
-    console.error("[auth/forgot-password/reset]", err);
-    res.status(500).json({ error: friendlyAuthError(err) });
-  }
 });
 
 router.post("/login", async (req, res) => {
