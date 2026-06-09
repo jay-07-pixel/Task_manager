@@ -2525,6 +2525,30 @@ function ownerAssigneeUpdatesHtml(taskId, assignee) {
     </button>`;
 }
 
+function ownerEmployeeAssignmentChainText(task) {
+  const delegations = task.delegations ?? [];
+  if (delegations.length > 0) {
+    return delegations
+      .map((d) => `${d.fromUserName} → ${d.toUserName}`)
+      .join(" · ");
+  }
+  const withAssigner = (task.assignees ?? []).find((a) => a.assignedBy?.displayName);
+  if (withAssigner?.assignedBy) {
+    return `${withAssigner.assignedBy.displayName} → ${withAssigner.displayName}`;
+  }
+  if (task.createdBy?.role === "employee" && (task.assignees ?? []).length > 0) {
+    const names = task.assignees.map((a) => a.displayName).join(", ");
+    return `${task.createdBy.displayName} → ${names}`;
+  }
+  return "";
+}
+
+function ownerEmployeeAssignmentLineHtml(task) {
+  const chain = ownerEmployeeAssignmentChainText(task);
+  if (!chain) return "";
+  return `<div class="small text-info owner-emp-assignment-line mt-1"><i class="bi bi-arrow-right-short" aria-hidden="true"></i> ${escapeHtml(chain)}</div>`;
+}
+
 function ownerDelegationHistoryHtml(task) {
   const rows = task.delegations ?? [];
   if (!rows.length) return "";
@@ -3261,7 +3285,7 @@ function ownerTaskGroupTbody(t) {
               : "owner-assignee-status--pending";
             const statusLabel = a.assigneeDone ? "Submitted" : "Pending";
             const assignedByNote = a.assignedBy?.displayName
-              ? `<div class="small text-muted owner-delegated-by-note">Assigned by ${escapeHtml(a.assignedBy.displayName)}</div>`
+              ? `<div class="small text-info owner-delegated-by-note"><i class="bi bi-person-plus me-1" aria-hidden="true"></i>Employee assigned by ${escapeHtml(a.assignedBy.displayName)}</div>`
               : "";
             return `<article class="owner-team-card">
                 <div class="owner-team-card-head">
@@ -3313,14 +3337,20 @@ function ownerTaskGroupTbody(t) {
         <span class="task-grip grip-handle d-inline-flex align-items-center justify-content-center rounded p-1" title="Drag to reorder"><i class="bi bi-grip-vertical fs-5"></i></span>
       </td>
       <td class="owner-task-cell owner-task-col--task align-middle">
-        <button type="button" class="btn btn-link text-start text-body fw-semibold text-decoration-none p-0 owner-task-open-details" data-open-id="${
-          t.id
-        }" aria-label="Open task details">${escapeHtml(t.title)}</button>
+        <div class="min-w-0">
+          <button type="button" class="btn btn-link text-start text-body fw-semibold text-decoration-none p-0 owner-task-open-details" data-open-id="${
+            t.id
+          }" aria-label="Open task details">${escapeHtml(t.title)}</button>
+          ${ownerEmployeeAssignmentLineHtml(t)}
+        </div>
       </td>
       <td class="owner-task-cell owner-task-col--deadline align-middle small text-nowrap tabular-nums">${deadlineCell}</td>
       <td class="owner-task-cell owner-task-col--description align-middle">${descriptionBox}</td>
-      <td class="owner-task-cell owner-task-col--employees align-middle text-center small tabular-nums text-nowrap">
-        <span class="text-muted me-1"><i class="bi bi-people" aria-hidden="true"></i></span>${progressNumbers}
+      <td class="owner-task-cell owner-task-col--employees align-middle text-center small text-nowrap">
+        ${ownerEmployeeAssignmentChainText(t)
+          ? `<div class="small fw-semibold text-info mb-1">${escapeHtml(ownerEmployeeAssignmentChainText(t))}</div>`
+          : ""}
+        <span class="text-muted tabular-nums"><i class="bi bi-people me-1" aria-hidden="true"></i>${progressNumbers}</span>
       </td>
       <td class="owner-task-cell owner-task-col--trail align-middle text-end">
         <button
@@ -3348,6 +3378,9 @@ function ownerTaskGroupTbody(t) {
                   <i class="bi bi-people me-1" aria-hidden="true"></i>${progressNumbers}
                 </span>
               </div>
+              ${ownerEmployeeAssignmentChainText(t)
+                ? `<div class="owner-emp-assignment-banner small text-info px-1 mb-3"><i class="bi bi-people-fill me-1" aria-hidden="true"></i>Employee assignment: <strong>${escapeHtml(ownerEmployeeAssignmentChainText(t))}</strong></div>`
+                : ""}
               <div class="owner-team-cards">${assigneeCards}</div>
               ${ownerDelegationHistoryHtml(t)}
             </div>
