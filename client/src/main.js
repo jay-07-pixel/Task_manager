@@ -1122,16 +1122,60 @@ function ownerEmployeesCellHtml(task) {
     .filter((a) => a.assignedBy?.displayName)
     .map((a) => ({ from: a.assignedBy.displayName, to: a.displayName }));
   if (empChains.length) {
-    return `<div class="owner-emp-assign-chains d-flex flex-column align-items-center gap-1">${empChains
-      .map(
-        (c) =>
-          `<span class="owner-emp-chain-line small text-nowrap" title="Employee assignment">${escapeHtml(c.from)} <span class="owner-emp-chain-arrow text-muted" aria-hidden="true">→</span> ${escapeHtml(c.to)}</span>`
-      )
+    return `<div class="owner-emp-assign-chains d-flex flex-column align-items-stretch gap-1">${empChains
+      .map((c) => {
+        const label = `${c.from} → ${c.to}`;
+        return `<span class="owner-emp-chain-line small" title="${escapeHtml(label)}">${escapeHtml(c.from)} <span class="owner-emp-chain-arrow text-muted" aria-hidden="true">→</span> ${escapeHtml(c.to)}</span>`;
+      })
       .join("")}</div>`;
   }
   const nAssigned = assignees.length;
   const nDone = assignees.filter((a) => a.assigneeDone).length;
   return `<span class="text-muted me-1"><i class="bi bi-people" aria-hidden="true"></i></span><span class="tabular-nums">${nDone}\u00a0/\u00a0${nAssigned}</span>`;
+}
+
+function ownerTaskDescriptionPreview(notes) {
+  const text = (notes || "").trim().replace(/\s+/g, " ");
+  if (!text) return { short: "", full: "", truncated: false };
+  const words = text.split(/\s+/).filter(Boolean);
+  if (words.length <= 3) return { short: text, full: text, truncated: false };
+  return { short: `${words.slice(0, 3).join(" ")}…`, full: text, truncated: true };
+}
+
+function ownerTaskDescriptionHtml(notes) {
+  const { short, full, truncated } = ownerTaskDescriptionPreview(notes);
+  if (!full) {
+    return `<span class="owner-task-desc-short small text-muted fst-italic">—</span>`;
+  }
+  if (!truncated) {
+    return `<span class="owner-task-desc-short small text-body-secondary">${escapeHtml(full)}</span>`;
+  }
+  return `<button type="button" class="btn btn-link btn-sm p-0 text-start owner-task-desc-toggle js-owner-desc-toggle" data-full="${escapeHtml(full)}" aria-expanded="false" aria-label="Show full description">
+    <span class="owner-task-desc-preview small text-body-secondary">${escapeHtml(short)}</span>
+  </button>`;
+}
+
+function bindOwnerDescriptionToggles(root) {
+  root.querySelectorAll(".js-owner-desc-toggle").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const preview = btn.querySelector(".owner-task-desc-preview");
+      if (!preview) return;
+      const full = btn.getAttribute("data-full") || "";
+      const expanded = btn.getAttribute("aria-expanded") === "true";
+      if (expanded) {
+        preview.textContent = ownerTaskDescriptionPreview(full).short;
+        btn.setAttribute("aria-expanded", "false");
+        btn.classList.remove("owner-task-desc-toggle--expanded");
+        btn.setAttribute("aria-label", "Show full description");
+      } else {
+        preview.textContent = full;
+        btn.setAttribute("aria-expanded", "true");
+        btn.classList.add("owner-task-desc-toggle--expanded");
+        btn.setAttribute("aria-label", "Hide full description");
+      }
+    });
+  });
 }
 
 function leftNavInner() {
@@ -3317,12 +3361,7 @@ function ownerTaskGroupTbody(t) {
     ? `<span class="text-body tabular-nums">${escapeHtml(t.dueAt.slice(0, 10))}</span>`
     : `<span class="text-muted">—</span>`;
 
-  const notesRaw = (t.notes || "").trim().replace(/\s+/g, " ");
-  const notesPreview = notesRaw.length > 100 ? `${notesRaw.slice(0, 97)}…` : notesRaw;
-  const descriptionBox =
-    notesPreview.length > 0
-      ? `<div class="owner-task-desc-box small text-body-secondary text-truncate mb-0" title="${escapeHtml(notesRaw)}">${escapeHtml(notesPreview)}</div>`
-      : `<div class="owner-task-desc-box small text-muted fst-italic mb-0">No description</div>`;
+  const descriptionBox = ownerTaskDescriptionHtml(t.notes);
 
   const assigneeCards =
     assignees.length === 0
@@ -3393,7 +3432,7 @@ function ownerTaskGroupTbody(t) {
       </td>
       <td class="owner-task-cell owner-task-col--deadline align-middle small text-nowrap tabular-nums">${deadlineCell}</td>
       <td class="owner-task-cell owner-task-col--description align-middle">${descriptionBox}</td>
-      <td class="owner-task-cell owner-task-col--employees align-middle text-center small text-nowrap">
+      <td class="owner-task-cell owner-task-col--employees align-middle text-center small">
         ${ownerEmployeesCellHtml(t)}
       </td>
       <td class="owner-task-cell owner-task-col--trail align-middle text-end">
@@ -3455,6 +3494,7 @@ function renderOwnerMain() {
   const tbodyInner = visibleTasks.map((t) => ownerTaskGroupTbody(t)).join("");
 
   const isEmpAssignList = isEmployeeAssignmentsList(list);
+  const useEmpAssignColumns = isEmpAssignList || state.ownerTaskFilter === "employee_assigned";
   const pageSubtitle = isEmpAssignList
     ? "Tasks assigned by one employee to another. The Team column shows who assigned whom."
     : "Assign tasks, review progress updates, and check final submissions.";
@@ -3559,13 +3599,13 @@ function renderOwnerMain() {
     !list || visibleTasks.length === 0
       ? emptyMessage
       : `<div class="table-responsive owner-task-table-wrap">
-          <table class="table table-hover align-middle mb-0 owner-task-table" id="owner-task-table-sort">
+          <table class="table table-hover align-middle mb-0 owner-task-table${useEmpAssignColumns ? " owner-task-table--emp-assign" : ""}" id="owner-task-table-sort">
             <thead>
               <tr>
                 <th scope="col" class="owner-task-cell owner-task-cell--grip border-end-0"><span class="visually-hidden">Reorder</span></th>
                 <th scope="col" class="owner-task-head owner-task-col--task">Task</th>
                 <th scope="col" class="owner-task-head owner-task-col--deadline text-nowrap">Deadline</th>
-                <th scope="col" class="owner-task-head">Description</th>
+                <th scope="col" class="owner-task-head owner-task-col--description">Description</th>
                 <th scope="col" class="owner-task-head owner-task-col--employees text-center text-nowrap">${escapeHtml(teamColLabel)}</th>
                 <th scope="col" class="owner-task-head owner-task-col--trail text-end"><span class="visually-hidden">Details</span></th>
               </tr>
@@ -3649,6 +3689,8 @@ function renderOwnerMain() {
       if (filter) setOwnerTaskFilter(filter);
     });
   });
+
+  bindOwnerDescriptionToggles(main);
 
   main.querySelectorAll(".owner-mark-done-open").forEach((btn) => {
     btn.addEventListener("click", () => {

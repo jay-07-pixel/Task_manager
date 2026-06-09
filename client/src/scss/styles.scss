@@ -471,11 +471,48 @@ body {
 .owner-emp-chain-line {
   font-weight: 500;
   line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
 }
 
 .owner-emp-chain-arrow {
   margin: 0 0.15rem;
   font-weight: 400;
+}
+
+.owner-task-desc-short,
+.owner-task-desc-toggle {
+  display: block;
+  max-width: 100%;
+  line-height: 1.35;
+}
+
+.owner-task-desc-short {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.owner-task-desc-toggle {
+  max-width: 100%;
+  text-decoration: none !important;
+  border: 0;
+  min-width: 0;
+}
+
+.owner-task-desc-toggle .owner-task-desc-preview {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.owner-task-desc-toggle--expanded .owner-task-desc-preview {
+  white-space: normal;
+  word-break: break-word;
+  overflow: visible;
 }
 
 .owner-list-item--pinned {
@@ -595,11 +632,39 @@ body {
   padding-right: 0.75rem !important;
 }
 
+.owner-task-head.owner-task-col--description,
+.owner-task-cell.owner-task-col--description {
+  width: 7.5rem;
+  max-width: 7.5rem;
+  overflow: hidden;
+  padding-left: 0.65rem !important;
+  padding-right: 0.65rem !important;
+}
+
 .owner-task-head.owner-task-col--employees,
 .owner-task-cell.owner-task-col--employees {
   width: 5rem;
   padding-left: 0.6rem !important;
   padding-right: 0.6rem !important;
+  overflow: hidden;
+}
+
+.owner-task-table--emp-assign {
+  .owner-task-col--task {
+    width: 14%;
+  }
+
+  .owner-task-col--description {
+    width: 6.5rem;
+    max-width: 6.5rem;
+  }
+
+  .owner-task-head.owner-task-col--employees,
+  .owner-task-cell.owner-task-col--employees {
+    width: 11.5rem;
+    min-width: 11.5rem;
+    max-width: 11.5rem;
+  }
 }
 
 .owner-task-head.owner-task-col--trail,
