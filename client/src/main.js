@@ -1057,21 +1057,30 @@ function wireEmpEnablePush() {
   });
 }
 
+function taskHasUnreadProgressUpdates(task) {
+  return (task.assignees ?? []).some((a) => (a.unreadProgressUpdateCount ?? 0) > 0);
+}
+
 function ownerDashboardMetrics() {
   const tasks = state.tasks;
   const active = tasks.filter((t) => !t.completed).length;
   const done = tasks.filter((t) => t.completed).length;
-  return { total: tasks.length, active, done };
+  const inReview = tasks.filter(taskHasUnreadProgressUpdates).length;
+  return { total: tasks.length, active, done, inReview };
 }
 
 function ownerFilteredTasks() {
-  return state.tasks.filter((t) =>
-    state.ownerTaskFilter === "completed" ? t.completed : !t.completed
-  );
+  if (state.ownerTaskFilter === "completed") {
+    return state.tasks.filter((t) => t.completed);
+  }
+  if (state.ownerTaskFilter === "in_review") {
+    return state.tasks.filter(taskHasUnreadProgressUpdates);
+  }
+  return state.tasks.filter((t) => !t.completed);
 }
 
 function setOwnerTaskFilter(filter) {
-  if (filter !== "active" && filter !== "completed") return;
+  if (filter !== "active" && filter !== "completed" && filter !== "in_review") return;
   state.ownerTaskFilter = filter;
   renderOwnerMain();
 }
@@ -3222,12 +3231,14 @@ function renderOwnerMain() {
   const metrics = ownerDashboardMetrics();
   const activeKpiClass =
     state.ownerTaskFilter === "active" ? " owner-kpi-card--active owner-kpi-card--active-primary" : "";
+  const inReviewKpiClass =
+    state.ownerTaskFilter === "in_review" ? " owner-kpi-card--active owner-kpi-card--active-danger" : "";
   const completedKpiClass =
     state.ownerTaskFilter === "completed" ? " owner-kpi-card--active owner-kpi-card--active-success" : "";
   const kpiRow =
     list && metrics.total > 0
       ? `<div class="row g-3 mb-4 owner-kpi-row">
-          <div class="col-6 col-md-4">
+          <div class="col-6 col-lg-3">
             <button type="button" class="owner-kpi-card owner-kpi-card--filter w-100 text-start${activeKpiClass}" data-owner-filter="active" aria-pressed="${state.ownerTaskFilter === "active"}">
               <div class="owner-kpi-icon text-primary"><i class="bi bi-list-task" aria-hidden="true"></i></div>
               <div>
@@ -3236,7 +3247,16 @@ function renderOwnerMain() {
               </div>
             </button>
           </div>
-          <div class="col-6 col-md-4">
+          <div class="col-6 col-lg-3">
+            <button type="button" class="owner-kpi-card owner-kpi-card--filter w-100 text-start${inReviewKpiClass}" data-owner-filter="in_review" aria-pressed="${state.ownerTaskFilter === "in_review"}">
+              <div class="owner-kpi-icon text-danger"><i class="bi bi-chat-left-dots" aria-hidden="true"></i></div>
+              <div>
+                <div class="owner-kpi-value tabular-nums">${metrics.inReview}</div>
+                <div class="owner-kpi-label">In review</div>
+              </div>
+            </button>
+          </div>
+          <div class="col-6 col-lg-3">
             <button type="button" class="owner-kpi-card owner-kpi-card--filter w-100 text-start${completedKpiClass}" data-owner-filter="completed" aria-pressed="${state.ownerTaskFilter === "completed"}">
               <div class="owner-kpi-icon text-success"><i class="bi bi-check-circle" aria-hidden="true"></i></div>
               <div>
@@ -3245,7 +3265,7 @@ function renderOwnerMain() {
               </div>
             </button>
           </div>
-          <div class="col-12 col-md-4">
+          <div class="col-6 col-lg-3">
             <div class="owner-kpi-card">
               <div class="owner-kpi-icon text-info"><i class="bi bi-collection" aria-hidden="true"></i></div>
               <div>
@@ -3275,11 +3295,17 @@ function renderOwnerMain() {
             <p class="owner-empty-title mb-1">No completed tasks</p>
             <p class="owner-empty-desc text-muted small mb-0">Tasks appear here after every assigned employee has submitted.</p>
           </div>`
-        : `<div class="owner-empty-state py-5 px-3">
-            <i class="bi bi-check2-all owner-empty-icon text-success" aria-hidden="true"></i>
-            <p class="owner-empty-title mb-1">No active tasks</p>
-            <p class="owner-empty-desc text-muted small mb-0">All caught up. Click <strong>Completed</strong> above to review finished tasks.</p>
-          </div>`;
+        : state.ownerTaskFilter === "in_review"
+          ? `<div class="owner-empty-state py-5 px-3">
+              <i class="bi bi-chat-left-dots owner-empty-icon text-danger" aria-hidden="true"></i>
+              <p class="owner-empty-title mb-1">Nothing in review</p>
+              <p class="owner-empty-desc text-muted small mb-0">Tasks appear here when an employee posts an update you have not opened yet.</p>
+            </div>`
+          : `<div class="owner-empty-state py-5 px-3">
+              <i class="bi bi-check2-all owner-empty-icon text-success" aria-hidden="true"></i>
+              <p class="owner-empty-title mb-1">No active tasks</p>
+              <p class="owner-empty-desc text-muted small mb-0">All caught up. Click <strong>Completed</strong> above to review finished tasks.</p>
+            </div>`;
 
   const tableBlock =
     !list || visibleTasks.length === 0
@@ -3317,7 +3343,7 @@ function renderOwnerMain() {
     <section class="owner-task-panel" aria-label="Tasks">
       ${tableBlock}
     </section>
-    <section class="owner-quick-add-bar mt-auto flex-shrink-0 ${state.ownerTaskFilter === "completed" ? "d-none" : ""}" aria-label="Quick add task">
+    <section class="owner-quick-add-bar mt-auto flex-shrink-0 ${state.ownerTaskFilter === "completed" || state.ownerTaskFilter === "in_review" ? "d-none" : ""}" aria-label="Quick add task">
       <label class="owner-quick-add-label form-label" for="quick-add-title">Quick add task</label>
       <div class="input-group">
         <span class="input-group-text"><i class="bi bi-plus-lg" aria-hidden="true"></i></span>
