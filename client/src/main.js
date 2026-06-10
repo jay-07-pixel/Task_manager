@@ -2272,7 +2272,34 @@ function submissionPreviewText(text, max = 72) {
 
 function assigneeHasSubmission(a) {
   if (!a) return false;
-  return !!(a.submissionText?.trim() || a.completionProofUrl);
+  return !!(
+    a.submissionText?.trim() ||
+    a.completionProofUrl ||
+    a.lastSubmissionText?.trim() ||
+    a.lastCompletionProofUrl
+  );
+}
+
+function resolveAssigneeSubmissionForView(assignee) {
+  if (!assignee) {
+    return { submissionText: "", proofUrl: null, archived: false, submittedAt: null };
+  }
+  const currentText = assignee.submissionText?.trim() || "";
+  const currentProof = assignee.completionProofUrl || null;
+  if (currentText || currentProof) {
+    return {
+      submissionText: currentText,
+      proofUrl: currentProof,
+      archived: false,
+      submittedAt: assignee.lastSubmittedAt ?? null,
+    };
+  }
+  return {
+    submissionText: assignee.lastSubmissionText?.trim() || "",
+    proofUrl: assignee.lastCompletionProofUrl || null,
+    archived: !!(assignee.lastSubmissionText?.trim() || assignee.lastCompletionProofUrl),
+    submittedAt: assignee.lastSubmittedAt ?? null,
+  };
 }
 
 function lookupAssigneeSubmission(taskId, userId) {
@@ -2281,10 +2308,13 @@ function lookupAssigneeSubmission(taskId, userId) {
   if (!task) return null;
   const assignee = (task.assignees ?? []).find((a) => a.id === userId) ?? null;
   if (!assignee) return null;
+  const view = resolveAssigneeSubmissionForView(assignee);
   return {
     taskTitle: task.title,
-    submissionText: assignee.submissionText?.trim() || "",
-    proofUrl: assignee.completionProofUrl || null,
+    submissionText: view.submissionText,
+    proofUrl: view.proofUrl,
+    archived: view.archived,
+    submittedAt: view.submittedAt,
   };
 }
 
@@ -2354,8 +2384,10 @@ async function openSubmissionDetailForAssignee(taskId, userId) {
       ? ""
       : `?assigneeUserId=${encodeURIComponent(userId)}`;
   const data = await api(`/api/tasks/${taskId}/submission${q}`);
+  const when = data.submittedAt ? formatProgressUpdateTime(data.submittedAt) : "";
+  const title = data.archived && when ? `${data.taskTitle} — submitted ${when}` : data.taskTitle;
   await openSubmissionDetailModal({
-    title: data.taskTitle,
+    title,
     submissionText: data.submissionText,
     proofUrl: data.completionProofUrl,
   });
@@ -2660,16 +2692,25 @@ function ownerAssigneeSubmissionHtml(taskId, assignee) {
   if (!assigneeHasSubmission(assignee)) {
     return `<span class="owner-assignee-empty-hint text-muted small">No submission yet</span>`;
   }
-  return `<button
-      type="button"
-      class="btn btn-sm btn-outline-primary owner-view-submission-btn owner-assignee-submission-btn"
-      data-view-submission-task-id="${taskId}"
-      data-view-submission-user-id="${escapeHtml(assignee.id)}"
-      title="View submission"
-      aria-label="View submission for ${escapeHtml(assignee.displayName)}"
-    >
-      <i class="bi bi-eye me-1" aria-hidden="true"></i>View submission
-    </button>`;
+  const view = resolveAssigneeSubmissionForView(assignee);
+  const when = view.submittedAt ? formatProgressUpdateTime(view.submittedAt) : "";
+  const meta =
+    view.archived && when
+      ? `<span class="d-block small text-muted mt-1">Last submitted ${escapeHtml(when)}</span>`
+      : "";
+  return `<div class="owner-assignee-submission-wrap">
+      <button
+        type="button"
+        class="btn btn-sm btn-outline-primary owner-view-submission-btn owner-assignee-submission-btn"
+        data-view-submission-task-id="${taskId}"
+        data-view-submission-user-id="${escapeHtml(assignee.id)}"
+        title="View submission"
+        aria-label="View submission for ${escapeHtml(assignee.displayName)}"
+      >
+        <i class="bi bi-eye me-1" aria-hidden="true"></i>View submission
+      </button>
+      ${meta}
+    </div>`;
 }
 
 async function markProgressUpdatesRead(taskId, assigneeUserId) {
@@ -3391,10 +3432,17 @@ function ownerTaskGroupTbody(t) {
       ? `<p class="owner-assignee-empty text-muted small mb-0 px-1">No assignees yet. Edit the task to add people.</p>`
       : assignees
           .map((a) => {
-            const statusClass = a.assigneeDone
-              ? "owner-assignee-status--done"
-              : "owner-assignee-status--pending";
-            const statusLabel = a.assigneeDone ? "Submitted" : "Pending";
+            const rolledSubmission =
+              !a.assigneeDone && !!a.lastSubmittedAt && assigneeHasSubmission(a);
+            const statusClass =
+              a.assigneeDone || rolledSubmission
+                ? "owner-assignee-status--done"
+                : "owner-assignee-status--pending";
+            const statusLabel = a.assigneeDone
+              ? "Submitted"
+              : rolledSubmission
+                ? "Submitted · next due"
+                : "Pending";
             const assignedByNote =
               !isEmpAssignList && a.assignedBy?.displayName
                 ? `<div class="small text-info owner-delegated-by-note"><i class="bi bi-arrow-right-short" aria-hidden="true"></i>${escapeHtml(a.assignedBy.displayName)} → ${escapeHtml(a.displayName)}</div>`

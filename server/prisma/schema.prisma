@@ -70,8 +70,10 @@ model TaskAssignee {
   delegatedAt         DateTime? @map("delegated_at")
   completionProofPath String?   @map("completion_proof_path") @db.VarChar(512)
   submissionText      String?   @map("submission_text") @db.Text
-  assigneeDone        Boolean   @default(false) @map("assignee_done")
-  lastSubmittedAt     DateTime? @map("last_submitted_at")
+  assigneeDone             Boolean   @default(false) @map("assignee_done")
+  lastSubmittedAt          DateTime? @map("last_submitted_at")
+  lastSubmissionText       String?   @map("last_submission_text") @db.Text
+  lastCompletionProofPath  String?   @map("last_completion_proof_path") @db.VarChar(512)
   task                Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
   user                User      @relation("TaskAssigneeUser", fields: [userId], references: [id], onDelete: Cascade)
   assignedBy          User?     @relation("TaskAssignedBy", fields: [assignedByUserId], references: [id], onDelete: SetNull)

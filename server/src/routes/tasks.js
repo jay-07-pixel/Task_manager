@@ -47,8 +47,35 @@ function clearAssigneeSubmissionUpdate(assigneeDone, { clearLastSubmittedAt = tr
   };
   if (clearLastSubmittedAt) {
     data.lastSubmittedAt = null;
+    data.lastSubmissionText = null;
+    data.lastCompletionProofPath = null;
   }
   return data;
+}
+
+/** Current submission if present, otherwise the archived copy kept after a recurring roll. */
+function resolveAssigneeSubmissionView(row) {
+  if (!row) {
+    return { submissionText: null, proofPath: null, archived: false, submittedAt: null };
+  }
+  const currentText = (row.submissionText ?? "").trim();
+  const currentProof = row.completionProofPath ?? null;
+  if (currentText || currentProof) {
+    return {
+      submissionText: currentText || null,
+      proofPath: currentProof,
+      archived: false,
+      submittedAt: row.lastSubmittedAt ?? null,
+    };
+  }
+  const lastText = (row.lastSubmissionText ?? "").trim();
+  const lastProof = row.lastCompletionProofPath ?? null;
+  return {
+    submissionText: lastText || null,
+    proofPath: lastProof,
+    archived: !!(lastText || lastProof),
+    submittedAt: row.lastSubmittedAt ?? null,
+  };
 }
 
 const EMPLOYEE_ASSIGNMENTS_LIST_TITLE = "Employee assignments";
@@ -133,9 +160,8 @@ async function maybeRollRecurringAfterEmployeeComplete(task, userId) {
   }
 
   const row = task.assignments.find((a) => a.userId === userId);
-  if (row?.completionProofPath) {
-    deleteProofFile(row.completionProofPath);
-  }
+  const archiveText = (row?.submissionText ?? "").trim() || null;
+  const archiveProof = row?.completionProofPath ?? null;
 
   const updateData = { dueAt: nextDue, completed: false };
   if (task.recurrence === "custom" && task.recurrenceRule) {
@@ -146,9 +172,28 @@ async function maybeRollRecurringAfterEmployeeComplete(task, userId) {
     where: { id: task.id },
     data: updateData,
   });
+
+  const existing = await prisma.taskAssignee.findUnique({
+    where: { taskId_userId: { taskId: task.id, userId } },
+    select: { lastCompletionProofPath: true },
+  });
+  if (
+    existing?.lastCompletionProofPath &&
+    archiveProof &&
+    existing.lastCompletionProofPath !== archiveProof
+  ) {
+    deleteProofFile(existing.lastCompletionProofPath);
+  }
+
   await prisma.taskAssignee.update({
     where: { taskId_userId: { taskId: task.id, userId } },
-    data: clearAssigneeSubmissionUpdate(false, { clearLastSubmittedAt: false }),
+    data: {
+      assigneeDone: false,
+      submissionText: null,
+      completionProofPath: null,
+      lastSubmissionText: archiveText,
+      lastCompletionProofPath: archiveProof,
+    },
   });
   await syncTaskCompletedFromAssignments(task.id);
 }
@@ -477,6 +522,10 @@ export function serializeTask(t) {
     delegatedAt: a.delegatedAt instanceof Date ? a.delegatedAt.toISOString() : (a.delegatedAt ?? null),
     lastSubmittedAt:
       a.lastSubmittedAt instanceof Date ? a.lastSubmittedAt.toISOString() : (a.lastSubmittedAt ?? null),
+    lastSubmissionText: (a.lastSubmissionText ?? "").trim() || null,
+    lastCompletionProofUrl: a.lastCompletionProofPath
+      ? `/api/tasks/${t.id}/completion-proof/${a.user.id}?archived=1`
+      : null,
   }));
   const delegations = (t.delegations ?? []).map(serializeDelegation);
   return {
@@ -957,14 +1006,17 @@ router.get("/:id/submission", requireAuth, async (req, res) => {
     return res.status(403).json({ error: "Not allowed" });
   }
 
-  const submissionText = (row.submissionText ?? "").trim() || null;
+  const view = resolveAssigneeSubmissionView(row);
   res.json({
     taskTitle: task.title,
     assigneeUserId,
-    submissionText,
-    completionProofUrl: row.completionProofPath
-      ? `/api/tasks/${task.id}/completion-proof/${assigneeUserId}`
+    submissionText: view.submissionText,
+    completionProofUrl: view.proofPath
+      ? `/api/tasks/${task.id}/completion-proof/${assigneeUserId}${view.archived ? "?archived=1" : ""}`
       : null,
+    submittedAt:
+      view.submittedAt instanceof Date ? view.submittedAt.toISOString() : (view.submittedAt ?? null),
+    archived: view.archived,
   });
 });
 
@@ -978,7 +1030,11 @@ router.get("/:id/completion-proof/:assigneeUserId", requireAuth, async (req, res
     return res.status(404).send("Not found");
   }
   const row = task.assignments.find((a) => a.userId === assigneeUserId);
-  if (!row?.completionProofPath) {
+  const useArchived = req.query.archived === "1" || req.query.archived === "true";
+  const proofPath = useArchived
+    ? row?.lastCompletionProofPath
+    : row?.completionProofPath || row?.lastCompletionProofPath;
+  if (!proofPath) {
     return res.status(404).send("Not found");
   }
   const isOwner = task.list.ownerId === req.session.userId;
@@ -989,11 +1045,11 @@ router.get("/:id/completion-proof/:assigneeUserId", requireAuth, async (req, res
   if (!isOwner && !isSelfEmployee) {
     return res.status(403).send("Forbidden");
   }
-  const full = proofAbsolutePath(row.completionProofPath);
+  const full = proofAbsolutePath(proofPath);
   if (!full) {
     return res.status(404).send("Not found");
   }
-  res.type(proofContentType(row.completionProofPath));
+  res.type(proofContentType(proofPath));
   res.sendFile(full);
 });
 
