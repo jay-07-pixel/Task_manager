@@ -1130,7 +1130,7 @@ function ownerEmployeesCellHtml(task) {
       .join("")}</div>`;
   }
   const nAssigned = assignees.length;
-  const nDone = assignees.filter((a) => a.assigneeDone).length;
+  const nDone = assignees.filter((a) => assigneeShowsSubmittedForOwner(a)).length;
   return `<span class="text-muted me-1"><i class="bi bi-people" aria-hidden="true"></i></span><span class="tabular-nums">${nDone}\u00a0/\u00a0${nAssigned}</span>`;
 }
 
@@ -2201,7 +2201,7 @@ function fillOwnerMarkDoneModalList(taskId) {
         <div class="form-check mb-0">
           <input class="form-check-input owner-mark-done-modal-cb" type="checkbox" data-task-id="${taskId}" data-user-id="${
         a.id
-      }" id="${cbId}" ${a.assigneeDone ? "checked" : ""} />
+      }" id="${cbId}" ${assigneeShowsSubmittedForOwner(a) ? "checked" : ""} />
           <label class="form-check-label" for="${cbId}">${escapeHtml(a.displayName)}</label>
         </div>
       </div>`;
@@ -2278,6 +2278,17 @@ function assigneeHasSubmission(a) {
     a.lastSubmissionText?.trim() ||
     a.lastCompletionProofUrl
   );
+}
+
+/** Admin progress: submitted now or archived after a recurring roll. */
+function assigneeShowsSubmittedForOwner(assignee) {
+  if (!assignee) return false;
+  if (assignee.assigneeDone) return true;
+  return !!assignee.lastSubmittedAt && assigneeHasSubmission(assignee);
+}
+
+function assigneeRolledRecurringSubmission(assignee) {
+  return assigneeShowsSubmittedForOwner(assignee) && !assignee.assigneeDone;
 }
 
 function resolveAssigneeSubmissionForView(assignee) {
@@ -3417,7 +3428,7 @@ function ownerTaskGroupTbody(t) {
   const isEmpAssignList = isEmployeeAssignmentsList(activeList);
   const assignees = t.assignees ?? [];
   const nAssigned = assignees.length;
-  const nDone = assignees.filter((a) => a.assigneeDone).length;
+  const nDone = assignees.filter((a) => assigneeShowsSubmittedForOwner(a)).length;
   const progressNumbers = `${nDone}\u00a0/\u00a0${nAssigned}`;
   const detailId = `owner-task-detail-${t.id}`;
 
@@ -3432,12 +3443,10 @@ function ownerTaskGroupTbody(t) {
       ? `<p class="owner-assignee-empty text-muted small mb-0 px-1">No assignees yet. Edit the task to add people.</p>`
       : assignees
           .map((a) => {
-            const rolledSubmission =
-              !a.assigneeDone && !!a.lastSubmittedAt && assigneeHasSubmission(a);
-            const statusClass =
-              a.assigneeDone || rolledSubmission
-                ? "owner-assignee-status--done"
-                : "owner-assignee-status--pending";
+            const rolledSubmission = assigneeRolledRecurringSubmission(a);
+            const statusClass = assigneeShowsSubmittedForOwner(a)
+              ? "owner-assignee-status--done"
+              : "owner-assignee-status--pending";
             const statusLabel = a.assigneeDone
               ? "Submitted"
               : rolledSubmission
