@@ -857,7 +857,7 @@ async function focusEmployeeTaskFromNotify(notify) {
   }
 
   const task = state.empTasks.find((t) => t.id === notify.taskId);
-  if (task && employeeAssigneeShowsAsSubmitted(task)) {
+  if (task && employeeAssigneeShowsAsSubmitted(task) && !employeeAwaitingFreshOccurrence(task)) {
     state.empFilter = "submitted";
   } else if (!task) {
     state.empFilter = "all";
@@ -2280,6 +2280,32 @@ function assigneeHasSubmission(a) {
   );
 }
 
+/** Current occurrence only — excludes archived fields after a recurring roll. */
+function employeeHasCurrentSubmission(a) {
+  if (!a) return false;
+  return !!(a.submissionText?.trim() || a.completionProofUrl);
+}
+
+function employeeHasArchivedSubmission(a) {
+  if (!a) return false;
+  return !!(a.lastSubmissionText?.trim() || a.lastCompletionProofUrl);
+}
+
+/** Recurring task rolled forward; employee has not submitted the new occurrence yet. */
+function employeeAwaitingFreshOccurrence(task, assigneeRow = employeeMyAssignee(task)) {
+  if (!assigneeRow || assigneeRow.assigneeDone) return false;
+  const recurrence = task.recurrence ?? "none";
+  if (recurrence === "none") return false;
+  return !!assigneeRow.lastSubmittedAt && !employeeHasCurrentSubmission(assigneeRow);
+}
+
+function empTaskRowDisplayMode(task, me) {
+  if (state.empFilter === "submitted") return "submitted";
+  if (employeeAwaitingFreshOccurrence(task, me)) return "active";
+  if (employeeAssigneeShowsAsSubmitted(task, me) && me?.assigneeDone) return "submitted";
+  return "active";
+}
+
 /** Admin progress: submitted now or archived after a recurring roll. */
 function assigneeShowsSubmittedForOwner(assignee) {
   if (!assignee) return false;
@@ -2376,10 +2402,10 @@ async function openSubmissionDetailModal({ title, submissionText, proofUrl }) {
   modal.show();
 
   if (hasImage) {
-    try {
-      img.src = await fetchProofBlobUrl(proofUrl);
-    } catch (err) {
-      modal.hide();
+  try {
+    img.src = await fetchProofBlobUrl(proofUrl);
+  } catch (err) {
+    modal.hide();
       showToast(err.message || "Could not load submission image.", "danger");
     }
   }
@@ -3602,14 +3628,14 @@ function renderOwnerMain() {
                 <div class="owner-kpi-label">Active tasks</div>
               </div>
             </button>
-          </div>
+            </div>
           <div class="col-6 col-lg-3">
             <button type="button" class="owner-kpi-card owner-kpi-card--filter w-100 text-start${inReviewKpiClass}" data-owner-filter="in_review" aria-pressed="${state.ownerTaskFilter === "in_review"}">
               <div class="owner-kpi-icon text-danger"><i class="bi bi-chat-left-dots" aria-hidden="true"></i></div>
               <div>
                 <div class="owner-kpi-value tabular-nums">${metrics.inReview}</div>
                 <div class="owner-kpi-label">In review</div>
-              </div>
+          </div>
             </button>
           </div>
           <div class="col-6 col-lg-3">
@@ -3620,7 +3646,7 @@ function renderOwnerMain() {
                 <div class="owner-kpi-label">Completed</div>
               </div>
             </button>
-          </div>
+            </div>
           <div class="col-6 col-lg-3">
             <button type="button" class="owner-kpi-card owner-kpi-card--filter w-100 text-start${empAssignedKpiClass}" data-owner-filter="employee_assigned" aria-pressed="${state.ownerTaskFilter === "employee_assigned"}">
               <div class="owner-kpi-icon text-info"><i class="bi bi-person-lines-fill" aria-hidden="true"></i></div>
@@ -3647,9 +3673,9 @@ function renderOwnerMain() {
             <p class="owner-empty-desc text-muted small mb-0">When employees use <strong>Create & assign task</strong> or assign a task to a colleague, it appears here. Click <strong>Refresh</strong> or re-open this list if you expect tasks to show.</p>
           </div>`
         : `<div class="owner-empty-state py-5 px-3">
-            <i class="bi bi-clipboard2-plus owner-empty-icon text-primary" aria-hidden="true"></i>
-            <p class="owner-empty-title mb-1">No tasks yet</p>
-            <p class="owner-empty-desc text-muted small mb-0">Use quick add below to create the first task for this list.</p>
+        <i class="bi bi-clipboard2-plus owner-empty-icon text-primary" aria-hidden="true"></i>
+        <p class="owner-empty-title mb-1">No tasks yet</p>
+        <p class="owner-empty-desc text-muted small mb-0">Use quick add below to create the first task for this list.</p>
           </div>`
       : state.ownerTaskFilter === "completed"
         ? `<div class="owner-empty-state py-5 px-3">
@@ -3668,12 +3694,12 @@ function renderOwnerMain() {
                 <i class="bi bi-person-lines-fill owner-empty-icon text-info" aria-hidden="true"></i>
                 <p class="owner-empty-title mb-1">No employee assignments</p>
                 <p class="owner-empty-desc text-muted small mb-0">Tasks appear here when an employee creates or assigns work to a colleague. Check the <strong>Employee assignments</strong> list.</p>
-              </div>`
-            : `<div class="owner-empty-state py-5 px-3">
+      </div>`
+    : `<div class="owner-empty-state py-5 px-3">
               <i class="bi bi-check2-all owner-empty-icon text-success" aria-hidden="true"></i>
               <p class="owner-empty-title mb-1">No active tasks</p>
               <p class="owner-empty-desc text-muted small mb-0">All caught up. Click <strong>Completed</strong> above to review finished tasks.</p>
-            </div>`;
+      </div>`;
 
   const tableBlock =
     !list || visibleTasks.length === 0
@@ -3749,14 +3775,14 @@ function renderOwnerMain() {
       if (!listId) return;
       btn.disabled = true;
       try {
-        await loadTasks(listId);
-        renderOwnerMain();
+      await loadTasks(listId);
+      renderOwnerMain();
         showToast(
           state.tasks.length ? "Employee assignments refreshed." : "No employee assignments found yet.",
           state.tasks.length ? "success" : "info"
         );
-      } catch (err) {
-        showToast(err.message, "danger");
+    } catch (err) {
+      showToast(err.message, "danger");
       } finally {
         btn.disabled = false;
       }
@@ -3887,7 +3913,7 @@ function renderOwnerMain() {
   });
 
   if (state.ownerTaskFilter === "active" && visibleTasks.length > 0) {
-    initIncompleteSortables(listId);
+  initIncompleteSortables(listId);
   } else {
     destroyTaskSortables();
   }
@@ -4329,9 +4355,11 @@ function empTaskTableRows(tasks) {
   return `<tbody>${tasks
     .map((t) => {
       const me = employeeMyAssignee(t);
-      const showsAsSubmitted = employeeAssigneeShowsAsSubmitted(t, me);
-      const submitted = showsAsSubmitted;
-      const hasSubmission = assigneeHasSubmission(me);
+      const displayMode = empTaskRowDisplayMode(t, me);
+      const submitted = displayMode === "submitted";
+      const hasViewableSubmission = submitted
+        ? employeeHasArchivedSubmission(me) || employeeHasCurrentSubmission(me)
+        : employeeHasCurrentSubmission(me);
       const notesRaw = (t.notes || "").trim().replace(/\s+/g, " ");
       const notesPreview = notesRaw.length > 100 ? `${notesRaw.slice(0, 97)}…` : notesRaw;
       const descriptionBox =
@@ -4343,8 +4371,18 @@ function empTaskTableRows(tasks) {
         updateCount > 0
           ? `<span class="badge rounded-pill text-bg-secondary ms-1 tabular-nums">${updateCount}</span>`
           : "";
+      const archivedNotesRaw = (me?.lastSubmissionText || "").trim().replace(/\s+/g, " ");
+      const archivedNotesPreview =
+        submitted && archivedNotesRaw
+          ? archivedNotesRaw.length > 80
+            ? `${archivedNotesRaw.slice(0, 77)}…`
+            : archivedNotesRaw
+          : "";
+      const archivedNotesLine = archivedNotesPreview
+        ? `<div class="small text-muted emp-submitted-notes-preview mt-1" title="${escapeHtml(archivedNotesRaw)}">${escapeHtml(archivedNotesPreview)}</div>`
+        : "";
       const submissionBtn = submitted
-        ? hasSubmission
+        ? hasViewableSubmission
           ? `<button type="button" class="btn btn-sm btn-outline-primary emp-view-submission" data-task-id="${t.id}" data-user-id="${escapeHtml(state.user?.id || "")}"><i class="bi bi-eye me-1" aria-hidden="true"></i>View</button>`
           : me?.lastSubmittedAt
             ? `<span class="small text-success text-nowrap"><i class="bi bi-check-circle me-1" aria-hidden="true"></i>${escapeHtml(formatProgressUpdateTime(me.lastSubmittedAt))}</span>`
@@ -4353,7 +4391,7 @@ function empTaskTableRows(tasks) {
       const assignedByLine = me?.assignedBy?.displayName
         ? `<div class="small text-muted emp-assigned-by-line mt-1">From ${escapeHtml(me.assignedBy.displayName)}</div>`
         : "";
-      const canReassign = !submitted && !me?.assignedBy;
+      const canReassign = displayMode === "active" && !me?.assignedBy;
       const delegateBtn = canReassign
         ? `<button type="button" class="btn btn-sm btn-outline-info emp-open-delegate" data-task-id="${t.id}"><i class="bi bi-person-plus me-1" aria-hidden="true"></i>Assign</button>`
         : "";
@@ -4365,13 +4403,18 @@ function empTaskTableRows(tasks) {
           ${submissionBtn}
         </div>`;
       const rowDone = submitted ? "owner-task-row--completed" : "";
-      const deadlineDisplay = t.dueAt
-        ? `<span class="text-body tabular-nums emp-deadline-full d-none d-md-inline">${escapeHtml(
-            formatEmpDue(t.dueAt)
-          )}</span><span class="text-body tabular-nums emp-deadline-short d-md-none">${escapeHtml(
-            t.dueAt.slice(0, 10)
-          )}</span>`
-        : `<span class="text-muted">—</span>`;
+      const submittedWhen = me?.lastSubmittedAt || me?.assigneeDoneAt || null;
+      const deadlineDisplay = submitted && submittedWhen
+        ? `<span class="text-success small text-nowrap"><i class="bi bi-check-circle me-1" aria-hidden="true"></i><span class="emp-deadline-full d-none d-md-inline">Submitted ${escapeHtml(formatEmpDue(submittedWhen))}</span><span class="emp-deadline-short d-md-none">${escapeHtml(
+            String(submittedWhen).slice(0, 10)
+          )}</span></span>`
+        : t.dueAt
+          ? `<span class="text-body tabular-nums emp-deadline-full d-none d-md-inline">${escapeHtml(
+              formatEmpDue(t.dueAt)
+            )}</span><span class="text-body tabular-nums emp-deadline-short d-md-none">${escapeHtml(
+              t.dueAt.slice(0, 10)
+            )}</span>`
+          : `<span class="text-muted">—</span>`;
       return `<tr class="owner-task-row emp-task-row ${rowDone}" data-task-id="${t.id}">
         <td class="owner-task-cell emp-col-check text-center align-middle">
           <input type="checkbox" class="form-check-input emp-task-check" data-task-id="${t.id}" ${
@@ -4381,6 +4424,7 @@ function empTaskTableRows(tasks) {
         <td class="owner-task-cell owner-task-col--task emp-col-task align-middle">
           <span class="fw-semibold emp-task-title ${submitted ? "text-muted text-decoration-line-through" : ""}">${escapeHtml(t.title)}</span>
           ${assignedByLine}
+          ${archivedNotesLine}
         </td>
         <td class="owner-task-cell owner-task-col--deadline emp-col-deadline align-middle small">${deadlineDisplay}</td>
         <td class="owner-task-cell emp-col-desc align-middle">${descriptionBox}</td>
@@ -4396,7 +4440,7 @@ function empAssignedByMeCardsHtml(tasks) {
       <i class="bi bi-person-plus owner-empty-icon text-primary" aria-hidden="true"></i>
       <p class="owner-empty-title mb-1">Nothing assigned yet</p>
       <p class="owner-empty-desc text-muted small mb-0">Use <strong>Create & assign task</strong> to assign work to a colleague.</p>
-    </div>`;
+      </div>`;
   }
 
   return `<div class="emp-assigned-by-me-cards d-flex flex-column gap-3">${tasks
@@ -4426,21 +4470,21 @@ function empAssignedByMeCardsHtml(tasks) {
           <div class="emp-assigned-out-card-meta d-flex flex-wrap align-items-center gap-2">
             ${assignedWhen ? `<time class="emp-assigned-out-card-when small text-muted tabular-nums">Assigned ${assignedWhen}</time>` : ""}
             ${deleteBtn}
-          </div>
-        </div>
+                </div>
+              </div>
         <div class="emp-assigned-out-card-grid">
           <div class="emp-assigned-out-card-field">
             <span class="emp-assigned-out-card-label">Assigned to</span>
             <span class="emp-assigned-out-card-value fw-semibold">${assigneeNames}</span>
-          </div>
+            </div>
           <div class="emp-assigned-out-card-field">
             <span class="emp-assigned-out-card-label">Deadline</span>
             <span class="emp-assigned-out-card-value tabular-nums">${deadlineDisplay}</span>
-          </div>
+                </div>
           <div class="emp-assigned-out-card-field emp-assigned-out-card-field--full">
             <span class="emp-assigned-out-card-label">Description</span>
             <span class="emp-assigned-out-card-value small">${descriptionText}</span>
-          </div>
+              </div>
         </div>
       </article>`;
     })
@@ -4460,8 +4504,8 @@ function empLeftNavInner() {
           <div class="owner-sidebar-brand-title">Task Manager</div>
           <div class="owner-sidebar-brand-user text-truncate">${displayName}</div>
           <span class="badge rounded-pill emp-role-badge mt-1">Employee</span>
-        </div>
-      </div>
+                  </div>
+                </div>
       <button type="button" class="btn btn-primary w-100 owner-sidebar-new-list js-emp-create-task">
         <i class="bi bi-plus-lg me-1" aria-hidden="true"></i>Create & assign task
       </button>
@@ -4477,7 +4521,7 @@ function empLeftNavInner() {
         <button type="button" class="btn btn-outline-danger w-100 js-logout">
           <i class="bi bi-box-arrow-right me-1" aria-hidden="true"></i>Sign out
         </button>
-      </div>
+                  </div>
     </div>`;
 }
 
@@ -4604,17 +4648,17 @@ function renderEmployeeMain() {
                   <div class="owner-kpi-value tabular-nums">${metrics.active}</div>
                   <div class="owner-kpi-label">Active tasks</div>
                 </div>
-              </div>
-            </div>
+                  </div>
+                </div>
             <div class="col-6 col-xl-3">
               <div class="owner-kpi-card">
                 <div class="owner-kpi-icon text-success"><i class="bi bi-check-circle" aria-hidden="true"></i></div>
                 <div>
                   <div class="owner-kpi-value tabular-nums">${metrics.done}</div>
                   <div class="owner-kpi-label">Submitted</div>
+                  </div>
                 </div>
               </div>
-            </div>
             <div class="col-6 col-xl-3">
               <div class="owner-kpi-card">
                 <div class="owner-kpi-icon text-warning"><i class="bi bi-alarm" aria-hidden="true"></i></div>
@@ -4659,7 +4703,7 @@ function renderEmployeeMain() {
         <p class="owner-page-eyebrow mb-1 d-none d-md-block">Employee dashboard</p>
         <h2 class="owner-page-title h4 mb-0 text-truncate d-none d-md-block">${escapeHtml(filterTitle)}</h2>
         <p class="owner-page-sub text-muted small mb-0 mt-1 d-none d-md-block">${escapeHtml(filterSubtitle)}</p>
-      </div>
+                </div>
       <div class="d-none d-md-flex flex-wrap gap-2 owner-toolbar">
         <button type="button" class="btn btn-primary btn-sm js-emp-create-task">
           <i class="bi bi-plus-lg me-1" aria-hidden="true"></i>Create & assign
@@ -4667,7 +4711,7 @@ function renderEmployeeMain() {
         <button type="button" class="btn btn-outline-secondary btn-sm js-emp-refresh">
           <i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>Refresh
         </button>
-      </div>
+              </div>
     </header>
     ${kpiRow}
     ${tableSection}
@@ -4694,7 +4738,7 @@ function renderEmployeeMain() {
       const completed = cb.checked;
       const me = employeeMyAssignee(task);
 
-      if (completed && !assigneeHasSubmission(me)) {
+      if (completed && !employeeHasCurrentSubmission(me)) {
         cb.checked = false;
         if (task) openEmpSubmissionModal(task);
         return;
@@ -4783,8 +4827,8 @@ function renderEmployeeChrome() {
           <span class="owner-topbar-title text-truncate fw-semibold small">${escapeHtml(filterTitle)}</span>
           <button type="button" class="btn btn-primary btn-sm js-emp-refresh" aria-label="Refresh tasks">
             <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
-          </button>
-        </div>
+                </button>
+              </div>
         <div id="emp-mobile-filters" class="emp-mobile-filters d-lg-none mb-2" aria-label="Task filters"></div>
         <div class="row g-2 g-md-3 g-lg-4 owner-shell-row flex-lg-grow-1">
           <aside class="col-lg-3 d-none d-lg-flex owner-sidebar-col">
