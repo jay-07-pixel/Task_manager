@@ -39,12 +39,16 @@ function assigneeHasSubmissionContent(row) {
 }
 
 /** @param {{ completionProofPath?: string | null }} row */
-function clearAssigneeSubmissionUpdate(assigneeDone) {
-  return {
+function clearAssigneeSubmissionUpdate(assigneeDone, { clearLastSubmittedAt = true } = {}) {
+  const data = {
     assigneeDone,
     completionProofPath: null,
     submissionText: null,
   };
+  if (clearLastSubmittedAt) {
+    data.lastSubmittedAt = null;
+  }
+  return data;
 }
 
 const EMPLOYEE_ASSIGNMENTS_LIST_TITLE = "Employee assignments";
@@ -144,7 +148,7 @@ async function maybeRollRecurringAfterEmployeeComplete(task, userId) {
   });
   await prisma.taskAssignee.update({
     where: { taskId_userId: { taskId: task.id, userId } },
-    data: clearAssigneeSubmissionUpdate(false),
+    data: clearAssigneeSubmissionUpdate(false, { clearLastSubmittedAt: false }),
   });
   await syncTaskCompletedFromAssignments(task.id);
 }
@@ -471,6 +475,8 @@ export function serializeTask(t) {
       ? { id: a.assignedBy.id, displayName: a.assignedBy.displayName, role: a.assignedBy.role }
       : null,
     delegatedAt: a.delegatedAt instanceof Date ? a.delegatedAt.toISOString() : (a.delegatedAt ?? null),
+    lastSubmittedAt:
+      a.lastSubmittedAt instanceof Date ? a.lastSubmittedAt.toISOString() : (a.lastSubmittedAt ?? null),
   }));
   const delegations = (t.delegations ?? []).map(serializeDelegation);
   return {
@@ -1024,12 +1030,14 @@ router.post("/:id/completion-proof", requireAuth, handleProofUpload, async (req,
       return res.status(400).json({ error: SUBMISSION_REQUIRED_MSG });
     }
 
+    const submittedAt = new Date();
     await prisma.taskAssignee.update({
       where: { taskId_userId: { taskId: task.id, userId: req.session.userId } },
       data: {
         completionProofPath,
         submissionText: submissionText || null,
         assigneeDone: true,
+        lastSubmittedAt: submittedAt,
       },
     });
     await syncTaskCompletedFromAssignments(task.id);
@@ -1232,7 +1240,9 @@ router.patch("/:id", requireAuth, async (req, res) => {
       }
       await prisma.taskAssignee.update({
         where: { taskId_userId: { taskId: task.id, userId } },
-        data: assigneeDone ? { assigneeDone: true } : clearAssigneeSubmissionUpdate(false),
+        data: assigneeDone
+          ? { assigneeDone: true, lastSubmittedAt: new Date() }
+          : clearAssigneeSubmissionUpdate(false),
       });
       await syncTaskCompletedFromAssignments(task.id);
       const afterAssignee = await prisma.task.findUnique({
@@ -1333,7 +1343,7 @@ router.patch("/:id", requireAuth, async (req, res) => {
     } else {
       await prisma.taskAssignee.update({
         where: { taskId_userId: { taskId: task.id, userId: req.session.userId } },
-        data: { assigneeDone: true },
+        data: { assigneeDone: true, lastSubmittedAt: new Date() },
       });
     }
     await syncTaskCompletedFromAssignments(task.id);

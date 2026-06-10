@@ -857,7 +857,7 @@ async function focusEmployeeTaskFromNotify(notify) {
   }
 
   const task = state.empTasks.find((t) => t.id === notify.taskId);
-  if (task && employeeMyAssignee(task)?.assigneeDone) {
+  if (task && employeeAssigneeShowsAsSubmitted(task)) {
     state.empFilter = "submitted";
   } else if (!task) {
     state.empFilter = "all";
@@ -2540,9 +2540,11 @@ function wireEmpSubmissionModal() {
         else state.empTasks.push(result.task);
       }
       showToast("Task submitted.", "success");
+      state.empFilter = "submitted";
       await loadEmployeeTasks();
       renderEmpListContentOnly();
       renderEmployeeMain();
+      syncEmpTopbarTitle();
     } catch (err) {
       errEl.textContent = err.message || "Submission failed";
       errEl.classList.remove("d-none");
@@ -3946,6 +3948,14 @@ function employeeMyAssignee(task) {
   return (task.assignees ?? []).find((a) => a.id === uid) ?? null;
 }
 
+/** Submitted tab: done now, or recurring task rolled forward after a prior submit. */
+function employeeAssigneeShowsAsSubmitted(task, assigneeRow = employeeMyAssignee(task)) {
+  if (!assigneeRow) return false;
+  if (assigneeRow.assigneeDone) return true;
+  const recurrence = task.recurrence ?? "none";
+  return recurrence !== "none" && !!assigneeRow.lastSubmittedAt;
+}
+
 function formatEmpDue(iso) {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -4179,7 +4189,7 @@ function wireEmpDelegateModal() {
 function employeeDashboardMetrics() {
   const tasks = state.empTasks;
   const active = tasks.filter((t) => !employeeMyAssignee(t)?.assigneeDone).length;
-  const done = tasks.filter((t) => employeeMyAssignee(t)?.assigneeDone).length;
+  const done = tasks.filter((t) => employeeAssigneeShowsAsSubmitted(t)).length;
   const now = Date.now();
   const dueSoon = tasks.filter((t) => {
     if (!t.dueAt || employeeMyAssignee(t)?.assigneeDone) return false;
@@ -4235,7 +4245,7 @@ function empNavFilterButtonHtml(f, active) {
 
 function empFilteredTasks() {
   if (state.empFilter === "submitted") {
-    return state.empTasks.filter((t) => employeeMyAssignee(t)?.assigneeDone);
+    return state.empTasks.filter((t) => employeeAssigneeShowsAsSubmitted(t));
   }
   if (state.empFilter === "all") return state.empTasks;
   return state.empTasks.filter((t) => !employeeMyAssignee(t)?.assigneeDone);
@@ -4262,7 +4272,8 @@ function empTaskTableRows(tasks) {
   return `<tbody>${tasks
     .map((t) => {
       const me = employeeMyAssignee(t);
-      const submitted = me?.assigneeDone ?? false;
+      const showsAsSubmitted = employeeAssigneeShowsAsSubmitted(t, me);
+      const submitted = showsAsSubmitted;
       const hasSubmission = assigneeHasSubmission(me);
       const notesRaw = (t.notes || "").trim().replace(/\s+/g, " ");
       const notesPreview = notesRaw.length > 100 ? `${notesRaw.slice(0, 97)}…` : notesRaw;
@@ -4275,10 +4286,13 @@ function empTaskTableRows(tasks) {
         updateCount > 0
           ? `<span class="badge rounded-pill text-bg-secondary ms-1 tabular-nums">${updateCount}</span>`
           : "";
-      const submissionBtn =
-        submitted && hasSubmission
+      const submissionBtn = submitted
+        ? hasSubmission
           ? `<button type="button" class="btn btn-sm btn-outline-primary emp-view-submission" data-task-id="${t.id}" data-user-id="${escapeHtml(state.user?.id || "")}"><i class="bi bi-eye me-1" aria-hidden="true"></i>View</button>`
-          : `<button type="button" class="btn btn-sm btn-primary emp-open-submit" data-task-id="${t.id}"><i class="bi bi-send me-1" aria-hidden="true"></i>Submit</button>`;
+          : me?.lastSubmittedAt
+            ? `<span class="small text-success text-nowrap"><i class="bi bi-check-circle me-1" aria-hidden="true"></i>${escapeHtml(formatProgressUpdateTime(me.lastSubmittedAt))}</span>`
+            : `<span class="small text-success"><i class="bi bi-check-circle me-1" aria-hidden="true"></i>Submitted</span>`
+        : `<button type="button" class="btn btn-sm btn-primary emp-open-submit" data-task-id="${t.id}"><i class="bi bi-send me-1" aria-hidden="true"></i>Submit</button>`;
       const assignedByLine = me?.assignedBy?.displayName
         ? `<div class="small text-muted emp-assigned-by-line mt-1">From ${escapeHtml(me.assignedBy.displayName)}</div>`
         : "";
