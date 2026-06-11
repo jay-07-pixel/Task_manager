@@ -2402,10 +2402,10 @@ async function openSubmissionDetailModal({ title, submissionText, proofUrl }) {
   modal.show();
 
   if (hasImage) {
-  try {
-    img.src = await fetchProofBlobUrl(proofUrl);
-  } catch (err) {
-    modal.hide();
+    try {
+      img.src = await fetchProofBlobUrl(proofUrl);
+    } catch (err) {
+      modal.hide();
       showToast(err.message || "Could not load submission image.", "danger");
     }
   }
@@ -2415,11 +2415,13 @@ async function openProofImageModal(proofUrl, altLabel) {
   await openSubmissionDetailModal({ title: altLabel, submissionText: null, proofUrl });
 }
 
-async function openSubmissionDetailForAssignee(taskId, userId) {
+async function openSubmissionDetailForAssignee(taskId, userId, { archived = false } = {}) {
   const q =
     state.user?.role === "employee"
-      ? ""
-      : `?assigneeUserId=${encodeURIComponent(userId)}`;
+      ? archived
+        ? "?archived=1"
+        : ""
+      : `?assigneeUserId=${encodeURIComponent(userId)}${archived ? "&archived=1" : ""}`;
   const data = await api(`/api/tasks/${taskId}/submission${q}`);
   const when = data.submittedAt ? formatProgressUpdateTime(data.submittedAt) : "";
   const title = data.archived && when ? `${data.taskTitle} — submitted ${when}` : data.taskTitle;
@@ -4046,6 +4048,50 @@ function formatEmpDue(iso) {
   return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }
 
+function formatEmpRecurrencePattern(task) {
+  const recurrence = task.recurrence ?? "none";
+  if (recurrence === "none") return "";
+  const due = task.dueAt ? new Date(task.dueAt) : null;
+  if (recurrence === "daily") return "Daily";
+  if (recurrence === "weekly") {
+    const weekday = due && !Number.isNaN(due.getTime()) ? due.toLocaleDateString(undefined, { weekday: "long" }) : "";
+    return weekday ? `Weekly ${weekday}` : "Weekly";
+  }
+  if (recurrence === "monthly") {
+    return due && !Number.isNaN(due.getTime()) ? `Monthly ${ordinalDayOfMonth(due.getDate())}` : "Monthly";
+  }
+  if (recurrence === "yearly") {
+    if (due && !Number.isNaN(due.getTime())) {
+      return `Yearly ${due.toLocaleDateString(undefined, { month: "long" })} ${ordinalDayOfMonth(due.getDate())}`;
+    }
+    return "Yearly";
+  }
+  if (recurrence === "custom" && task.recurrenceRule && typeof task.recurrenceRule === "object") {
+    const rule = task.recurrenceRule;
+    const every = Math.max(1, Number(rule.every) || 1);
+    const unit = rule.unit || "day";
+    const unitWord = { day: "day", week: "week", month: "month", year: "year" }[unit] || unit;
+    let label = every === 1 ? `Every ${unitWord}` : `Every ${every} ${unitWord}s`;
+    if (rule.endType === "on" && rule.endOn) {
+      const endStr = String(rule.endOn).slice(0, 10);
+      const endDate = new Date(`${endStr}T12:00:00`);
+      const until =
+        !Number.isNaN(endDate.getTime())
+          ? endDate.toLocaleDateString(undefined, { dateStyle: "medium" })
+          : endStr;
+      label += ` · Until ${until}`;
+    }
+    return label;
+  }
+  return recurrence.charAt(0).toUpperCase() + recurrence.slice(1);
+}
+
+function empActiveRecurrenceLinesHtml(task) {
+  const pattern = formatEmpRecurrencePattern(task);
+  if (!pattern) return "";
+  return `<div class="emp-recurrence-lines small text-muted mt-1"><div class="emp-recurrence-pattern">${escapeHtml(pattern)}</div></div>`;
+}
+
 async function loadEmployeeTasks() {
   const { tasks } = await api("/api/tasks/assigned");
   state.empTasks = tasks;
@@ -4391,6 +4437,13 @@ function empTaskTableRows(tasks) {
       const assignedByLine = me?.assignedBy?.displayName
         ? `<div class="small text-muted emp-assigned-by-line mt-1">From ${escapeHtml(me.assignedBy.displayName)}</div>`
         : "";
+      const now = Date.now();
+      const dueMs = t.dueAt ? new Date(t.dueAt).getTime() : NaN;
+      const showRecurrenceOnActive =
+        displayMode === "active" &&
+        (t.recurrence ?? "none") !== "none" &&
+        (employeeAwaitingFreshOccurrence(t, me) || (Number.isFinite(dueMs) && dueMs > now));
+      const recurrenceLines = showRecurrenceOnActive ? empActiveRecurrenceLinesHtml(t) : "";
       const canReassign = displayMode === "active" && !me?.assignedBy;
       const delegateBtn = canReassign
         ? `<button type="button" class="btn btn-sm btn-outline-info emp-open-delegate" data-task-id="${t.id}"><i class="bi bi-person-plus me-1" aria-hidden="true"></i>Assign</button>`
@@ -4411,7 +4464,7 @@ function empTaskTableRows(tasks) {
         : t.dueAt
           ? `<span class="text-body tabular-nums emp-deadline-full d-none d-md-inline">${escapeHtml(
               formatEmpDue(t.dueAt)
-            )}</span><span class="text-body tabular-nums emp-deadline-short d-md-none">${escapeHtml(
+            )}</span><span class="text-body tabular-nums emp-deadline-short d-md-none" title="${escapeHtml(formatEmpDue(t.dueAt))}">Due ${escapeHtml(
               t.dueAt.slice(0, 10)
             )}</span>`
           : `<span class="text-muted">—</span>`;
@@ -4424,6 +4477,7 @@ function empTaskTableRows(tasks) {
         <td class="owner-task-cell owner-task-col--task emp-col-task align-middle">
           <span class="fw-semibold emp-task-title ${submitted ? "text-muted text-decoration-line-through" : ""}">${escapeHtml(t.title)}</span>
           ${assignedByLine}
+          ${recurrenceLines}
           ${archivedNotesLine}
         </td>
         <td class="owner-task-cell owner-task-col--deadline emp-col-deadline align-middle small">${deadlineDisplay}</td>
@@ -4807,7 +4861,8 @@ function renderEmployeeMain() {
       const taskId = btn.getAttribute("data-task-id");
       const userId = btn.getAttribute("data-user-id") || state.user?.id;
       if (!taskId || !userId) return;
-      void openSubmissionDetailForAssignee(taskId, userId).catch((err) => {
+      const archived = state.empFilter === "submitted";
+      void openSubmissionDetailForAssignee(taskId, userId, { archived }).catch((err) => {
         showToast(err.message || "Could not load submission.", "danger");
       });
     });

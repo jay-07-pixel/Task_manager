@@ -72,19 +72,23 @@ function clearAssigneeSubmissionUpdate(assigneeDone, { clearLastSubmittedAt = tr
 }
 
 /** Current submission if present, otherwise the archived copy kept after a recurring roll. */
-function resolveAssigneeSubmissionView(row) {
+function resolveAssigneeCurrentSubmissionView(row) {
   if (!row) {
     return { submissionText: null, proofPath: null, archived: false, submittedAt: null };
   }
   const currentText = (row.submissionText ?? "").trim();
   const currentProof = row.completionProofPath ?? null;
-  if (currentText || currentProof) {
-    return {
-      submissionText: currentText || null,
-      proofPath: currentProof,
-      archived: false,
-      submittedAt: row.lastSubmittedAt ?? null,
-    };
+  return {
+    submissionText: currentText || null,
+    proofPath: currentProof,
+    archived: false,
+    submittedAt: assigneeHasSubmissionContent(row) ? (row.lastSubmittedAt ?? null) : null,
+  };
+}
+
+function resolveAssigneeArchivedSubmissionView(row) {
+  if (!row) {
+    return { submissionText: null, proofPath: null, archived: false, submittedAt: null };
   }
   const lastText = (row.lastSubmissionText ?? "").trim();
   const lastProof = row.lastCompletionProofPath ?? null;
@@ -94,6 +98,13 @@ function resolveAssigneeSubmissionView(row) {
     archived: !!(lastText || lastProof),
     submittedAt: row.lastSubmittedAt ?? null,
   };
+}
+
+/** Admin / fallback: current occurrence first, then archived. */
+function resolveAssigneeSubmissionView(row) {
+  const current = resolveAssigneeCurrentSubmissionView(row);
+  if (current.submissionText || current.proofPath) return current;
+  return resolveAssigneeArchivedSubmissionView(row);
 }
 
 const EMPLOYEE_ASSIGNMENTS_LIST_TITLE = "Employee assignments";
@@ -1038,7 +1049,12 @@ router.get("/:id/submission", requireAuth, async (req, res) => {
     return res.status(403).json({ error: "Not allowed" });
   }
 
-  const view = resolveAssigneeSubmissionView(row);
+  const wantArchived = req.query.archived === "1" || req.query.archived === "true";
+  const view = wantArchived
+    ? resolveAssigneeArchivedSubmissionView(row)
+    : isSelfEmployee
+      ? resolveAssigneeCurrentSubmissionView(row)
+      : resolveAssigneeSubmissionView(row);
   res.json({
     taskTitle: task.title,
     assigneeUserId,
@@ -1063,9 +1079,7 @@ router.get("/:id/completion-proof/:assigneeUserId", requireAuth, async (req, res
   }
   const row = task.assignments.find((a) => a.userId === assigneeUserId);
   const useArchived = req.query.archived === "1" || req.query.archived === "true";
-  const proofPath = useArchived
-    ? row?.lastCompletionProofPath
-    : row?.completionProofPath || row?.lastCompletionProofPath;
+  const proofPath = useArchived ? row?.lastCompletionProofPath : row?.completionProofPath;
   if (!proofPath) {
     return res.status(404).send("Not found");
   }
