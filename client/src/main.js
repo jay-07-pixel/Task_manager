@@ -1656,6 +1656,63 @@ function ordinalDayOfMonth(day) {
   return `${n}${suffix[n % 10] || "th"}`;
 }
 
+function formatIsoDateShort(isoStr) {
+  if (!isoStr) return "";
+  const s = String(isoStr).slice(0, 10);
+  const d = new Date(`${s}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return s;
+  return d.toLocaleDateString(undefined, { dateStyle: "medium" });
+}
+
+function formatCustomRecurrenceFrequency(rule) {
+  if (!rule) return "Custom";
+  const every = Math.max(1, Number(rule.every) || 1);
+  const unit = rule.unit || "day";
+  const unitWord = { day: "day", week: "week", month: "month", year: "year" }[unit] || unit;
+  return every === 1 ? `Every ${unitWord}` : `Every ${every} ${unitWord}s`;
+}
+
+function formatCustomRecurrenceRuleLabel(rule, dueAtIso) {
+  if (!rule) return "Custom";
+  const startIso = rule.startDate || (dueAtIso ? String(dueAtIso).slice(0, 10) : "");
+  let label = formatCustomRecurrenceFrequency(rule);
+  if (rule.endType === "on" && rule.endOn) {
+    const from = formatIsoDateShort(startIso);
+    const to = formatIsoDateShort(rule.endOn);
+    label = from && to ? `${label} · ${from} → ${to}` : `${label} · until ${formatIsoDateShort(rule.endOn)}`;
+  } else if (rule.endType === "after" && rule.endAfterOccurrences) {
+    label += ` · ${rule.endAfterOccurrences} times`;
+    if (startIso) label += ` from ${formatIsoDateShort(startIso)}`;
+  } else if (startIso) {
+    label += ` · from ${formatIsoDateShort(startIso)}`;
+  }
+  return label;
+}
+
+function syncModalCustomRecurrenceSummary() {
+  const el = document.getElementById("modal-custom-repeat-summary");
+  const repeatEl = document.getElementById("modal-repeat");
+  const dueLabel = document.querySelector('label[for="modal-due"]');
+  if (!el || !repeatEl) return;
+
+  const isCustom = repeatEl.value === "custom" && pendingCustomRecurrence;
+  if (!isCustom) {
+    el.classList.add("d-none");
+    el.textContent = "";
+    if (dueLabel) dueLabel.textContent = "Date";
+    return;
+  }
+
+  const rule = pendingCustomRecurrence;
+  const dueIso = document.getElementById("modal-due")?.value || rule.startDate || "";
+  el.textContent = formatCustomRecurrenceRuleLabel(rule, dueIso);
+  if (dueLabel) {
+    dueLabel.textContent =
+      rule.endType === "on" && rule.endOn ? "First due date (series start)" : "First due date";
+  }
+  el.classList.remove("d-none");
+}
+
 function refreshModalRepeatLabels() {
   const sel = document.getElementById("modal-repeat");
   if (!sel) return;
@@ -1664,6 +1721,7 @@ function refreshModalRepeatLabels() {
   const weekday = d.toLocaleDateString(undefined, { weekday: "long" });
   const monthLong = d.toLocaleDateString(undefined, { month: "long" });
   const ord = ordinalDayOfMonth(d.getDate());
+  const dueIso = document.getElementById("modal-due")?.value || "";
 
   const labels = {
     none: "Does not repeat",
@@ -1671,13 +1729,30 @@ function refreshModalRepeatLabels() {
     weekly: `Weekly ${weekday}`,
     monthly: `Monthly ${ord}`,
     yearly: `Yearly ${monthLong} ${ord}`,
-    custom: "Custom",
+    custom:
+      current === "custom" && pendingCustomRecurrence
+        ? formatCustomRecurrenceRuleLabel(pendingCustomRecurrence, dueIso)
+        : "Custom",
   };
 
   for (const opt of sel.options) {
     if (labels[opt.value]) opt.textContent = labels[opt.value];
   }
   if ([...sel.options].some((o) => o.value === current)) sel.value = current;
+  syncModalCustomRecurrenceSummary();
+}
+
+function formatOwnerTaskDeadline(task) {
+  if (!task.dueAt) return `<span class="text-muted">—</span>`;
+  const startIso = task.dueAt.slice(0, 10);
+  const rule = task.recurrence === "custom" && task.recurrenceRule ? task.recurrenceRule : null;
+  if (rule?.endType === "on" && rule.endOn) {
+    const endIso = String(rule.endOn).slice(0, 10);
+    const from = formatIsoDateShort(rule.startDate || startIso);
+    const to = formatIsoDateShort(endIso);
+    return `<span class="text-body tabular-nums" title="Custom repeat: ${escapeHtml(from)} to ${escapeHtml(to)}">${escapeHtml(from)} → ${escapeHtml(to)}</span>`;
+  }
+  return `<span class="text-body tabular-nums">${escapeHtml(startIso)}</span>`;
 }
 
 function getBrowserDueTimeZone() {
@@ -1970,14 +2045,21 @@ function wireCustomRecurrenceModal() {
       showToast('Choose an end date for "On", or pick Never / After occurrences.', "warning");
       return;
     }
+    const startIso = draft.startDate || document.getElementById("cr-start").value || "";
+    if (draft.endType === "on" && draft.endOn && startIso && draft.endOn < startIso) {
+      showToast("End date must be on or after the start date.", "warning");
+      return;
+    }
     pendingCustomRecurrence = draft;
     document.getElementById("modal-repeat").value = "custom";
     const mainDue = document.getElementById("cr-start").value;
     if (mainDue) {
       document.getElementById("modal-due").value = mainDue;
+      pendingCustomRecurrence.startDate = mainDue;
     }
     const t = pendingCustomRecurrence.startTime;
     if (t) document.getElementById("modal-due-time").value = t;
+    refreshModalRepeatLabels();
     bootstrap.Modal.getInstance(document.getElementById("customRecurrenceModal")).hide();
   });
   document.getElementById("cr-cancel").addEventListener("click", () => {
@@ -2126,6 +2208,7 @@ function taskModalHtml() {
                     <option value="yearly">Yearly</option>
                     <option value="custom">Custom</option>
                   </select>
+                  <p class="small text-primary mb-0 mt-1 d-none" id="modal-custom-repeat-summary"></p>
                 </div>
               </div>
             </div>
@@ -3744,11 +3827,11 @@ function openTaskModal(task) {
   document.getElementById("modal-task-id").value = task.id;
   document.getElementById("modal-title").value = task.title;
   document.getElementById("modal-notes").value = task.notes || "";
-  fillModalDueFields(task);
   pendingCustomRecurrence =
     task.recurrence === "custom" && task.recurrenceRule && typeof task.recurrenceRule === "object"
       ? { ...task.recurrenceRule }
       : null;
+  fillModalDueFields(task);
   document.getElementById("modal-schedule-wrap").classList.remove("d-none");
   document.getElementById("modal-list-wrap").classList.remove("d-none");
   document.getElementById("modal-assignee-wrap").classList.remove("d-none");
@@ -3784,7 +3867,12 @@ function wireTaskModal() {
         showToast('Custom repeat: pick an end date for "On", or choose Never / After.', "warning");
         return;
       }
-      recurrenceRule = pendingCustomRecurrence;
+      const dueDate = document.getElementById("modal-due")?.value || "";
+      recurrenceRule = {
+        ...pendingCustomRecurrence,
+        ...(dueDate ? { startDate: dueDate } : {}),
+      };
+      pendingCustomRecurrence = recurrenceRule;
     }
     const dueAt = buildDueAtFromModal();
     const body = {
@@ -3844,7 +3932,9 @@ function wireTaskModal() {
       openCustomRecurrenceEditor();
     } else {
       pendingCustomRecurrence = null;
+      syncModalCustomRecurrenceSummary();
     }
+    refreshModalRepeatLabels();
   });
 
   updateModalSaveEnabled();
@@ -3859,9 +3949,7 @@ function ownerTaskGroupTbody(t) {
   const progressNumbers = `${nDone}\u00a0/\u00a0${nAssigned}`;
   const detailId = `owner-task-detail-${t.id}`;
 
-  const deadlineCell = t.dueAt
-    ? `<span class="text-body tabular-nums">${escapeHtml(t.dueAt.slice(0, 10))}</span>`
-    : `<span class="text-muted">—</span>`;
+  const deadlineCell = formatOwnerTaskDeadline(t);
 
   const descriptionBox = ownerTaskDescriptionHtml(t.notes, t.title);
 
@@ -4467,21 +4555,7 @@ function formatEmpRecurrencePattern(task) {
     return "Yearly";
   }
   if (recurrence === "custom" && task.recurrenceRule && typeof task.recurrenceRule === "object") {
-    const rule = task.recurrenceRule;
-    const every = Math.max(1, Number(rule.every) || 1);
-    const unit = rule.unit || "day";
-    const unitWord = { day: "day", week: "week", month: "month", year: "year" }[unit] || unit;
-    let label = every === 1 ? `Every ${unitWord}` : `Every ${every} ${unitWord}s`;
-    if (rule.endType === "on" && rule.endOn) {
-      const endStr = String(rule.endOn).slice(0, 10);
-      const endDate = new Date(`${endStr}T12:00:00`);
-      const until =
-        !Number.isNaN(endDate.getTime())
-          ? endDate.toLocaleDateString(undefined, { dateStyle: "medium" })
-          : endStr;
-      label += ` · Until ${until}`;
-    }
-    return label;
+    return formatCustomRecurrenceRuleLabel(task.recurrenceRule, task.dueAt);
   }
   return recurrence.charAt(0).toUpperCase() + recurrence.slice(1);
 }
