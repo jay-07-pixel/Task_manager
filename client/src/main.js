@@ -1689,28 +1689,78 @@ function formatCustomRecurrenceRuleLabel(rule, dueAtIso) {
   return label;
 }
 
-function syncModalCustomRecurrenceSummary() {
-  const el = document.getElementById("modal-custom-repeat-summary");
+function syncModalCustomRepeatUi() {
+  const card = document.getElementById("modal-custom-repeat-card");
   const repeatEl = document.getElementById("modal-repeat");
   const dueLabel = document.querySelector('label[for="modal-due"]');
-  if (!el || !repeatEl) return;
+  const dueWrap = document.getElementById("modal-due-wrap");
+  const endWrap = document.getElementById("modal-custom-end-wrap");
+  const endDisplay = document.getElementById("modal-custom-end-display");
+  if (!card || !repeatEl) return;
 
   const isCustom = repeatEl.value === "custom" && pendingCustomRecurrence;
   if (!isCustom) {
-    el.classList.add("d-none");
-    el.textContent = "";
+    card.classList.add("d-none");
     if (dueLabel) dueLabel.textContent = "Date";
+    if (dueWrap) {
+      dueWrap.classList.remove("col-12");
+      dueWrap.classList.add("col-sm-6");
+    }
+    if (endWrap) endWrap.classList.add("d-none");
     return;
   }
 
   const rule = pendingCustomRecurrence;
   const dueIso = document.getElementById("modal-due")?.value || rule.startDate || "";
-  el.textContent = formatCustomRecurrenceRuleLabel(rule, dueIso);
-  if (dueLabel) {
-    dueLabel.textContent =
-      rule.endType === "on" && rule.endOn ? "First due date (series start)" : "First due date";
+  const freqEl = document.getElementById("modal-custom-repeat-freq");
+  const fromEl = document.getElementById("modal-custom-repeat-from");
+  const toEl = document.getElementById("modal-custom-repeat-to");
+  const metaEl = document.getElementById("modal-custom-repeat-meta");
+  const rangeEl = document.getElementById("modal-custom-repeat-range");
+
+  if (freqEl) freqEl.textContent = formatCustomRecurrenceFrequency(rule);
+  if (fromEl) fromEl.textContent = formatIsoDateShort(dueIso) || "—";
+
+  let toText = "No end";
+  if (rule.endType === "on" && rule.endOn) {
+    toText = formatIsoDateShort(rule.endOn);
+    if (dueLabel) dueLabel.textContent = "From";
+    if (dueWrap) {
+      dueWrap.classList.remove("col-12");
+      dueWrap.classList.add("col-sm-6");
+    }
+    if (endWrap) endWrap.classList.remove("d-none");
+    if (endDisplay) endDisplay.value = String(rule.endOn).slice(0, 10);
+  } else {
+    if (dueLabel) dueLabel.textContent = "Starts";
+    if (dueWrap) {
+      dueWrap.classList.remove("col-sm-6");
+      dueWrap.classList.add("col-12");
+    }
+    if (endWrap) endWrap.classList.add("d-none");
+    if (rule.endType === "after" && rule.endAfterOccurrences) {
+      toText = `After ${rule.endAfterOccurrences} times`;
+    }
   }
-  el.classList.remove("d-none");
+
+  if (toEl) toEl.textContent = toText;
+  if (rangeEl) {
+    rangeEl.classList.toggle(
+      "modal-custom-repeat-card__range--open",
+      rule.endType === "never" && !rule.endAfterOccurrences
+    );
+  }
+
+  const time = document.getElementById("modal-due-time")?.value || rule.startTime || "";
+  const allDay = document.getElementById("modal-all-day")?.checked;
+  const metaParts = [];
+  if (!allDay && time) metaParts.push(`at ${time}`);
+  if (metaEl) {
+    metaEl.textContent = metaParts.join(" · ");
+    metaEl.classList.toggle("d-none", metaParts.length === 0);
+  }
+
+  card.classList.remove("d-none");
 }
 
 function refreshModalRepeatLabels() {
@@ -1731,15 +1781,15 @@ function refreshModalRepeatLabels() {
     yearly: `Yearly ${monthLong} ${ord}`,
     custom:
       current === "custom" && pendingCustomRecurrence
-        ? formatCustomRecurrenceRuleLabel(pendingCustomRecurrence, dueIso)
-        : "Custom",
+        ? formatCustomRecurrenceFrequency(pendingCustomRecurrence)
+        : "Custom…",
   };
 
   for (const opt of sel.options) {
     if (labels[opt.value]) opt.textContent = labels[opt.value];
   }
   if ([...sel.options].some((o) => o.value === current)) sel.value = current;
-  syncModalCustomRecurrenceSummary();
+  syncModalCustomRepeatUi();
 }
 
 function formatOwnerTaskDeadline(task) {
@@ -2185,11 +2235,17 @@ function taskModalHtml() {
               <div class="d-flex align-items-start gap-2 mb-3">
                 <i class="bi bi-clock text-secondary fs-5 mt-1 flex-shrink-0" aria-hidden="true"></i>
                 <div class="flex-grow-1">
-                  <div class="row g-2">
-                    <div class="col-sm-6">
+                  <div class="row g-2 align-items-end" id="modal-schedule-dates-row">
+                    <div class="col-sm-6" id="modal-due-wrap">
                       <label class="form-label small text-muted mb-0" for="modal-due">Date</label>
                       <input class="form-control" type="date" id="modal-due" />
                     </div>
+                    <div class="col-sm-6 d-none" id="modal-custom-end-wrap">
+                      <label class="form-label small text-muted mb-0" for="modal-custom-end-display">To</label>
+                      <input class="form-control" type="date" id="modal-custom-end-display" disabled tabindex="-1" aria-readonly="true" />
+                    </div>
+                  </div>
+                  <div class="row g-2 mt-2 align-items-end">
                     <div class="col-sm-6" id="modal-time-wrap">
                       <label class="form-label small text-muted mb-0" for="modal-due-time">Time</label>
                       <input class="form-control" type="time" id="modal-due-time" value="12:00" />
@@ -2206,9 +2262,22 @@ function taskModalHtml() {
                     <option value="weekly">Weekly</option>
                     <option value="monthly">Monthly</option>
                     <option value="yearly">Yearly</option>
-                    <option value="custom">Custom</option>
+                    <option value="custom">Custom…</option>
                   </select>
-                  <p class="small text-primary mb-0 mt-1 d-none" id="modal-custom-repeat-summary"></p>
+                  <div id="modal-custom-repeat-card" class="modal-custom-repeat-card d-none mt-2" aria-live="polite">
+                    <div class="modal-custom-repeat-card__head">
+                      <span class="modal-custom-repeat-card__badge" id="modal-custom-repeat-freq">Every day</span>
+                      <button type="button" class="btn btn-link btn-sm p-0 modal-custom-repeat-card__edit" id="modal-custom-repeat-edit">
+                        <i class="bi bi-pencil-square me-1" aria-hidden="true"></i>Edit
+                      </button>
+                    </div>
+                    <div class="modal-custom-repeat-card__range" id="modal-custom-repeat-range">
+                      <span class="modal-custom-repeat-card__date" id="modal-custom-repeat-from">—</span>
+                      <span class="modal-custom-repeat-card__arrow" aria-hidden="true"><i class="bi bi-arrow-right"></i></span>
+                      <span class="modal-custom-repeat-card__date" id="modal-custom-repeat-to">—</span>
+                    </div>
+                    <p class="modal-custom-repeat-card__meta small text-muted mb-0" id="modal-custom-repeat-meta"></p>
+                  </div>
                 </div>
               </div>
             </div>
@@ -3932,10 +4001,14 @@ function wireTaskModal() {
       openCustomRecurrenceEditor();
     } else {
       pendingCustomRecurrence = null;
-      syncModalCustomRecurrenceSummary();
+      syncModalCustomRepeatUi();
     }
     refreshModalRepeatLabels();
   });
+  document.getElementById("modal-custom-repeat-edit")?.addEventListener("click", () => {
+    openCustomRecurrenceEditor();
+  });
+  document.getElementById("modal-due-time")?.addEventListener("change", syncModalCustomRepeatUi);
 
   updateModalSaveEnabled();
 }
