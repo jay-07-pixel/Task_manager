@@ -2184,6 +2184,15 @@ body {
   background: rgba(var(--bs-primary-rgb), 0.14) !important;
 }
 
+.auth-forgot-link {
+  font-size: 0.875rem;
+  text-decoration: none;
+}
+
+.auth-forgot-link:hover {
+  text-decoration: underline;
+}
+
 .auth-form-login {
   max-width: 21rem;
   margin-inline: auto;

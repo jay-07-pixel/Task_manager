@@ -282,6 +282,9 @@ const PUBLIC_AUTH_PATHS = [
   "/api/auth/register",
   "/api/auth/send-otp",
   "/api/auth/verify-otp",
+  "/api/auth/forgot-password/send-otp",
+  "/api/auth/forgot-password/verify-otp",
+  "/api/auth/forgot-password/reset",
 ];
 
 function isPublicAuthPath(path) {
@@ -291,8 +294,11 @@ function isPublicAuthPath(path) {
 let registerOtpCountdownTimer = null;
 
 const registerGate = { otpVerified: false, turnstileToken: null };
+const forgotGate = { otpVerified: false, turnstileToken: null };
 let turnstileScriptPromise = null;
 let turnstileWidgetId = null;
+let forgotTurnstileWidgetId = null;
+let forgotOtpCountdownTimer = null;
 
 function updateRegisterSubmitButton() {
   const submitBtn = document.getElementById("btn-register-submit");
@@ -562,6 +568,388 @@ function wireRegisterOtp() {
   setVerified(false);
 }
 
+function clearForgotOtpTimer() {
+  if (forgotOtpCountdownTimer) {
+    clearInterval(forgotOtpCountdownTimer);
+    forgotOtpCountdownTimer = null;
+  }
+}
+
+function resetForgotTurnstileWidget() {
+  if (window.turnstile && forgotTurnstileWidgetId != null) {
+    try {
+      window.turnstile.remove(forgotTurnstileWidgetId);
+    } catch {
+      /* ignore */
+    }
+    forgotTurnstileWidgetId = null;
+  }
+  forgotGate.turnstileToken = null;
+  const sendBtn = document.getElementById("fp-btn-send-otp");
+  if (sendBtn) sendBtn.disabled = true;
+}
+
+async function wireForgotTurnstile() {
+  resetForgotTurnstileWidget();
+  const container = document.getElementById("fp-turnstile");
+  if (!container) return;
+
+  let siteKey;
+  try {
+    const data = await api("/api/auth/turnstile-site-key");
+    siteKey = data.siteKey;
+  } catch {
+    container.innerHTML =
+      '<p class="form-text text-danger mb-0">Security check unavailable. Contact your administrator.</p>';
+    return;
+  }
+
+  try {
+    await loadTurnstileScript();
+  } catch {
+    container.innerHTML =
+      '<p class="form-text text-danger mb-0">Could not load CAPTCHA. Check your network and refresh.</p>';
+    return;
+  }
+
+  container.innerHTML = "";
+  const turnstileSize = window.matchMedia("(max-width: 575.98px)").matches ? "compact" : "flexible";
+  forgotTurnstileWidgetId = window.turnstile.render(container, {
+    sitekey: siteKey,
+    size: turnstileSize,
+    callback(token) {
+      forgotGate.turnstileToken = token;
+      const sendBtn = document.getElementById("fp-btn-send-otp");
+      if (sendBtn) sendBtn.disabled = false;
+      const hint = document.getElementById("fp-turnstile-hint");
+      if (hint) hint.classList.add("d-none");
+    },
+    "expired-callback"() {
+      forgotGate.turnstileToken = null;
+      const sendBtn = document.getElementById("fp-btn-send-otp");
+      if (sendBtn) sendBtn.disabled = true;
+      showToast("CAPTCHA expired. Please complete it again.", "warning");
+    },
+    "error-callback"() {
+      forgotGate.turnstileToken = null;
+      const sendBtn = document.getElementById("fp-btn-send-otp");
+      if (sendBtn) sendBtn.disabled = true;
+      showToast("CAPTCHA error. Please try again.", "warning");
+    },
+  });
+}
+
+function forgotPasswordModalHtml() {
+  return `
+    <div class="modal fade" id="forgotPasswordModal" tabindex="-1" aria-labelledby="forgotPasswordModalTitle" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h2 class="modal-title h5" id="forgotPasswordModalTitle">Reset password</h2>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <p class="text-muted small mb-3">Owners and employees can reset their password with a code sent to their registered email.</p>
+            <div id="fp-step-verify">
+              <div class="mb-3">
+                <label class="auth-field-label" for="fp-email">Email</label>
+                <div class="input-group auth-input-group">
+                  <span class="input-group-text"><i class="bi bi-envelope" aria-hidden="true"></i></span>
+                  <input class="form-control" id="fp-email" type="email" autocomplete="username" placeholder="you@company.com" required />
+                </div>
+              </div>
+              <div class="auth-reg-verify-card mb-3">
+                <div class="auth-reg-captcha-row">
+                  <div class="reg-turnstile-wrap">
+                    <span class="auth-reg-mini-label">Security check</span>
+                    <div class="reg-turnstile-viewport">
+                      <div id="fp-turnstile" class="reg-turnstile"></div>
+                    </div>
+                    <p class="form-text text-danger d-none mb-0" id="fp-turnstile-hint" role="alert">Complete CAPTCHA before sending code.</p>
+                  </div>
+                  <button type="button" class="btn btn-outline-primary auth-reg-action-btn" id="fp-btn-send-otp" disabled>Send code</button>
+                </div>
+                <div class="auth-reg-divider" aria-hidden="true"></div>
+                <div class="auth-reg-otp-row">
+                  <div class="auth-reg-otp-field">
+                    <label class="auth-reg-mini-label" for="fp-otp">Reset code</label>
+                    <div class="input-group input-group-sm auth-input-group">
+                      <span class="input-group-text"><i class="bi bi-shield-check" aria-hidden="true"></i></span>
+                      <input class="form-control font-monospace text-center" id="fp-otp" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="000000" disabled />
+                    </div>
+                  </div>
+                  <button type="button" class="btn btn-primary auth-reg-action-btn" id="fp-btn-verify-otp" disabled>Verify</button>
+                </div>
+                <div class="auth-reg-otp-meta">
+                  <small class="text-muted" id="fp-otp-countdown">Complete CAPTCHA, then send code.</small>
+                  <button type="button" class="btn btn-sm btn-outline-secondary auth-reg-resend" id="fp-btn-resend-otp" disabled>Resend code</button>
+                </div>
+                <div class="form-text text-success d-none mb-0" id="fp-otp-status" role="status"></div>
+              </div>
+            </div>
+            <div id="fp-step-password" class="d-none">
+              <div class="mb-3">
+                <label class="auth-field-label" for="fp-new-password">New password</label>
+                <div class="input-group auth-input-group">
+                  <span class="input-group-text"><i class="bi bi-shield-lock" aria-hidden="true"></i></span>
+                  <input class="form-control" id="fp-new-password" type="password" minlength="6" autocomplete="new-password" placeholder="Min. 6 characters" required />
+                </div>
+              </div>
+              <div class="mb-0">
+                <label class="auth-field-label" for="fp-confirm-password">Confirm password</label>
+                <div class="input-group auth-input-group">
+                  <span class="input-group-text"><i class="bi bi-shield-lock" aria-hidden="true"></i></span>
+                  <input class="form-control" id="fp-confirm-password" type="password" minlength="6" autocomplete="new-password" placeholder="Repeat password" required />
+                </div>
+              </div>
+              <p class="form-text text-danger d-none mb-0 mt-2" id="fp-reset-error" role="alert"></p>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn btn-primary d-none" id="fp-btn-reset-password">Update password</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function resetForgotPasswordModal() {
+  forgotGate.otpVerified = false;
+  forgotGate.turnstileToken = null;
+  clearForgotOtpTimer();
+  resetForgotTurnstileWidget();
+  const emailEl = document.getElementById("fp-email");
+  const otpEl = document.getElementById("fp-otp");
+  const newPw = document.getElementById("fp-new-password");
+  const confirmPw = document.getElementById("fp-confirm-password");
+  const statusEl = document.getElementById("fp-otp-status");
+  const countdownEl = document.getElementById("fp-otp-countdown");
+  const errEl = document.getElementById("fp-reset-error");
+  if (emailEl) emailEl.disabled = false;
+  if (otpEl) {
+    otpEl.value = "";
+    otpEl.disabled = true;
+  }
+  if (newPw) newPw.value = "";
+  if (confirmPw) confirmPw.value = "";
+  if (statusEl) statusEl.classList.add("d-none");
+  if (errEl) {
+    errEl.textContent = "";
+    errEl.classList.add("d-none");
+  }
+  if (countdownEl) countdownEl.textContent = "Complete CAPTCHA, then send code.";
+  document.getElementById("fp-step-verify")?.classList.remove("d-none");
+  document.getElementById("fp-step-password")?.classList.add("d-none");
+  document.getElementById("fp-btn-reset-password")?.classList.add("d-none");
+  document.getElementById("fp-btn-verify-otp")?.setAttribute("disabled", "");
+  document.getElementById("fp-btn-resend-otp")?.setAttribute("disabled", "");
+}
+
+function wireForgotPasswordModal() {
+  const modalEl = document.getElementById("forgotPasswordModal");
+  if (!modalEl || modalEl.dataset.wiredForgot === "1") return;
+  modalEl.dataset.wiredForgot = "1";
+
+  const emailEl = document.getElementById("fp-email");
+  const otpEl = document.getElementById("fp-otp");
+  const sendBtn = document.getElementById("fp-btn-send-otp");
+  const verifyBtn = document.getElementById("fp-btn-verify-otp");
+  const resendBtn = document.getElementById("fp-btn-resend-otp");
+  const countdownEl = document.getElementById("fp-otp-countdown");
+  const statusEl = document.getElementById("fp-otp-status");
+  const resetBtn = document.getElementById("fp-btn-reset-password");
+  const newPw = document.getElementById("fp-new-password");
+  const confirmPw = document.getElementById("fp-confirm-password");
+  const errEl = document.getElementById("fp-reset-error");
+  if (!emailEl || !sendBtn || !verifyBtn || !resetBtn) return;
+
+  let otpExpiresAt = 0;
+
+  const getEmail = () => String(emailEl.value || "").trim().toLowerCase();
+
+  const showPasswordStep = () => {
+    forgotGate.otpVerified = true;
+    document.getElementById("fp-step-verify")?.classList.add("d-none");
+    document.getElementById("fp-step-password")?.classList.remove("d-none");
+    resetBtn.classList.remove("d-none");
+    if (statusEl) {
+      statusEl.textContent = "Code verified — choose a new password.";
+      statusEl.classList.remove("d-none");
+    }
+    emailEl.disabled = true;
+    window.setTimeout(() => newPw?.focus(), 200);
+  };
+
+  const updateCountdown = () => {
+    if (!countdownEl) return;
+    const left = Math.max(0, Math.ceil((otpExpiresAt - Date.now()) / 1000));
+    if (left <= 0) {
+      countdownEl.textContent = "Code expired — resend a new one.";
+      if (resendBtn) resendBtn.disabled = false;
+      clearForgotOtpTimer();
+      return;
+    }
+    countdownEl.textContent = `Code expires in ${formatCountdown(left)}`;
+    if (resendBtn) resendBtn.disabled = left > 0 && !forgotGate.otpVerified;
+  };
+
+  const startCountdown = (expiresInSeconds) => {
+    otpExpiresAt = Date.now() + expiresInSeconds * 1000;
+    if (otpEl) otpEl.disabled = false;
+    verifyBtn.disabled = false;
+    if (resendBtn) resendBtn.disabled = true;
+    updateCountdown();
+    clearForgotOtpTimer();
+    forgotOtpCountdownTimer = setInterval(updateCountdown, 1000);
+    window.setTimeout(() => {
+      if (resendBtn && !forgotGate.otpVerified) resendBtn.disabled = false;
+    }, 60_000);
+  };
+
+  const sendOtp = async (isResend) => {
+    const email = getEmail();
+    if (!email || !emailEl.checkValidity()) {
+      emailEl.reportValidity();
+      showToast("Enter a valid email address first.", "warning");
+      return;
+    }
+    if (!forgotGate.turnstileToken) {
+      showToast("Please complete CAPTCHA before sending code.", "warning");
+      document.getElementById("fp-turnstile-hint")?.classList.remove("d-none");
+      return;
+    }
+    sendBtn.disabled = true;
+    if (resendBtn) resendBtn.disabled = true;
+    try {
+      const data = await api("/api/auth/forgot-password/send-otp", {
+        method: "POST",
+        body: JSON.stringify({ email, turnstileToken: forgotGate.turnstileToken }),
+      });
+      forgotGate.otpVerified = false;
+      document.getElementById("fp-step-password")?.classList.add("d-none");
+      document.getElementById("fp-step-verify")?.classList.remove("d-none");
+      resetBtn.classList.add("d-none");
+      if (otpEl) {
+        otpEl.value = "";
+        otpEl.disabled = false;
+      }
+      verifyBtn.disabled = false;
+      startCountdown(data.expiresInSeconds ?? 600);
+      showToast(isResend ? "New code sent." : data.message || "Reset code sent.", "success");
+      resetForgotTurnstileWidget();
+      void wireForgotTurnstile();
+    } catch (err) {
+      showToast(err.message, "danger");
+      resetForgotTurnstileWidget();
+      void wireForgotTurnstile();
+    } finally {
+      sendBtn.disabled = !forgotGate.turnstileToken;
+    }
+  };
+
+  sendBtn.addEventListener("click", () => void sendOtp(false));
+  resendBtn?.addEventListener("click", () => void sendOtp(true));
+
+  verifyBtn.addEventListener("click", () => {
+    void (async () => {
+      const email = getEmail();
+      const otp = String(otpEl?.value || "").replace(/\D/g, "").slice(0, 6);
+      if (!email || !emailEl.checkValidity()) {
+        emailEl.reportValidity();
+        return;
+      }
+      if (otp.length !== 6) {
+        showToast("Enter the 6-digit code from your email.", "warning");
+        return;
+      }
+      verifyBtn.disabled = true;
+      try {
+        await api("/api/auth/forgot-password/verify-otp", {
+          method: "POST",
+          body: JSON.stringify({ email, otp }),
+        });
+        clearForgotOtpTimer();
+        if (countdownEl) countdownEl.textContent = "Code verified.";
+        showPasswordStep();
+        showToast("Code verified. Choose a new password.", "success");
+      } catch (err) {
+        showToast(err.message, "danger");
+        verifyBtn.disabled = false;
+      }
+    })();
+  });
+
+  otpEl?.addEventListener("input", () => {
+    if (otpEl) otpEl.value = otpEl.value.replace(/\D/g, "").slice(0, 6);
+  });
+
+  resetBtn.addEventListener("click", () => {
+    void (async () => {
+      if (!forgotGate.otpVerified) {
+        showToast("Verify the email code first.", "warning");
+        return;
+      }
+      const email = getEmail();
+      const password = String(newPw?.value || "");
+      const confirm = String(confirmPw?.value || "");
+      if (password.length < 6) {
+        if (errEl) {
+          errEl.textContent = "Password must be at least 6 characters.";
+          errEl.classList.remove("d-none");
+        }
+        return;
+      }
+      if (password !== confirm) {
+        if (errEl) {
+          errEl.textContent = "Passwords do not match.";
+          errEl.classList.remove("d-none");
+        }
+        return;
+      }
+      if (errEl) errEl.classList.add("d-none");
+      resetBtn.disabled = true;
+      try {
+        await api("/api/auth/forgot-password/reset", {
+          method: "POST",
+          body: JSON.stringify({ email, password }),
+        });
+        bootstrap.Modal.getInstance(modalEl)?.hide();
+        const loginEmail = document.getElementById("login-email");
+        if (loginEmail) loginEmail.value = email;
+        showToast("Password updated. Sign in with your new password.", "success");
+      } catch (err) {
+        if (errEl) {
+          errEl.textContent = err.message || "Could not reset password.";
+          errEl.classList.remove("d-none");
+        } else {
+          showToast(err.message, "danger");
+        }
+        resetBtn.disabled = false;
+      }
+    })();
+  });
+
+  modalEl.addEventListener("hidden.bs.modal", () => {
+    resetForgotPasswordModal();
+  });
+}
+
+function openForgotPasswordModal() {
+  let modalEl = document.getElementById("forgotPasswordModal");
+  if (!modalEl) {
+    document.body.insertAdjacentHTML("beforeend", forgotPasswordModalHtml());
+    modalEl = document.getElementById("forgotPasswordModal");
+    wireForgotPasswordModal();
+  }
+  resetForgotPasswordModal();
+  const loginEmail = document.getElementById("login-email");
+  const fpEmail = document.getElementById("fp-email");
+  if (loginEmail?.value && fpEmail) fpEmail.value = loginEmail.value.trim();
+  bootstrap.Modal.getOrCreateInstance(modalEl).show();
+  void wireForgotTurnstile();
+}
+
 function wireRegisterPhoneDigits() {
   const el = document.getElementById("reg-phone");
   if (!el) return;
@@ -642,6 +1030,9 @@ function renderAuthForm() {
                       <span class="input-group-text"><i class="bi bi-key" aria-hidden="true"></i></span>
                       <input class="form-control" id="login-password" name="password" type="password" autocomplete="current-password" placeholder="••••••••" required />
                     </div>
+                    </div>
+                    <div class="text-end mb-3">
+                      <button type="button" class="btn btn-link btn-sm p-0 auth-forgot-link" id="btn-forgot-password">Forgot password?</button>
                     </div>
                     <button class="btn btn-primary w-100 auth-submit" type="submit">Sign in</button>
                   </form>
@@ -760,6 +1151,10 @@ function renderAuthForm() {
         </div>
       </div>
     </div>`;
+
+  document.getElementById("btn-forgot-password")?.addEventListener("click", () => {
+    openForgotPasswordModal();
+  });
 
   document.getElementById("form-login").addEventListener("submit", (e) => {
     e.preventDefault();
