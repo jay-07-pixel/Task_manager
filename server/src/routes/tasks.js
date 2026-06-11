@@ -172,59 +172,110 @@ async function endRecurrenceSeries(taskId) {
   });
 }
 
-async function maybeRollRecurringAfterEmployeeComplete(task, userId) {
+/** Create the next open occurrence as a new task card (submission stays on the completed card). */
+async function spawnNextRecurringTask(completedTask, nextRecurrenceRuleJson = null) {
+  const maxOrder = await prisma.task.aggregate({
+    where: { listId: completedTask.listId },
+    _max: { sortOrder: true },
+  });
+  const sortOrder = (maxOrder._max.sortOrder ?? -1) + 1;
+
+  const ruleForNextDue =
+    completedTask.recurrence === "custom" && nextRecurrenceRuleJson
+      ? nextRecurrenceRuleJson
+      : completedTask.recurrenceRule;
+
+  const nextDue = computeNextDueAt(
+    completedTask.dueAt,
+    completedTask.recurrence,
+    completedTask.allDay,
+    ruleForNextDue
+  );
+  if (!nextDue) return null;
+
+  const assigneeCreates = (completedTask.assignments ?? []).map((a) => ({
+    userId: a.userId,
+    assignedByUserId: a.assignedByUserId ?? null,
+    delegatedAt: a.delegatedAt ?? null,
+  }));
+
+  const createData = {
+    listId: completedTask.listId,
+    createdById: completedTask.createdById,
+    title: completedTask.title,
+    notes: completedTask.notes,
+    dueAt: nextDue,
+    dueTimeZone: completedTask.dueTimeZone,
+    allDay: completedTask.allDay,
+    recurrence: completedTask.recurrence,
+    sortOrder,
+    completed: false,
+    starred: completedTask.starred,
+    assignments: assigneeCreates.length ? { create: assigneeCreates } : undefined,
+  };
+
+  if (completedTask.recurrence === "custom" && nextRecurrenceRuleJson) {
+    createData.recurrenceRule = nextRecurrenceRuleJson;
+  } else if (completedTask.recurrenceRule) {
+    createData.recurrenceRule = completedTask.recurrenceRule;
+  }
+
+  return prisma.task.create({
+    data: createData,
+    include: taskAssigneeInclude,
+  });
+}
+
+async function maybeRollRecurringAfterEmployeeComplete(task, _userId) {
   if (!shouldRollOnEmployeeComplete(task.recurrence, task.recurrenceRule)) return;
 
-  if (recurrenceEndsAfterThisCompletion(task.recurrence, task.recurrenceRule)) {
-    await endRecurrenceSeries(task.id);
-    return;
-  }
-
-  const nextDue = computeNextDueAt(task.dueAt, task.recurrence, task.allDay, task.recurrenceRule);
-  if (!nextDue) return;
-
-  if (recurrenceNextDueExceedsEndOn(nextDue, task.recurrenceRule)) {
-    await endRecurrenceSeries(task.id);
-    return;
-  }
-
-  const row = task.assignments.find((a) => a.userId === userId);
-  const archiveText = (row?.submissionText ?? "").trim() || null;
-  const archiveProof = row?.completionProofPath ?? null;
-
-  const updateData = { dueAt: nextDue, completed: false };
-  if (task.recurrence === "custom" && task.recurrenceRule) {
-    updateData.recurrenceRule = bumpedRecurrenceRuleJson(task.recurrenceRule);
-  }
-
-  await prisma.task.update({
+  const fresh = await prisma.task.findFirst({
     where: { id: task.id },
-    data: updateData,
+    include: taskAssigneeInclude,
   });
+  if (!fresh) return;
 
-  const existing = await prisma.taskAssignee.findUnique({
-    where: { taskId_userId: { taskId: task.id, userId } },
-    select: { lastCompletionProofPath: true },
-  });
-  if (
-    existing?.lastCompletionProofPath &&
-    archiveProof &&
-    existing.lastCompletionProofPath !== archiveProof
-  ) {
-    deleteProofFile(existing.lastCompletionProofPath);
+  const allAssigneesDone = fresh.assignments.length > 0 && fresh.assignments.every((a) => a.assigneeDone);
+  if (!allAssigneesDone) return;
+
+  if (recurrenceEndsAfterThisCompletion(fresh.recurrence, fresh.recurrenceRule)) {
+    await endRecurrenceSeries(fresh.id);
+    await prisma.task.update({ where: { id: fresh.id }, data: { completed: true } });
+    return;
   }
 
-  await prisma.taskAssignee.update({
-    where: { taskId_userId: { taskId: task.id, userId } },
-    data: {
-      assigneeDone: false,
-      submissionText: null,
-      completionProofPath: null,
-      lastSubmissionText: archiveText,
-      lastCompletionProofPath: archiveProof,
-    },
+  let nextRuleJson = fresh.recurrenceRule;
+  if (fresh.recurrence === "custom" && fresh.recurrenceRule) {
+    nextRuleJson = bumpedRecurrenceRuleJson(fresh.recurrenceRule);
+  }
+
+  const nextDue = computeNextDueAt(
+    fresh.dueAt,
+    fresh.recurrence,
+    fresh.allDay,
+    fresh.recurrence === "custom" ? nextRuleJson : fresh.recurrenceRule
+  );
+  if (!nextDue) {
+    await prisma.task.update({ where: { id: fresh.id }, data: { completed: true } });
+    return;
+  }
+
+  if (recurrenceNextDueExceedsEndOn(nextDue, fresh.recurrenceRule)) {
+    await endRecurrenceSeries(fresh.id);
+    await prisma.task.update({ where: { id: fresh.id }, data: { completed: true } });
+    return;
+  }
+
+  // Freeze this occurrence on its own completed card (keep submission on assignee rows).
+  await prisma.task.update({
+    where: { id: fresh.id },
+    data: { completed: true },
   });
-  await syncTaskCompletedFromAssignments(task.id);
+
+  await spawnNextRecurringTask(
+    fresh,
+    fresh.recurrence === "custom" ? nextRuleJson : null
+  );
 }
 
 async function resolveEmployeeIds(ids) {

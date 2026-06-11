@@ -4037,12 +4037,13 @@ function employeeMyAssignee(task) {
   return (task.assignees ?? []).find((a) => a.id === uid) ?? null;
 }
 
-/** Submitted tab: done now, or recurring task rolled forward after a prior submit. */
+/** Submitted tab: this occurrence is done (each recurring day is its own task card). */
 function employeeAssigneeShowsAsSubmitted(task, assigneeRow = employeeMyAssignee(task)) {
   if (!assigneeRow) return false;
   if (assigneeRow.assigneeDone) return true;
+  // Legacy: same task id was rolled in-place before spawn-per-occurrence.
   const recurrence = task.recurrence ?? "none";
-  return recurrence !== "none" && !!assigneeRow.lastSubmittedAt;
+  return recurrence !== "none" && !!assigneeRow.lastSubmittedAt && !employeeHasCurrentSubmission(assigneeRow);
 }
 
 function formatEmpDue(iso) {
