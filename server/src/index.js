@@ -20,6 +20,7 @@ import { initPush } from "./lib/push.js";
 import { initFcm } from "./lib/fcm.js";
 import { startReminderScheduler } from "./lib/reminderScheduler.js";
 import { getTurnstileSiteKey } from "./lib/turnstile.js";
+import { reconcileAllLegacyRolledRecurringTasks } from "./lib/recurringLegacyBackfill.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const sessionsDir = path.join(__dirname, "..", "sessions");
@@ -133,6 +134,13 @@ const server = app.listen(PORT, () => {
   initPush();
   initFcm();
   startReminderScheduler();
+  void reconcileAllLegacyRolledRecurringTasks()
+    .then((n) => {
+      if (n > 0) {
+        console.log(`[recurring-backfill] split ${n} legacy recurring task(s) into completed + active cards`);
+      }
+    })
+    .catch((err) => console.error("[recurring-backfill]", err));
 });
 
 /** Avoid dev crash on abrupt client disconnect (browser tab closed mid-request, flaky proxy, etc.). */

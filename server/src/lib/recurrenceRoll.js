@@ -98,3 +98,44 @@ export function computeNextDueAt(dueAt, recurrence, allDay, recurrenceRuleJson) 
 
   return next;
 }
+
+/**
+ * Previous occurrence due date (inverse of computeNextDueAt).
+ * @param {Date | null | undefined} dueAt
+ * @param {string} recurrence
+ * @param {boolean} allDay
+ * @param {string | null} recurrenceRuleJson
+ */
+export function computePreviousDueAt(dueAt, recurrence, allDay, recurrenceRuleJson) {
+  const base = dueAt ? new Date(dueAt) : null;
+  if (!base || Number.isNaN(base.getTime())) return null;
+  const prev = new Date(base);
+
+  if (recurrence === "daily") {
+    prev.setUTCDate(prev.getUTCDate() - 1);
+  } else if (recurrence === "weekly") {
+    prev.setUTCDate(prev.getUTCDate() - 7);
+  } else if (recurrence === "monthly") {
+    prev.setUTCMonth(prev.getUTCMonth() - 1);
+  } else if (recurrence === "yearly") {
+    prev.setUTCFullYear(prev.getUTCFullYear() - 1);
+  } else if (recurrence === "custom" && recurrenceRuleJson) {
+    const rule = parseRecurrenceRuleJson(recurrenceRuleJson);
+    if (!rule) return null;
+    const every = Math.max(1, Number(rule.every) || 1);
+    const unit = rule.unit;
+    if (unit === "day") prev.setUTCDate(prev.getUTCDate() - every);
+    else if (unit === "week") prev.setUTCDate(prev.getUTCDate() - 7 * every);
+    else if (unit === "month") prev.setUTCMonth(prev.getUTCMonth() - every);
+    else if (unit === "year") prev.setUTCFullYear(prev.getUTCFullYear() - every);
+    else return null;
+  } else {
+    return null;
+  }
+
+  if (allDay) {
+    return new Date(Date.UTC(prev.getUTCFullYear(), prev.getUTCMonth(), prev.getUTCDate(), 12, 0, 0, 0));
+  }
+
+  return prev;
+}

@@ -1,6 +1,7 @@
 import {
   bumpedRecurrenceRuleJson,
   computeNextDueAt,
+  computePreviousDueAt,
   recurrenceEndsAfterThisCompletion,
   recurrenceNextDueExceedsEndOn,
   shouldRollOnEmployeeComplete,
@@ -17,6 +18,9 @@ assert(shouldRollOnEmployeeComplete("custom", JSON.stringify({ unit: "year", eve
 
 const nextYear = computeNextDueAt(due, "yearly", false, null);
 assert(nextYear.getUTCFullYear() === 2027, "yearly +1 year");
+
+const prevDay = computePreviousDueAt(new Date("2026-06-12T12:00:00.000Z"), "daily", true, null);
+assert(prevDay.toISOString().startsWith("2026-06-11"), "daily previous due");
 
 const ruleAfter = JSON.stringify({
   every: 1,
