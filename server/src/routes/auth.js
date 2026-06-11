@@ -39,6 +39,12 @@ function friendlyAuthError(err) {
   if (msg.includes("Can't reach database server") || /ECONNREFUSED|connect ECONNREFUSED/i.test(msg)) {
     return "Cannot connect to MySQL. Start MySQL, check DATABASE_URL in server/.env, then run npm run db:migrate and npm run db:seed.";
   }
+  if (/Email service is not configured|Failed to send (verification|reset) email/i.test(msg)) {
+    return msg;
+  }
+  if (err?.code === "P2021" || /password_reset/i.test(msg)) {
+    return "Password reset is not set up on the database yet. Run: cd server && npx prisma migrate resolve --applied 20260613120000_password_reset && pm2 restart taskmanager";
+  }
   if (process.env.NODE_ENV === "production") {
     return "Server error";
   }
