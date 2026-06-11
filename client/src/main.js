@@ -2469,9 +2469,13 @@ function openEmpSubmissionModal(task) {
   const errEl = document.getElementById("emp-submission-error");
   if (!idInput || !titleEl || !ta || !errEl) return;
 
+  const me = employeeMyAssignee(task);
+  const freshOccurrence = employeeAwaitingFreshOccurrence(task, me);
+  const currentText = freshOccurrence ? "" : me?.submissionText?.trim() || "";
+
   idInput.value = task.id;
   titleEl.textContent = task.title;
-  ta.value = "";
+  ta.value = currentText;
   errEl.textContent = "";
   errEl.classList.add("d-none");
   resetEmpSubmissionPreview();
@@ -4089,7 +4093,10 @@ function formatEmpRecurrencePattern(task) {
 function empActiveRecurrenceLinesHtml(task) {
   const pattern = formatEmpRecurrencePattern(task);
   if (!pattern) return "";
-  return `<div class="emp-recurrence-lines small text-muted mt-1"><div class="emp-recurrence-pattern">${escapeHtml(pattern)}</div></div>`;
+  const dueLine = task.dueAt
+    ? `<div class="emp-recurrence-due tabular-nums fw-semibold text-body-secondary">Due ${escapeHtml(formatEmpDue(task.dueAt))}</div>`
+    : "";
+  return `<div class="emp-recurrence-lines small text-muted mt-1"><div class="emp-recurrence-pattern">${escapeHtml(pattern)}</div>${dueLine}</div>`;
 }
 
 async function loadEmployeeTasks() {
@@ -4412,7 +4419,7 @@ function empTaskTableRows(tasks) {
         notesPreview.length > 0
           ? `<div class="owner-task-desc-box small text-body-secondary text-truncate mb-0" title="${escapeHtml(notesRaw)}">${escapeHtml(notesPreview)}</div>`
           : `<div class="owner-task-desc-box small text-muted fst-italic mb-0">No description</div>`;
-      const updateCount = me?.progressUpdateCount ?? 0;
+      const updateCount = employeeAwaitingFreshOccurrence(t, me) ? 0 : (me?.progressUpdateCount ?? 0);
       const updateBadge =
         updateCount > 0
           ? `<span class="badge rounded-pill text-bg-secondary ms-1 tabular-nums">${updateCount}</span>`
@@ -4437,12 +4444,7 @@ function empTaskTableRows(tasks) {
       const assignedByLine = me?.assignedBy?.displayName
         ? `<div class="small text-muted emp-assigned-by-line mt-1">From ${escapeHtml(me.assignedBy.displayName)}</div>`
         : "";
-      const now = Date.now();
-      const dueMs = t.dueAt ? new Date(t.dueAt).getTime() : NaN;
-      const showRecurrenceOnActive =
-        displayMode === "active" &&
-        (t.recurrence ?? "none") !== "none" &&
-        (employeeAwaitingFreshOccurrence(t, me) || (Number.isFinite(dueMs) && dueMs > now));
+      const showRecurrenceOnActive = displayMode === "active" && (t.recurrence ?? "none") !== "none";
       const recurrenceLines = showRecurrenceOnActive ? empActiveRecurrenceLinesHtml(t) : "";
       const canReassign = displayMode === "active" && !me?.assignedBy;
       const delegateBtn = canReassign
@@ -4813,9 +4815,11 @@ function renderEmployeeMain() {
           body: JSON.stringify({ completed }),
         });
         if (completed && task?.dueAt) clearReminderForTask(id, task.dueAt);
+        if (completed) state.empFilter = "submitted";
         await loadEmployeeTasks();
         renderEmpListContentOnly();
         renderEmployeeMain();
+        syncEmpTopbarTitle();
       } catch (err) {
         showToast(err.message, "danger");
         cb.checked = !completed;
