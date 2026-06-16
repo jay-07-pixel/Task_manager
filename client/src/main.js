@@ -2596,7 +2596,7 @@ function ownerTrialMessageModalHtml() {
             </p>
             <p class="mb-0">
               To continue using our service after the trial period, please renew your plan by contacting
-              <a href="mailto:Kalpanik432@gmail.com">Kalpanik432@gmail.com</a>.
+              <a href="mailto:support@kalpanik.in">support@kalpanik.in</a>.
             </p>
           </div>
           <div class="modal-footer border-0 pt-2">
@@ -2641,7 +2641,7 @@ function ownerTrialStatusChipHtml() {
   if (info.isExpired) {
     return `<div class="owner-trial-chip owner-trial-chip--expired small">
       <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
-      <span>Free trial ended on ${escapeHtml(endStr)}. Renew via <a href="mailto:Kalpanik432@gmail.com">Kalpanik432@gmail.com</a>.</span>
+      <span>Free trial ended on ${escapeHtml(endStr)}. Renew via <a href="mailto:support@kalpanik.in">support@kalpanik.in</a>.</span>
     </div>`;
   }
   return `<div class="owner-trial-chip owner-trial-chip--active small">

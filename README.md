@@ -366,9 +366,9 @@ Reminders are sent from the **server every 60 seconds** (~10 min before due, +1 
 
    FIREBASE_SERVICE_ACCOUNT_PATH="firebase-service-account.json"
 
-   SUPPORT_SMTP_USER="kalpanik432@gmail.com"
+   SUPPORT_SMTP_USER="support@kalpanik.in"
    SUPPORT_SMTP_PASSWORD="your-gmail-app-password"
-   SUPPORT_SMTP_TO="kalpanik432@gmail.com"
+   SUPPORT_SMTP_TO="support@kalpanik.in"
    ```
 
    - `COOKIE_SECURE=false` on **HTTP** — required or login cookie is dropped.  
