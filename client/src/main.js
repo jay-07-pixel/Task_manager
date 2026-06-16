@@ -40,6 +40,7 @@ const OWNER_SYNC_INTERVAL_MS = 12_000;
 /** @type {number | null} */
 let ownerSyncTimer = null;
 let ownerTasksFingerprint = "";
+const OWNER_TRIAL_POPUP_KEY = "taskmgr-owner-trial-popup-shown";
 
 const THEME_STORAGE_KEY = "task-manager-theme";
 const THEME_TRANSITION_MS = 450;
@@ -1214,6 +1215,7 @@ function renderAuthForm() {
 async function logout() {
   stopOwnerAutoSync();
   stopEmployeeReminders();
+  sessionStorage.removeItem(OWNER_TRIAL_POPUP_KEY);
   try {
     await api("/api/auth/logout", { method: "POST" });
   } catch {
@@ -2577,6 +2579,41 @@ function ownerMarkDoneModalHtml() {
         </div>
       </div>
     </div>`;
+}
+
+function ownerTrialMessageModalHtml() {
+  return `
+    <div class="modal fade" id="ownerTrialMessageModal" tabindex="-1" aria-labelledby="ownerTrialMessageModalTitle" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+          <div class="modal-header border-0 pb-0">
+            <h2 class="modal-title h5 mb-0" id="ownerTrialMessageModalTitle">Free Trial Notice</h2>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body pt-2">
+            <p class="mb-2">
+              Your free trial started on <strong>15 June</strong> and will end on <strong>15 July</strong>.
+            </p>
+            <p class="mb-0">
+              To continue using our service after the trial period, please renew your plan by contacting
+              <a href="mailto:Kalpanik432@gmail.com">Kalpanik432@gmail.com</a>.
+            </p>
+          </div>
+          <div class="modal-footer border-0 pt-2">
+            <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Got it</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function maybeShowOwnerTrialMessageModal() {
+  if (state.user?.role !== "owner") return;
+  if (sessionStorage.getItem(OWNER_TRIAL_POPUP_KEY) === "1") return;
+  const modalEl = document.getElementById("ownerTrialMessageModal");
+  if (!modalEl) return;
+  sessionStorage.setItem(OWNER_TRIAL_POPUP_KEY, "1");
+  bootstrap.Modal.getOrCreateInstance(modalEl).show();
 }
 
 function teamAdminModalHtml() {
@@ -4543,6 +4580,7 @@ function renderOwnerChrome() {
       ${submissionDetailModalHtml()}
       ${progressUpdateModalHtml()}
       ${ownerMarkDoneModalHtml()}
+      ${ownerTrialMessageModalHtml()}
       ${teamAdminModalHtml()}
     </div>`;
 
@@ -5507,6 +5545,7 @@ async function render() {
   await loadAssignees();
   await loadTasks(state.activeListId);
   renderOwnerChrome();
+  maybeShowOwnerTrialMessageModal();
 }
 
 initTheme();
