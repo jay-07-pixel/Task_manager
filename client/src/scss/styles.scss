@@ -166,6 +166,41 @@ body {
   border: 1px solid rgba(var(--bs-primary-rgb), 0.2);
 }
 
+.owner-trial-chip {
+  margin-top: 0.55rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.3rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: var(--bs-tertiary-bg);
+  color: var(--bs-body-color);
+}
+
+.owner-trial-chip a {
+  color: inherit;
+  font-weight: 600;
+}
+
+.owner-trial-chip--active {
+  background: rgba(var(--bs-success-rgb), 0.12);
+  color: var(--bs-success-text-emphasis);
+  border-color: rgba(var(--bs-success-rgb), 0.28);
+}
+
+.owner-trial-chip--pending {
+  background: rgba(var(--bs-warning-rgb), 0.15);
+  color: var(--bs-warning-text-emphasis);
+  border-color: rgba(var(--bs-warning-rgb), 0.3);
+}
+
+.owner-trial-chip--expired {
+  background: rgba(var(--bs-danger-rgb), 0.12);
+  color: var(--bs-danger-text-emphasis);
+  border-color: rgba(var(--bs-danger-rgb), 0.28);
+}
+
 .emp-role-badge {
   font-size: 0.65rem;
   font-weight: 600;

@@ -2616,6 +2616,40 @@ function maybeShowOwnerTrialMessageModal() {
   bootstrap.Modal.getOrCreateInstance(modalEl).show();
 }
 
+function ownerTrialStatusInfo() {
+  const start = new Date("2026-06-15T00:00:00");
+  const end = new Date("2026-07-15T23:59:59");
+  const now = new Date();
+  const dayMs = 24 * 60 * 60 * 1000;
+  const daysRemaining = Math.ceil((end.getTime() - now.getTime()) / dayMs);
+  const hasStarted = now.getTime() >= start.getTime();
+  const isExpired = now.getTime() > end.getTime();
+  return { start, end, daysRemaining, hasStarted, isExpired };
+}
+
+function ownerTrialStatusChipHtml() {
+  const info = ownerTrialStatusInfo();
+  const startStr = info.start.toLocaleDateString(undefined, { dateStyle: "medium" });
+  const endStr = info.end.toLocaleDateString(undefined, { dateStyle: "medium" });
+
+  if (!info.hasStarted) {
+    return `<div class="owner-trial-chip owner-trial-chip--pending small">
+      <i class="bi bi-hourglass-split" aria-hidden="true"></i>
+      <span>Free trial starts on ${escapeHtml(startStr)} and ends on ${escapeHtml(endStr)}.</span>
+    </div>`;
+  }
+  if (info.isExpired) {
+    return `<div class="owner-trial-chip owner-trial-chip--expired small">
+      <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
+      <span>Free trial ended on ${escapeHtml(endStr)}. Renew via <a href="mailto:Kalpanik432@gmail.com">Kalpanik432@gmail.com</a>.</span>
+    </div>`;
+  }
+  return `<div class="owner-trial-chip owner-trial-chip--active small">
+    <i class="bi bi-clock-history" aria-hidden="true"></i>
+    <span><strong>${info.daysRemaining}</strong> day${info.daysRemaining === 1 ? "" : "s"} remaining in free trial (ends ${escapeHtml(endStr)}).</span>
+  </div>`;
+}
+
 function teamAdminModalHtml() {
   return `
     <div class="modal fade" id="teamAdminModal" tabindex="-1" aria-labelledby="teamAdminModalTitle" aria-hidden="true">
@@ -4325,6 +4359,7 @@ function renderOwnerMain() {
         <p class="owner-page-eyebrow mb-1">Admin dashboard</p>
         <h2 class="owner-page-title h4 mb-0">${list ? escapeHtml(list.title) : "Select a list"}</h2>
         <p class="owner-page-sub text-muted small mb-0 mt-1">${escapeHtml(pageSubtitle)}</p>
+        ${ownerTrialStatusChipHtml()}
       </div>
       <div class="d-flex flex-wrap gap-2 owner-toolbar">
         ${
