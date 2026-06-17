@@ -1,11 +1,18 @@
 /** @typedef {{ api: Function, escapeHtml: Function, showToast: Function, bootstrap: any, getUser: () => any }} ChatDeps */
 
-const CHAT_POLL_MS = 8000;
+const CHAT_POLL_MS_HIDDEN = 20000;
+const CHAT_POLL_MS_CLOSED = 6000;
+const CHAT_POLL_MS_OPEN = 2500;
+const CHAT_POLL_MS_ACTIVE = 1200;
 
 /** @type {ChatDeps | null} */
 let deps = null;
 /** @type {number | null} */
 let pollTimer = null;
+/** @type {EventSource | null} */
+let chatEventSource = null;
+/** @type {number | null} */
+let chatLiveRetryTimer = null;
 
 /** @type {any[]} */
 let threads = [];
@@ -29,6 +36,90 @@ let sidebarTab = "chats";
 let lastUnreadTotal = 0;
 /** @type {boolean} */
 let chatPollInitialized = false;
+
+function getChatPollMs() {
+  if (document.hidden) return CHAT_POLL_MS_HIDDEN;
+  if (!isChatPanelOpen()) return CHAT_POLL_MS_CLOSED;
+  if (activeChatId && activeThreadType) return CHAT_POLL_MS_ACTIVE;
+  return CHAT_POLL_MS_OPEN;
+}
+
+async function refreshActiveMessages() {
+  if (!activeChatId || !activeThreadType || !isChatPanelOpen()) return;
+  const base =
+    activeThreadType === "group"
+      ? `/api/chat/groups/${activeChatId}`
+      : `/api/chat/conversations/${activeChatId}`;
+  const prevLastId = activeMessages[activeMessages.length - 1]?.id;
+  const data = await d().api(`${base}/messages`);
+  const next = data.messages ?? [];
+  const nextLastId = next[next.length - 1]?.id;
+  if (next.length === activeMessages.length && nextLastId === prevLastId) return;
+
+  const incoming =
+    nextLastId &&
+    nextLastId !== prevLastId &&
+    next[next.length - 1] &&
+    !next[next.length - 1].isMine;
+  activeMessages = next;
+  renderMessages();
+
+  if (incoming) {
+    try {
+      await d().api(`${base}/read`, { method: "POST", body: "{}" });
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+function onChatLivePayload(payload) {
+  if (!payload || payload.type === "connected") return;
+  if (
+    payload.kind === "message" &&
+    payload.threadType === activeThreadType &&
+    payload.threadId === activeChatId &&
+    isChatPanelOpen()
+  ) {
+    void refreshActiveMessages().then(() => loadThreads());
+    return;
+  }
+  void refreshChatData();
+}
+
+function stopChatLive() {
+  if (chatLiveRetryTimer != null) {
+    window.clearTimeout(chatLiveRetryTimer);
+    chatLiveRetryTimer = null;
+  }
+  if (chatEventSource) {
+    chatEventSource.close();
+    chatEventSource = null;
+  }
+}
+
+function startChatLive() {
+  if (!("EventSource" in window) || chatEventSource) return;
+  try {
+    chatEventSource = new EventSource("/api/chat/live");
+    chatEventSource.onmessage = (event) => {
+      try {
+        onChatLivePayload(JSON.parse(event.data));
+      } catch {
+        /* ignore */
+      }
+    };
+    chatEventSource.onerror = () => {
+      stopChatLive();
+      chatLiveRetryTimer = window.setTimeout(() => {
+        chatLiveRetryTimer = null;
+        startChatLive();
+      }, 5000);
+    };
+  } catch {
+    /* unsupported */
+  }
+}
 
 function d() {
   if (!deps) throw new Error("Chat not initialized");
@@ -659,31 +750,33 @@ async function refreshChatData() {
     lastUnreadTotal = unreadNow;
 
     if (activeChatId && activeThreadType && isChatPanelOpen()) {
-      const base =
-        activeThreadType === "group"
-          ? `/api/chat/groups/${activeChatId}`
-          : `/api/chat/conversations/${activeChatId}`;
-      const data = await d().api(`${base}/messages`);
-      activeMessages = data.messages ?? [];
-      renderMessages();
+      await refreshActiveMessages();
     }
   } catch {
     /* ignore polling errors */
   }
 }
 
+function schedulePoll() {
+  const tick = () => {
+    void refreshChatData().finally(() => {
+      pollTimer = window.setTimeout(tick, getChatPollMs());
+    });
+  };
+  pollTimer = window.setTimeout(tick, getChatPollMs());
+}
+
 function startPolling() {
   stopPolling();
-  pollTimer = window.setInterval(() => {
-    void refreshChatData();
-  }, CHAT_POLL_MS);
+  schedulePoll();
 }
 
 export function stopPolling() {
   if (pollTimer != null) {
-    window.clearInterval(pollTimer);
+    window.clearTimeout(pollTimer);
     pollTimer = null;
   }
+  stopChatLive();
 }
 
 export function openTeamChat() {
@@ -766,6 +859,7 @@ export function initTeamChat(chatDeps) {
   offcanvas.addEventListener("shown.bs.offcanvas", () => {
     syncChatPushButton();
     syncAdminGroupUi();
+    void refreshChatData();
   });
   offcanvas.addEventListener("hidden.bs.offcanvas", () => {
     mobileShowThread = false;
@@ -782,6 +876,14 @@ export function initTeamChat(chatDeps) {
     }
   });
 
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) void refreshChatData();
+  });
+
+  window.addEventListener("focus", () => {
+    void refreshChatData();
+  });
+
   document.getElementById("team-chat-enable-push")?.addEventListener("click", () => {
     void (async () => {
       if (!d().subscribeToPush) return;
@@ -796,7 +898,9 @@ export function initTeamChat(chatDeps) {
   });
 
   wireTeamChatButtons();
+  startChatLive();
   startPolling();
+  void refreshChatData();
   void refreshUnreadBadges();
   syncChatPushButton();
 }

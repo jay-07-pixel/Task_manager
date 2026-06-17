@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, requireOwner } from "../middleware/auth.js";
 import { notifyChatMessage, notifyGroupMessage } from "../services/chatNotificationService.js";
+import { addChatLiveClient, removeChatLiveClient, publishChatLive } from "../lib/chatLive.js";
 
 const router = Router();
 
@@ -30,6 +31,10 @@ function userInConversation(conversation, userId) {
 
 function peerFromConversation(conversation, userId) {
   return conversation.userLowId === userId ? conversation.userHigh : conversation.userLow;
+}
+
+function dmRecipientId(conversation, senderId) {
+  return conversation.userLowId === senderId ? conversation.userHighId : conversation.userLowId;
 }
 
 async function findPeerUser(peerUserId, currentUserId) {
@@ -90,6 +95,31 @@ router.get("/unread-count", requireAuth, async (req, res) => {
   }
 
   res.json({ count: dmCount + groupCount });
+});
+
+router.get("/live", requireAuth, (req, res) => {
+  const userId = req.session.userId;
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  if (typeof res.flushHeaders === "function") res.flushHeaders();
+
+  addChatLiveClient(userId, res);
+  res.write(`data: ${JSON.stringify({ type: "connected" })}\n\n`);
+
+  const heartbeat = setInterval(() => {
+    try {
+      res.write(": keepalive\n\n");
+    } catch {
+      clearInterval(heartbeat);
+    }
+  }, 25000);
+
+  req.on("close", () => {
+    clearInterval(heartbeat);
+    removeChatLiveClient(userId, res);
+  });
 });
 
 router.get("/conversations", requireAuth, async (req, res) => {
@@ -399,6 +429,14 @@ router.post("/conversations/:id/messages", requireAuth, async (req, res) => {
   }).catch((err) => {
     console.error("[chat] notify failed", err?.message ?? err);
   });
+
+  publishChatLive([dmRecipientId(conversation, meId), meId], {
+    kind: "message",
+    threadType: "dm",
+    threadId: conversation.id,
+    messageId: message.id,
+    senderId: meId,
+  });
 });
 
 router.post("/conversations/:id/read", requireAuth, async (req, res) => {
@@ -464,6 +502,12 @@ router.post("/groups", requireAuth, requireOwner, async (req, res) => {
       memberCount: group._count.members,
       updatedAt: group.updatedAt,
     },
+  });
+
+  publishChatLive(memberIds, {
+    kind: "thread",
+    threadType: "group",
+    threadId: group.id,
   });
 });
 
@@ -567,6 +611,25 @@ router.post("/groups/:id/messages", requireAuth, async (req, res) => {
   }).catch((err) => {
     console.error("[chat] group notify failed", err?.message ?? err);
   });
+
+  void prisma.chatGroupMember
+    .findMany({
+      where: { groupId: membership.groupId },
+      select: { userId: true },
+    })
+    .then((members) => {
+      publishChatLive(
+        members.map((m) => m.userId),
+        {
+          kind: "message",
+          threadType: "group",
+          threadId: membership.groupId,
+          messageId: message.id,
+          senderId: meId,
+        }
+      );
+    })
+    .catch(() => {});
 });
 
 router.post("/groups/:id/read", requireAuth, async (req, res) => {
