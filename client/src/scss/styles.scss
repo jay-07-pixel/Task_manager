@@ -2288,11 +2288,17 @@ body {
   --bs-offcanvas-width: min(94vw, 76rem);
   width: min(94vw, 76rem);
   max-width: 94vw;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
   border-left: 1px solid var(--bs-border-color);
   box-shadow: -8px 0 32px rgba(0, 0, 0, 0.08);
 }
 
 .team-chat-header {
+  flex-shrink: 0;
   padding: 1rem 1.1rem;
   background: linear-gradient(
     135deg,
@@ -2333,14 +2339,18 @@ body {
 .team-chat-body {
   min-height: 0;
   flex: 1 1 auto;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .team-chat-layout {
   display: grid;
   grid-template-columns: minmax(18rem, 22rem) 1fr;
   min-height: 0;
+  flex: 1 1 auto;
   height: 100%;
-  min-height: calc(100vh - 4.25rem);
+  overflow: hidden;
 }
 
 .team-chat-sidebar {
@@ -2682,7 +2692,7 @@ body {
 }
 
 .team-chat-compose {
-  padding: 0.75rem 1rem 1rem;
+  padding: 0.75rem 1rem max(1.25rem, env(safe-area-inset-bottom, 1rem));
   border-top: 1px solid var(--bs-border-color);
   background: var(--bs-body-bg);
   flex-shrink: 0;
@@ -2727,7 +2737,6 @@ body {
   }
 
   .team-chat-layout {
-    min-height: calc(100vh - 3.75rem);
     grid-template-columns: 1fr;
   }
 
