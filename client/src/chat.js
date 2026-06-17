@@ -34,6 +34,8 @@ let mobileShowThread = false;
 let sidebarTab = "chats";
 /** @type {number} */
 let lastUnreadTotal = 0;
+/** @type {string} */
+let manageMemberFilter = "";
 /** @type {boolean} */
 let chatPollInitialized = false;
 
@@ -280,60 +282,90 @@ export function teamChatOffcanvasHtml() {
         </div>
       </div>
     </div>
-    <div class="modal fade" id="teamChatCreateGroupModal" tabindex="-1" aria-labelledby="teamChatCreateGroupLabel" aria-hidden="true">
-      <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
+    <div class="modal fade team-chat-group-modal" id="teamChatCreateGroupModal" tabindex="-1" aria-labelledby="teamChatCreateGroupLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+        <div class="modal-content team-chat-group-modal-content border-0">
           <form id="team-chat-create-group-form">
-            <div class="modal-header">
-              <h2 class="modal-title h5" id="teamChatCreateGroupLabel">Create group</h2>
+            <div class="team-chat-group-modal-header">
+              <div class="team-chat-group-modal-icon" aria-hidden="true"><i class="bi bi-people-fill"></i></div>
+              <div class="min-w-0 flex-grow-1">
+                <h2 class="h5 mb-0" id="teamChatCreateGroupLabel">Create group</h2>
+                <p class="small text-muted mb-0">Start a team conversation</p>
+              </div>
               <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body">
-              <div class="mb-3">
-                <label class="form-label" for="team-chat-group-name">Group name</label>
-                <input type="text" class="form-control" id="team-chat-group-name" maxlength="80" required placeholder="e.g. Sales team" />
+            <div class="modal-body team-chat-group-modal-body">
+              <label class="form-label fw-semibold" for="team-chat-group-name">Group name</label>
+              <div class="team-chat-group-name-field mb-3">
+                <i class="bi bi-chat-left-text" aria-hidden="true"></i>
+                <input type="text" class="form-control border-0 shadow-none" id="team-chat-group-name" maxlength="80" required placeholder="e.g. Sales team" />
               </div>
-              <div class="form-check mb-3">
-                <input class="form-check-input" type="checkbox" id="team-chat-group-everyone" checked />
-                <label class="form-check-label" for="team-chat-group-everyone">Include everyone on the team</label>
+              <div class="team-chat-group-everyone-card mb-3">
+                <div class="form-check form-switch mb-0">
+                  <input class="form-check-input" type="checkbox" id="team-chat-group-everyone" checked />
+                  <label class="form-check-label fw-medium" for="team-chat-group-everyone">Include everyone on the team</label>
+                </div>
+                <p class="small text-muted mb-0 mt-1">Turn off to pick specific people only.</p>
               </div>
               <div class="d-none" id="team-chat-group-members-wrap">
-                <p class="small text-muted mb-2">Select members</p>
-                <div class="team-chat-group-member-picks border rounded p-2" id="team-chat-group-member-picks"></div>
+                <div class="team-chat-group-members-toolbar mb-2">
+                  <span class="fw-semibold">Members</span>
+                  <span class="team-chat-member-count-badge" id="team-chat-create-member-count">0 selected</span>
+                </div>
+                <div class="team-chat-member-pick-list" id="team-chat-group-member-picks"></div>
               </div>
             </div>
-            <div class="modal-footer">
-              <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-              <button type="submit" class="btn btn-primary" id="team-chat-group-submit">Create group</button>
+            <div class="team-chat-group-modal-footer">
+              <button type="button" class="btn btn-light border" data-bs-dismiss="modal">Cancel</button>
+              <button type="submit" class="btn btn-primary px-4" id="team-chat-group-submit">
+                <i class="bi bi-plus-lg me-1" aria-hidden="true"></i>Create group
+              </button>
             </div>
           </form>
         </div>
       </div>
     </div>
-    <div class="modal fade" id="teamChatManageGroupModal" tabindex="-1" aria-labelledby="teamChatManageGroupLabel" aria-hidden="true">
-      <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
-        <div class="modal-content">
+    <div class="modal fade team-chat-group-modal" id="teamChatManageGroupModal" tabindex="-1" aria-labelledby="teamChatManageGroupLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+        <div class="modal-content team-chat-group-modal-content border-0">
           <form id="team-chat-manage-group-form">
-            <div class="modal-header">
-              <h2 class="modal-title h5" id="teamChatManageGroupLabel">Manage group</h2>
+            <div class="team-chat-group-modal-header">
+              <div class="team-chat-group-modal-icon" aria-hidden="true"><i class="bi bi-sliders"></i></div>
+              <div class="min-w-0 flex-grow-1">
+                <h2 class="h5 mb-0" id="teamChatManageGroupLabel">Manage group</h2>
+                <p class="small text-muted mb-0">Edit name, members, or delete</p>
+              </div>
               <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body">
-              <div class="mb-3">
-                <label class="form-label" for="team-chat-manage-group-name">Group name</label>
-                <input type="text" class="form-control" id="team-chat-manage-group-name" maxlength="80" required />
+            <div class="modal-body team-chat-group-modal-body">
+              <label class="form-label fw-semibold" for="team-chat-manage-group-name">Group name</label>
+              <div class="team-chat-group-name-field mb-4">
+                <i class="bi bi-chat-left-text" aria-hidden="true"></i>
+                <input type="text" class="form-control border-0 shadow-none" id="team-chat-manage-group-name" maxlength="80" required placeholder="Group name" />
               </div>
-              <div class="mb-2 d-flex align-items-center justify-content-between">
-                <p class="small fw-semibold mb-0">Members</p>
-                <span class="small text-muted" id="team-chat-manage-member-count"></span>
+              <div class="team-chat-group-members-toolbar mb-2">
+                <span class="fw-semibold">Members</span>
+                <span class="team-chat-member-count-badge" id="team-chat-manage-member-count">0 selected</span>
+                <div class="team-chat-group-members-actions ms-auto">
+                  <button type="button" class="btn btn-sm btn-light border" id="team-chat-manage-select-all">All</button>
+                  <button type="button" class="btn btn-sm btn-light border" id="team-chat-manage-select-none">None</button>
+                </div>
               </div>
-              <div class="team-chat-group-member-picks border rounded p-2" id="team-chat-manage-member-picks"></div>
+              <div class="team-chat-group-search mb-2">
+                <i class="bi bi-search" aria-hidden="true"></i>
+                <input type="search" class="form-control form-control-sm border-0 shadow-none" id="team-chat-manage-member-search" placeholder="Search members…" autocomplete="off" />
+              </div>
+              <div class="team-chat-member-pick-list" id="team-chat-manage-member-picks"></div>
             </div>
-            <div class="modal-footer flex-wrap gap-2 justify-content-between">
-              <button type="button" class="btn btn-outline-danger" id="team-chat-delete-group-btn">Delete group</button>
-              <div class="d-flex gap-2 ms-auto">
-                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="submit" class="btn btn-primary" id="team-chat-manage-group-submit">Save changes</button>
+            <div class="team-chat-group-modal-footer team-chat-group-modal-footer--split">
+              <button type="button" class="btn btn-outline-danger" id="team-chat-delete-group-btn">
+                <i class="bi bi-trash me-1" aria-hidden="true"></i>Delete group
+              </button>
+              <div class="team-chat-group-modal-actions">
+                <button type="button" class="btn btn-light border" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-primary px-4" id="team-chat-manage-group-submit">
+                  <i class="bi bi-check-lg me-1" aria-hidden="true"></i>Save changes
+                </button>
               </div>
             </div>
           </form>
@@ -377,10 +409,7 @@ function syncGroupManageUi() {
   headMain?.classList.toggle("team-chat-thread-head-main--clickable", show);
 }
 
-function renderManageMemberPicks(selectedIds = []) {
-  const host = document.getElementById("team-chat-manage-member-picks");
-  if (!host) return;
-  const selected = new Set(selectedIds);
+function allPeopleForPicks() {
   const meId = d().getUser()?.id;
   const allPeople = [...contacts];
   if (meId && !allPeople.some((c) => c.id === meId)) {
@@ -393,21 +422,84 @@ function renderManageMemberPicks(selectedIds = []) {
       roleLabel: me?.role === "owner" ? "Admin" : "Employee",
     });
   }
-  host.innerHTML = allPeople
-    .map((c) => {
-      const checked = selected.has(c.id) ? " checked" : "";
-      const isMe = c.id === meId;
-      return `<div class="form-check">
-        <input class="form-check-input" type="checkbox" value="${c.id}" id="team-chat-manage-pick-${c.id}"${checked}${isMe ? " disabled" : ""} />
-        <label class="form-check-label" for="team-chat-manage-pick-${c.id}">
-          ${d().escapeHtml(c.displayName)}${isMe ? " (you)" : ""}
-          <span class="text-muted small"> · ${d().escapeHtml(c.roleLabel || "")}</span>
-        </label>
-      </div>`;
-    })
-    .join("");
-  const countEl = document.getElementById("team-chat-manage-member-count");
-  if (countEl) countEl.textContent = `${selected.size} selected`;
+  return allPeople;
+}
+
+function countCheckedInList(listId) {
+  return document.querySelectorAll(`#${listId} input.team-chat-member-pick-input:checked`).length;
+}
+
+function updateMemberPickCount(countId, listId) {
+  const el = document.getElementById(countId);
+  if (!el) return;
+  const n = countCheckedInList(listId);
+  el.textContent = `${n} selected`;
+}
+
+function memberPickRowHtml(c, selected, inputPrefix, meId) {
+  const checked = selected.has(c.id);
+  const isMe = c.id === meId;
+  const onCls = checked ? " team-chat-member-pick-row--on" : "";
+  const youCls = isMe ? " team-chat-member-pick-row--you" : "";
+  return `<label class="team-chat-member-pick-row${onCls}${youCls}">
+    <input type="checkbox" class="team-chat-member-pick-input visually-hidden" value="${c.id}" id="${inputPrefix}-pick-${c.id}"${checked ? " checked" : ""}${isMe ? " disabled" : ""} />
+    ${contactAvatarHtml(c.displayName, c.role)}
+    <span class="team-chat-member-pick-info min-w-0">
+      <span class="team-chat-member-pick-name text-truncate">${d().escapeHtml(c.displayName)}${isMe ? ' <span class="team-chat-member-you-tag">You</span>' : ""}</span>
+      ${rolePillHtml(c.roleLabel || c.role)}
+    </span>
+    <span class="team-chat-member-pick-check" aria-hidden="true"><i class="bi bi-check-lg"></i></span>
+  </label>`;
+}
+
+function renderMemberPickList(hostId, selectedIds, { inputPrefix = "manage", searchQuery = "", countId = null } = {}) {
+  const host = document.getElementById(hostId);
+  if (!host) return;
+  const selected = new Set(selectedIds);
+  const meId = d().getUser()?.id;
+  let allPeople = allPeopleForPicks();
+  const q = searchQuery.trim().toLowerCase();
+  if (q) {
+    allPeople = allPeople.filter(
+      (c) => c.displayName.toLowerCase().includes(q) || (c.email || "").toLowerCase().includes(q)
+    );
+  }
+  const admins = allPeople.filter((c) => c.role === "owner");
+  const employees = allPeople.filter((c) => c.role !== "owner");
+  const section = (title, items) => {
+    if (!items.length) return "";
+    return `<div class="team-chat-member-pick-section">
+      <p class="team-chat-member-pick-section-label">${title}</p>
+      <div class="team-chat-member-pick-section-list">
+        ${items.map((c) => memberPickRowHtml(c, selected, inputPrefix, meId)).join("")}
+      </div>
+    </div>`;
+  };
+  host.innerHTML =
+    admins.length || employees.length
+      ? section("Admins", admins) + section("Employees", employees)
+      : `<p class="small text-muted text-center py-4 mb-0">No members match your search.</p>`;
+  if (countId) updateMemberPickCount(countId, hostId);
+}
+
+function renderManageMemberPicks(selectedIds = []) {
+  renderMemberPickList("team-chat-manage-member-picks", selectedIds, {
+    inputPrefix: "team-chat-manage",
+    searchQuery: manageMemberFilter,
+    countId: "team-chat-manage-member-count",
+  });
+}
+
+function renderGroupMemberPicks() {
+  const checked = [];
+  document.querySelectorAll("#team-chat-group-member-picks input:checked").forEach((el) => {
+    checked.push(el.value);
+  });
+  const selectedIds = checked.length ? checked : allPeopleForPicks().map((c) => c.id);
+  renderMemberPickList("team-chat-group-member-picks", selectedIds, {
+    inputPrefix: "team-chat-create",
+    countId: "team-chat-create-member-count",
+  });
 }
 
 async function openManageGroupModal() {
@@ -416,6 +508,9 @@ async function openManageGroupModal() {
     const data = await d().api(`/api/chat/groups/${activeChatId}`);
     const nameInput = document.getElementById("team-chat-manage-group-name");
     if (nameInput) nameInput.value = data.group?.name || "";
+    manageMemberFilter = "";
+    const searchEl = document.getElementById("team-chat-manage-member-search");
+    if (searchEl) searchEl.value = "";
     renderManageMemberPicks((data.members ?? []).map((m) => m.id));
     const modalEl = document.getElementById("teamChatManageGroupModal");
     if (modalEl) d().bootstrap.Modal.getOrCreateInstance(modalEl).show();
@@ -433,7 +528,7 @@ async function saveManageGroup(e) {
   if (!name) return;
 
   const memberIds = [];
-  document.querySelectorAll("#team-chat-manage-member-picks input:checked").forEach((el) => {
+  document.querySelectorAll("#team-chat-manage-member-picks input.team-chat-member-pick-input:checked").forEach((el) => {
     memberIds.push(el.value);
   });
   const meId = d().getUser()?.id;
@@ -591,19 +686,6 @@ function renderContactList() {
       if (peerId) void startChatWithPeer(peerId);
     });
   });
-}
-
-function renderGroupMemberPicks() {
-  const host = document.getElementById("team-chat-group-member-picks");
-  if (!host) return;
-  host.innerHTML = contacts
-    .map(
-      (c) => `<div class="form-check">
-        <input class="form-check-input" type="checkbox" value="${c.id}" id="team-chat-pick-${c.id}" checked />
-        <label class="form-check-label" for="team-chat-pick-${c.id}">${d().escapeHtml(c.displayName)}</label>
-      </div>`
-    )
-    .join("");
 }
 
 function renderMessages() {
@@ -807,7 +889,7 @@ async function createGroup(e) {
   const includeEveryone = everyone?.checked !== false;
   let memberIds = [];
   if (!includeEveryone) {
-    document.querySelectorAll("#team-chat-group-member-picks input:checked").forEach((el) => {
+    document.querySelectorAll("#team-chat-group-member-picks input.team-chat-member-pick-input:checked").forEach((el) => {
       memberIds.push(el.value);
     });
     if (!memberIds.length) {
@@ -1020,6 +1102,41 @@ export function initTeamChat(chatDeps) {
   document.getElementById("team-chat-group-everyone")?.addEventListener("change", (e) => {
     const wrap = document.getElementById("team-chat-group-members-wrap");
     if (wrap) wrap.classList.toggle("d-none", e.target.checked);
+    if (!e.target.checked) renderGroupMemberPicks();
+  });
+  document.getElementById("team-chat-manage-member-search")?.addEventListener("input", (e) => {
+    manageMemberFilter = e.target.value || "";
+    const selected = [];
+    document.querySelectorAll("#team-chat-manage-member-picks input.team-chat-member-pick-input:checked").forEach((el) => {
+      selected.push(el.value);
+    });
+    renderManageMemberPicks(selected);
+  });
+  document.getElementById("team-chat-manage-select-all")?.addEventListener("click", () => {
+    document.querySelectorAll("#team-chat-manage-member-picks input.team-chat-member-pick-input:not(:disabled)").forEach((el) => {
+      el.checked = true;
+      el.closest(".team-chat-member-pick-row")?.classList.add("team-chat-member-pick-row--on");
+    });
+    updateMemberPickCount("team-chat-manage-member-count", "team-chat-manage-member-picks");
+  });
+  document.getElementById("team-chat-manage-select-none")?.addEventListener("click", () => {
+    document.querySelectorAll("#team-chat-manage-member-picks input.team-chat-member-pick-input:not(:disabled)").forEach((el) => {
+      el.checked = false;
+      el.closest(".team-chat-member-pick-row")?.classList.remove("team-chat-member-pick-row--on");
+    });
+    updateMemberPickCount("team-chat-manage-member-count", "team-chat-manage-member-picks");
+  });
+  document.getElementById("team-chat-manage-member-picks")?.addEventListener("change", (e) => {
+    const input = e.target;
+    if (!input?.classList?.contains("team-chat-member-pick-input")) return;
+    input.closest(".team-chat-member-pick-row")?.classList.toggle("team-chat-member-pick-row--on", input.checked);
+    updateMemberPickCount("team-chat-manage-member-count", "team-chat-manage-member-picks");
+  });
+  document.getElementById("team-chat-group-member-picks")?.addEventListener("change", (e) => {
+    const input = e.target;
+    if (!input?.classList?.contains("team-chat-member-pick-input")) return;
+    input.closest(".team-chat-member-pick-row")?.classList.toggle("team-chat-member-pick-row--on", input.checked);
+    updateMemberPickCount("team-chat-create-member-count", "team-chat-group-member-picks");
   });
   document.getElementById("team-chat-group-manage-btn")?.addEventListener("click", () => {
     void openManageGroupModal();
@@ -1032,14 +1149,6 @@ export function initTeamChat(chatDeps) {
   });
   document.getElementById("team-chat-delete-group-btn")?.addEventListener("click", () => {
     void deleteActiveGroup();
-  });
-  document.getElementById("team-chat-manage-member-picks")?.addEventListener("change", () => {
-    const memberIds = [];
-    document.querySelectorAll("#team-chat-manage-member-picks input:checked").forEach((el) => {
-      memberIds.push(el.value);
-    });
-    const countEl = document.getElementById("team-chat-manage-member-count");
-    if (countEl) countEl.textContent = `${memberIds.length} selected`;
   });
 
   setSidebarTab("chats");
