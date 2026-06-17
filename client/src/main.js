@@ -8,6 +8,7 @@ import {
   preparePushInfrastructure,
   linkPushSubscriptionToServer,
   runPushRegistrationDuringGesture,
+  subscribeToPush,
 } from "./sw-register.js";
 import {
   teamChatOffcanvasHtml,
@@ -15,6 +16,7 @@ import {
   initTeamChat,
   stopPolling as stopChatPolling,
   refreshUnreadBadges,
+  openChatFromDeepLink,
 } from "./chat.js";
 
 const app = document.getElementById("app");
@@ -1231,6 +1233,45 @@ async function logout() {
   }
   state.user = null;
   renderAuthForm();
+}
+
+function getOpenChatParam() {
+  return new URLSearchParams(window.location.search).get("openChat");
+}
+
+function handleOpenChatDeepLink() {
+  const conversationId = getOpenChatParam();
+  if (!conversationId || !state.user) return;
+  window.history.replaceState({}, "", window.location.pathname);
+  void openChatFromDeepLink(conversationId);
+}
+
+function chatInitDeps() {
+  return {
+    api,
+    escapeHtml,
+    showToast,
+    bootstrap,
+    getUser: () => state.user,
+    isPushSupported,
+    preparePushInfrastructure: () => preparePushInfrastructure(api),
+    subscribeToPush: () => subscribeToPush(api),
+  };
+}
+
+function wireChatNotifyHandlers() {
+  if (document.documentElement.dataset.taskmgrChatNotifyWired === "1") return;
+  document.documentElement.dataset.taskmgrChatNotifyWired = "1";
+
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.addEventListener("message", (event) => {
+      if (event.data?.type === "taskmgr-navigate" && state.user) {
+        const url = event.data.url || "";
+        const match = url.match(/openChat=([^&]+)/);
+        if (match?.[1]) void openChatFromDeepLink(decodeURIComponent(match[1]));
+      }
+    });
+  }
 }
 
 function getEmployeeNotifyParams() {
@@ -4640,8 +4681,10 @@ function renderOwnerChrome() {
   wireOwnerMarkDoneModal();
   wireTeamAdminModal();
   wireThemeIconToggles();
-  initTeamChat({ api, escapeHtml, showToast, bootstrap, getUser: () => state.user });
+  initTeamChat(chatInitDeps());
   startOwnerAutoSync();
+  wireChatNotifyHandlers();
+  handleOpenChatDeepLink();
 }
 
 /** Optional Play Store link — set VITE_PLAY_STORE_URL at build time when published. */
@@ -5548,8 +5591,10 @@ function renderEmployeeChrome() {
   wireProgressUpdateModal();
   wireEmpDelegateModal();
   wireEmpCreateTaskModal();
-  initTeamChat({ api, escapeHtml, showToast, bootstrap, getUser: () => state.user });
+  initTeamChat(chatInitDeps());
   renderEmployeeMain();
+  wireChatNotifyHandlers();
+  handleOpenChatDeepLink();
 }
 
 async function render() {
@@ -5595,6 +5640,7 @@ async function render() {
   await loadTasks(state.activeListId);
   renderOwnerChrome();
   maybeShowOwnerTrialMessageModal();
+  wireChatNotifyHandlers();
 }
 
 initTheme();

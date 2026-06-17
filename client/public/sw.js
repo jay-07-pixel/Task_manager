@@ -15,8 +15,7 @@ function taskDashboardUrl(data) {
   return `/?${p.toString()}`;
 }
 
-async function openTaskDashboard(data) {
-  const path = taskDashboardUrl(data);
+async function openAppUrl(path) {
   const fullUrl = new URL(path, self.registration.scope).href;
   const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
 
@@ -26,7 +25,7 @@ async function openTaskDashboard(data) {
       if ("navigate" in client) {
         await client.navigate(fullUrl);
       } else {
-        client.postMessage({ type: "taskmgr-open-task", payload: data || {} });
+        client.postMessage({ type: "taskmgr-navigate", url: path });
       }
       return client;
     }
@@ -37,8 +36,29 @@ async function openTaskDashboard(data) {
   }
 }
 
+async function openChatFromNotification(data) {
+  const conversationId = data?.conversationId;
+  const path = conversationId ? `/?openChat=${encodeURIComponent(conversationId)}` : "/";
+  return openAppUrl(path);
+}
+
+async function openTaskDashboard(data) {
+  const path = taskDashboardUrl(data);
+  return openAppUrl(path);
+}
+
 function formatNotificationCopy(payload) {
   const data = payload.payload || payload;
+  const msgType = data?.type || payload.type;
+
+  if (msgType === "chat_message") {
+    return {
+      title: payload.title || `New message from ${data?.senderName || "someone"}`,
+      body: payload.body || "Open Messages to read.",
+      data: { ...data, type: "chat_message" },
+    };
+  }
+
   const taskTitle = data?.title || payload.taskTitle || "Your task";
   const slot = data?.slot || payload.slot;
 
@@ -61,7 +81,12 @@ function formatNotificationCopy(payload) {
 
 async function showNotificationFromPayload(payload) {
   const { title, body, data } = formatNotificationCopy(payload);
-  const tag = payload.tag || `taskmgr-${data.taskId || "reminder"}-${data.slot || "alert"}`;
+  const isChat = data?.type === "chat_message";
+  const tag =
+    payload.tag ||
+    (isChat
+      ? `taskmgr-chat-${data.conversationId || "message"}`
+      : `taskmgr-${data.taskId || "reminder"}-${data.slot || "alert"}`);
 
   const options = {
     body,
@@ -105,6 +130,10 @@ self.addEventListener("push", (event) => {
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const data = event.notification.data || {};
+  if (data.type === "chat_message") {
+    event.waitUntil(openChatFromNotification(data));
+    return;
+  }
   event.waitUntil(openTaskDashboard(data));
 });
 

@@ -19,6 +19,10 @@ let activeMessages = [];
 let contactFilter = "";
 /** @type {boolean} */
 let mobileShowThread = false;
+/** @type {number} */
+let lastUnreadTotal = 0;
+/** @type {boolean} */
+let chatPollInitialized = false;
 
 function d() {
   if (!deps) throw new Error("Chat not initialized");
@@ -50,10 +54,13 @@ export function teamChatOffcanvasHtml() {
   return `
     <div class="offcanvas offcanvas-end team-chat-offcanvas" tabindex="-1" id="teamChatOffcanvas" aria-labelledby="teamChatOffcanvasLabel">
       <div class="offcanvas-header border-bottom py-3">
-        <div class="min-w-0">
+        <div class="min-w-0 flex-grow-1">
           <h2 class="offcanvas-title h5 mb-0" id="teamChatOffcanvasLabel">Messages</h2>
           <p class="small text-muted mb-0">Chat with employees and admins</p>
         </div>
+        <button type="button" class="btn btn-sm btn-outline-primary me-2 d-none js-chat-enable-push" id="team-chat-enable-push" title="Enable message notifications">
+          <i class="bi bi-bell me-1" aria-hidden="true"></i><span class="d-none d-sm-inline">Notify</span>
+        </button>
         <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
       </div>
       <div class="offcanvas-body p-0 d-flex flex-column team-chat-body">
@@ -206,6 +213,40 @@ function setThreadVisible(open) {
   sidebar.classList.toggle("d-none", hasThread && mobileShowThread);
 }
 
+function isChatPanelOpen() {
+  return document.getElementById("teamChatOffcanvas")?.classList.contains("show") ?? false;
+}
+
+function notifyIncomingMessage(conv) {
+  const name = conv.peer?.displayName || "Someone";
+  const preview = previewText(conv.lastMessage?.body);
+  d().showToast(`New message from ${name}: ${preview}`, "primary");
+  if (typeof Notification !== "undefined" && Notification.permission === "granted" && document.hidden) {
+    try {
+      const n = new Notification(`Message from ${name}`, {
+        body: preview,
+        tag: `taskmgr-chat-${conv.id}`,
+      });
+      n.onclick = () => {
+        window.focus();
+        void openChatFromDeepLink(conv.id);
+      };
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+function syncChatPushButton() {
+  const btn = document.getElementById("team-chat-enable-push");
+  if (!btn) return;
+  const show =
+    typeof Notification !== "undefined" &&
+    Notification.permission !== "granted" &&
+    d().isPushSupported?.();
+  btn.classList.toggle("d-none", !show);
+}
+
 async function loadContacts() {
   const data = await d().api("/api/chat/contacts");
   contacts = data.contacts ?? [];
@@ -291,10 +332,41 @@ export async function refreshUnreadBadges() {
 }
 
 async function refreshChatData() {
-  if (!document.getElementById("teamChatOffcanvas")) return;
   try {
+    const prevUnread = lastUnreadTotal;
+    const prevFingerprints = new Map(
+      conversations.map((c) => [c.id, `${c.unreadCount}:${c.lastMessage?.id || ""}`])
+    );
+
     await loadConversations();
-    if (activeConversationId) {
+
+    const unreadNow = conversations.reduce((sum, c) => sum + (c.unreadCount || 0), 0);
+    if (!chatPollInitialized) {
+      chatPollInitialized = true;
+      lastUnreadTotal = unreadNow;
+    } else if (unreadNow > prevUnread) {
+      const incoming = conversations
+        .filter((c) => c.unreadCount > 0 && c.id !== activeConversationId)
+        .sort(
+          (a, b) =>
+            new Date(b.lastMessage?.createdAt || b.updatedAt).getTime() -
+            new Date(a.lastMessage?.createdAt || a.updatedAt).getTime()
+        )[0];
+      if (incoming) notifyIncomingMessage(incoming);
+    } else {
+      for (const c of conversations) {
+        const prev = prevFingerprints.get(c.id);
+        const cur = `${c.unreadCount}:${c.lastMessage?.id || ""}`;
+        if (prev === cur || c.lastMessage?.isMine) continue;
+        const offcanvasOpen = isChatPanelOpen();
+        if (c.id === activeConversationId && offcanvasOpen) continue;
+        notifyIncomingMessage(c);
+        break;
+      }
+    }
+    lastUnreadTotal = unreadNow;
+
+    if (activeConversationId && isChatPanelOpen()) {
       const data = await d().api(`/api/chat/conversations/${activeConversationId}/messages`);
       activeMessages = data.messages ?? [];
       renderMessages();
@@ -323,14 +395,29 @@ export function openTeamChat() {
   if (!el) return;
   mobileShowThread = false;
   setThreadVisible(!!activeConversationId);
+  syncChatPushButton();
   d().bootstrap.Offcanvas.getOrCreateInstance(el).show();
   void (async () => {
     try {
       await Promise.all([loadContacts(), loadConversations()]);
+      if (d().preparePushInfrastructure) {
+        void d().preparePushInfrastructure();
+      }
     } catch (err) {
       d().showToast(err.message, "danger");
     }
   })();
+}
+
+export async function openChatFromDeepLink(conversationId) {
+  if (!conversationId) return;
+  openTeamChat();
+  try {
+    await loadConversations();
+    await openConversation(conversationId);
+  } catch (err) {
+    d().showToast(err.message, "danger");
+  }
 }
 
 export function wireTeamChatButtons() {
@@ -356,6 +443,9 @@ export function initTeamChat(chatDeps) {
     mobileShowThread = false;
     setThreadVisible(false);
   });
+  offcanvas.addEventListener("shown.bs.offcanvas", () => {
+    syncChatPushButton();
+  });
   offcanvas.addEventListener("hidden.bs.offcanvas", () => {
     mobileShowThread = false;
     activeConversationId = null;
@@ -363,9 +453,23 @@ export function initTeamChat(chatDeps) {
     setThreadVisible(false);
   });
 
+  document.getElementById("team-chat-enable-push")?.addEventListener("click", () => {
+    void (async () => {
+      if (!d().subscribeToPush) return;
+      const result = await d().subscribeToPush();
+      if (result?.ok) {
+        d().showToast("Message notifications enabled.", "success");
+        syncChatPushButton();
+      } else if (result?.reason === "denied") {
+        d().showToast("Notifications blocked in browser settings.", "warning");
+      }
+    })();
+  });
+
   wireTeamChatButtons();
   startPolling();
   void refreshUnreadBadges();
+  syncChatPushButton();
 }
 
 export function teamChatSidebarButtonHtml() {

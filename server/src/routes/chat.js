@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth } from "../middleware/auth.js";
+import { notifyChatMessage } from "../services/chatNotificationService.js";
 
 const router = Router();
 
@@ -243,6 +244,14 @@ router.post("/conversations/:id/messages", requireAuth, async (req, res) => {
       readAt: message.readAt,
       isMine: true,
     },
+  });
+
+  void notifyChatMessage({
+    conversation,
+    message: { id: message.id, body: message.body },
+    sender: { id: message.sender.id, displayName: message.sender.displayName },
+  }).catch((err) => {
+    console.error("[chat] notify failed", err?.message ?? err);
   });
 });
 
