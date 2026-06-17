@@ -18,7 +18,7 @@ import {
   refreshUnreadBadges,
   openChatFromDeepLink,
 } from "./chat.js";
-import { adminNotificationsBellHtml, wireAdminNotifications } from "./adminAnnouncements.js";
+import { adminNotificationsBellHtml, adminNotifOffcanvasHtml, wireAdminNotifications } from "./adminAnnouncements.js";
 
 const app = document.getElementById("app");
 const toastHost = document.getElementById("toastHost");
@@ -4674,6 +4674,7 @@ function renderOwnerChrome() {
       ${ownerMarkDoneModalHtml()}
       ${ownerTrialMessageModalHtml()}
       ${teamAdminModalHtml()}
+      ${adminNotifOffcanvasHtml(state.user?.id)}
       ${teamChatOffcanvasHtml()}
     </div>`;
 
@@ -4711,7 +4712,7 @@ function empMobileAppButtonsHtml({ block = true, size = "" } = {}) {
   const apkUrl = employeeApkDownloadUrl();
   const playStore = kalpanikPlayStoreUrl();
   const btnClass = `${block ? "w-100 " : ""}btn ${size} btn-outline-success${block ? " mb-2" : ""}`;
-  const apkBtn = `<a class="${btnClass}" href="${escapeHtml(apkUrl)}" download="sugandh-reminder.apk">
+  const apkBtn = `<a class="${btnClass}" href="${escapeHtml(apkUrl)}" download="kalpanik-reminder.apk">
         <i class="bi bi-android2 me-1" aria-hidden="true"></i>Download app (APK)
       </a>`;
   const playBtn = playStore
