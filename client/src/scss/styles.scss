@@ -2420,6 +2420,12 @@ body {
   display: flex;
   flex-direction: column;
   background: var(--bs-body-bg);
+  flex: 1 1 auto;
+}
+
+.team-chat-thread-active {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .team-chat-thread-empty {

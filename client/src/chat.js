@@ -283,6 +283,19 @@ function renderMessages() {
   host.scrollTop = host.scrollHeight;
 }
 
+function isMobileChatLayout() {
+  return window.matchMedia("(max-width: 767.98px)").matches;
+}
+
+function updateThreadPeerHeader(peer) {
+  const nameEl = document.getElementById("team-chat-peer-name");
+  const roleEl = document.getElementById("team-chat-peer-role");
+  const avatarEl = document.getElementById("team-chat-peer-avatar");
+  if (nameEl) nameEl.textContent = peer?.displayName || "Chat";
+  if (roleEl) roleEl.innerHTML = peer ? rolePillHtml(peer.roleLabel || peer.role) : "";
+  if (avatarEl) avatarEl.innerHTML = peer ? contactAvatarHtml(peer.displayName, peer.role, true) : "";
+}
+
 function setThreadVisible(open) {
   const empty = document.getElementById("team-chat-thread-empty");
   const active = document.getElementById("team-chat-thread-active");
@@ -292,7 +305,8 @@ function setThreadVisible(open) {
   empty.classList.toggle("d-none", hasThread);
   active.classList.toggle("d-none", !hasThread);
   active.classList.toggle("d-flex", hasThread);
-  sidebar.classList.toggle("d-none", hasThread && mobileShowThread);
+  // Keep the people/chats list visible on desktop; only hide on small screens.
+  sidebar.classList.toggle("d-none", hasThread && mobileShowThread && isMobileChatLayout());
 }
 
 function isChatPanelOpen() {
@@ -344,24 +358,36 @@ async function loadConversations() {
 
 async function openConversation(conversationId) {
   activeConversationId = conversationId;
-  mobileShowThread = true;
-  const data = await d().api(`/api/chat/conversations/${conversationId}/messages`);
-  activeMessages = data.messages ?? [];
-  const peer = data.conversation?.peer;
-  const nameEl = document.getElementById("team-chat-peer-name");
-  const roleEl = document.getElementById("team-chat-peer-role");
-  const avatarEl = document.getElementById("team-chat-peer-avatar");
-  if (nameEl) nameEl.textContent = peer?.displayName || "Chat";
-  if (roleEl) roleEl.innerHTML = peer ? rolePillHtml(peer.roleLabel || peer.role) : "";
-  if (avatarEl) avatarEl.innerHTML = peer ? contactAvatarHtml(peer.displayName, peer.role, true) : "";
-  renderThreadList();
-  renderMessages();
+  mobileShowThread = isMobileChatLayout();
+
+  const cached = conversations.find((c) => c.id === conversationId);
+  if (cached?.peer) updateThreadPeerHeader(cached.peer);
+
   setThreadVisible(true);
+  activeMessages = [];
+  const host = document.getElementById("team-chat-messages");
+  if (host) {
+    host.innerHTML = `<div class="team-chat-messages-empty"><div class="spinner-border spinner-border-sm text-primary" role="status"><span class="visually-hidden">Loading…</span></div></div>`;
+  }
+  renderThreadList();
+
   try {
-    await d().api(`/api/chat/conversations/${conversationId}/read`, { method: "POST", body: "{}" });
-    await loadConversations();
-  } catch {
-    /* ignore */
+    const data = await d().api(`/api/chat/conversations/${conversationId}/messages`);
+    activeMessages = data.messages ?? [];
+    const peer = data.conversation?.peer;
+    if (peer) updateThreadPeerHeader(peer);
+    renderMessages();
+    try {
+      await d().api(`/api/chat/conversations/${conversationId}/read`, { method: "POST", body: "{}" });
+      await loadConversations();
+    } catch {
+      /* ignore */
+    }
+  } catch (err) {
+    activeConversationId = null;
+    mobileShowThread = false;
+    setThreadVisible(false);
+    d().showToast(err.message || "Could not open chat", "danger");
   }
 }
 
@@ -542,6 +568,12 @@ export function initTeamChat(chatDeps) {
     activeConversationId = null;
     activeMessages = [];
     setThreadVisible(false);
+  });
+
+  window.addEventListener("resize", () => {
+    if (isChatPanelOpen() && activeConversationId) {
+      setThreadVisible(true);
+    }
   });
 
   document.getElementById("team-chat-enable-push")?.addEventListener("click", () => {
