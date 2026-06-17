@@ -9,6 +9,13 @@ import {
   linkPushSubscriptionToServer,
   runPushRegistrationDuringGesture,
 } from "./sw-register.js";
+import {
+  teamChatOffcanvasHtml,
+  teamChatSidebarButtonHtml,
+  initTeamChat,
+  stopPolling as stopChatPolling,
+  refreshUnreadBadges,
+} from "./chat.js";
 
 const app = document.getElementById("app");
 const toastHost = document.getElementById("toastHost");
@@ -1215,6 +1222,7 @@ function renderAuthForm() {
 async function logout() {
   stopOwnerAutoSync();
   stopEmployeeReminders();
+  stopChatPolling();
   sessionStorage.removeItem(OWNER_TRIAL_POPUP_KEY);
   try {
     await api("/api/auth/logout", { method: "POST" });
@@ -1616,6 +1624,7 @@ function leftNavInner() {
       <p class="owner-sidebar-label mb-2 mt-2">Your lists</p>
       <div class="list-group list-group-flush flex-grow-1 overflow-auto owner-list-nav js-list-host"></div>
       <div class="owner-sidebar-footer">
+        ${teamChatSidebarButtonHtml()}
         <button type="button" class="btn btn-outline-primary w-100 mb-2" data-bs-toggle="modal" data-bs-target="#teamAdminModal">
           <i class="bi bi-person-badge me-1" aria-hidden="true"></i>Manage admins
         </button>
@@ -4617,6 +4626,7 @@ function renderOwnerChrome() {
       ${ownerMarkDoneModalHtml()}
       ${ownerTrialMessageModalHtml()}
       ${teamAdminModalHtml()}
+      ${teamChatOffcanvasHtml()}
     </div>`;
 
   wireChromeNav();
@@ -4630,6 +4640,7 @@ function renderOwnerChrome() {
   wireOwnerMarkDoneModal();
   wireTeamAdminModal();
   wireThemeIconToggles();
+  initTeamChat({ api, escapeHtml, showToast, bootstrap, getUser: () => state.user });
   startOwnerAutoSync();
 }
 
@@ -5188,6 +5199,7 @@ function empLeftNavInner() {
       <div class="list-group list-group-flush flex-grow-1 overflow-auto owner-list-nav js-emp-nav-host"></div>
       <div class="owner-sidebar-footer">
         ${empRemindersButtonHtml()}
+        ${teamChatSidebarButtonHtml()}
         ${appBtn}
         <div class="d-flex justify-content-center mb-2">${themeIconToggleMarkup()}</div>
         <button type="button" class="btn btn-outline-danger w-100 js-logout">
@@ -5526,6 +5538,7 @@ function renderEmployeeChrome() {
       ${progressUpdateModalHtml()}
       ${empDelegateModalHtml()}
       ${empCreateTaskModalHtml()}
+      ${teamChatOffcanvasHtml()}
     </div>`;
 
   wireEmpChromeNav();
@@ -5535,6 +5548,7 @@ function renderEmployeeChrome() {
   wireProgressUpdateModal();
   wireEmpDelegateModal();
   wireEmpCreateTaskModal();
+  initTeamChat({ api, escapeHtml, showToast, bootstrap, getUser: () => state.user });
   renderEmployeeMain();
 }
 
