@@ -2508,6 +2508,41 @@ body {
     0 0 0 2px rgba(var(--bs-primary-rgb), 0.45);
 }
 
+.team-chat-avatar--group {
+  font-size: 0.85rem;
+}
+
+.team-chat-group-badge {
+  display: inline-flex;
+  margin-left: 0.35rem;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--bs-primary);
+  vertical-align: middle;
+}
+
+.team-chat-create-group-wrap {
+  padding: 0 0.85rem 0.65rem;
+  flex-shrink: 0;
+}
+
+.team-chat-create-group-btn {
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.team-chat-group-member-picks {
+  max-height: 10rem;
+  overflow-y: auto;
+}
+
+.team-chat-role-pill--group {
+  background: rgba(var(--bs-primary-rgb), 0.1);
+  color: var(--bs-primary);
+}
+
 .team-chat-role-pill {
   display: inline-flex;
   align-items: center;
@@ -2650,12 +2685,30 @@ body {
   display: flex;
 }
 
+.team-chat-bubble-wrap {
+  max-width: min(36rem, 78%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.team-chat-bubble-row--mine .team-chat-bubble-wrap {
+  align-items: flex-end;
+}
+
+.team-chat-bubble-sender {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--bs-secondary-color);
+  padding: 0 0.35rem;
+}
+
 .team-chat-bubble-row--mine {
   justify-content: flex-end;
 }
 
 .team-chat-bubble {
-  max-width: min(36rem, 78%);
+  width: 100%;
   border-radius: 1.1rem;
   padding: 0.55rem 0.85rem 0.4rem;
   background: var(--bs-tertiary-bg);

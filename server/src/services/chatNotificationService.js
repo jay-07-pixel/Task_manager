@@ -77,3 +77,73 @@ export async function notifyChatMessage({ conversation, message, sender }) {
     }
   }
 }
+
+/**
+ * Notify all group members except the sender (web push + FCM).
+ * @param {{ id: string, name: string }} group
+ * @param {{ id: string, body: string }} message
+ * @param {{ id: string, displayName: string }} sender
+ */
+export async function notifyGroupMessage({ group, message, sender }) {
+  const members = await prisma.chatGroupMember.findMany({
+    where: { groupId: group.id, userId: { not: sender.id } },
+    select: { userId: true },
+  });
+  const title = `${group.name}`;
+  const body = `${sender.displayName}: ${previewBody(message.body)}`;
+  const openChatId = `g:${group.id}`;
+
+  for (const { userId: recipientId } of members) {
+    if (isPushConfigured()) {
+      const subs = await prisma.pushSubscription.findMany({
+        where: { userId: recipientId },
+        select: { id: true, endpoint: true, p256dh: true, auth: true },
+      });
+      for (const sub of subs) {
+        const payload = {
+          title,
+          body,
+          tag: `taskmgr-chat-${group.id}`,
+          type: "chat_message",
+          payload: {
+            type: "chat_message",
+            conversationId: openChatId,
+            groupId: group.id,
+            senderId: sender.id,
+            senderName: sender.displayName,
+            messageId: message.id,
+            url: `/?openChat=${encodeURIComponent(openChatId)}`,
+          },
+        };
+        const result = await sendPushToSubscription(sub, payload);
+        if (result.ok) {
+          console.log(`${LOG} group web push sent groupId=${group.id} recipientId=${recipientId}`);
+        } else if (result.gone) {
+          await prisma.pushSubscription.delete({ where: { id: sub.id } }).catch(() => {});
+        }
+      }
+    }
+
+    const devices = await getEmployeeDevicesForUser(recipientId);
+    for (const device of devices) {
+      const result = await sendFcmNotification({
+        token: device.fcmToken,
+        title,
+        body,
+        data: {
+          type: "chat_message",
+          conversationId: openChatId,
+          groupId: group.id,
+          senderId: sender.id,
+          senderName: sender.displayName,
+          messageId: message.id,
+        },
+      });
+      if (result.ok) {
+        console.log(
+          `${LOG} group FCM sent groupId=${group.id} recipientId=${recipientId} deviceId=${device.deviceId}`
+        );
+      }
+    }
+  }
+}

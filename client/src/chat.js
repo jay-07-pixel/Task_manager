@@ -8,13 +8,17 @@ let deps = null;
 let pollTimer = null;
 
 /** @type {any[]} */
-let conversations = [];
+let threads = [];
 /** @type {any[]} */
 let contacts = [];
+/** @type {"dm" | "group" | null} */
+let activeThreadType = null;
 /** @type {string | null} */
-let activeConversationId = null;
+let activeChatId = null;
 /** @type {any[]} */
 let activeMessages = [];
+/** @type {boolean} */
+let activeThreadIsGroup = false;
 /** @type {string} */
 let contactFilter = "";
 /** @type {boolean} */
@@ -29,6 +33,24 @@ let chatPollInitialized = false;
 function d() {
   if (!deps) throw new Error("Chat not initialized");
   return deps;
+}
+
+function isAdminUser() {
+  return d().getUser()?.role === "owner";
+}
+
+function threadKey(t) {
+  return `${t.type}:${t.id}`;
+}
+
+function isActiveThread(t) {
+  return t.type === activeThreadType && t.id === activeChatId;
+}
+
+function parseChatDeepLink(raw) {
+  const id = String(raw || "");
+  if (id.startsWith("g:")) return { type: "group", id: id.slice(2) };
+  return { type: "dm", id };
 }
 
 function formatChatTime(iso) {
@@ -65,6 +87,11 @@ function contactAvatarHtml(name, roleOrLabel, large = false) {
   const sizeCls = large ? " team-chat-avatar--lg" : "";
   const adminCls = isAdmin ? " team-chat-avatar--admin" : "";
   return `<span class="team-chat-avatar${sizeCls}${adminCls}" style="--avatar-bg:${avatarColor(name)}" aria-hidden="true">${d().escapeHtml(initial)}</span>`;
+}
+
+function groupAvatarHtml(name, large = false) {
+  const sizeCls = large ? " team-chat-avatar--lg" : "";
+  return `<span class="team-chat-avatar team-chat-avatar--group${sizeCls}" style="--avatar-bg:${avatarColor(name)}" aria-hidden="true"><i class="bi bi-people-fill"></i></span>`;
 }
 
 function rolePillHtml(roleOrLabel) {
@@ -105,6 +132,11 @@ export function teamChatOffcanvasHtml() {
               <button type="button" class="team-chat-tab" data-chat-tab="people" role="tab" aria-selected="false">People</button>
             </div>
             <div class="team-chat-list-scroll" id="team-chat-pane-chats" role="tabpanel">
+              <div class="team-chat-create-group-wrap d-none" id="team-chat-create-group-wrap">
+                <button type="button" class="btn btn-sm btn-primary w-100 team-chat-create-group-btn" id="team-chat-create-group-btn">
+                  <i class="bi bi-people-fill me-1" aria-hidden="true"></i>New group
+                </button>
+              </div>
               <div id="team-chat-thread-list" aria-live="polite"></div>
             </div>
             <div class="team-chat-list-scroll d-none" id="team-chat-pane-people" role="tabpanel">
@@ -116,7 +148,7 @@ export function teamChatOffcanvasHtml() {
               <div class="team-chat-empty-card">
                 <div class="team-chat-empty-icon" aria-hidden="true"><i class="bi bi-chat-square-dots"></i></div>
                 <p class="fw-semibold mb-1">Your team chat</p>
-                <p class="small text-muted mb-0">Select a chat or pick someone under <strong>People</strong> to start messaging.</p>
+                <p class="small text-muted mb-0">Select a chat, open a <strong>group</strong>, or pick someone under <strong>People</strong>.</p>
               </div>
             </div>
             <div class="team-chat-thread-active d-none flex-column h-100" id="team-chat-thread-active">
@@ -143,6 +175,36 @@ export function teamChatOffcanvasHtml() {
           </section>
         </div>
       </div>
+    </div>
+    <div class="modal fade" id="teamChatCreateGroupModal" tabindex="-1" aria-labelledby="teamChatCreateGroupLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <form id="team-chat-create-group-form">
+            <div class="modal-header">
+              <h2 class="modal-title h5" id="teamChatCreateGroupLabel">Create group</h2>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              <div class="mb-3">
+                <label class="form-label" for="team-chat-group-name">Group name</label>
+                <input type="text" class="form-control" id="team-chat-group-name" maxlength="80" required placeholder="e.g. Sales team" />
+              </div>
+              <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" id="team-chat-group-everyone" checked />
+                <label class="form-check-label" for="team-chat-group-everyone">Include everyone on the team</label>
+              </div>
+              <div class="d-none" id="team-chat-group-members-wrap">
+                <p class="small text-muted mb-2">Select members</p>
+                <div class="team-chat-group-member-picks border rounded p-2" id="team-chat-group-member-picks"></div>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+              <button type="submit" class="btn btn-primary" id="team-chat-group-submit">Create group</button>
+            </div>
+          </form>
+        </div>
+      </div>
     </div>`;
 }
 
@@ -154,14 +216,23 @@ function filteredContacts() {
   );
 }
 
-function filteredConversations() {
+function filteredThreads() {
   const q = contactFilter.trim().toLowerCase();
-  if (!q) return conversations;
-  return conversations.filter(
-    (c) =>
-      c.peer.displayName.toLowerCase().includes(q) ||
-      (c.peer.email || "").toLowerCase().includes(q)
-  );
+  if (!q) return threads;
+  return threads.filter((t) => {
+    if (t.type === "group") {
+      return t.group?.name?.toLowerCase().includes(q);
+    }
+    return (
+      t.peer?.displayName?.toLowerCase().includes(q) ||
+      (t.peer?.email || "").toLowerCase().includes(q)
+    );
+  });
+}
+
+function syncAdminGroupUi() {
+  const wrap = document.getElementById("team-chat-create-group-wrap");
+  if (wrap) wrap.classList.toggle("d-none", !isAdminUser());
 }
 
 function setSidebarTab(tab) {
@@ -178,41 +249,47 @@ function setSidebarTab(tab) {
 function renderThreadList() {
   const host = document.getElementById("team-chat-thread-list");
   if (!host) return;
-  const list = filteredConversations();
+  const list = filteredThreads();
   if (!list.length) {
     host.innerHTML = `<div class="team-chat-list-empty">
-      <p class="small text-muted mb-0">${contactFilter.trim() ? "No chats match your search." : "No conversations yet. Open People to start one."}</p>
+      <p class="small text-muted mb-0">${contactFilter.trim() ? "No chats match your search." : "No conversations yet. Admins can create a group, or open People to DM someone."}</p>
     </div>`;
     return;
   }
   host.innerHTML = list
-    .map((c) => {
-      const active = c.id === activeConversationId ? " team-chat-thread-item--active" : "";
+    .map((t) => {
+      const active = isActiveThread(t) ? " team-chat-thread-item--active" : "";
       const unread =
-        c.unreadCount > 0
-          ? `<span class="team-chat-unread-badge">${c.unreadCount > 9 ? "9+" : c.unreadCount}</span>`
+        t.unreadCount > 0
+          ? `<span class="team-chat-unread-badge">${t.unreadCount > 9 ? "9+" : t.unreadCount}</span>`
           : "";
-      const prefix = c.lastMessage?.isMine ? "You: " : "";
-      const unreadRow = c.unreadCount > 0 ? " team-chat-thread-item--unread" : "";
-      return `<button type="button" class="team-chat-thread-item${active}${unreadRow}" data-conversation-id="${c.id}">
-        ${contactAvatarHtml(c.peer.displayName, c.peer.role)}
+      const unreadRow = t.unreadCount > 0 ? " team-chat-thread-item--unread" : "";
+      const isGroup = t.type === "group";
+      const title = isGroup ? t.group.name : t.peer.displayName;
+      const avatar = isGroup
+        ? groupAvatarHtml(t.group.name)
+        : contactAvatarHtml(t.peer.displayName, t.peer.role);
+      const prefix = t.lastMessage?.isMine ? "You: " : t.lastMessage?.senderName && isGroup ? `${t.lastMessage.senderName}: ` : "";
+      return `<button type="button" class="team-chat-thread-item${active}${unreadRow}" data-thread-type="${t.type}" data-thread-id="${t.id}">
+        ${avatar}
         <span class="team-chat-thread-item-main">
           <span class="team-chat-thread-item-top">
-            <span class="team-chat-thread-item-name text-truncate">${d().escapeHtml(c.peer.displayName)}</span>
-            <span class="team-chat-thread-item-time tabular-nums">${d().escapeHtml(formatChatTime(c.lastMessage?.createdAt || c.updatedAt))}</span>
+            <span class="team-chat-thread-item-name text-truncate">${d().escapeHtml(title)}${isGroup ? `<span class="team-chat-group-badge">Group</span>` : ""}</span>
+            <span class="team-chat-thread-item-time tabular-nums">${d().escapeHtml(formatChatTime(t.lastMessage?.createdAt || t.updatedAt))}</span>
           </span>
           <span class="team-chat-thread-item-bottom">
-            <span class="team-chat-thread-item-preview text-truncate">${d().escapeHtml(prefix + previewText(c.lastMessage?.body))}</span>
+            <span class="team-chat-thread-item-preview text-truncate">${d().escapeHtml(prefix + previewText(t.lastMessage?.body))}</span>
             ${unread}
           </span>
         </span>
       </button>`;
     })
     .join("");
-  host.querySelectorAll("[data-conversation-id]").forEach((btn) => {
+  host.querySelectorAll("[data-thread-id]").forEach((btn) => {
     btn.addEventListener("click", () => {
-      const id = btn.getAttribute("data-conversation-id");
-      if (id) void openConversation(id);
+      const type = btn.getAttribute("data-thread-type");
+      const id = btn.getAttribute("data-thread-id");
+      if (type && id) void openThread(type, id);
     });
   });
 }
@@ -259,6 +336,19 @@ function renderContactList() {
   });
 }
 
+function renderGroupMemberPicks() {
+  const host = document.getElementById("team-chat-group-member-picks");
+  if (!host) return;
+  host.innerHTML = contacts
+    .map(
+      (c) => `<div class="form-check">
+        <input class="form-check-input" type="checkbox" value="${c.id}" id="team-chat-pick-${c.id}" checked />
+        <label class="form-check-label" for="team-chat-pick-${c.id}">${d().escapeHtml(c.displayName)}</label>
+      </div>`
+    )
+    .join("");
+}
+
 function renderMessages() {
   const host = document.getElementById("team-chat-messages");
   if (!host) return;
@@ -272,10 +362,17 @@ function renderMessages() {
   host.innerHTML = activeMessages
     .map((m) => {
       const mine = m.isMine ? " team-chat-bubble-row--mine" : "";
+      const senderLine =
+        activeThreadIsGroup && !m.isMine
+          ? `<div class="team-chat-bubble-sender">${d().escapeHtml(m.senderName || "Member")}</div>`
+          : "";
       return `<div class="team-chat-bubble-row${mine}">
-        <div class="team-chat-bubble">
-          <div class="team-chat-bubble-body text-break">${d().escapeHtml(m.body)}</div>
-          <div class="team-chat-bubble-time tabular-nums">${d().escapeHtml(formatChatTime(m.createdAt))}</div>
+        <div class="team-chat-bubble-wrap">
+          ${senderLine}
+          <div class="team-chat-bubble">
+            <div class="team-chat-bubble-body text-break">${d().escapeHtml(m.body)}</div>
+            <div class="team-chat-bubble-time tabular-nums">${d().escapeHtml(formatChatTime(m.createdAt))}</div>
+          </div>
         </div>
       </div>`;
     })
@@ -287,10 +384,20 @@ function isMobileChatLayout() {
   return window.matchMedia("(max-width: 767.98px)").matches;
 }
 
-function updateThreadPeerHeader(peer) {
+function updateThreadHeaderFromThread(t) {
   const nameEl = document.getElementById("team-chat-peer-name");
   const roleEl = document.getElementById("team-chat-peer-role");
   const avatarEl = document.getElementById("team-chat-peer-avatar");
+  if (!t) return;
+  if (t.type === "group") {
+    if (nameEl) nameEl.textContent = t.group?.name || "Group";
+    if (roleEl) {
+      roleEl.innerHTML = `<span class="team-chat-role-pill team-chat-role-pill--group">${t.group?.memberCount ?? 0} members</span>`;
+    }
+    if (avatarEl) avatarEl.innerHTML = groupAvatarHtml(t.group?.name || "Group", true);
+    return;
+  }
+  const peer = t.peer;
   if (nameEl) nameEl.textContent = peer?.displayName || "Chat";
   if (roleEl) roleEl.innerHTML = peer ? rolePillHtml(peer.roleLabel || peer.role) : "";
   if (avatarEl) avatarEl.innerHTML = peer ? contactAvatarHtml(peer.displayName, peer.role, true) : "";
@@ -301,11 +408,10 @@ function setThreadVisible(open) {
   const active = document.getElementById("team-chat-thread-active");
   const sidebar = document.getElementById("team-chat-sidebar");
   if (!empty || !active || !sidebar) return;
-  const hasThread = !!open && !!activeConversationId;
+  const hasThread = !!open && !!activeChatId && !!activeThreadType;
   empty.classList.toggle("d-none", hasThread);
   active.classList.toggle("d-none", !hasThread);
   active.classList.toggle("d-flex", hasThread);
-  // Keep the people/chats list visible on desktop; only hide on small screens.
   sidebar.classList.toggle("d-none", hasThread && mobileShowThread && isMobileChatLayout());
 }
 
@@ -313,19 +419,24 @@ function isChatPanelOpen() {
   return document.getElementById("teamChatOffcanvas")?.classList.contains("show") ?? false;
 }
 
-function notifyIncomingMessage(conv) {
-  const name = conv.peer?.displayName || "Someone";
-  const preview = previewText(conv.lastMessage?.body);
-  d().showToast(`New message from ${name}: ${preview}`, "primary");
+function notifyIncomingMessage(thread) {
+  const isGroup = thread.type === "group";
+  const name = isGroup ? thread.group?.name : thread.peer?.displayName || "Someone";
+  const preview = previewText(thread.lastMessage?.body);
+  const label = isGroup && thread.lastMessage?.senderName
+    ? `${thread.lastMessage.senderName} in ${name}`
+    : name;
+  d().showToast(`New message from ${label}: ${preview}`, "primary");
   if (typeof Notification !== "undefined" && Notification.permission === "granted" && document.hidden) {
     try {
-      const n = new Notification(`Message from ${name}`, {
+      const openId = isGroup ? `g:${thread.id}` : thread.id;
+      const n = new Notification(isGroup ? `${name}` : `Message from ${name}`, {
         body: preview,
-        tag: `taskmgr-chat-${conv.id}`,
+        tag: `taskmgr-chat-${thread.id}`,
       });
       n.onclick = () => {
         window.focus();
-        void openChatFromDeepLink(conv.id);
+        void openChatFromDeepLink(openId);
       };
     } catch {
       /* ignore */
@@ -347,21 +458,24 @@ async function loadContacts() {
   const data = await d().api("/api/chat/contacts");
   contacts = data.contacts ?? [];
   renderContactList();
+  renderGroupMemberPicks();
 }
 
-async function loadConversations() {
-  const data = await d().api("/api/chat/conversations");
-  conversations = data.conversations ?? [];
+async function loadThreads() {
+  const data = await d().api("/api/chat/threads");
+  threads = data.threads ?? [];
   renderThreadList();
   await refreshUnreadBadges();
 }
 
-async function openConversation(conversationId) {
-  activeConversationId = conversationId;
+async function openThread(type, id) {
+  activeThreadType = type === "group" ? "group" : "dm";
+  activeChatId = id;
+  activeThreadIsGroup = activeThreadType === "group";
   mobileShowThread = isMobileChatLayout();
 
-  const cached = conversations.find((c) => c.id === conversationId);
-  if (cached?.peer) updateThreadPeerHeader(cached.peer);
+  const cached = threads.find((t) => t.type === activeThreadType && t.id === id);
+  if (cached) updateThreadHeaderFromThread(cached);
 
   setThreadVisible(true);
   activeMessages = [];
@@ -371,20 +485,36 @@ async function openConversation(conversationId) {
   }
   renderThreadList();
 
+  const base =
+    activeThreadType === "group"
+      ? `/api/chat/groups/${id}`
+      : `/api/chat/conversations/${id}`;
+
   try {
-    const data = await d().api(`/api/chat/conversations/${conversationId}/messages`);
+    const data = await d().api(`${base}/messages`);
     activeMessages = data.messages ?? [];
-    const peer = data.conversation?.peer;
-    if (peer) updateThreadPeerHeader(peer);
+    if (activeThreadType === "group" && data.group) {
+      updateThreadHeaderFromThread({
+        type: "group",
+        group: data.group,
+      });
+    } else if (data.conversation?.peer) {
+      updateThreadHeaderFromThread({
+        type: "dm",
+        peer: data.conversation.peer,
+      });
+    }
     renderMessages();
     try {
-      await d().api(`/api/chat/conversations/${conversationId}/read`, { method: "POST", body: "{}" });
-      await loadConversations();
+      await d().api(`${base}/read`, { method: "POST", body: "{}" });
+      await loadThreads();
     } catch {
       /* ignore */
     }
   } catch (err) {
-    activeConversationId = null;
+    activeThreadType = null;
+    activeChatId = null;
+    activeThreadIsGroup = false;
     mobileShowThread = false;
     setThreadVisible(false);
     d().showToast(err.message || "Could not open chat", "danger");
@@ -397,30 +527,78 @@ async function startChatWithPeer(peerUserId) {
       method: "POST",
       body: JSON.stringify({ peerUserId }),
     });
-    await loadConversations();
-    if (data.conversation?.id) await openConversation(data.conversation.id);
+    await loadThreads();
+    if (data.conversation?.id) await openThread("dm", data.conversation.id);
   } catch (err) {
     d().showToast(err.message, "danger");
   }
 }
 
+async function createGroup(e) {
+  e.preventDefault();
+  const nameInput = document.getElementById("team-chat-group-name");
+  const everyone = document.getElementById("team-chat-group-everyone");
+  const submit = document.getElementById("team-chat-group-submit");
+  const name = nameInput?.value?.trim();
+  if (!name) return;
+
+  const includeEveryone = everyone?.checked !== false;
+  let memberIds = [];
+  if (!includeEveryone) {
+    document.querySelectorAll("#team-chat-group-member-picks input:checked").forEach((el) => {
+      memberIds.push(el.value);
+    });
+    if (!memberIds.length) {
+      d().showToast("Select at least one member.", "warning");
+      return;
+    }
+  }
+
+  if (submit) submit.disabled = true;
+  try {
+    const data = await d().api("/api/chat/groups", {
+      method: "POST",
+      body: JSON.stringify({ name, includeEveryone, memberIds: includeEveryone ? undefined : memberIds }),
+    });
+    const modalEl = document.getElementById("teamChatCreateGroupModal");
+    if (modalEl) d().bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+    if (nameInput) nameInput.value = "";
+    if (everyone) everyone.checked = true;
+    document.getElementById("team-chat-group-members-wrap")?.classList.add("d-none");
+    d().showToast(`Group "${name}" created.`, "success");
+    await loadThreads();
+    if (data.group?.id) {
+      setSidebarTab("chats");
+      await openThread("group", data.group.id);
+    }
+  } catch (err) {
+    d().showToast(err.message, "danger");
+  } finally {
+    if (submit) submit.disabled = false;
+  }
+}
+
 async function sendMessage(e) {
   e.preventDefault();
-  if (!activeConversationId) return;
+  if (!activeChatId || !activeThreadType) return;
   const input = document.getElementById("team-chat-input");
   const body = input?.value?.trim();
   if (!body) return;
   const btn = document.getElementById("team-chat-send");
   if (btn) btn.disabled = true;
+  const base =
+    activeThreadType === "group"
+      ? `/api/chat/groups/${activeChatId}`
+      : `/api/chat/conversations/${activeChatId}`;
   try {
-    const data = await d().api(`/api/chat/conversations/${activeConversationId}/messages`, {
+    const data = await d().api(`${base}/messages`, {
       method: "POST",
       body: JSON.stringify({ body }),
     });
     if (input) input.value = "";
     if (data.message) activeMessages.push(data.message);
     renderMessages();
-    await loadConversations();
+    await loadThreads();
   } catch (err) {
     d().showToast(err.message, "danger");
   } finally {
@@ -441,22 +619,24 @@ export async function refreshUnreadBadges() {
   }
 }
 
+function isSameActiveThread(t) {
+  return t.type === activeThreadType && t.id === activeChatId;
+}
+
 async function refreshChatData() {
   try {
     const prevUnread = lastUnreadTotal;
-    const prevFingerprints = new Map(
-      conversations.map((c) => [c.id, `${c.unreadCount}:${c.lastMessage?.id || ""}`])
-    );
+    const prevFingerprints = new Map(threads.map((t) => [threadKey(t), `${t.unreadCount}:${t.lastMessage?.id || ""}`]));
 
-    await loadConversations();
+    await loadThreads();
 
-    const unreadNow = conversations.reduce((sum, c) => sum + (c.unreadCount || 0), 0);
+    const unreadNow = threads.reduce((sum, t) => sum + (t.unreadCount || 0), 0);
     if (!chatPollInitialized) {
       chatPollInitialized = true;
       lastUnreadTotal = unreadNow;
     } else if (unreadNow > prevUnread) {
-      const incoming = conversations
-        .filter((c) => c.unreadCount > 0 && c.id !== activeConversationId)
+      const incoming = threads
+        .filter((t) => t.unreadCount > 0 && !isSameActiveThread(t))
         .sort(
           (a, b) =>
             new Date(b.lastMessage?.createdAt || b.updatedAt).getTime() -
@@ -464,20 +644,23 @@ async function refreshChatData() {
         )[0];
       if (incoming) notifyIncomingMessage(incoming);
     } else {
-      for (const c of conversations) {
-        const prev = prevFingerprints.get(c.id);
-        const cur = `${c.unreadCount}:${c.lastMessage?.id || ""}`;
-        if (prev === cur || c.lastMessage?.isMine) continue;
-        const offcanvasOpen = isChatPanelOpen();
-        if (c.id === activeConversationId && offcanvasOpen) continue;
-        notifyIncomingMessage(c);
+      for (const t of threads) {
+        const prev = prevFingerprints.get(threadKey(t));
+        const cur = `${t.unreadCount}:${t.lastMessage?.id || ""}`;
+        if (prev === cur || t.lastMessage?.isMine) continue;
+        if (isSameActiveThread(t) && isChatPanelOpen()) continue;
+        notifyIncomingMessage(t);
         break;
       }
     }
     lastUnreadTotal = unreadNow;
 
-    if (activeConversationId && isChatPanelOpen()) {
-      const data = await d().api(`/api/chat/conversations/${activeConversationId}/messages`);
+    if (activeChatId && activeThreadType && isChatPanelOpen()) {
+      const base =
+        activeThreadType === "group"
+          ? `/api/chat/groups/${activeChatId}`
+          : `/api/chat/conversations/${activeChatId}`;
+      const data = await d().api(`${base}/messages`);
       activeMessages = data.messages ?? [];
       renderMessages();
     }
@@ -504,12 +687,13 @@ export function openTeamChat() {
   const el = document.getElementById("teamChatOffcanvas");
   if (!el) return;
   mobileShowThread = false;
-  setThreadVisible(!!activeConversationId);
+  syncAdminGroupUi();
+  setThreadVisible(!!activeChatId);
   syncChatPushButton();
   d().bootstrap.Offcanvas.getOrCreateInstance(el).show();
   void (async () => {
     try {
-      await Promise.all([loadContacts(), loadConversations()]);
+      await Promise.all([loadContacts(), loadThreads()]);
       if (d().preparePushInfrastructure) {
         void d().preparePushInfrastructure();
       }
@@ -521,10 +705,12 @@ export function openTeamChat() {
 
 export async function openChatFromDeepLink(conversationId) {
   if (!conversationId) return;
+  const { type, id } = parseChatDeepLink(conversationId);
+  if (!id) return;
   openTeamChat();
   try {
-    await loadConversations();
-    await openConversation(conversationId);
+    await loadThreads();
+    await openThread(type, id);
   } catch (err) {
     d().showToast(err.message, "danger");
   }
@@ -559,19 +745,36 @@ export function initTeamChat(chatDeps) {
       setSidebarTab(btn.getAttribute("data-chat-tab") || "chats");
     });
   });
+  document.getElementById("team-chat-create-group-btn")?.addEventListener("click", () => {
+    renderGroupMemberPicks();
+    const modalEl = document.getElementById("teamChatCreateGroupModal");
+    if (modalEl) d().bootstrap.Modal.getOrCreateInstance(modalEl).show();
+  });
+  document.getElementById("team-chat-create-group-form")?.addEventListener("submit", (e) => {
+    void createGroup(e);
+  });
+  document.getElementById("team-chat-group-everyone")?.addEventListener("change", (e) => {
+    const wrap = document.getElementById("team-chat-group-members-wrap");
+    if (wrap) wrap.classList.toggle("d-none", e.target.checked);
+  });
+
   setSidebarTab("chats");
+  syncAdminGroupUi();
   offcanvas.addEventListener("shown.bs.offcanvas", () => {
     syncChatPushButton();
+    syncAdminGroupUi();
   });
   offcanvas.addEventListener("hidden.bs.offcanvas", () => {
     mobileShowThread = false;
-    activeConversationId = null;
+    activeThreadType = null;
+    activeChatId = null;
+    activeThreadIsGroup = false;
     activeMessages = [];
     setThreadVisible(false);
   });
 
   window.addEventListener("resize", () => {
-    if (isChatPanelOpen() && activeConversationId) {
+    if (isChatPanelOpen() && activeChatId) {
       setThreadVisible(true);
     }
   });
