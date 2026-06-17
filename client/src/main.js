@@ -18,6 +18,7 @@ import {
   refreshUnreadBadges,
   openChatFromDeepLink,
 } from "./chat.js";
+import { adminNotificationsBellHtml, wireAdminNotifications } from "./adminAnnouncements.js";
 
 const app = document.getElementById("app");
 const toastHost = document.getElementById("toastHost");
@@ -4411,7 +4412,8 @@ function renderOwnerMain() {
         <p class="owner-page-sub text-muted small mb-0 mt-1">${escapeHtml(pageSubtitle)}</p>
         ${ownerTrialStatusChipHtml()}
       </div>
-      <div class="d-flex flex-wrap gap-2 owner-toolbar">
+      <div class="d-flex flex-wrap gap-2 align-items-center owner-toolbar">
+        <div class="d-none d-lg-block">${adminNotificationsBellHtml(state.user?.id)}</div>
         ${
           isEmpAssignList
             ? `<button type="button" class="btn btn-outline-primary btn-sm js-owner-refresh-tasks" aria-label="Refresh employee assignments">
@@ -4439,6 +4441,8 @@ function renderOwnerMain() {
       </div>
     </section>
   `;
+
+  wireAdminNotifications(state.user?.id, main);
 
   document.getElementById("btn-delete-list")?.addEventListener("click", async () => {
     if (!list || !window.confirm(`Delete list "${list.title}" and all its tasks?`)) return;
@@ -4638,9 +4642,12 @@ function renderOwnerChrome() {
             <i class="bi bi-list me-1" aria-hidden="true"></i>Lists
           </button>
           <span class="owner-topbar-title text-truncate fw-semibold small">${mobileListTitle}</span>
-          <button type="button" class="btn btn-primary btn-sm js-new-list" aria-label="New list">
-            <i class="bi bi-plus-lg" aria-hidden="true"></i>
-          </button>
+          <div class="d-flex align-items-center gap-1 flex-shrink-0">
+            ${adminNotificationsBellHtml(state.user?.id)}
+            <button type="button" class="btn btn-primary btn-sm js-new-list" aria-label="New list">
+              <i class="bi bi-plus-lg" aria-hidden="true"></i>
+            </button>
+          </div>
         </div>
         <div class="row g-3 g-lg-4 owner-shell-row flex-lg-grow-1">
           <aside class="col-lg-3 d-none d-lg-flex owner-sidebar-col">
@@ -4673,6 +4680,7 @@ function renderOwnerChrome() {
   wireChromeNav();
   renderListGroup();
   renderOwnerMain();
+  wireAdminNotifications(state.user?.id);
   wireTaskModal();
   wireCustomRecurrenceModal();
   wireListNameModal();

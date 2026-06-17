@@ -3611,3 +3611,118 @@ body {
 .task-reminder-banner__actions {
   flex-shrink: 0;
 }
+
+/* Admin dashboard — feature announcements bell */
+.admin-notif-btn {
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.admin-notif-badge {
+  position: absolute;
+  top: -0.35rem;
+  right: -0.35rem;
+  min-width: 1.1rem;
+  height: 1.1rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  background: var(--bs-danger);
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 700;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--bs-body-bg);
+}
+
+.admin-notif-menu {
+  width: min(22rem, calc(100vw - 1.5rem));
+  max-height: min(24rem, 70vh);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.admin-notif-menu-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--bs-border-color);
+  background: var(--bs-body-bg);
+  flex-shrink: 0;
+}
+
+.admin-notif-list {
+  overflow-y: auto;
+  flex: 1 1 auto;
+}
+
+.admin-notif-item {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--bs-border-color-translucent, var(--bs-border-color));
+}
+
+.admin-notif-item:last-child {
+  border-bottom: 0;
+}
+
+.admin-notif-item--unread {
+  background: rgba(var(--bs-primary-rgb), 0.06);
+}
+
+.admin-notif-item-icon {
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.5rem;
+  background: rgba(var(--bs-primary-rgb), 0.12);
+  color: var(--bs-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+}
+
+.admin-notif-item-body {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.admin-notif-item-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.admin-notif-item-title {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.admin-notif-item-date {
+  font-size: 0.72rem;
+  color: var(--bs-secondary-color);
+  white-space: nowrap;
+}
+
+.admin-notif-item-text {
+  font-size: 0.82rem;
+  color: var(--bs-secondary-color);
+  line-height: 1.45;
+}
+
+[data-bs-theme="dark"] .admin-notif-item--unread {
+  background: rgba(var(--bs-primary-rgb), 0.1);
+}
