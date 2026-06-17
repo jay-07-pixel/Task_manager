@@ -283,89 +283,64 @@ export function teamChatOffcanvasHtml() {
       </div>
     </div>
     <div class="modal fade team-chat-group-modal" id="teamChatCreateGroupModal" tabindex="-1" aria-labelledby="teamChatCreateGroupLabel" aria-hidden="true">
-      <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
-        <div class="modal-content team-chat-group-modal-content border-0">
+      <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content team-chat-group-modal-content">
           <form id="team-chat-create-group-form">
-            <div class="team-chat-group-modal-header">
-              <div class="team-chat-group-modal-icon" aria-hidden="true"><i class="bi bi-people-fill"></i></div>
-              <div class="min-w-0 flex-grow-1">
-                <h2 class="h5 mb-0" id="teamChatCreateGroupLabel">Create group</h2>
-                <p class="small text-muted mb-0">Start a team conversation</p>
-              </div>
+            <div class="modal-header border-bottom-0 pb-0">
+              <h2 class="modal-title h5" id="teamChatCreateGroupLabel">Create group</h2>
               <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body team-chat-group-modal-body">
-              <label class="form-label fw-semibold" for="team-chat-group-name">Group name</label>
-              <div class="team-chat-group-name-field mb-3">
-                <i class="bi bi-chat-left-text" aria-hidden="true"></i>
-                <input type="text" class="form-control border-0 shadow-none" id="team-chat-group-name" maxlength="80" required placeholder="e.g. Sales team" />
-              </div>
-              <div class="team-chat-group-everyone-card mb-3">
-                <div class="form-check form-switch mb-0">
-                  <input class="form-check-input" type="checkbox" id="team-chat-group-everyone" checked />
-                  <label class="form-check-label fw-medium" for="team-chat-group-everyone">Include everyone on the team</label>
-                </div>
-                <p class="small text-muted mb-0 mt-1">Turn off to pick specific people only.</p>
+            <div class="modal-body team-chat-group-modal-body pt-2">
+              <label class="form-label team-chat-group-label" for="team-chat-group-name">Group name</label>
+              <input type="text" class="form-control mb-3" id="team-chat-group-name" maxlength="80" required placeholder="e.g. Sales team" />
+              <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" id="team-chat-group-everyone" checked />
+                <label class="form-check-label" for="team-chat-group-everyone">Include everyone on the team</label>
               </div>
               <div class="d-none" id="team-chat-group-members-wrap">
                 <div class="team-chat-group-members-toolbar mb-2">
-                  <span class="fw-semibold">Members</span>
-                  <span class="team-chat-member-count-badge" id="team-chat-create-member-count">0 selected</span>
+                  <label class="form-label team-chat-group-label mb-0">Members</label>
+                  <span class="team-chat-member-count-text" id="team-chat-create-member-count">0 selected</span>
                 </div>
                 <div class="team-chat-member-pick-list" id="team-chat-group-member-picks"></div>
               </div>
             </div>
-            <div class="team-chat-group-modal-footer">
-              <button type="button" class="btn btn-light border" data-bs-dismiss="modal">Cancel</button>
-              <button type="submit" class="btn btn-primary px-4" id="team-chat-group-submit">
-                <i class="bi bi-plus-lg me-1" aria-hidden="true"></i>Create group
-              </button>
+            <div class="modal-footer border-top-0 pt-0">
+              <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+              <button type="submit" class="btn btn-dark" id="team-chat-group-submit">Create group</button>
             </div>
           </form>
         </div>
       </div>
     </div>
     <div class="modal fade team-chat-group-modal" id="teamChatManageGroupModal" tabindex="-1" aria-labelledby="teamChatManageGroupLabel" aria-hidden="true">
-      <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
-        <div class="modal-content team-chat-group-modal-content border-0">
+      <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content team-chat-group-modal-content">
           <form id="team-chat-manage-group-form">
-            <div class="team-chat-group-modal-header">
-              <div class="team-chat-group-modal-icon" aria-hidden="true"><i class="bi bi-sliders"></i></div>
-              <div class="min-w-0 flex-grow-1">
-                <h2 class="h5 mb-0" id="teamChatManageGroupLabel">Manage group</h2>
-                <p class="small text-muted mb-0">Edit name, members, or delete</p>
-              </div>
+            <div class="modal-header border-bottom-0 pb-0">
+              <h2 class="modal-title h5" id="teamChatManageGroupLabel">Manage group</h2>
               <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body team-chat-group-modal-body">
-              <label class="form-label fw-semibold" for="team-chat-manage-group-name">Group name</label>
-              <div class="team-chat-group-name-field mb-4">
-                <i class="bi bi-chat-left-text" aria-hidden="true"></i>
-                <input type="text" class="form-control border-0 shadow-none" id="team-chat-manage-group-name" maxlength="80" required placeholder="Group name" />
-              </div>
+            <div class="modal-body team-chat-group-modal-body pt-2">
+              <label class="form-label team-chat-group-label" for="team-chat-manage-group-name">Group name</label>
+              <input type="text" class="form-control mb-4" id="team-chat-manage-group-name" maxlength="80" required placeholder="Group name" />
               <div class="team-chat-group-members-toolbar mb-2">
-                <span class="fw-semibold">Members</span>
-                <span class="team-chat-member-count-badge" id="team-chat-manage-member-count">0 selected</span>
+                <label class="form-label team-chat-group-label mb-0">Members</label>
+                <span class="team-chat-member-count-text" id="team-chat-manage-member-count">0 selected</span>
                 <div class="team-chat-group-members-actions ms-auto">
-                  <button type="button" class="btn btn-sm btn-light border" id="team-chat-manage-select-all">All</button>
-                  <button type="button" class="btn btn-sm btn-light border" id="team-chat-manage-select-none">None</button>
+                  <button type="button" class="btn btn-sm btn-link text-muted text-decoration-none p-0" id="team-chat-manage-select-all">Select all</button>
+                  <span class="text-muted" aria-hidden="true">·</span>
+                  <button type="button" class="btn btn-sm btn-link text-muted text-decoration-none p-0" id="team-chat-manage-select-none">Clear</button>
                 </div>
               </div>
-              <div class="team-chat-group-search mb-2">
-                <i class="bi bi-search" aria-hidden="true"></i>
-                <input type="search" class="form-control form-control-sm border-0 shadow-none" id="team-chat-manage-member-search" placeholder="Search members…" autocomplete="off" />
-              </div>
+              <input type="search" class="form-control form-control-sm mb-2" id="team-chat-manage-member-search" placeholder="Search members…" autocomplete="off" />
               <div class="team-chat-member-pick-list" id="team-chat-manage-member-picks"></div>
             </div>
-            <div class="team-chat-group-modal-footer team-chat-group-modal-footer--split">
-              <button type="button" class="btn btn-outline-danger" id="team-chat-delete-group-btn">
-                <i class="bi bi-trash me-1" aria-hidden="true"></i>Delete group
-              </button>
+            <div class="modal-footer team-chat-group-modal-footer--split border-top-0 pt-0">
+              <button type="button" class="btn btn-link text-danger text-decoration-none px-0" id="team-chat-delete-group-btn">Delete group</button>
               <div class="team-chat-group-modal-actions">
-                <button type="button" class="btn btn-light border" data-bs-dismiss="modal">Cancel</button>
-                <button type="submit" class="btn btn-primary px-4" id="team-chat-manage-group-submit">
-                  <i class="bi bi-check-lg me-1" aria-hidden="true"></i>Save changes
-                </button>
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-dark" id="team-chat-manage-group-submit">Save</button>
               </div>
             </div>
           </form>
@@ -436,19 +411,23 @@ function updateMemberPickCount(countId, listId) {
   el.textContent = `${n} selected`;
 }
 
+function neutralAvatarHtml(name) {
+  const initial = String(name || "?").slice(0, 1).toUpperCase();
+  return `<span class="team-chat-neutral-avatar" aria-hidden="true">${d().escapeHtml(initial)}</span>`;
+}
+
 function memberPickRowHtml(c, selected, inputPrefix, meId) {
   const checked = selected.has(c.id);
   const isMe = c.id === meId;
   const onCls = checked ? " team-chat-member-pick-row--on" : "";
-  const youCls = isMe ? " team-chat-member-pick-row--you" : "";
-  return `<label class="team-chat-member-pick-row${onCls}${youCls}">
-    <input type="checkbox" class="team-chat-member-pick-input visually-hidden" value="${c.id}" id="${inputPrefix}-pick-${c.id}"${checked ? " checked" : ""}${isMe ? " disabled" : ""} />
-    ${contactAvatarHtml(c.displayName, c.role)}
+  const roleLabel = c.roleLabel || (c.role === "owner" ? "Admin" : "Employee");
+  return `<label class="team-chat-member-pick-row${onCls}">
+    <input type="checkbox" class="form-check-input team-chat-member-pick-input flex-shrink-0" value="${c.id}" id="${inputPrefix}-pick-${c.id}"${checked ? " checked" : ""}${isMe ? " disabled" : ""} />
+    ${neutralAvatarHtml(c.displayName)}
     <span class="team-chat-member-pick-info min-w-0">
-      <span class="team-chat-member-pick-name text-truncate">${d().escapeHtml(c.displayName)}${isMe ? ' <span class="team-chat-member-you-tag">You</span>' : ""}</span>
-      ${rolePillHtml(c.roleLabel || c.role)}
+      <span class="team-chat-member-pick-name text-truncate">${d().escapeHtml(c.displayName)}${isMe ? ' <span class="team-chat-member-you-tag">(you)</span>' : ""}</span>
+      <span class="team-chat-member-pick-role">${d().escapeHtml(roleLabel)}</span>
     </span>
-    <span class="team-chat-member-pick-check" aria-hidden="true"><i class="bi bi-check-lg"></i></span>
   </label>`;
 }
 
@@ -731,8 +710,7 @@ function updateThreadHeaderFromThread(t) {
   if (t.type === "group") {
     if (nameEl) nameEl.textContent = t.group?.name || "Group";
     if (roleEl) {
-      const hint = isAdminUser() ? " · tap to manage" : "";
-      roleEl.innerHTML = `<span class="team-chat-role-pill team-chat-role-pill--group">${t.group?.memberCount ?? 0} members${hint}</span>`;
+      roleEl.innerHTML = `<span class="team-chat-role-pill team-chat-role-pill--group">${t.group?.memberCount ?? 0} members</span>`;
     }
     if (avatarEl) avatarEl.innerHTML = groupAvatarHtml(t.group?.name || "Group", true);
     syncGroupManageUi();
