@@ -2662,6 +2662,33 @@ body {
   flex-shrink: 0;
 }
 
+.team-chat-thread-head-main {
+  color: inherit;
+  min-width: 0;
+}
+
+.team-chat-thread-head-main--clickable {
+  cursor: pointer;
+  border-radius: 0.5rem;
+  padding: 0.15rem 0.35rem !important;
+  margin: -0.15rem -0.35rem;
+}
+
+.team-chat-thread-head-main--clickable:hover {
+  background: rgba(var(--bs-primary-rgb), 0.08);
+}
+
+.team-chat-group-manage-btn {
+  border-radius: 999px;
+  width: 2.15rem;
+  height: 2.15rem;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
 .team-chat-back-btn {
   border-radius: 999px;
   width: 2rem;

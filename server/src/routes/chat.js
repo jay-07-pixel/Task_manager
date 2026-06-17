@@ -21,6 +21,11 @@ const createGroupSchema = z.object({
   includeEveryone: z.boolean().optional(),
 });
 
+const updateGroupSchema = z.object({
+  name: z.string().trim().min(1).max(80).optional(),
+  memberIds: z.array(z.string().uuid()).min(1).optional(),
+});
+
 function canonicalPair(userIdA, userIdB) {
   return userIdA < userIdB ? [userIdA, userIdB] : [userIdB, userIdA];
 }
@@ -509,6 +514,130 @@ router.post("/groups", requireAuth, requireOwner, async (req, res) => {
     threadType: "group",
     threadId: group.id,
   });
+});
+
+router.get("/groups/:id", requireAuth, async (req, res) => {
+  const meId = req.session.userId;
+  const membership = await prisma.chatGroupMember.findUnique({
+    where: { groupId_userId: { groupId: req.params.id, userId: meId } },
+    include: {
+      group: {
+        include: {
+          _count: { select: { members: true } },
+          members: {
+            include: {
+              user: { select: { id: true, displayName: true, email: true, role: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+  if (!membership) {
+    return res.status(404).json({ error: "Group not found." });
+  }
+
+  const { group } = membership;
+  res.json({
+    group: {
+      id: group.id,
+      name: group.name,
+      memberCount: group._count.members,
+      createdById: group.createdById,
+      updatedAt: group.updatedAt,
+    },
+    members: group.members
+      .map((m) => serializeContact(m.user))
+      .sort((a, b) => a.displayName.localeCompare(b.displayName)),
+    canManage: req.session.role === "owner",
+  });
+});
+
+router.patch("/groups/:id", requireAuth, requireOwner, async (req, res) => {
+  const parsed = updateGroupSchema.safeParse(req.body);
+  if (!parsed.success || (!parsed.data.name && !parsed.data.memberIds)) {
+    return res.status(400).json({ error: "Provide a group name and/or at least one member." });
+  }
+
+  const meId = req.session.userId;
+  const group = await prisma.chatGroup.findUnique({
+    where: { id: req.params.id },
+    include: { members: { select: { userId: true } } },
+  });
+  if (!group) {
+    return res.status(404).json({ error: "Group not found." });
+  }
+
+  let memberIds = parsed.data.memberIds;
+  if (memberIds) {
+    memberIds = [...new Set([meId, ...memberIds])];
+    const validCount = await prisma.user.count({ where: { id: { in: memberIds } } });
+    if (validCount !== memberIds.length) {
+      return res.status(400).json({ error: "One or more members were not found." });
+    }
+  }
+
+  const formerMemberIds = group.members.map((m) => m.userId);
+
+  await prisma.$transaction(async (tx) => {
+    if (parsed.data.name) {
+      await tx.chatGroup.update({
+        where: { id: group.id },
+        data: { name: parsed.data.name },
+      });
+    }
+    if (memberIds) {
+      await tx.chatGroupMember.deleteMany({ where: { groupId: group.id } });
+      await tx.chatGroupMember.createMany({
+        data: memberIds.map((userId) => ({ groupId: group.id, userId })),
+      });
+    }
+  });
+
+  const updated = await prisma.chatGroup.findUnique({
+    where: { id: group.id },
+    include: {
+      _count: { select: { members: true } },
+      members: { select: { userId: true } },
+    },
+  });
+
+  const notifyIds = [...new Set([...formerMemberIds, ...(updated?.members.map((m) => m.userId) ?? [])])];
+  publishChatLive(notifyIds, {
+    kind: "thread",
+    threadType: "group",
+    threadId: group.id,
+  });
+
+  res.json({
+    group: {
+      id: updated.id,
+      name: updated.name,
+      memberCount: updated._count.members,
+      updatedAt: updated.updatedAt,
+    },
+  });
+});
+
+router.delete("/groups/:id", requireAuth, requireOwner, async (req, res) => {
+  const group = await prisma.chatGroup.findUnique({
+    where: { id: req.params.id },
+    include: { members: { select: { userId: true } } },
+  });
+  if (!group) {
+    return res.status(404).json({ error: "Group not found." });
+  }
+
+  const memberIds = group.members.map((m) => m.userId);
+  await prisma.chatGroup.delete({ where: { id: group.id } });
+
+  publishChatLive(memberIds, {
+    kind: "thread_deleted",
+    threadType: "group",
+    threadId: group.id,
+  });
+
+  res.json({ ok: true });
 });
 
 router.get("/groups/:id/messages", requireAuth, async (req, res) => {

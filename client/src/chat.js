@@ -75,6 +75,16 @@ async function refreshActiveMessages() {
 
 function onChatLivePayload(payload) {
   if (!payload || payload.type === "connected") return;
+  if (payload.kind === "thread_deleted" && payload.threadType === "group" && payload.threadId === activeChatId) {
+    activeThreadType = null;
+    activeChatId = null;
+    activeThreadIsGroup = false;
+    activeMessages = [];
+    setThreadVisible(false);
+    syncGroupManageUi();
+    void loadThreads();
+    return;
+  }
   if (
     payload.kind === "message" &&
     payload.threadType === activeThreadType &&
@@ -248,10 +258,13 @@ export function teamChatOffcanvasHtml() {
                   <i class="bi bi-arrow-left" aria-hidden="true"></i>
                 </button>
                 <span id="team-chat-peer-avatar"></span>
-                <div class="min-w-0 flex-grow-1">
+                <button type="button" class="team-chat-thread-head-main min-w-0 flex-grow-1 text-start border-0 bg-transparent p-0" id="team-chat-thread-head-main">
                   <div class="fw-semibold text-truncate" id="team-chat-peer-name">—</div>
                   <div id="team-chat-peer-role"></div>
-                </div>
+                </button>
+                <button type="button" class="btn btn-sm btn-light border team-chat-group-manage-btn d-none" id="team-chat-group-manage-btn" title="Manage group" aria-label="Manage group">
+                  <i class="bi bi-people-fill" aria-hidden="true"></i>
+                </button>
               </div>
               <div class="team-chat-messages flex-grow-1" id="team-chat-messages" aria-live="polite"></div>
               <form class="team-chat-compose" id="team-chat-compose">
@@ -296,6 +309,36 @@ export function teamChatOffcanvasHtml() {
           </form>
         </div>
       </div>
+    </div>
+    <div class="modal fade" id="teamChatManageGroupModal" tabindex="-1" aria-labelledby="teamChatManageGroupLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+          <form id="team-chat-manage-group-form">
+            <div class="modal-header">
+              <h2 class="modal-title h5" id="teamChatManageGroupLabel">Manage group</h2>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              <div class="mb-3">
+                <label class="form-label" for="team-chat-manage-group-name">Group name</label>
+                <input type="text" class="form-control" id="team-chat-manage-group-name" maxlength="80" required />
+              </div>
+              <div class="mb-2 d-flex align-items-center justify-content-between">
+                <p class="small fw-semibold mb-0">Members</p>
+                <span class="small text-muted" id="team-chat-manage-member-count"></span>
+              </div>
+              <div class="team-chat-group-member-picks border rounded p-2" id="team-chat-manage-member-picks"></div>
+            </div>
+            <div class="modal-footer flex-wrap gap-2 justify-content-between">
+              <button type="button" class="btn btn-outline-danger" id="team-chat-delete-group-btn">Delete group</button>
+              <div class="d-flex gap-2 ms-auto">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" class="btn btn-primary" id="team-chat-manage-group-submit">Save changes</button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
     </div>`;
 }
 
@@ -324,6 +367,126 @@ function filteredThreads() {
 function syncAdminGroupUi() {
   const wrap = document.getElementById("team-chat-create-group-wrap");
   if (wrap) wrap.classList.toggle("d-none", !isAdminUser());
+}
+
+function syncGroupManageUi() {
+  const btn = document.getElementById("team-chat-group-manage-btn");
+  const headMain = document.getElementById("team-chat-thread-head-main");
+  const show = isAdminUser() && activeThreadIsGroup && !!activeChatId;
+  btn?.classList.toggle("d-none", !show);
+  headMain?.classList.toggle("team-chat-thread-head-main--clickable", show);
+}
+
+function renderManageMemberPicks(selectedIds = []) {
+  const host = document.getElementById("team-chat-manage-member-picks");
+  if (!host) return;
+  const selected = new Set(selectedIds);
+  const meId = d().getUser()?.id;
+  const allPeople = [...contacts];
+  if (meId && !allPeople.some((c) => c.id === meId)) {
+    const me = d().getUser();
+    allPeople.unshift({
+      id: meId,
+      displayName: me?.displayName || "You",
+      email: me?.email || "",
+      role: me?.role || "owner",
+      roleLabel: me?.role === "owner" ? "Admin" : "Employee",
+    });
+  }
+  host.innerHTML = allPeople
+    .map((c) => {
+      const checked = selected.has(c.id) ? " checked" : "";
+      const isMe = c.id === meId;
+      return `<div class="form-check">
+        <input class="form-check-input" type="checkbox" value="${c.id}" id="team-chat-manage-pick-${c.id}"${checked}${isMe ? " disabled" : ""} />
+        <label class="form-check-label" for="team-chat-manage-pick-${c.id}">
+          ${d().escapeHtml(c.displayName)}${isMe ? " (you)" : ""}
+          <span class="text-muted small"> · ${d().escapeHtml(c.roleLabel || "")}</span>
+        </label>
+      </div>`;
+    })
+    .join("");
+  const countEl = document.getElementById("team-chat-manage-member-count");
+  if (countEl) countEl.textContent = `${selected.size} selected`;
+}
+
+async function openManageGroupModal() {
+  if (!isAdminUser() || !activeChatId || activeThreadType !== "group") return;
+  try {
+    const data = await d().api(`/api/chat/groups/${activeChatId}`);
+    const nameInput = document.getElementById("team-chat-manage-group-name");
+    if (nameInput) nameInput.value = data.group?.name || "";
+    renderManageMemberPicks((data.members ?? []).map((m) => m.id));
+    const modalEl = document.getElementById("teamChatManageGroupModal");
+    if (modalEl) d().bootstrap.Modal.getOrCreateInstance(modalEl).show();
+  } catch (err) {
+    d().showToast(err.message || "Could not load group", "danger");
+  }
+}
+
+async function saveManageGroup(e) {
+  e.preventDefault();
+  if (!activeChatId || activeThreadType !== "group") return;
+  const nameInput = document.getElementById("team-chat-manage-group-name");
+  const submit = document.getElementById("team-chat-manage-group-submit");
+  const name = nameInput?.value?.trim();
+  if (!name) return;
+
+  const memberIds = [];
+  document.querySelectorAll("#team-chat-manage-member-picks input:checked").forEach((el) => {
+    memberIds.push(el.value);
+  });
+  const meId = d().getUser()?.id;
+  if (meId && !memberIds.includes(meId)) memberIds.push(meId);
+  if (!memberIds.length) {
+    d().showToast("Select at least one member.", "warning");
+    return;
+  }
+
+  if (submit) submit.disabled = true;
+  try {
+    await d().api(`/api/chat/groups/${activeChatId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ name, memberIds }),
+    });
+    const modalEl = document.getElementById("teamChatManageGroupModal");
+    if (modalEl) d().bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+    d().showToast("Group updated.", "success");
+    await loadThreads();
+    const cached = threads.find((t) => t.type === "group" && t.id === activeChatId);
+    if (cached) updateThreadHeaderFromThread(cached);
+  } catch (err) {
+    d().showToast(err.message, "danger");
+  } finally {
+    if (submit) submit.disabled = false;
+  }
+}
+
+async function deleteActiveGroup() {
+  if (!isAdminUser() || !activeChatId || activeThreadType !== "group") return;
+  const cached = threads.find((t) => t.type === "group" && t.id === activeChatId);
+  const groupName = cached?.group?.name || "this group";
+  if (!window.confirm(`Delete "${groupName}"? All messages in this group will be removed.`)) return;
+
+  const btn = document.getElementById("team-chat-delete-group-btn");
+  if (btn) btn.disabled = true;
+  try {
+    await d().api(`/api/chat/groups/${activeChatId}`, { method: "DELETE" });
+    const modalEl = document.getElementById("teamChatManageGroupModal");
+    if (modalEl) d().bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+    activeThreadType = null;
+    activeChatId = null;
+    activeThreadIsGroup = false;
+    activeMessages = [];
+    setThreadVisible(false);
+    syncGroupManageUi();
+    d().showToast("Group deleted.", "success");
+    await loadThreads();
+  } catch (err) {
+    d().showToast(err.message, "danger");
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 function setSidebarTab(tab) {
@@ -486,15 +649,18 @@ function updateThreadHeaderFromThread(t) {
   if (t.type === "group") {
     if (nameEl) nameEl.textContent = t.group?.name || "Group";
     if (roleEl) {
-      roleEl.innerHTML = `<span class="team-chat-role-pill team-chat-role-pill--group">${t.group?.memberCount ?? 0} members</span>`;
+      const hint = isAdminUser() ? " · tap to manage" : "";
+      roleEl.innerHTML = `<span class="team-chat-role-pill team-chat-role-pill--group">${t.group?.memberCount ?? 0} members${hint}</span>`;
     }
     if (avatarEl) avatarEl.innerHTML = groupAvatarHtml(t.group?.name || "Group", true);
+    syncGroupManageUi();
     return;
   }
   const peer = t.peer;
   if (nameEl) nameEl.textContent = peer?.displayName || "Chat";
   if (roleEl) roleEl.innerHTML = peer ? rolePillHtml(peer.roleLabel || peer.role) : "";
   if (avatarEl) avatarEl.innerHTML = peer ? contactAvatarHtml(peer.displayName, peer.role, true) : "";
+  syncGroupManageUi();
 }
 
 function setThreadVisible(open) {
@@ -567,6 +733,7 @@ async function openThread(type, id) {
   activeChatId = id;
   activeThreadIsGroup = activeThreadType === "group";
   mobileShowThread = isMobileChatLayout();
+  syncGroupManageUi();
 
   const cached = threads.find((t) => t.type === activeThreadType && t.id === id);
   if (cached) updateThreadHeaderFromThread(cached);
@@ -610,6 +777,7 @@ async function openThread(type, id) {
     activeChatId = null;
     activeThreadIsGroup = false;
     mobileShowThread = false;
+    syncGroupManageUi();
     setThreadVisible(false);
     d().showToast(err.message || "Could not open chat", "danger");
   }
@@ -853,9 +1021,30 @@ export function initTeamChat(chatDeps) {
     const wrap = document.getElementById("team-chat-group-members-wrap");
     if (wrap) wrap.classList.toggle("d-none", e.target.checked);
   });
+  document.getElementById("team-chat-group-manage-btn")?.addEventListener("click", () => {
+    void openManageGroupModal();
+  });
+  document.getElementById("team-chat-thread-head-main")?.addEventListener("click", () => {
+    if (isAdminUser() && activeThreadIsGroup) void openManageGroupModal();
+  });
+  document.getElementById("team-chat-manage-group-form")?.addEventListener("submit", (e) => {
+    void saveManageGroup(e);
+  });
+  document.getElementById("team-chat-delete-group-btn")?.addEventListener("click", () => {
+    void deleteActiveGroup();
+  });
+  document.getElementById("team-chat-manage-member-picks")?.addEventListener("change", () => {
+    const memberIds = [];
+    document.querySelectorAll("#team-chat-manage-member-picks input:checked").forEach((el) => {
+      memberIds.push(el.value);
+    });
+    const countEl = document.getElementById("team-chat-manage-member-count");
+    if (countEl) countEl.textContent = `${memberIds.length} selected`;
+  });
 
   setSidebarTab("chats");
   syncAdminGroupUi();
+  syncGroupManageUi();
   offcanvas.addEventListener("shown.bs.offcanvas", () => {
     syncChatPushButton();
     syncAdminGroupUi();
@@ -867,6 +1056,7 @@ export function initTeamChat(chatDeps) {
     activeChatId = null;
     activeThreadIsGroup = false;
     activeMessages = [];
+    syncGroupManageUi();
     setThreadVisible(false);
   });
 
