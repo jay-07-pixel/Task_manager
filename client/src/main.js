@@ -5238,11 +5238,11 @@ function empLeftNavInner() {
       <button type="button" class="btn btn-outline-primary w-100 mb-2 js-emp-refresh">
         <i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>Refresh tasks
       </button>
+      ${teamChatSidebarButtonHtml()}
       <p class="owner-sidebar-label mb-2">My work</p>
       <div class="list-group list-group-flush flex-grow-1 overflow-auto owner-list-nav js-emp-nav-host"></div>
       <div class="owner-sidebar-footer">
         ${empRemindersButtonHtml()}
-        ${teamChatSidebarButtonHtml()}
         ${appBtn}
         <div class="d-flex justify-content-center mb-2">${themeIconToggleMarkup()}</div>
         <button type="button" class="btn btn-outline-danger w-100 js-logout">
