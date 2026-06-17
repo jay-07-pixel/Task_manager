@@ -274,7 +274,10 @@ function renderThreadList() {
         ${avatar}
         <span class="team-chat-thread-item-main">
           <span class="team-chat-thread-item-top">
-            <span class="team-chat-thread-item-name text-truncate">${d().escapeHtml(title)}${isGroup ? `<span class="team-chat-group-badge">Group</span>` : ""}</span>
+            <span class="team-chat-thread-item-title-wrap">
+              <span class="team-chat-thread-item-name text-truncate">${d().escapeHtml(title)}</span>
+              ${isGroup ? `<span class="team-chat-group-badge">Group</span>` : ""}
+            </span>
             <span class="team-chat-thread-item-time tabular-nums">${d().escapeHtml(formatChatTime(t.lastMessage?.createdAt || t.updatedAt))}</span>
           </span>
           <span class="team-chat-thread-item-bottom">
