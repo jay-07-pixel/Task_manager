@@ -193,8 +193,8 @@ function formatChatTime(iso) {
   });
 }
 
-const CHAT_MAX_FILE_BYTES = 45 * 1024 * 1024;
-const CHAT_MAX_FILE_MB = 45;
+const CHAT_MAX_FILE_BYTES = 5 * 1024 * 1024;
+const CHAT_MAX_FILE_MB = 5;
 
 function previewText(body, hasAttachment) {
   const t = String(body || "").trim().replace(/\s+/g, " ");
@@ -298,13 +298,13 @@ async function postChatMessage(base, body, file) {
   if (!res.ok) {
     if (res.status === 413) {
       throw new Error(
-        `File is too large for the server. Use a file under ${CHAT_MAX_FILE_MB} MB, or ask your admin to set nginx client_max_body_size to 50m.`
+        `File is too large for the server. Use a file under ${CHAT_MAX_FILE_MB} MB, or ask your admin to set nginx client_max_body_size to 6m.`
       );
     }
     let msg = data?.error;
     if (!msg && text && /413|entity too large/i.test(text)) {
       msg =
-        "File is too large for the server. Ask your admin to set nginx client_max_body_size to 50m on the VPS.";
+        "File is too large for the server. Ask your admin to set nginx client_max_body_size to 6m on the VPS.";
     }
     throw new Error(msg || "Could not send message.");
   }

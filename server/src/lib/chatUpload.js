@@ -9,8 +9,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const chatUploadsRoot = path.join(__dirname, "..", "..", "uploads", "chat");
 fs.mkdirSync(chatUploadsRoot, { recursive: true });
 
-export const CHAT_MAX_FILE_BYTES = 45 * 1024 * 1024;
-export const CHAT_MAX_FILE_MB = 45;
+export const CHAT_MAX_FILE_BYTES = 5 * 1024 * 1024;
+export const CHAT_MAX_FILE_MB = 5;
 
 export const chatFileUpload = multer({
   storage: multer.diskStorage({
