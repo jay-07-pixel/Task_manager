@@ -9,21 +9,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const chatUploadsRoot = path.join(__dirname, "..", "..", "uploads", "chat");
 fs.mkdirSync(chatUploadsRoot, { recursive: true });
 
-export const CHAT_MAX_FILE_BYTES = 10 * 1024 * 1024;
-
-const ALLOWED_MIME = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/gif",
-  "image/webp",
-  "application/pdf",
-  "text/plain",
-  "text/csv",
-  "application/msword",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "application/vnd.ms-excel",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-]);
+export const CHAT_MAX_FILE_BYTES = 45 * 1024 * 1024;
+export const CHAT_MAX_FILE_MB = 45;
 
 export const chatFileUpload = multer({
   storage: multer.diskStorage({
@@ -38,13 +25,6 @@ export const chatFileUpload = multer({
     },
   }),
   limits: { fileSize: CHAT_MAX_FILE_BYTES },
-  fileFilter: (_req, file, cb) => {
-    if (ALLOWED_MIME.has(file.mimetype)) {
-      cb(null, true);
-      return;
-    }
-    cb(new Error("File type not allowed"));
-  },
 });
 
 /** @param {import("express").Request} req */
@@ -52,13 +32,7 @@ export function handleChatFileUpload(req, res, next) {
   chatFileUpload.single("file")(req, res, (err) => {
     if (!err) return next();
     if (err.code === "LIMIT_FILE_SIZE") {
-      return res.status(400).json({ error: "File must be 10 MB or smaller." });
-    }
-    const msg = err.message || "Upload failed";
-    if (/not allowed/i.test(msg)) {
-      return res.status(400).json({
-        error: "File type not allowed. Use images, PDF, Word, Excel, or text files.",
-      });
+      return res.status(400).json({ error: `File must be ${CHAT_MAX_FILE_MB} MB or smaller.` });
     }
     return next(err);
   });
@@ -68,10 +42,19 @@ export function isImageMime(mime) {
   return typeof mime === "string" && mime.startsWith("image/");
 }
 
+export function isVideoMime(mime) {
+  return typeof mime === "string" && mime.startsWith("video/");
+}
+
+export function isInlineAttachmentMime(mime) {
+  return isImageMime(mime) || isVideoMime(mime);
+}
+
 export function messagePreviewLabel(body, attachmentMime, attachmentName) {
   const text = String(body || "").trim();
   if (text) return text;
   if (isImageMime(attachmentMime)) return "Photo";
+  if (isVideoMime(attachmentMime)) return "Video";
   if (attachmentName) return `File: ${attachmentName}`;
   return "Attachment";
 }
@@ -129,6 +112,7 @@ export function serializeChatMessage(m, meId, threadType) {
     out.attachmentMime = m.attachmentMime;
     out.attachmentName = m.attachmentName;
     out.attachmentIsImage = isImageMime(m.attachmentMime);
+    out.attachmentIsVideo = isVideoMime(m.attachmentMime);
   }
   return out;
 }
@@ -160,7 +144,7 @@ export function parseOutgoingChatMessage(req) {
   return {
     body,
     attachmentPath: file?.filename ?? null,
-    attachmentMime: file?.mimetype ?? null,
+    attachmentMime: file?.mimetype || "application/octet-stream",
     attachmentName: file?.originalname ? path.basename(file.originalname).slice(0, 255) : null,
   };
 }

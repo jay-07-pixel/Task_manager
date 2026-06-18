@@ -193,6 +193,9 @@ function formatChatTime(iso) {
   });
 }
 
+const CHAT_MAX_FILE_BYTES = 45 * 1024 * 1024;
+const CHAT_MAX_FILE_MB = 45;
+
 function previewText(body, hasAttachment) {
   const t = String(body || "").trim().replace(/\s+/g, " ");
   if (t) return t.length > 72 ? `${t.slice(0, 69)}…` : t;
@@ -207,6 +210,11 @@ function messageAttachmentHtml(m) {
     return `<a href="${d().escapeHtml(m.attachmentUrl)}" target="_blank" rel="noopener noreferrer" class="team-chat-attach-image-link">
       <img src="${d().escapeHtml(m.attachmentUrl)}" alt="${d().escapeHtml(name)}" class="team-chat-attach-image" loading="lazy" />
     </a>`;
+  }
+  if (m.attachmentIsVideo) {
+    return `<video class="team-chat-attach-video" controls preload="metadata" src="${d().escapeHtml(m.attachmentUrl)}">
+      <a href="${d().escapeHtml(m.attachmentUrl)}" download="${d().escapeHtml(name)}">${d().escapeHtml(name)}</a>
+    </video>`;
   }
   return `<a href="${d().escapeHtml(m.attachmentUrl)}" class="team-chat-attach-file" download="${d().escapeHtml(name)}">
     <i class="bi bi-file-earmark-arrow-down" aria-hidden="true"></i>
@@ -240,9 +248,12 @@ function renderAttachPreview() {
   }
   const name = pendingChatFile.name;
   const isImage = pendingChatFile.type.startsWith("image/");
+  const isVideo = pendingChatFile.type.startsWith("video/");
   const thumb = isImage
     ? `<img src="" alt="" class="team-chat-attach-preview-thumb" id="team-chat-attach-preview-thumb" />`
-    : `<span class="team-chat-attach-preview-icon" aria-hidden="true"><i class="bi bi-file-earmark"></i></span>`;
+    : isVideo
+      ? `<span class="team-chat-attach-preview-icon" aria-hidden="true"><i class="bi bi-camera-video"></i></span>`
+      : `<span class="team-chat-attach-preview-icon" aria-hidden="true"><i class="bi bi-file-earmark"></i></span>`;
   wrap.classList.remove("d-none");
   wrap.innerHTML = `
     <div class="team-chat-attach-preview">
@@ -287,13 +298,13 @@ async function postChatMessage(base, body, file) {
   if (!res.ok) {
     if (res.status === 413) {
       throw new Error(
-        "File is too large for the server. Use a file under 10 MB, or ask your admin to set nginx client_max_body_size to 11m."
+        `File is too large for the server. Use a file under ${CHAT_MAX_FILE_MB} MB, or ask your admin to set nginx client_max_body_size to 50m.`
       );
     }
     let msg = data?.error;
     if (!msg && text && /413|entity too large/i.test(text)) {
       msg =
-        "File is too large for the server. Ask your admin to set nginx client_max_body_size to 11m on the VPS.";
+        "File is too large for the server. Ask your admin to set nginx client_max_body_size to 50m on the VPS.";
     }
     throw new Error(msg || "Could not send message.");
   }
@@ -395,7 +406,7 @@ export function teamChatOffcanvasHtml() {
               <form class="team-chat-compose" id="team-chat-compose">
                 <div id="team-chat-attach-preview" class="d-none"></div>
                 <div class="team-chat-compose-inner">
-                  <input type="file" class="d-none" id="team-chat-file-input" accept="image/jpeg,image/png,image/gif,image/webp,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv" />
+                  <input type="file" class="d-none" id="team-chat-file-input" accept="*/*" />
                   <button type="button" class="btn btn-light border team-chat-attach-btn" id="team-chat-attach-btn" aria-label="Attach file">
                     <i class="bi bi-paperclip" aria-hidden="true"></i>
                   </button>
@@ -1194,8 +1205,8 @@ export function initTeamChat(chatDeps) {
   document.getElementById("team-chat-file-input")?.addEventListener("change", (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 10 * 1024 * 1024) {
-      d().showToast("File must be 10 MB or smaller.", "warning");
+    if (file.size > CHAT_MAX_FILE_BYTES) {
+      d().showToast(`File must be ${CHAT_MAX_FILE_MB} MB or smaller.`, "warning");
       e.target.value = "";
       return;
     }

@@ -4,9 +4,9 @@
 # Nginx default is 1m — uploads will fail with 413 Request Entity Too Large.
 #
 #   sudo nano /etc/nginx/sites-available/YOUR_SITE
-#   add inside server { }:  client_max_body_size 11m;
+#   add inside server { }:  client_max_body_size 50m;
 #   sudo nginx -t && sudo systemctl reload nginx
 #
-# Limits: task proof images 5 MB, chat attachments 10 MB.
+# Limits: task proof images 5 MB, chat attachments 45 MB (any file type).
 
-client_max_body_size 11m;
+client_max_body_size 50m;

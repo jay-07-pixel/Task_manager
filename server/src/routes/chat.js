@@ -10,7 +10,7 @@ import {
   dmMessageSelect,
   groupMessageSelect,
   handleChatFileUpload,
-  isImageMime,
+  isInlineAttachmentMime,
   messagePreviewLabel,
   parseOutgoingChatMessage,
   serializeChatMessage,
@@ -764,7 +764,7 @@ async function sendDmAttachment(req, res) {
     return res.status(404).json({ error: "File not found." });
   }
   const filePath = attachmentFilePath(message.attachmentPath);
-  const disposition = isImageMime(message.attachmentMime) ? "inline" : "attachment";
+  const disposition = isInlineAttachmentMime(message.attachmentMime) ? "inline" : "attachment";
   const safeName = path.basename(message.attachmentName || "file");
   res.setHeader("Content-Type", message.attachmentMime || "application/octet-stream");
   res.setHeader("Content-Disposition", `${disposition}; filename="${safeName}"`);
@@ -783,7 +783,7 @@ async function sendGroupAttachment(req, res) {
     return res.status(404).json({ error: "File not found." });
   }
   const filePath = attachmentFilePath(message.attachmentPath);
-  const disposition = isImageMime(message.attachmentMime) ? "inline" : "attachment";
+  const disposition = isInlineAttachmentMime(message.attachmentMime) ? "inline" : "attachment";
   const safeName = path.basename(message.attachmentName || "file");
   res.setHeader("Content-Type", message.attachmentMime || "application/octet-stream");
   res.setHeader("Content-Disposition", `${disposition}; filename="${safeName}"`);

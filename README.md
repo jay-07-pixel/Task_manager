@@ -403,7 +403,7 @@ Reminders are sent from the **server every 60 seconds** (~10 min before due, +1 
 | Prisma EPERM on Windows | Stop dev server, rerun `npm run db:generate --prefix server` |
 | Push `invalid JWT` / no background alerts | Regenerate VAPID, clear `push_subscription`, re-login and allow notifications |
 | CAPTCHA overflows on mobile | Pull latest; uses compact Turnstile + stacked layout |
-| Submit task or **chat file** shows **413 Request Entity Too Large** (nginx HTML) | On VPS nginx `server` block add `client_max_body_size 11m;` then `sudo nginx -t && sudo systemctl reload nginx` (see `deploy/nginx-upload-limit.conf.example`) |
+| Submit task or **chat file** shows **413 Request Entity Too Large** (nginx HTML) | On VPS nginx `server` block add `client_max_body_size 50m;` then `sudo nginx -t && sudo systemctl reload nginx` (see `deploy/nginx-upload-limit.conf.example`) |
 | Submit task shows **Server error** | Run migration on VPS: `npm run db:migrate:deploy --prefix server` then `npm run db:generate --prefix server` and `pm2 restart taskmanager`. Check `pm2 logs taskmanager` for `[completion-proof]` errors. |
 
 ## License
