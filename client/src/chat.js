@@ -24,6 +24,8 @@ let activeThreadType = null;
 let activeChatId = null;
 /** @type {any[]} */
 let activeMessages = [];
+/** @type {File | null} */
+let pendingChatFile = null;
 /** @type {boolean} */
 let activeThreadIsGroup = false;
 /** @type {string} */
@@ -156,25 +158,136 @@ function parseChatDeepLink(raw) {
   return { type: "dm", id };
 }
 
+const CHAT_TIME_ZONE = (import.meta.env.VITE_APP_TIMEZONE || "Asia/Kolkata").trim() || "Asia/Kolkata";
+
+function dateKeyInTimeZone(dt, timeZone) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(dt);
+}
+
 function formatChatTime(iso) {
   if (!iso) return "";
   const dt = new Date(iso);
   if (Number.isNaN(dt.getTime())) return "";
   const now = new Date();
-  const sameDay =
-    dt.getFullYear() === now.getFullYear() &&
-    dt.getMonth() === now.getMonth() &&
-    dt.getDate() === now.getDate();
+  const sameDay = dateKeyInTimeZone(dt, CHAT_TIME_ZONE) === dateKeyInTimeZone(now, CHAT_TIME_ZONE);
   if (sameDay) {
-    return dt.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+    return dt.toLocaleTimeString("en-IN", {
+      timeZone: CHAT_TIME_ZONE,
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
   }
-  return dt.toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  return dt.toLocaleString("en-IN", {
+    timeZone: CHAT_TIME_ZONE,
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
 }
 
-function previewText(body) {
+function previewText(body, hasAttachment) {
   const t = String(body || "").trim().replace(/\s+/g, " ");
-  if (!t) return "No messages yet";
-  return t.length > 72 ? `${t.slice(0, 69)}…` : t;
+  if (t) return t.length > 72 ? `${t.slice(0, 69)}…` : t;
+  if (hasAttachment) return "Attachment";
+  return "No messages yet";
+}
+
+function messageAttachmentHtml(m) {
+  if (!m.attachmentUrl) return "";
+  const name = m.attachmentName || "File";
+  if (m.attachmentIsImage) {
+    return `<a href="${d().escapeHtml(m.attachmentUrl)}" target="_blank" rel="noopener noreferrer" class="team-chat-attach-image-link">
+      <img src="${d().escapeHtml(m.attachmentUrl)}" alt="${d().escapeHtml(name)}" class="team-chat-attach-image" loading="lazy" />
+    </a>`;
+  }
+  return `<a href="${d().escapeHtml(m.attachmentUrl)}" class="team-chat-attach-file" download="${d().escapeHtml(name)}">
+    <i class="bi bi-file-earmark-arrow-down" aria-hidden="true"></i>
+    <span class="text-truncate">${d().escapeHtml(name)}</span>
+  </a>`;
+}
+
+function messageBodyHtml(m) {
+  const attach = messageAttachmentHtml(m);
+  const text = String(m.body || "").trim();
+  const textHtml = text
+    ? `<div class="team-chat-bubble-body text-break">${d().escapeHtml(m.body)}</div>`
+    : "";
+  return `${attach}${textHtml}`;
+}
+
+function clearPendingChatFile() {
+  pendingChatFile = null;
+  const input = document.getElementById("team-chat-file-input");
+  if (input) input.value = "";
+  renderAttachPreview();
+}
+
+function renderAttachPreview() {
+  const wrap = document.getElementById("team-chat-attach-preview");
+  if (!wrap) return;
+  if (!pendingChatFile) {
+    wrap.classList.add("d-none");
+    wrap.innerHTML = "";
+    return;
+  }
+  const name = pendingChatFile.name;
+  const isImage = pendingChatFile.type.startsWith("image/");
+  const thumb = isImage
+    ? `<img src="" alt="" class="team-chat-attach-preview-thumb" id="team-chat-attach-preview-thumb" />`
+    : `<span class="team-chat-attach-preview-icon" aria-hidden="true"><i class="bi bi-file-earmark"></i></span>`;
+  wrap.classList.remove("d-none");
+  wrap.innerHTML = `
+    <div class="team-chat-attach-preview">
+      ${thumb}
+      <span class="team-chat-attach-preview-name text-truncate">${d().escapeHtml(name)}</span>
+      <button type="button" class="btn btn-sm btn-link text-danger p-0 ms-auto" id="team-chat-attach-remove" aria-label="Remove attachment">&times;</button>
+    </div>`;
+  if (isImage) {
+    const img = document.getElementById("team-chat-attach-preview-thumb");
+    if (img) {
+      const url = URL.createObjectURL(pendingChatFile);
+      img.src = url;
+      img.onload = () => URL.revokeObjectURL(url);
+    }
+  }
+  document.getElementById("team-chat-attach-remove")?.addEventListener("click", () => {
+    clearPendingChatFile();
+  });
+}
+
+async function postChatMessage(base, body, file) {
+  const fd = new FormData();
+  if (body) fd.append("body", body);
+  if (file) fd.append("file", file);
+  let res;
+  try {
+    res = await fetch(`${base}/messages`, {
+      method: "POST",
+      credentials: "include",
+      body: fd,
+    });
+  } catch {
+    throw new Error("Network error sending message.");
+  }
+  const text = await res.text();
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = { error: text };
+  }
+  if (!res.ok) {
+    throw new Error(data?.error || "Could not send message.");
+  }
+  return data;
 }
 
 function avatarColor(name) {
@@ -270,7 +383,12 @@ export function teamChatOffcanvasHtml() {
               </div>
               <div class="team-chat-messages flex-grow-1" id="team-chat-messages" aria-live="polite"></div>
               <form class="team-chat-compose" id="team-chat-compose">
+                <div id="team-chat-attach-preview" class="d-none"></div>
                 <div class="team-chat-compose-inner">
+                  <input type="file" class="d-none" id="team-chat-file-input" accept="image/jpeg,image/png,image/gif,image/webp,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv" />
+                  <button type="button" class="btn btn-light border team-chat-attach-btn" id="team-chat-attach-btn" aria-label="Attach file">
+                    <i class="bi bi-paperclip" aria-hidden="true"></i>
+                  </button>
                   <textarea class="form-control team-chat-input" id="team-chat-input" rows="1" maxlength="4000" placeholder="Type a message…" aria-label="Message"></textarea>
                   <button class="btn btn-primary team-chat-send-btn" type="submit" id="team-chat-send" aria-label="Send message">
                     <i class="bi bi-send-fill" aria-hidden="true"></i>
@@ -609,7 +727,7 @@ function renderThreadList() {
             <span class="team-chat-thread-item-time tabular-nums">${d().escapeHtml(formatChatTime(t.lastMessage?.createdAt || t.updatedAt))}</span>
           </span>
           <span class="team-chat-thread-item-bottom">
-            <span class="team-chat-thread-item-preview text-truncate">${d().escapeHtml(prefix + previewText(t.lastMessage?.body))}</span>
+            <span class="team-chat-thread-item-preview text-truncate">${d().escapeHtml(prefix + previewText(t.lastMessage?.body, t.lastMessage?.hasAttachment))}</span>
             ${unread}
           </span>
         </span>
@@ -688,7 +806,7 @@ function renderMessages() {
         <div class="team-chat-bubble-wrap">
           ${senderLine}
           <div class="team-chat-bubble">
-            <div class="team-chat-bubble-body text-break">${d().escapeHtml(m.body)}</div>
+            ${messageBodyHtml(m)}
             <div class="team-chat-bubble-time tabular-nums">${d().escapeHtml(formatChatTime(m.createdAt))}</div>
           </div>
         </div>
@@ -742,7 +860,7 @@ function isChatPanelOpen() {
 function notifyIncomingMessage(thread) {
   const isGroup = thread.type === "group";
   const name = isGroup ? thread.group?.name : thread.peer?.displayName || "Someone";
-  const preview = previewText(thread.lastMessage?.body);
+  const preview = previewText(thread.lastMessage?.body, thread.lastMessage?.hasAttachment);
   const label = isGroup && thread.lastMessage?.senderName
     ? `${thread.lastMessage.senderName} in ${name}`
     : name;
@@ -789,6 +907,7 @@ async function loadThreads() {
 }
 
 async function openThread(type, id) {
+  clearPendingChatFile();
   activeThreadType = type === "group" ? "group" : "dm";
   activeChatId = id;
   activeThreadIsGroup = activeThreadType === "group";
@@ -904,8 +1023,9 @@ async function sendMessage(e) {
   e.preventDefault();
   if (!activeChatId || !activeThreadType) return;
   const input = document.getElementById("team-chat-input");
-  const body = input?.value?.trim();
-  if (!body) return;
+  const body = input?.value?.trim() || "";
+  const file = pendingChatFile;
+  if (!body && !file) return;
   const btn = document.getElementById("team-chat-send");
   if (btn) btn.disabled = true;
   const base =
@@ -913,11 +1033,9 @@ async function sendMessage(e) {
       ? `/api/chat/groups/${activeChatId}`
       : `/api/chat/conversations/${activeChatId}`;
   try {
-    const data = await d().api(`${base}/messages`, {
-      method: "POST",
-      body: JSON.stringify({ body }),
-    });
+    const data = await postChatMessage(base, body, file);
     if (input) input.value = "";
+    clearPendingChatFile();
     if (data.message) activeMessages.push(data.message);
     renderMessages();
     await loadThreads();
@@ -1059,6 +1177,20 @@ export function initTeamChat(chatDeps) {
   });
   document.getElementById("team-chat-compose")?.addEventListener("submit", (e) => {
     void sendMessage(e);
+  });
+  document.getElementById("team-chat-attach-btn")?.addEventListener("click", () => {
+    document.getElementById("team-chat-file-input")?.click();
+  });
+  document.getElementById("team-chat-file-input")?.addEventListener("change", (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      d().showToast("File must be 10 MB or smaller.", "warning");
+      e.target.value = "";
+      return;
+    }
+    pendingChatFile = file;
+    renderAttachPreview();
   });
   document.getElementById("team-chat-back")?.addEventListener("click", () => {
     mobileShowThread = false;

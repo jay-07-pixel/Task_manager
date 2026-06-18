@@ -244,6 +244,9 @@ model ChatMessage {
   conversationId String    @map("conversation_id")
   senderId       String    @map("sender_id")
   body           String    @db.Text
+  attachmentPath String?   @map("attachment_path") @db.VarChar(255)
+  attachmentMime String?   @map("attachment_mime") @db.VarChar(128)
+  attachmentName String?   @map("attachment_name") @db.VarChar(255)
   createdAt      DateTime  @default(now()) @map("created_at")
   readAt         DateTime? @map("read_at")
 
@@ -284,11 +287,14 @@ model ChatGroupMember {
 }
 
 model ChatGroupMessage {
-  id        String   @id @default(uuid())
-  groupId   String   @map("group_id")
-  senderId  String   @map("sender_id")
-  body      String   @db.Text
-  createdAt DateTime @default(now()) @map("created_at")
+  id             String   @id @default(uuid())
+  groupId        String   @map("group_id")
+  senderId       String   @map("sender_id")
+  body           String   @db.Text
+  attachmentPath String?  @map("attachment_path") @db.VarChar(255)
+  attachmentMime String?  @map("attachment_mime") @db.VarChar(128)
+  attachmentName String?  @map("attachment_name") @db.VarChar(255)
+  createdAt      DateTime @default(now()) @map("created_at")
 
   group  ChatGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
   sender User      @relation(fields: [senderId], references: [id], onDelete: Cascade)

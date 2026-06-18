@@ -1,9 +1,21 @@
 import { Router } from "express";
+import path from "path";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, requireOwner } from "../middleware/auth.js";
 import { notifyChatMessage, notifyGroupMessage } from "../services/chatNotificationService.js";
 import { addChatLiveClient, removeChatLiveClient, publishChatLive } from "../lib/chatLive.js";
+import {
+  attachmentFilePath,
+  dmMessageSelect,
+  groupMessageSelect,
+  handleChatFileUpload,
+  isImageMime,
+  messagePreviewLabel,
+  parseOutgoingChatMessage,
+  serializeChatMessage,
+  serializeLastMessage,
+} from "../lib/chatUpload.js";
 
 const router = Router();
 
@@ -11,9 +23,27 @@ const createConversationSchema = z.object({
   peerUserId: z.string().uuid(),
 });
 
-const sendMessageSchema = z.object({
-  body: z.string().trim().min(1).max(4000),
-});
+const lastDmMessageSelect = {
+  id: true,
+  body: true,
+  senderId: true,
+  createdAt: true,
+  readAt: true,
+  attachmentPath: true,
+  attachmentMime: true,
+  attachmentName: true,
+};
+
+const lastGroupMessageSelect = {
+  id: true,
+  body: true,
+  senderId: true,
+  createdAt: true,
+  attachmentPath: true,
+  attachmentMime: true,
+  attachmentName: true,
+  sender: { select: { displayName: true } },
+};
 
 const createGroupSchema = z.object({
   name: z.string().trim().min(1).max(80),
@@ -137,7 +167,7 @@ router.get("/conversations", requireAuth, async (req, res) => {
       messages: {
         orderBy: { createdAt: "desc" },
         take: 1,
-        select: { id: true, body: true, senderId: true, createdAt: true, readAt: true },
+        select: lastDmMessageSelect,
       },
     },
     orderBy: { updatedAt: "desc" },
@@ -162,13 +192,14 @@ router.get("/conversations", requireAuth, async (req, res) => {
         id: c.id,
         peer: serializeContact(peer),
         lastMessage: last
-          ? {
-              id: last.id,
-              body: last.body,
-              senderId: last.senderId,
-              createdAt: last.createdAt,
-              isMine: last.senderId === meId,
-            }
+          ? serializeLastMessage(
+              {
+                ...last,
+                senderName: last.senderId === meId ? "You" : peer.displayName,
+              },
+              meId,
+              peer.displayName
+            )
           : null,
         unreadCount: unreadByConv.get(c.id) ?? 0,
         updatedAt: c.updatedAt,
@@ -199,7 +230,7 @@ router.get("/threads", requireAuth, async (req, res) => {
       messages: {
         orderBy: { createdAt: "desc" },
         take: 1,
-        select: { id: true, body: true, senderId: true, createdAt: true, readAt: true },
+        select: lastDmMessageSelect,
       },
     },
   });
@@ -223,13 +254,7 @@ router.get("/threads", requireAuth, async (req, res) => {
           messages: {
             orderBy: { createdAt: "desc" },
             take: 1,
-            select: {
-              id: true,
-              body: true,
-              senderId: true,
-              createdAt: true,
-              sender: { select: { displayName: true } },
-            },
+            select: lastGroupMessageSelect,
           },
           _count: { select: { members: true } },
         },
@@ -247,14 +272,14 @@ router.get("/threads", requireAuth, async (req, res) => {
         peer: serializeContact(peer),
         group: null,
         lastMessage: last
-          ? {
-              id: last.id,
-              body: last.body,
-              senderId: last.senderId,
-              senderName: last.senderId === meId ? "You" : peer.displayName,
-              createdAt: last.createdAt,
-              isMine: last.senderId === meId,
-            }
+          ? serializeLastMessage(
+              {
+                ...last,
+                senderName: last.senderId === meId ? "You" : peer.displayName,
+              },
+              meId,
+              peer.displayName
+            )
           : null,
         unreadCount: unreadByConv.get(c.id) ?? 0,
         updatedAt: c.updatedAt,
@@ -277,14 +302,15 @@ router.get("/threads", requireAuth, async (req, res) => {
           memberCount: g._count.members,
         },
         lastMessage: last
-          ? {
-              id: last.id,
-              body: last.body,
-              senderId: last.senderId,
-              senderName: last.senderId === meId ? "You" : last.sender.displayName,
-              createdAt: last.createdAt,
-              isMine: last.senderId === meId,
-            }
+          ? serializeLastMessage(
+              {
+                ...last,
+                senderName:
+                  last.senderId === meId ? "You" : last.sender?.displayName || "Member",
+              },
+              meId,
+              last.sender?.displayName || "Member"
+            )
           : null,
         unreadCount,
         updatedAt: g.updatedAt,
@@ -350,14 +376,7 @@ router.get("/conversations/:id/messages", requireAuth, async (req, res) => {
     where: { conversationId: conversation.id },
     orderBy: { createdAt: "asc" },
     take: 200,
-    select: {
-      id: true,
-      body: true,
-      senderId: true,
-      createdAt: true,
-      readAt: true,
-      sender: { select: { id: true, displayName: true, role: true } },
-    },
+    select: dmMessageSelect,
   });
 
   res.json({
@@ -365,23 +384,14 @@ router.get("/conversations/:id/messages", requireAuth, async (req, res) => {
       id: conversation.id,
       peer: serializeContact(peerFromConversation(conversation, meId)),
     },
-    messages: messages.map((m) => ({
-      id: m.id,
-      body: m.body,
-      senderId: m.senderId,
-      senderName: m.sender.displayName,
-      senderRole: m.sender.role,
-      createdAt: m.createdAt,
-      readAt: m.readAt,
-      isMine: m.senderId === meId,
-    })),
+    messages: messages.map((m) => serializeChatMessage(m, meId, "dm")),
   });
 });
 
-router.post("/conversations/:id/messages", requireAuth, async (req, res) => {
-  const parsed = sendMessageSchema.safeParse(req.body);
-  if (!parsed.success) {
-    return res.status(400).json({ error: "Message must be 1–4000 characters." });
+router.post("/conversations/:id/messages", requireAuth, handleChatFileUpload, async (req, res) => {
+  const parsed = parseOutgoingChatMessage(req);
+  if (parsed.error) {
+    return res.status(400).json({ error: parsed.error });
   }
 
   const meId = req.session.userId;
@@ -397,16 +407,12 @@ router.post("/conversations/:id/messages", requireAuth, async (req, res) => {
       data: {
         conversationId: conversation.id,
         senderId: meId,
-        body: parsed.data.body,
+        body: parsed.body,
+        attachmentPath: parsed.attachmentPath,
+        attachmentMime: parsed.attachmentMime,
+        attachmentName: parsed.attachmentName,
       },
-      select: {
-        id: true,
-        body: true,
-        senderId: true,
-        createdAt: true,
-        readAt: true,
-        sender: { select: { id: true, displayName: true, role: true } },
-      },
+      select: dmMessageSelect,
     }),
     prisma.chatConversation.update({
       where: { id: conversation.id },
@@ -414,22 +420,15 @@ router.post("/conversations/:id/messages", requireAuth, async (req, res) => {
     }),
   ]);
 
-  res.status(201).json({
-    message: {
-      id: message.id,
-      body: message.body,
-      senderId: message.senderId,
-      senderName: message.sender.displayName,
-      senderRole: message.sender.role,
-      createdAt: message.createdAt,
-      readAt: message.readAt,
-      isMine: true,
-    },
-  });
+  const serialized = serializeChatMessage(message, meId, "dm");
+  res.status(201).json({ message: serialized });
 
   void notifyChatMessage({
     conversation,
-    message: { id: message.id, body: message.body },
+    message: {
+      id: message.id,
+      body: messagePreviewLabel(message.body, message.attachmentMime, message.attachmentName),
+    },
     sender: { id: message.sender.id, displayName: message.sender.displayName },
   }).catch((err) => {
     console.error("[chat] notify failed", err?.message ?? err);
@@ -658,13 +657,7 @@ router.get("/groups/:id/messages", requireAuth, async (req, res) => {
     where: { groupId: membership.groupId },
     orderBy: { createdAt: "asc" },
     take: 200,
-    select: {
-      id: true,
-      body: true,
-      senderId: true,
-      createdAt: true,
-      sender: { select: { id: true, displayName: true, role: true } },
-    },
+    select: groupMessageSelect,
   });
 
   res.json({
@@ -673,22 +666,14 @@ router.get("/groups/:id/messages", requireAuth, async (req, res) => {
       name: membership.group.name,
       memberCount: membership.group._count.members,
     },
-    messages: messages.map((m) => ({
-      id: m.id,
-      body: m.body,
-      senderId: m.senderId,
-      senderName: m.sender.displayName,
-      senderRole: m.sender.role,
-      createdAt: m.createdAt,
-      isMine: m.senderId === meId,
-    })),
+    messages: messages.map((m) => serializeChatMessage(m, meId, "group")),
   });
 });
 
-router.post("/groups/:id/messages", requireAuth, async (req, res) => {
-  const parsed = sendMessageSchema.safeParse(req.body);
-  if (!parsed.success) {
-    return res.status(400).json({ error: "Message must be 1–4000 characters." });
+router.post("/groups/:id/messages", requireAuth, handleChatFileUpload, async (req, res) => {
+  const parsed = parseOutgoingChatMessage(req);
+  if (parsed.error) {
+    return res.status(400).json({ error: parsed.error });
   }
 
   const meId = req.session.userId;
@@ -705,15 +690,12 @@ router.post("/groups/:id/messages", requireAuth, async (req, res) => {
       data: {
         groupId: membership.groupId,
         senderId: meId,
-        body: parsed.data.body,
+        body: parsed.body,
+        attachmentPath: parsed.attachmentPath,
+        attachmentMime: parsed.attachmentMime,
+        attachmentName: parsed.attachmentName,
       },
-      select: {
-        id: true,
-        body: true,
-        senderId: true,
-        createdAt: true,
-        sender: { select: { id: true, displayName: true, role: true } },
-      },
+      select: groupMessageSelect,
     }),
     prisma.chatGroup.update({
       where: { id: membership.groupId },
@@ -721,21 +703,15 @@ router.post("/groups/:id/messages", requireAuth, async (req, res) => {
     }),
   ]);
 
-  res.status(201).json({
-    message: {
-      id: message.id,
-      body: message.body,
-      senderId: message.senderId,
-      senderName: message.sender.displayName,
-      senderRole: message.sender.role,
-      createdAt: message.createdAt,
-      isMine: true,
-    },
-  });
+  const serialized = serializeChatMessage(message, meId, "group");
+  res.status(201).json({ message: serialized });
 
   void notifyGroupMessage({
     group: membership.group,
-    message: { id: message.id, body: message.body },
+    message: {
+      id: message.id,
+      body: messagePreviewLabel(message.body, message.attachmentMime, message.attachmentName),
+    },
     sender: { id: message.sender.id, displayName: message.sender.displayName },
   }).catch((err) => {
     console.error("[chat] group notify failed", err?.message ?? err);
@@ -776,6 +752,52 @@ router.post("/groups/:id/read", requireAuth, async (req, res) => {
   });
 
   res.json({ markedRead: true });
+});
+
+async function sendDmAttachment(req, res) {
+  const meId = req.session.userId;
+  const message = await prisma.chatMessage.findUnique({
+    where: { id: req.params.messageId },
+    include: { conversation: true },
+  });
+  if (!message?.attachmentPath || !userInConversation(message.conversation, meId)) {
+    return res.status(404).json({ error: "File not found." });
+  }
+  const filePath = attachmentFilePath(message.attachmentPath);
+  const disposition = isImageMime(message.attachmentMime) ? "inline" : "attachment";
+  const safeName = path.basename(message.attachmentName || "file");
+  res.setHeader("Content-Type", message.attachmentMime || "application/octet-stream");
+  res.setHeader("Content-Disposition", `${disposition}; filename="${safeName}"`);
+  return res.sendFile(filePath, (err) => {
+    if (err && !res.headersSent) res.status(404).json({ error: "File not found." });
+  });
+}
+
+async function sendGroupAttachment(req, res) {
+  const meId = req.session.userId;
+  const message = await prisma.chatGroupMessage.findUnique({
+    where: { id: req.params.messageId },
+    include: { group: { include: { members: { where: { userId: meId }, take: 1 } } } },
+  });
+  if (!message?.attachmentPath || !message.group.members.length) {
+    return res.status(404).json({ error: "File not found." });
+  }
+  const filePath = attachmentFilePath(message.attachmentPath);
+  const disposition = isImageMime(message.attachmentMime) ? "inline" : "attachment";
+  const safeName = path.basename(message.attachmentName || "file");
+  res.setHeader("Content-Type", message.attachmentMime || "application/octet-stream");
+  res.setHeader("Content-Disposition", `${disposition}; filename="${safeName}"`);
+  return res.sendFile(filePath, (err) => {
+    if (err && !res.headersSent) res.status(404).json({ error: "File not found." });
+  });
+}
+
+router.get("/files/dm/:messageId", requireAuth, (req, res) => {
+  void sendDmAttachment(req, res);
+});
+
+router.get("/files/group/:messageId", requireAuth, (req, res) => {
+  void sendGroupAttachment(req, res);
 });
 
 export default router;
