@@ -285,7 +285,17 @@ async function postChatMessage(base, body, file) {
     data = { error: text };
   }
   if (!res.ok) {
-    throw new Error(data?.error || "Could not send message.");
+    if (res.status === 413) {
+      throw new Error(
+        "File is too large for the server. Use a file under 10 MB, or ask your admin to set nginx client_max_body_size to 11m."
+      );
+    }
+    let msg = data?.error;
+    if (!msg && text && /413|entity too large/i.test(text)) {
+      msg =
+        "File is too large for the server. Ask your admin to set nginx client_max_body_size to 11m on the VPS.";
+    }
+    throw new Error(msg || "Could not send message.");
   }
   return data;
 }
