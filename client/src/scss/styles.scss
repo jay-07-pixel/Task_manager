@@ -707,6 +707,7 @@ body {
   white-space: nowrap;
   padding-left: 0.5rem !important;
   padding-right: 0.5rem !important;
+  text-align: center !important;
 }
 
 .owner-task-head.owner-task-col--description,
@@ -1135,8 +1136,8 @@ body {
   .owner-task-table tbody.owner-task-group tr.task-sort-row .owner-task-col--deadline {
     grid-area: deadline;
     font-size: 0.75rem;
-    justify-self: end;
-    text-align: end !important;
+    justify-self: center;
+    text-align: center !important;
     white-space: nowrap;
   }
 

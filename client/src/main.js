@@ -4263,7 +4263,7 @@ function ownerTaskGroupTbody(t) {
           t.id
         }" aria-label="Open task details">${escapeHtml(t.title)}</button>
       </td>
-      <td class="owner-task-cell owner-task-col--deadline align-middle small text-nowrap tabular-nums">${deadlineCell}</td>
+      <td class="owner-task-cell owner-task-col--deadline align-middle text-center small text-nowrap tabular-nums">${deadlineCell}</td>
       <td class="owner-task-cell owner-task-col--employees align-middle text-end small">
         ${ownerEmployeesCellHtml(t)}
       </td>
@@ -4444,7 +4444,7 @@ function renderOwnerMain() {
               <tr>
                 <th scope="col" class="owner-task-cell owner-task-cell--grip border-end-0"><span class="visually-hidden">Reorder</span></th>
                 <th scope="col" class="owner-task-head owner-task-col--task">Task</th>
-                <th scope="col" class="owner-task-head owner-task-col--deadline text-nowrap text-end">Deadline</th>
+                <th scope="col" class="owner-task-head owner-task-col--deadline text-nowrap text-center">Deadline</th>
                 <th scope="col" class="owner-task-head owner-task-col--employees text-nowrap text-end">${escapeHtml(teamColLabel)}</th>
                 <th scope="col" class="owner-task-head owner-task-col--trail text-end"><span class="visually-hidden">Details</span></th>
               </tr>
@@ -5471,7 +5471,7 @@ function renderEmployeeMain() {
             <tr>
               <th scope="col" class="owner-task-head text-center" style="width:3rem;"><span class="visually-hidden">Done</span></th>
               <th scope="col" class="owner-task-head owner-task-col--task">Task</th>
-              <th scope="col" class="owner-task-head owner-task-col--deadline text-nowrap">Deadline</th>
+              <th scope="col" class="owner-task-head owner-task-col--deadline text-nowrap text-center">Deadline</th>
               <th scope="col" class="owner-task-head">Description</th>
               <th scope="col" class="owner-task-head text-end" style="width:9rem;">Actions</th>
             </tr>

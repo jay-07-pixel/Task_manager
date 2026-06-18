@@ -89,22 +89,14 @@ async function refreshActiveMessages() {
     JSON.stringify(activeTypingUsers.map((u) => u.id));
   if (nextFp === prevFp && !typingChanged) return;
 
-  const prevLastId = activeMessages[activeMessages.length - 1]?.id;
-  const nextLastId = next[next.length - 1]?.id;
-  const incoming =
-    nextLastId &&
-    nextLastId !== prevLastId &&
-    next[next.length - 1] &&
-    !next[next.length - 1].isMine;
-
   activeMessages = next;
   activeTypingUsers = typingUsers;
   renderMessages();
   updateTypingIndicator();
 
-  if (incoming) {
-    await markActiveThreadRead();
-  }
+  await markActiveThreadRead();
+  void refreshUnreadBadges();
+  void loadThreads();
 }
 
 function activeThreadBase() {
@@ -158,17 +150,17 @@ function onChatLivePayload(payload) {
   if (
     payload.kind === "read" &&
     payload.threadType === activeThreadType &&
-    payload.threadId === activeChatId &&
-    isChatPanelOpen()
+    payload.threadId === activeChatId
   ) {
-    if (payload.threadType === "dm" && payload.readAt) {
+    const meId = d().getUser()?.id;
+    if (payload.readerId !== meId && payload.readAt && isChatPanelOpen()) {
       activeMessages = activeMessages.map((m) =>
         m.isMine && !m.readAt ? { ...m, readAt: payload.readAt } : m
       );
       renderMessages();
-    } else {
       void refreshActiveMessages();
     }
+    void loadThreads();
     return;
   }
   if (
@@ -1604,6 +1596,7 @@ export function initTeamChat(chatDeps) {
   syncAdminGroupUi();
   syncGroupManageUi();
   offcanvas.addEventListener("shown.bs.offcanvas", () => {
+    startChatLive();
     syncChatPushButton();
     syncAdminGroupUi();
     void refreshChatData();
