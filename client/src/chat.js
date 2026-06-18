@@ -3,7 +3,10 @@
 const CHAT_POLL_MS_HIDDEN = 20000;
 const CHAT_POLL_MS_CLOSED = 6000;
 const CHAT_POLL_MS_OPEN = 2500;
-const CHAT_POLL_MS_ACTIVE = 1200;
+/** Active thread poll — matches Android app (~3s) as SSE fallback. */
+const CHAT_POLL_MS_ACTIVE = 3000;
+const CHAT_TYPING_DEBOUNCE_MS = 400;
+const CHAT_TYPING_IDLE_MS = 3000;
 
 /** @type {ChatDeps | null} */
 let deps = null;
@@ -46,6 +49,8 @@ let activeTypingUsers = [];
 let typingPulseActive = false;
 /** @type {number | null} */
 let typingStopTimer = null;
+/** @type {number | null} */
+let typingDebounceTimer = null;
 
 function getChatPollMs() {
   if (document.hidden) return CHAT_POLL_MS_HIDDEN;
@@ -98,11 +103,24 @@ async function refreshActiveMessages() {
   updateTypingIndicator();
 
   if (incoming) {
-    try {
-      await d().api(`${base}/read`, { method: "POST", body: "{}" });
-    } catch {
-      /* ignore */
-    }
+    await markActiveThreadRead();
+  }
+}
+
+function activeThreadBase() {
+  if (!activeChatId || !activeThreadType) return null;
+  return activeThreadType === "group"
+    ? `/api/chat/groups/${activeChatId}`
+    : `/api/chat/conversations/${activeChatId}`;
+}
+
+async function markActiveThreadRead() {
+  const base = activeThreadBase();
+  if (!base) return;
+  try {
+    await d().api(`${base}/read`, { method: "POST", body: "{}" });
+  } catch {
+    /* ignore */
   }
 }
 
@@ -265,7 +283,7 @@ function formatTypingLabel(users) {
   const names = users.map((u) => u.displayName || "Someone");
   if (names.length === 1) return `${names[0]} is typing…`;
   if (names.length === 2) return `${names[0]} and ${names[1]} are typing…`;
-  return `${names[0]} and ${names.length - 1} others are typing…`;
+  return `${names.length} people are typing…`;
 }
 
 function updateTypingIndicator() {
@@ -310,6 +328,10 @@ async function postTyping(typing) {
 }
 
 function stopTypingPulse() {
+  if (typingDebounceTimer != null) {
+    window.clearTimeout(typingDebounceTimer);
+    typingDebounceTimer = null;
+  }
   if (typingStopTimer != null) {
     window.clearTimeout(typingStopTimer);
     typingStopTimer = null;
@@ -322,16 +344,21 @@ function stopTypingPulse() {
 
 function pulseTyping() {
   if (!activeChatId || !activeThreadType || !isChatPanelOpen()) return;
-  if (!typingPulseActive) {
-    typingPulseActive = true;
-    void postTyping(true);
+
+  if (!typingPulseActive && typingDebounceTimer == null) {
+    typingDebounceTimer = window.setTimeout(() => {
+      typingDebounceTimer = null;
+      if (!activeChatId || !isChatPanelOpen()) return;
+      typingPulseActive = true;
+      void postTyping(true);
+    }, CHAT_TYPING_DEBOUNCE_MS);
   }
+
   if (typingStopTimer != null) window.clearTimeout(typingStopTimer);
   typingStopTimer = window.setTimeout(() => {
     typingStopTimer = null;
-    typingPulseActive = false;
-    void postTyping(false);
-  }, 2800);
+    stopTypingPulse();
+  }, CHAT_TYPING_IDLE_MS);
 }
 
 function previewText(body, hasAttachment) {
@@ -404,6 +431,23 @@ function wireChatMediaLightbox() {
   chatMediaLightboxWired = true;
 
   document.getElementById("team-chat-messages")?.addEventListener("click", (e) => {
+    const playBtn = e.target.closest(".js-chat-inline-video-play");
+    if (playBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      const wrap = playBtn.closest(".team-chat-attach-video-wrap");
+      const video = wrap?.querySelector(".js-chat-inline-video");
+      const url = playBtn.getAttribute("data-video-url");
+      if (video && url) {
+        playBtn.classList.add("d-none");
+        video.classList.remove("d-none");
+        if (!video.src) video.src = url;
+        void video.play().catch(() => {
+          d().showToast("Could not play video. Try full screen or download.", "warning");
+        });
+      }
+      return;
+    }
     const open = e.target.closest(".js-chat-media-open");
     if (!open) return;
     e.preventDefault();
@@ -446,9 +490,11 @@ function messageAttachmentHtml(m) {
     const mime = m.attachmentMime && m.attachmentMime.startsWith("video/") ? m.attachmentMime : "video/mp4";
     const attrs = chatMediaDataAttrs(url, "video", safeName, mime);
     return `<div class="team-chat-attach-video-wrap">
-      <video class="team-chat-attach-video" controls playsinline preload="metadata" src="${url}" type="${d().escapeHtml(mime)}">
-        <p class="small mb-0">Your browser cannot play this video inline.</p>
-      </video>
+      <button type="button" class="team-chat-attach-video-play js-chat-inline-video-play" data-video-url="${url}" data-video-mime="${d().escapeHtml(mime)}" aria-label="Play video">
+        <i class="bi bi-play-circle-fill" aria-hidden="true"></i>
+        <span class="text-truncate">${safeName}</span>
+      </button>
+      <video class="team-chat-attach-video d-none js-chat-inline-video" controls playsinline preload="none"></video>
       <button type="button" class="team-chat-media-expand-btn js-chat-media-open" ${attrs} aria-label="View video full screen" title="Full screen">
         <i class="bi bi-arrows-fullscreen" aria-hidden="true"></i>
       </button>
@@ -647,7 +693,6 @@ export function teamChatOffcanvasHtml() {
                 <span id="team-chat-peer-avatar"></span>
                 <button type="button" class="team-chat-thread-head-main min-w-0 flex-grow-1 text-start border-0 bg-transparent p-0" id="team-chat-thread-head-main">
                   <div class="fw-semibold text-truncate" id="team-chat-peer-name">—</div>
-                  <div id="team-chat-typing-status" class="team-chat-typing-status small text-muted d-none" aria-live="polite"></div>
                   <div id="team-chat-peer-role"></div>
                 </button>
                 <button type="button" class="btn btn-sm btn-light border team-chat-group-manage-btn d-none" id="team-chat-group-manage-btn" title="Manage group" aria-label="Manage group">
@@ -655,6 +700,7 @@ export function teamChatOffcanvasHtml() {
                 </button>
               </div>
               <div class="team-chat-messages flex-grow-1" id="team-chat-messages" aria-live="polite"></div>
+              <div id="team-chat-typing-status" class="team-chat-typing-status px-3 small text-muted d-none" aria-live="polite"></div>
               <form class="team-chat-compose" id="team-chat-compose">
                 <div id="team-chat-attach-preview" class="d-none"></div>
                 <div class="team-chat-compose-inner">
@@ -1233,12 +1279,8 @@ async function openThread(type, id) {
     }
     renderMessages();
     updateTypingIndicator();
-    try {
-      await d().api(`${base}/read`, { method: "POST", body: "{}" });
-      await loadThreads();
-    } catch {
-      /* ignore */
-    }
+    await markActiveThreadRead();
+    await loadThreads();
   } catch (err) {
     activeThreadType = null;
     activeChatId = null;

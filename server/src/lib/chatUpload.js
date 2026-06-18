@@ -122,6 +122,63 @@ export function attachmentFilePath(storedName) {
   return path.join(chatUploadsRoot, path.basename(storedName));
 }
 
+/**
+ * Stream a chat attachment with explicit range support and no-store headers.
+ * Avoids Chrome ERR_CACHE_OPERATION_NOT_SUPPORTED on video byte-range requests.
+ *
+ * @param {import("express").Request} req
+ * @param {import("express").Response} res
+ * @param {string} filePath
+ * @param {{ contentType: string, safeName: string, disposition: "inline" | "attachment" }} opts
+ */
+export function serveChatAttachment(req, res, filePath, { contentType, safeName, disposition }) {
+  if (!fs.existsSync(filePath)) {
+    res.status(404).json({ error: "File not found." });
+    return;
+  }
+
+  const stat = fs.statSync(filePath);
+  const fileSize = stat.size;
+  const encodedName = String(safeName || "file").replace(/"/g, "_");
+
+  res.setHeader("Content-Type", contentType);
+  res.setHeader("Content-Disposition", `${disposition}; filename="${encodedName}"`);
+  res.setHeader("Accept-Ranges", "bytes");
+  res.setHeader("Cache-Control", "private, no-store, no-cache, must-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+
+  const rangeHeader = req.headers.range;
+  if (rangeHeader) {
+    const match = /^bytes=(\d*)-(\d*)$/.exec(String(rangeHeader));
+    if (!match) {
+      res.status(416).setHeader("Content-Range", `bytes */${fileSize}`).end();
+      return;
+    }
+    let start = match[1] ? parseInt(match[1], 10) : 0;
+    let end = match[2] ? parseInt(match[2], 10) : fileSize - 1;
+    if (Number.isNaN(start) || Number.isNaN(end) || start >= fileSize) {
+      res.status(416).setHeader("Content-Range", `bytes */${fileSize}`).end();
+      return;
+    }
+    end = Math.min(end, fileSize - 1);
+    if (start > end) {
+      res.status(416).setHeader("Content-Range", `bytes */${fileSize}`).end();
+      return;
+    }
+    const chunkSize = end - start + 1;
+    res.status(206);
+    res.setHeader("Content-Range", `bytes ${start}-${end}/${fileSize}`);
+    res.setHeader("Content-Length", String(chunkSize));
+    fs.createReadStream(filePath, { start, end }).pipe(res);
+    return;
+  }
+
+  res.status(200);
+  res.setHeader("Content-Length", String(fileSize));
+  fs.createReadStream(filePath).pipe(res);
+}
+
 const messageSenderSelect = {
   id: true,
   displayName: true,

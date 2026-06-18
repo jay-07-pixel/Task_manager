@@ -17,6 +17,7 @@ import {
   resolveAttachmentContentType,
   serializeChatMessage,
   serializeLastMessage,
+  serveChatAttachment,
 } from "../lib/chatUpload.js";
 
 const router = Router();
@@ -913,12 +914,7 @@ async function sendDmAttachment(req, res) {
   const disposition = isInlineAttachmentMime(message.attachmentMime, message.attachmentName)
     ? "inline"
     : "attachment";
-  res.setHeader("Content-Type", contentType);
-  res.setHeader("Content-Disposition", `${disposition}; filename="${safeName}"`);
-  res.setHeader("Accept-Ranges", "bytes");
-  return res.sendFile(filePath, { acceptRanges: true }, (err) => {
-    if (err && !res.headersSent) res.status(404).json({ error: "File not found." });
-  });
+  serveChatAttachment(req, res, filePath, { contentType, safeName, disposition });
 }
 
 async function sendGroupAttachment(req, res) {
@@ -936,12 +932,7 @@ async function sendGroupAttachment(req, res) {
   const disposition = isInlineAttachmentMime(message.attachmentMime, message.attachmentName)
     ? "inline"
     : "attachment";
-  res.setHeader("Content-Type", contentType);
-  res.setHeader("Content-Disposition", `${disposition}; filename="${safeName}"`);
-  res.setHeader("Accept-Ranges", "bytes");
-  return res.sendFile(filePath, { acceptRanges: true }, (err) => {
-    if (err && !res.headersSent) res.status(404).json({ error: "File not found." });
-  });
+  serveChatAttachment(req, res, filePath, { contentType, safeName, disposition });
 }
 
 router.get("/files/dm/:messageId", requireAuth, (req, res) => {
