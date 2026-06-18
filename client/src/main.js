@@ -1586,6 +1586,9 @@ function ownerEmployeesCellHtml(task) {
   }
   const nAssigned = assignees.length;
   const nDone = assignees.filter((a) => assigneeShowsSubmittedForOwner(a)).length;
+  if (nAssigned === 0) {
+    return `<span class="owner-task-unassigned fw-bold text-danger">Unassigned</span>`;
+  }
   return `<span class="text-muted me-1"><i class="bi bi-people" aria-hidden="true"></i></span><span class="tabular-nums">${nDone}\u00a0/\u00a0${nAssigned}</span>`;
 }
 
@@ -4184,7 +4187,12 @@ function ownerTaskGroupTbody(t) {
   const assignees = t.assignees ?? [];
   const nAssigned = assignees.length;
   const nDone = assignees.filter((a) => assigneeShowsSubmittedForOwner(a)).length;
-  const progressNumbers = `${nDone}\u00a0/\u00a0${nAssigned}`;
+  const progressNumbers =
+    nAssigned === 0 ? "Unassigned" : `${nDone}\u00a0/\u00a0${nAssigned}`;
+  const progressPillClass =
+    nAssigned === 0
+      ? "owner-team-count-pill owner-team-count-pill--unassigned fw-bold"
+      : "owner-team-count-pill";
   const detailId = `owner-task-detail-${t.id}`;
 
   const deadlineCell = formatOwnerTaskDeadline(t);
@@ -4193,7 +4201,7 @@ function ownerTaskGroupTbody(t) {
 
   const assigneeCards =
     assignees.length === 0
-      ? `<p class="owner-assignee-empty text-muted small mb-0 px-1">No assignees yet. Edit the task to add people.</p>`
+      ? `<p class="owner-assignee-empty fw-bold text-danger small mb-0 px-1">No assignees yet. Edit the task to add people.</p>`
       : assignees
           .map((a) => {
             const rolledSubmission = assigneeRolledRecurringSubmission(a);
@@ -4259,9 +4267,12 @@ function ownerTaskGroupTbody(t) {
         <span class="task-grip grip-handle d-inline-flex align-items-center justify-content-center rounded p-1" title="Drag to reorder"><i class="bi bi-grip-vertical fs-5"></i></span>
       </td>
       <td class="owner-task-cell owner-task-col--task align-middle">
-        <button type="button" class="btn btn-link text-start text-body fw-semibold text-decoration-none p-0 owner-task-open-details" data-open-id="${
+        <div class="owner-task-title-row d-inline-flex flex-wrap align-items-center gap-1 min-w-0">
+          <button type="button" class="btn btn-link text-start text-body fw-semibold text-decoration-none p-0 owner-task-open-details" data-open-id="${
           t.id
         }" aria-label="Open task details">${escapeHtml(t.title)}</button>
+          ${ownerTaskRecurrenceBadgeHtml(t)}
+        </div>
       </td>
       <td class="owner-task-cell owner-task-col--deadline align-middle text-center small text-nowrap tabular-nums">${deadlineCell}</td>
       <td class="owner-task-cell owner-task-col--employees align-middle text-end small">
@@ -4293,7 +4304,7 @@ function ownerTaskGroupTbody(t) {
             <div class="owner-team-progress px-3 pt-3 pb-2">
               <div class="owner-team-progress-head d-flex align-items-center justify-content-between gap-2 mb-3">
                 <h3 class="owner-task-detail-heading small text-secondary mb-0">Team progress</h3>
-                <span class="owner-team-count-pill small tabular-nums">
+                <span class="${progressPillClass} small tabular-nums">
                   <i class="bi bi-people me-1" aria-hidden="true"></i>${progressNumbers}
                 </span>
               </div>
@@ -4816,6 +4827,12 @@ function formatEmpRecurrencePattern(task) {
     return formatCustomRecurrenceRuleLabel(task.recurrenceRule, task.dueAt);
   }
   return recurrence.charAt(0).toUpperCase() + recurrence.slice(1);
+}
+
+function ownerTaskRecurrenceBadgeHtml(task) {
+  const pattern = formatEmpRecurrencePattern(task);
+  if (!pattern) return "";
+  return `<span class="owner-task-recurrence-badge" title="${escapeHtml(pattern)}"><i class="bi bi-arrow-repeat" aria-hidden="true"></i><span class="owner-task-recurrence-badge-text">${escapeHtml(pattern)}</span></span>`;
 }
 
 function empActiveRecurrenceLinesHtml(task) {

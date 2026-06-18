@@ -701,6 +701,37 @@ body {
   min-width: 10rem;
 }
 
+.owner-task-title-row {
+  max-width: 100%;
+}
+
+.owner-task-recurrence-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.25;
+  white-space: nowrap;
+  max-width: min(100%, 14rem);
+  background: rgba(var(--bs-info-rgb), 0.12);
+  color: var(--bs-info-text-emphasis, #055160);
+  border: 1px solid rgba(var(--bs-info-rgb), 0.28);
+  vertical-align: middle;
+}
+
+.owner-task-recurrence-badge-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.owner-task-col--task .owner-task-open-details {
+  min-width: 0;
+  max-width: 100%;
+}
+
 .owner-task-head.owner-task-col--deadline,
 .owner-task-cell.owner-task-col--deadline {
   width: 1%;
@@ -830,6 +861,15 @@ body {
   background: rgba(var(--bs-primary-rgb), 0.1);
   color: var(--bs-primary);
   font-weight: 600;
+}
+
+.owner-team-count-pill--unassigned {
+  background: rgba(var(--bs-danger-rgb), 0.12);
+  color: var(--bs-danger);
+}
+
+.owner-task-unassigned {
+  white-space: nowrap;
 }
 
 .owner-team-cards {
@@ -1124,7 +1164,7 @@ body {
     align-self: start;
   }
 
-  .owner-task-table tbody.owner-task-group tr.task-sort-row .owner-task-col--task .btn-link {
+  .owner-task-table tbody.owner-task-group tr.task-sort-row .owner-task-col--task .owner-task-open-details {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1154,6 +1194,11 @@ body {
     max-width: 5.5rem;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .owner-task-table tbody.owner-task-group tr.task-sort-row .owner-task-col--employees:has(.owner-task-unassigned) {
+    max-width: none;
+    overflow: visible;
   }
 
   .owner-task-table tbody.owner-task-group tr.task-sort-row .owner-task-col--employees::before {
