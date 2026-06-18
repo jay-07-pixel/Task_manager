@@ -8,6 +8,19 @@ const APK_FILENAME = "kalpanik-reminder.apk";
 /** @type {{ id: string; date: string; title: string; icon: string; body: string; action?: { label: string; type?: string; href?: string; download?: boolean } }[]} */
 export const ADMIN_ANNOUNCEMENTS = [
   {
+    id: "feature-updates-20260619",
+    date: "19-06-26",
+    title: "Important updates (since 18 Jun)",
+    icon: "bi-megaphone-fill",
+    body:
+      "Messages — Seen receipts and typing indicators; attachment playback and video fixes. Tasks — Employees can submit PDF completion proof; unassigned tasks show Unassigned in bold red; repeating tasks show Daily, Weekly, Monthly, etc. on the row; full description only when you expand a task. Employee assignments — Active, In review, and Completed filters now work on that list. App — Latest Kalpanik Reminder APK is on the employee dashboard; ask staff to install it for chat files, seen status, and typing.",
+    action: {
+      label: "Download APK",
+      href: (import.meta.env.VITE_APK_DOWNLOAD_URL || "").trim() || "/downloads/sugandh-reminder.apk",
+      download: true,
+    },
+  },
+  {
     id: "feature-chat-files-20260618",
     date: "18-06-26",
     title: "Share files in chat",
