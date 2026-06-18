@@ -13,6 +13,7 @@ import {
   isInlineAttachmentMime,
   messagePreviewLabel,
   parseOutgoingChatMessage,
+  resolveAttachmentContentType,
   serializeChatMessage,
   serializeLastMessage,
 } from "../lib/chatUpload.js";
@@ -764,11 +765,15 @@ async function sendDmAttachment(req, res) {
     return res.status(404).json({ error: "File not found." });
   }
   const filePath = attachmentFilePath(message.attachmentPath);
-  const disposition = isInlineAttachmentMime(message.attachmentMime) ? "inline" : "attachment";
   const safeName = path.basename(message.attachmentName || "file");
-  res.setHeader("Content-Type", message.attachmentMime || "application/octet-stream");
+  const contentType = resolveAttachmentContentType(message.attachmentMime, message.attachmentName);
+  const disposition = isInlineAttachmentMime(message.attachmentMime, message.attachmentName)
+    ? "inline"
+    : "attachment";
+  res.setHeader("Content-Type", contentType);
   res.setHeader("Content-Disposition", `${disposition}; filename="${safeName}"`);
-  return res.sendFile(filePath, (err) => {
+  res.setHeader("Accept-Ranges", "bytes");
+  return res.sendFile(filePath, { acceptRanges: true }, (err) => {
     if (err && !res.headersSent) res.status(404).json({ error: "File not found." });
   });
 }
@@ -783,11 +788,15 @@ async function sendGroupAttachment(req, res) {
     return res.status(404).json({ error: "File not found." });
   }
   const filePath = attachmentFilePath(message.attachmentPath);
-  const disposition = isInlineAttachmentMime(message.attachmentMime) ? "inline" : "attachment";
   const safeName = path.basename(message.attachmentName || "file");
-  res.setHeader("Content-Type", message.attachmentMime || "application/octet-stream");
+  const contentType = resolveAttachmentContentType(message.attachmentMime, message.attachmentName);
+  const disposition = isInlineAttachmentMime(message.attachmentMime, message.attachmentName)
+    ? "inline"
+    : "attachment";
+  res.setHeader("Content-Type", contentType);
   res.setHeader("Content-Disposition", `${disposition}; filename="${safeName}"`);
-  return res.sendFile(filePath, (err) => {
+  res.setHeader("Accept-Ranges", "bytes");
+  return res.sendFile(filePath, { acceptRanges: true }, (err) => {
     if (err && !res.headersSent) res.status(404).json({ error: "File not found." });
   });
 }

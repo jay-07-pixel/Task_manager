@@ -46,15 +46,74 @@ export function isVideoMime(mime) {
   return typeof mime === "string" && mime.startsWith("video/");
 }
 
-export function isInlineAttachmentMime(mime) {
-  return isImageMime(mime) || isVideoMime(mime);
+const VIDEO_EXTENSIONS = new Set([
+  ".mp4",
+  ".m4v",
+  ".webm",
+  ".mov",
+  ".mkv",
+  ".avi",
+  ".3gp",
+  ".3g2",
+  ".ogv",
+  ".mpeg",
+  ".mpg",
+]);
+
+const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg"]);
+
+const EXT_TO_MIME = {
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".bmp": "image/bmp",
+  ".svg": "image/svg+xml",
+  ".mp4": "video/mp4",
+  ".m4v": "video/mp4",
+  ".webm": "video/webm",
+  ".mov": "video/quicktime",
+  ".mkv": "video/x-matroska",
+  ".avi": "video/x-msvideo",
+  ".3gp": "video/3gpp",
+  ".3g2": "video/3gpp2",
+  ".ogv": "video/ogg",
+  ".mpeg": "video/mpeg",
+  ".mpg": "video/mpeg",
+};
+
+export function attachmentExtension(fileName) {
+  return path.extname(String(fileName || "")).toLowerCase();
+}
+
+export function isVideoAttachment(mime, fileName) {
+  if (isVideoMime(mime)) return true;
+  return VIDEO_EXTENSIONS.has(attachmentExtension(fileName));
+}
+
+export function isImageAttachment(mime, fileName) {
+  if (isImageMime(mime)) return true;
+  return IMAGE_EXTENSIONS.has(attachmentExtension(fileName));
+}
+
+/** Correct Content-Type when browser/multer sends application/octet-stream. */
+export function resolveAttachmentContentType(mime, fileName) {
+  const ext = attachmentExtension(fileName);
+  if (ext && EXT_TO_MIME[ext]) return EXT_TO_MIME[ext];
+  if (mime && mime !== "application/octet-stream") return mime;
+  return mime || "application/octet-stream";
+}
+
+export function isInlineAttachmentMime(mime, fileName) {
+  return isImageAttachment(mime, fileName) || isVideoAttachment(mime, fileName);
 }
 
 export function messagePreviewLabel(body, attachmentMime, attachmentName) {
   const text = String(body || "").trim();
   if (text) return text;
-  if (isImageMime(attachmentMime)) return "Photo";
-  if (isVideoMime(attachmentMime)) return "Video";
+  if (isImageAttachment(attachmentMime, attachmentName)) return "Photo";
+  if (isVideoAttachment(attachmentMime, attachmentName)) return "Video";
   if (attachmentName) return `File: ${attachmentName}`;
   return "Attachment";
 }
@@ -109,10 +168,10 @@ export function serializeChatMessage(m, meId, threadType) {
     const urlBase =
       threadType === "group" ? `/api/chat/files/group/${m.id}` : `/api/chat/files/dm/${m.id}`;
     out.attachmentUrl = urlBase;
-    out.attachmentMime = m.attachmentMime;
+    out.attachmentMime = resolveAttachmentContentType(m.attachmentMime, m.attachmentName);
     out.attachmentName = m.attachmentName;
-    out.attachmentIsImage = isImageMime(m.attachmentMime);
-    out.attachmentIsVideo = isVideoMime(m.attachmentMime);
+    out.attachmentIsImage = isImageAttachment(m.attachmentMime, m.attachmentName);
+    out.attachmentIsVideo = isVideoAttachment(m.attachmentMime, m.attachmentName);
   }
   return out;
 }
@@ -144,7 +203,9 @@ export function parseOutgoingChatMessage(req) {
   return {
     body,
     attachmentPath: file?.filename ?? null,
-    attachmentMime: file?.mimetype || "application/octet-stream",
+    attachmentMime: file
+      ? resolveAttachmentContentType(file.mimetype, file.originalname)
+      : null,
     attachmentName: file?.originalname ? path.basename(file.originalname).slice(0, 255) : null,
   };
 }

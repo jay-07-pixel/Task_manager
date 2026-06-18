@@ -203,22 +203,39 @@ function previewText(body, hasAttachment) {
   return "No messages yet";
 }
 
+function isVideoAttachment(m) {
+  if (m.attachmentIsVideo) return true;
+  if (typeof m.attachmentMime === "string" && m.attachmentMime.startsWith("video/")) return true;
+  return /\.(mp4|m4v|webm|mov|mkv|avi|3gp|3g2|ogv|mpeg|mpg)$/i.test(m.attachmentName || "");
+}
+
+function isImageAttachment(m) {
+  if (m.attachmentIsImage) return true;
+  if (typeof m.attachmentMime === "string" && m.attachmentMime.startsWith("image/")) return true;
+  return /\.(jpe?g|png|gif|webp|bmp|svg)$/i.test(m.attachmentName || "");
+}
+
 function messageAttachmentHtml(m) {
   if (!m.attachmentUrl) return "";
   const name = m.attachmentName || "File";
-  if (m.attachmentIsImage) {
-    return `<a href="${d().escapeHtml(m.attachmentUrl)}" target="_blank" rel="noopener noreferrer" class="team-chat-attach-image-link">
-      <img src="${d().escapeHtml(m.attachmentUrl)}" alt="${d().escapeHtml(name)}" class="team-chat-attach-image" loading="lazy" />
+  const url = d().escapeHtml(m.attachmentUrl);
+  const safeName = d().escapeHtml(name);
+  if (isImageAttachment(m)) {
+    return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="team-chat-attach-image-link">
+      <img src="${url}" alt="${safeName}" class="team-chat-attach-image" loading="lazy" />
     </a>`;
   }
-  if (m.attachmentIsVideo) {
-    return `<video class="team-chat-attach-video" controls preload="metadata" src="${d().escapeHtml(m.attachmentUrl)}">
-      <a href="${d().escapeHtml(m.attachmentUrl)}" download="${d().escapeHtml(name)}">${d().escapeHtml(name)}</a>
-    </video>`;
+  if (isVideoAttachment(m)) {
+    const mime = m.attachmentMime && m.attachmentMime.startsWith("video/") ? m.attachmentMime : "video/mp4";
+    return `<div class="team-chat-attach-video-wrap">
+      <video class="team-chat-attach-video" controls playsinline preload="metadata" src="${url}" type="${d().escapeHtml(mime)}">
+        <p class="small mb-0">Your browser cannot play this video inline.</p>
+      </video>
+    </div>`;
   }
-  return `<a href="${d().escapeHtml(m.attachmentUrl)}" class="team-chat-attach-file" download="${d().escapeHtml(name)}">
+  return `<a href="${url}" class="team-chat-attach-file" download="${safeName}">
     <i class="bi bi-file-earmark-arrow-down" aria-hidden="true"></i>
-    <span class="text-truncate">${d().escapeHtml(name)}</span>
+    <span class="text-truncate">${safeName}</span>
   </a>`;
 }
 
