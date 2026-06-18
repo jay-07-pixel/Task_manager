@@ -8,6 +8,15 @@ const APK_FILENAME = "kalpanik-reminder.apk";
 /** @type {{ id: string; date: string; title: string; icon: string; body: string; action?: { label: string; type?: string; href?: string; download?: boolean } }[]} */
 export const ADMIN_ANNOUNCEMENTS = [
   {
+    id: "feature-chat-files-20260618",
+    date: "18-06-26",
+    title: "Share files in chat",
+    icon: "bi-paperclip",
+    body:
+      "Users can now send images, videos, PDFs, and other files in team chat (up to 5 MB). View them full screen on the website and in the Kalpanik Reminder app after employees update the APK.",
+    action: { label: "Open Messages", type: "open-chat" },
+  },
+  {
     id: "feature-team-chat-20260617",
     date: "17-06-26",
     title: "Team chat",
