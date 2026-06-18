@@ -22,7 +22,7 @@ fs.mkdirSync(uploadsRoot, { recursive: true });
 const router = Router();
 
 const SUBMISSION_TEXT_MAX = 2000;
-const SUBMISSION_REQUIRED_MSG = "Please provide submission text or upload an image.";
+const SUBMISSION_REQUIRED_MSG = "Please provide submission text or upload an image or PDF.";
 const PROGRESS_UPDATE_TEXT_MAX = 2000;
 
 const progressUpdateTypeSchema = z.enum(["started", "in_progress", "blocked", "update"]);
@@ -352,6 +352,7 @@ function proofContentType(storedName) {
     ".png": "image/png",
     ".gif": "image/gif",
     ".webp": "image/webp",
+    ".pdf": "application/pdf",
   };
   return map[ext] || "application/octet-stream";
 }
@@ -380,18 +381,18 @@ const proofUpload = multer({
     },
     filename: (req, file, cb) => {
       const ext = path.extname(file.originalname).toLowerCase();
-      const safeExt = [".jpg", ".jpeg", ".png", ".gif", ".webp"].includes(ext) ? ext : ".jpg";
+      const safeExt = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".pdf"].includes(ext) ? ext : ".jpg";
       const uid = req.session?.userId || "anon";
       cb(null, `${req.params.id}-${uid}-${randomUUID()}${safeExt}`);
     },
   }),
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    if (/^image\/(jpeg|png|gif|webp)$/.test(file.mimetype)) {
+    if (/^image\/(jpeg|png|gif|webp)$/.test(file.mimetype) || file.mimetype === "application/pdf") {
       cb(null, true);
       return;
     }
-    cb(new Error("Only JPEG, PNG, GIF, or WebP images are allowed"));
+    cb(new Error("Only JPEG, PNG, GIF, WebP images, or PDF files are allowed"));
   },
 });
 
@@ -417,10 +418,10 @@ function handleProofUpload(req, res, next) {
   proofUpload.fields([{ name: "proof", maxCount: 1 }])(req, res, (err) => {
     if (!err) return next();
     if (err.code === "LIMIT_FILE_SIZE") {
-      return res.status(400).json({ error: "Image must be 5 MB or smaller." });
+      return res.status(400).json({ error: "File must be 5 MB or smaller." });
     }
     const msg = err.message || "Upload failed";
-    if (/Only JPEG|images are allowed/i.test(msg)) {
+    if (/Only JPEG|images are allowed|PDF files are allowed/i.test(msg)) {
       return res.status(400).json({ error: msg });
     }
     return next(err);

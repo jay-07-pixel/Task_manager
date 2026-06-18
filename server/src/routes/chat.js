@@ -5,6 +5,7 @@ import { prisma } from "../lib/prisma.js";
 import { requireAuth, requireOwner } from "../middleware/auth.js";
 import { notifyChatMessage, notifyGroupMessage } from "../services/chatNotificationService.js";
 import { addChatLiveClient, removeChatLiveClient, publishChatLive } from "../lib/chatLive.js";
+import { getChatTypingUsers, setChatTyping } from "../lib/chatTyping.js";
 import {
   attachmentFilePath,
   dmMessageSelect,
@@ -71,6 +72,33 @@ function peerFromConversation(conversation, userId) {
 
 function dmRecipientId(conversation, senderId) {
   return conversation.userLowId === senderId ? conversation.userHighId : conversation.userLowId;
+}
+
+function peerUserId(conversation, userId) {
+  return conversation.userLowId === userId ? conversation.userHighId : conversation.userLowId;
+}
+
+function groupMessageSeenMeta(message, memberships, meId) {
+  if (message.senderId !== meId) return null;
+  const created = new Date(message.createdAt).getTime();
+  const others = memberships.filter((m) => m.userId !== meId);
+  if (!others.length) return null;
+  const readBy = others.filter((m) => {
+    const since = m.lastReadAt ?? m.joinedAt;
+    return since && new Date(since).getTime() >= created;
+  });
+  return {
+    seenCount: readBy.length,
+    seenTotal: others.length,
+    seenByAll: readBy.length === others.length,
+  };
+}
+
+function serializeTypingUsers(threadType, threadId, meId) {
+  return getChatTypingUsers(threadType, threadId, meId).map((u) => ({
+    id: u.userId,
+    displayName: u.displayName,
+  }));
 }
 
 async function findPeerUser(peerUserId, currentUserId) {
@@ -386,6 +414,7 @@ router.get("/conversations/:id/messages", requireAuth, async (req, res) => {
       peer: serializeContact(peerFromConversation(conversation, meId)),
     },
     messages: messages.map((m) => serializeChatMessage(m, meId, "dm")),
+    typingUsers: serializeTypingUsers("dm", conversation.id, meId),
   });
 });
 
@@ -462,7 +491,55 @@ router.post("/conversations/:id/read", requireAuth, async (req, res) => {
     data: { readAt: new Date() },
   });
 
+  const readAt = new Date().toISOString();
+  if (result.count > 0) {
+    publishChatLive([peerUserId(conversation, meId)], {
+      kind: "read",
+      threadType: "dm",
+      threadId: conversation.id,
+      readerId: meId,
+      readAt,
+    });
+  }
+
   res.json({ markedRead: result.count });
+});
+
+router.post("/conversations/:id/typing", requireAuth, async (req, res) => {
+  const meId = req.session.userId;
+  const typing = req.body?.typing === true;
+  const conversation = await prisma.chatConversation.findUnique({
+    where: { id: req.params.id },
+    include: {
+      userLow: { select: { id: true, displayName: true } },
+      userHigh: { select: { id: true, displayName: true } },
+    },
+  });
+  if (!conversation || !userInConversation(conversation, meId)) {
+    return res.status(404).json({ error: "Conversation not found." });
+  }
+
+  const me =
+    conversation.userLowId === meId ? conversation.userLow : conversation.userHigh;
+  setChatTyping({
+    threadType: "dm",
+    threadId: conversation.id,
+    userId: meId,
+    displayName: me.displayName,
+    typing,
+  });
+
+  const peerId = peerUserId(conversation, meId);
+  publishChatLive([peerId, meId], {
+    kind: "typing",
+    threadType: "dm",
+    threadId: conversation.id,
+    userId: meId,
+    displayName: me.displayName,
+    typing,
+  });
+
+  res.json({ ok: true });
 });
 
 router.post("/groups", requireAuth, requireOwner, async (req, res) => {
@@ -661,13 +738,26 @@ router.get("/groups/:id/messages", requireAuth, async (req, res) => {
     select: groupMessageSelect,
   });
 
+  const members = await prisma.chatGroupMember.findMany({
+    where: { groupId: membership.groupId },
+    select: {
+      userId: true,
+      joinedAt: true,
+      lastReadAt: true,
+    },
+  });
+
   res.json({
     group: {
       id: membership.group.id,
       name: membership.group.name,
       memberCount: membership.group._count.members,
     },
-    messages: messages.map((m) => serializeChatMessage(m, meId, "group")),
+    messages: messages.map((m) => {
+      const seen = groupMessageSeenMeta(m, members, meId);
+      return serializeChatMessage(m, meId, "group", seen);
+    }),
+    typingUsers: serializeTypingUsers("group", membership.groupId, meId),
   });
 });
 
@@ -752,7 +842,60 @@ router.post("/groups/:id/read", requireAuth, async (req, res) => {
     data: { lastReadAt: new Date() },
   });
 
+  const members = await prisma.chatGroupMember.findMany({
+    where: { groupId: req.params.id },
+    select: { userId: true },
+  });
+  publishChatLive(
+    members.map((m) => m.userId),
+    {
+      kind: "read",
+      threadType: "group",
+      threadId: req.params.id,
+      readerId: meId,
+      readAt: new Date().toISOString(),
+    }
+  );
+
   res.json({ markedRead: true });
+});
+
+router.post("/groups/:id/typing", requireAuth, async (req, res) => {
+  const meId = req.session.userId;
+  const typing = req.body?.typing === true;
+  const membership = await prisma.chatGroupMember.findUnique({
+    where: { groupId_userId: { groupId: req.params.id, userId: meId } },
+    include: { user: { select: { displayName: true } } },
+  });
+  if (!membership) {
+    return res.status(404).json({ error: "Group not found." });
+  }
+
+  setChatTyping({
+    threadType: "group",
+    threadId: req.params.id,
+    userId: meId,
+    displayName: membership.user.displayName,
+    typing,
+  });
+
+  const members = await prisma.chatGroupMember.findMany({
+    where: { groupId: req.params.id },
+    select: { userId: true },
+  });
+  publishChatLive(
+    members.map((m) => m.userId),
+    {
+      kind: "typing",
+      threadType: "group",
+      threadId: req.params.id,
+      userId: meId,
+      displayName: membership.user.displayName,
+      typing,
+    }
+  );
+
+  res.json({ ok: true });
 });
 
 async function sendDmAttachment(req, res) {

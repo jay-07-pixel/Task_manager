@@ -525,6 +525,15 @@ body {
   font-weight: 400;
 }
 
+.owner-task-desc-detail {
+  white-space: pre-wrap;
+  line-height: 1.45;
+}
+
+.owner-task-desc-panel {
+  background: var(--bs-body-bg);
+}
+
 .owner-task-desc-short {
   display: block;
   max-width: 100%;
@@ -1076,7 +1085,6 @@ body {
     grid-template-areas:
       "grip task expand"
       "deadline deadline deadline"
-      "desc desc desc"
       "emp emp emp";
     gap: 0.4rem 0.45rem;
     align-items: center;
@@ -1126,28 +1134,6 @@ body {
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: var(--bs-secondary);
-  }
-
-  .owner-task-table tbody.owner-task-group tr.task-sort-row .owner-task-col--description {
-    grid-area: desc;
-    min-width: 0;
-  }
-
-  .owner-task-table tbody.owner-task-group tr.task-sort-row .owner-task-col--description::before {
-    content: "Description";
-    display: block;
-    font-weight: 600;
-    font-size: 0.65rem;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--bs-secondary);
-    margin-bottom: 0.3rem;
-  }
-
-  .owner-task-table tbody.owner-task-group tr.task-sort-row .owner-task-col--description .owner-task-desc-box {
-    white-space: normal !important;
-    overflow: visible !important;
-    text-overflow: unset !important;
   }
 
   .owner-task-table tbody.owner-task-group tr.task-sort-row .owner-task-col--employees {
@@ -2922,11 +2908,37 @@ body {
   color: rgba(255, 255, 255, 0.75);
 }
 
-.team-chat-bubble-time {
+.team-chat-bubble-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.5rem;
   margin-top: 0.2rem;
+}
+
+.team-chat-bubble-time {
   font-size: 0.68rem;
   color: var(--bs-secondary-color);
-  text-align: right;
+}
+
+.team-chat-msg-status {
+  font-size: 0.65rem;
+  color: var(--bs-secondary-color);
+  white-space: nowrap;
+}
+
+.team-chat-bubble-row--mine .team-chat-msg-status {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.team-chat-msg-status--sent {
+  opacity: 0.85;
+}
+
+.team-chat-typing-status {
+  line-height: 1.2;
+  font-style: italic;
 }
 
 .team-chat-compose {

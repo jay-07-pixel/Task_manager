@@ -1,6 +1,6 @@
 import { prisma } from "../lib/prisma.js";
 import { isPushConfigured, sendPushToSubscription } from "../lib/push.js";
-import { sendFcmNotification } from "../lib/fcm.js";
+import { sendFcmDataMessage } from "../lib/fcm.js";
 import { getEmployeeDevicesForUser } from "./fcmPushService.js";
 
 const LOG = "[chat-notify]";
@@ -58,16 +58,16 @@ export async function notifyChatMessage({ conversation, message, sender }) {
 
   const devices = await getEmployeeDevicesForUser(recipientId);
   for (const device of devices) {
-    const result = await sendFcmNotification({
+    const result = await sendFcmDataMessage({
       token: device.fcmToken,
-      title,
-      body,
       data: {
         type: "chat_message",
         conversationId,
         senderId: sender.id,
         senderName: sender.displayName,
         messageId: message.id,
+        title,
+        body,
       },
     });
     if (result.ok) {
@@ -126,10 +126,8 @@ export async function notifyGroupMessage({ group, message, sender }) {
 
     const devices = await getEmployeeDevicesForUser(recipientId);
     for (const device of devices) {
-      const result = await sendFcmNotification({
+      const result = await sendFcmDataMessage({
         token: device.fcmToken,
-        title,
-        body,
         data: {
           type: "chat_message",
           conversationId: openChatId,
@@ -137,6 +135,8 @@ export async function notifyGroupMessage({ group, message, sender }) {
           senderId: sender.id,
           senderName: sender.displayName,
           messageId: message.id,
+          title,
+          body,
         },
       });
       if (result.ok) {

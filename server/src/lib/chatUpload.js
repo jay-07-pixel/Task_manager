@@ -151,8 +151,8 @@ export const groupMessageSelect = {
   sender: { select: messageSenderSelect },
 };
 
-/** @param {any} m @param {string} meId @param {"dm"|"group"} threadType */
-export function serializeChatMessage(m, meId, threadType) {
+/** @param {any} m @param {string} meId @param {"dm"|"group"} threadType @param {{ seenCount?: number, seenTotal?: number, seenByAll?: boolean }} [seen] */
+export function serializeChatMessage(m, meId, threadType, seen = null) {
   /** @type {Record<string, unknown>} */
   const out = {
     id: m.id,
@@ -164,6 +164,11 @@ export function serializeChatMessage(m, meId, threadType) {
     isMine: m.senderId === meId,
   };
   if (m.readAt !== undefined) out.readAt = m.readAt;
+  if (seen && m.senderId === meId) {
+    out.seenCount = seen.seenCount;
+    out.seenTotal = seen.seenTotal;
+    out.seenByAll = seen.seenByAll;
+  }
   if (m.attachmentPath) {
     const urlBase =
       threadType === "group" ? `/api/chat/files/group/${m.id}` : `/api/chat/files/dm/${m.id}`;

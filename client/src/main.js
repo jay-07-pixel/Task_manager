@@ -191,8 +191,8 @@ function escapeHtml(s) {
 const proofBlobUrls = new Set();
 
 const EMP_SUBMISSION_TEXT_MAX = 2000;
-const EMP_SUBMISSION_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
-const EMP_SUBMISSION_REQUIRED_MSG = "Please provide submission text or upload an image.";
+const EMP_SUBMISSION_FILE_MAX_BYTES = 5 * 1024 * 1024;
+const EMP_SUBMISSION_REQUIRED_MSG = "Please provide submission text or upload a file.";
 const PROGRESS_UPDATE_TEXT_MAX = 2000;
 const PROGRESS_UPDATE_TYPES = [
   {
@@ -249,32 +249,41 @@ function submissionUploadErrorMessage(res, rawText) {
   return msg;
 }
 
-function validateEmpSubmissionImageFile(file) {
+function isEmpSubmissionPdfFile(file) {
+  return /^application\/pdf$/i.test(file.type) || /\.pdf$/i.test(file.name || "");
+}
+
+function validateEmpSubmissionFile(file) {
   if (!file) return null;
-  if (!/^image\/(jpeg|png|gif|webp)$/i.test(file.type)) {
-    return "Only JPEG, PNG, GIF, or WebP images are allowed.";
+  const isImage = /^image\/(jpeg|png|gif|webp)$/i.test(file.type);
+  const isPdf = isEmpSubmissionPdfFile(file);
+  if (!isImage && !isPdf) {
+    return "Only JPEG, PNG, GIF, WebP images, or PDF files are allowed.";
   }
-  if (file.size > EMP_SUBMISSION_IMAGE_MAX_BYTES) {
-    return "Image must be 5 MB or smaller.";
+  if (file.size > EMP_SUBMISSION_FILE_MAX_BYTES) {
+    return "File must be 5 MB or smaller.";
   }
   return null;
 }
 
-async function fetchProofBlobUrl(proofUrl) {
+async function fetchProofResource(proofUrl) {
   const res = await fetch(proofUrl, { credentials: "include" });
   if (!res.ok) {
-    if (res.status === 401) throw new Error("Sign in again to view proof images.");
-    if (res.status === 403) throw new Error("You do not have permission to view this proof.");
-    if (res.status === 404) throw new Error("Proof image not found on the server.");
-    throw new Error(`Could not load proof (${res.status}).`);
+    if (res.status === 401) throw new Error("Sign in again to view submission files.");
+    if (res.status === 403) throw new Error("You do not have permission to view this submission.");
+    if (res.status === 404) throw new Error("Submission file not found on the server.");
+    throw new Error(`Could not load submission file (${res.status}).`);
   }
   const blob = await res.blob();
-  if (!blob.type.startsWith("image/")) {
-    throw new Error("Proof file is missing or not a valid image.");
+  const mime = (blob.type || "").toLowerCase();
+  const isPdf = mime === "application/pdf" || /\.pdf(?:\?|$)/i.test(proofUrl);
+  const isImage = mime.startsWith("image/");
+  if (!isImage && !isPdf) {
+    throw new Error("Submission file is missing or not a supported image or PDF.");
   }
   const blobUrl = URL.createObjectURL(blob);
   proofBlobUrls.add(blobUrl);
-  return blobUrl;
+  return { url: blobUrl, kind: isPdf ? "pdf" : "image" };
 }
 
 async function refreshMe() {
@@ -1535,19 +1544,18 @@ function ownerDashboardMetrics() {
 
 function ownerFilteredTasks() {
   const activeList = state.lists.find((l) => l.id === state.activeListId);
-  if (isEmployeeAssignmentsList(activeList)) {
-    return state.tasks;
-  }
+  const tasks = state.tasks;
   if (state.ownerTaskFilter === "completed") {
-    return state.tasks.filter((t) => t.completed);
+    return tasks.filter((t) => t.completed);
   }
   if (state.ownerTaskFilter === "in_review") {
-    return state.tasks.filter(taskIsInReview);
+    return tasks.filter(taskIsInReview);
   }
   if (state.ownerTaskFilter === "employee_assigned") {
-    return state.tasks.filter(taskHasEmployeeAssignment);
+    if (isEmployeeAssignmentsList(activeList)) return tasks;
+    return tasks.filter(taskHasEmployeeAssignment);
   }
-  return state.tasks.filter((t) => !t.completed && !taskIsInReview(t));
+  return tasks.filter((t) => !t.completed && !taskIsInReview(t));
 }
 
 function setOwnerTaskFilter(filter) {
@@ -1581,26 +1589,12 @@ function ownerEmployeesCellHtml(task) {
   return `<span class="text-muted me-1"><i class="bi bi-people" aria-hidden="true"></i></span><span class="tabular-nums">${nDone}\u00a0/\u00a0${nAssigned}</span>`;
 }
 
-function ownerTaskDescriptionPreview(notes) {
-  const text = (notes || "").trim().replace(/\s+/g, " ");
-  if (!text) return { short: "", full: "", truncated: false };
-  const words = text.split(/\s+/).filter(Boolean);
-  if (words.length <= 3) return { short: text, full: text, truncated: false };
-  return { short: `${words.slice(0, 3).join(" ")}…`, full: text, truncated: true };
-}
-
-function ownerTaskDescriptionHtml(notes, taskTitle = "") {
-  const { short, full, truncated } = ownerTaskDescriptionPreview(notes);
+function ownerTaskDescriptionDetailHtml(notes) {
+  const full = (notes || "").trim().replace(/\s+/g, " ");
   if (!full) {
-    return `<span class="owner-task-desc-short small text-muted fst-italic">—</span>`;
+    return `<p class="owner-task-desc-detail small text-muted fst-italic mb-0">No description.</p>`;
   }
-  if (!truncated) {
-    return `<span class="owner-task-desc-box owner-task-desc-box--static small text-body-secondary mb-0">${escapeHtml(full)}</span>`;
-  }
-  return `<button type="button" class="owner-task-desc-box owner-task-desc-box--clickable js-owner-desc-popup small text-body-secondary mb-0" data-full="${escapeHtml(full)}" data-task-title="${escapeHtml(taskTitle)}" aria-label="View full description">
-    <span class="owner-task-desc-preview">${escapeHtml(short)}</span>
-    <i class="bi bi-box-arrow-up-right owner-task-desc-popup-icon" aria-hidden="true"></i>
-  </button>`;
+  return `<p class="owner-task-desc-detail small text-body-secondary mb-0 text-break">${escapeHtml(full)}</p>`;
 }
 
 function taskDescriptionModalHtml() {
@@ -2413,11 +2407,12 @@ function submissionDetailModalHtml() {
               <p class="small text-uppercase text-secondary fw-semibold mb-2">Submission notes</p>
               <div id="submission-detail-text" class="submission-detail-text border rounded p-3 bg-body-secondary small mb-0"></div>
             </div>
-            <div id="submission-detail-image-wrap" class="submission-detail-image-wrap d-none">
-              <p class="small text-uppercase text-secondary fw-semibold mb-2">Image</p>
-              <div class="submission-detail-image-frame rounded border bg-black d-flex align-items-center justify-content-center">
+            <div id="submission-detail-file-wrap" class="submission-detail-file-wrap d-none">
+              <p id="submission-detail-file-label" class="small text-uppercase text-secondary fw-semibold mb-2">Attachment</p>
+              <div id="submission-detail-image-frame" class="submission-detail-image-frame rounded border bg-black d-flex align-items-center justify-content-center">
                 <img id="submission-detail-img" src="" class="w-100" style="max-height: min(70vh, 720px); object-fit: contain;" alt="Submission image" />
               </div>
+              <iframe id="submission-detail-pdf" class="w-100 rounded border d-none" style="height: min(70vh, 720px);" title="Submission PDF"></iframe>
             </div>
             <p id="submission-detail-empty" class="text-muted small mb-0 d-none">No submission content.</p>
           </div>
@@ -2562,7 +2557,7 @@ function empSubmissionModalHtml() {
               id="emp-submission-text"
               rows="5"
               maxlength="${EMP_SUBMISSION_TEXT_MAX}"
-              placeholder="Describe what you completed, paste notes, or leave blank if you only upload an image."
+              placeholder="Describe what you completed, paste notes, or leave blank if you only upload a file."
             ></textarea>
             <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-2">
               <button type="button" class="btn btn-sm btn-outline-secondary" id="emp-submission-paste">
@@ -2572,15 +2567,19 @@ function empSubmissionModalHtml() {
             </div>
             <p id="emp-submission-error" class="text-danger small mb-0 mt-2 d-none" role="alert"></p>
             <hr class="my-3" />
-            <label class="form-label" for="emp-submission-image">Submission image <span class="text-muted fw-normal">(optional)</span></label>
+            <label class="form-label" for="emp-submission-image">Submission file <span class="text-muted fw-normal">(image or PDF, optional)</span></label>
             <input
               type="file"
               class="form-control"
               id="emp-submission-image"
-              accept="image/jpeg,image/png,image/gif,image/webp"
+              accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,.pdf"
             />
             <div id="emp-submission-preview-wrap" class="mt-2 d-none">
-              <img id="emp-submission-preview" src="" alt="Selected image preview" class="submission-preview-thumb rounded border" />
+              <img id="emp-submission-preview" src="" alt="Selected image preview" class="submission-preview-thumb rounded border d-none" />
+              <div id="emp-submission-preview-pdf" class="submission-preview-pdf rounded border px-3 py-2 d-none d-flex align-items-center gap-2">
+                <i class="bi bi-file-earmark-pdf text-danger fs-4" aria-hidden="true"></i>
+                <span id="emp-submission-preview-name" class="small text-break"></span>
+              </div>
             </div>
           </div>
           <div class="modal-footer">
@@ -3024,13 +3023,25 @@ function lookupAssigneeSubmission(taskId, userId) {
   };
 }
 
-function clearSubmissionDetailImage() {
+function clearSubmissionDetailMedia() {
   const img = document.getElementById("submission-detail-img");
+  const pdf = document.getElementById("submission-detail-pdf");
   if (img?.src?.startsWith("blob:")) {
     URL.revokeObjectURL(img.src);
     proofBlobUrls.delete(img.src);
   }
-  if (img) img.removeAttribute("src");
+  if (img) {
+    img.removeAttribute("src");
+    img.classList.add("d-none");
+  }
+  if (pdf?.src?.startsWith("blob:")) {
+    URL.revokeObjectURL(pdf.src);
+    proofBlobUrls.delete(pdf.src);
+  }
+  if (pdf) {
+    pdf.removeAttribute("src");
+    pdf.classList.add("d-none");
+  }
 }
 
 async function openSubmissionDetailModal({ title, submissionText, proofUrl }) {
@@ -3038,17 +3049,20 @@ async function openSubmissionDetailModal({ title, submissionText, proofUrl }) {
   const titleEl = document.getElementById("submissionDetailTitle");
   const textWrap = document.getElementById("submission-detail-text-wrap");
   const textEl = document.getElementById("submission-detail-text");
-  const imageWrap = document.getElementById("submission-detail-image-wrap");
+  const fileWrap = document.getElementById("submission-detail-file-wrap");
+  const fileLabel = document.getElementById("submission-detail-file-label");
+  const imageFrame = document.getElementById("submission-detail-image-frame");
   const img = document.getElementById("submission-detail-img");
+  const pdf = document.getElementById("submission-detail-pdf");
   const emptyEl = document.getElementById("submission-detail-empty");
-  if (!modalEl || !titleEl || !textWrap || !textEl || !imageWrap || !img || !emptyEl) return;
+  if (!modalEl || !titleEl || !textWrap || !textEl || !fileWrap || !fileLabel || !imageFrame || !img || !pdf || !emptyEl) return;
 
   const text = (submissionText || "").trim();
   const hasText = text.length > 0;
-  const hasImage = !!proofUrl;
+  const hasFile = !!proofUrl;
 
   titleEl.textContent = title || "Submission";
-  clearSubmissionDetailImage();
+  clearSubmissionDetailMedia();
 
   if (hasText) {
     textWrap.classList.remove("d-none");
@@ -3058,24 +3072,34 @@ async function openSubmissionDetailModal({ title, submissionText, proofUrl }) {
     textEl.textContent = "";
   }
 
-  if (hasImage) {
-    imageWrap.classList.remove("d-none");
-    img.alt = title || "Submission image";
+  if (hasFile) {
+    fileWrap.classList.remove("d-none");
   } else {
-    imageWrap.classList.add("d-none");
+    fileWrap.classList.add("d-none");
   }
 
-  emptyEl.classList.toggle("d-none", hasText || hasImage);
+  emptyEl.classList.toggle("d-none", hasText || hasFile);
 
   const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
   modal.show();
 
-  if (hasImage) {
+  if (hasFile) {
     try {
-      img.src = await fetchProofBlobUrl(proofUrl);
+      const resource = await fetchProofResource(proofUrl);
+      if (resource.kind === "pdf") {
+        fileLabel.textContent = "PDF";
+        imageFrame.classList.add("d-none");
+        pdf.src = resource.url;
+        pdf.classList.remove("d-none");
+      } else {
+        fileLabel.textContent = "Image";
+        imageFrame.classList.remove("d-none");
+        img.src = resource.url;
+        img.classList.remove("d-none");
+      }
     } catch (err) {
       modal.hide();
-      showToast(err.message || "Could not load submission image.", "danger");
+      showToast(err.message || "Could not load submission file.", "danger");
     }
   }
 }
@@ -3106,7 +3130,7 @@ function wireSubmissionDetailModal() {
   if (!modalEl || modalEl.dataset.wiredSubmissionDetail === "1") return;
   modalEl.dataset.wiredSubmissionDetail = "1";
   modalEl.addEventListener("hidden.bs.modal", () => {
-    clearSubmissionDetailImage();
+    clearSubmissionDetailMedia();
   });
 }
 
@@ -3123,9 +3147,16 @@ function resetEmpSubmissionPreview() {
   const input = document.getElementById("emp-submission-image");
   const wrap = document.getElementById("emp-submission-preview-wrap");
   const preview = document.getElementById("emp-submission-preview");
+  const pdfPreview = document.getElementById("emp-submission-preview-pdf");
+  const pdfName = document.getElementById("emp-submission-preview-name");
   if (input) input.value = "";
   if (preview?.src?.startsWith("blob:")) URL.revokeObjectURL(preview.src);
-  if (preview) preview.removeAttribute("src");
+  if (preview) {
+    preview.removeAttribute("src");
+    preview.classList.add("d-none");
+  }
+  if (pdfPreview) pdfPreview.classList.add("d-none");
+  if (pdfName) pdfName.textContent = "";
   if (wrap) wrap.classList.add("d-none");
 }
 
@@ -3196,6 +3227,8 @@ function wireEmpSubmissionModal() {
   const submitBtn = document.getElementById("emp-submission-submit");
   const previewWrap = document.getElementById("emp-submission-preview-wrap");
   const preview = document.getElementById("emp-submission-preview");
+  const pdfPreview = document.getElementById("emp-submission-preview-pdf");
+  const pdfName = document.getElementById("emp-submission-preview-name");
 
   ta?.addEventListener("input", syncEmpSubmissionCharCount);
 
@@ -3226,11 +3259,11 @@ function wireEmpSubmissionModal() {
 
   fileInput?.addEventListener("change", () => {
     const file = fileInput.files?.[0];
-    if (!file || !preview || !previewWrap) {
+    if (!file || !preview || !previewWrap || !pdfPreview || !pdfName) {
       resetEmpSubmissionPreview();
       return;
     }
-    const fileErr = validateEmpSubmissionImageFile(file);
+    const fileErr = validateEmpSubmissionFile(file);
     if (fileErr) {
       showToast(fileErr, "warning");
       fileInput.value = "";
@@ -3238,7 +3271,17 @@ function wireEmpSubmissionModal() {
       return;
     }
     if (preview.src?.startsWith("blob:")) URL.revokeObjectURL(preview.src);
-    preview.src = URL.createObjectURL(file);
+    preview.removeAttribute("src");
+    preview.classList.add("d-none");
+    pdfPreview.classList.add("d-none");
+    pdfName.textContent = "";
+    if (isEmpSubmissionPdfFile(file)) {
+      pdfName.textContent = file.name || "document.pdf";
+      pdfPreview.classList.remove("d-none");
+    } else {
+      preview.src = URL.createObjectURL(file);
+      preview.classList.remove("d-none");
+    }
     previewWrap.classList.remove("d-none");
   });
 
@@ -3264,7 +3307,7 @@ function wireEmpSubmissionModal() {
       return;
     }
     if (file) {
-      const fileErr = validateEmpSubmissionImageFile(file);
+      const fileErr = validateEmpSubmissionFile(file);
       if (fileErr) {
         errEl.textContent = fileErr;
         errEl.classList.remove("d-none");
@@ -3870,7 +3913,7 @@ function bindListNavHandlers() {
         const listId = btn.getAttribute("data-list-id");
         state.activeListId = listId;
         const list = state.lists.find((x) => x.id === listId);
-        state.ownerTaskFilter = isEmployeeAssignmentsList(list) ? "employee_assigned" : "active";
+        state.ownerTaskFilter = "active";
         await loadTasks(state.activeListId);
         renderOwnerMain();
         renderListContentOnly();
@@ -4146,7 +4189,7 @@ function ownerTaskGroupTbody(t) {
 
   const deadlineCell = formatOwnerTaskDeadline(t);
 
-  const descriptionBox = ownerTaskDescriptionHtml(t.notes, t.title);
+  const descriptionPanel = ownerTaskDescriptionDetailHtml(t.notes);
 
   const assigneeCards =
     assignees.length === 0
@@ -4221,7 +4264,6 @@ function ownerTaskGroupTbody(t) {
         }" aria-label="Open task details">${escapeHtml(t.title)}</button>
       </td>
       <td class="owner-task-cell owner-task-col--deadline align-middle small text-nowrap tabular-nums">${deadlineCell}</td>
-      <td class="owner-task-cell owner-task-col--description align-middle">${descriptionBox}</td>
       <td class="owner-task-cell owner-task-col--employees align-middle text-center small">
         ${ownerEmployeesCellHtml(t)}
       </td>
@@ -4241,9 +4283,13 @@ function ownerTaskGroupTbody(t) {
       </td>
     </tr>
     <tr class="owner-task-detail-row">
-      <td colspan="6" class="p-0">
+      <td colspan="5" class="p-0">
         <div class="collapse owner-task-detail-collapse" id="${detailId}">
           <div class="owner-task-detail-inner">
+            <div class="owner-task-desc-panel px-3 pt-3 pb-3 border-bottom">
+              <h3 class="owner-task-detail-heading small text-secondary mb-2">Description</h3>
+              ${descriptionPanel}
+            </div>
             <div class="owner-team-progress px-3 pt-3 pb-2">
               <div class="owner-team-progress-head d-flex align-items-center justify-content-between gap-2 mb-3">
                 <h3 class="owner-task-detail-heading small text-secondary mb-0">Team progress</h3>
@@ -4304,7 +4350,7 @@ function renderOwnerMain() {
   const kpiRow =
     list && metrics.total > 0
       ? `<div class="row g-3 mb-4 owner-kpi-row">
-          <div class="col-6 col-lg-3">
+          <div class="col-6 ${isEmpAssignList ? "col-lg-4" : "col-lg-3"}">
             <button type="button" class="owner-kpi-card owner-kpi-card--filter w-100 text-start${activeKpiClass}" data-owner-filter="active" aria-pressed="${state.ownerTaskFilter === "active"}">
               <div class="owner-kpi-icon text-primary"><i class="bi bi-list-task" aria-hidden="true"></i></div>
               <div>
@@ -4313,7 +4359,7 @@ function renderOwnerMain() {
               </div>
             </button>
             </div>
-          <div class="col-6 col-lg-3">
+          <div class="col-6 ${isEmpAssignList ? "col-lg-4" : "col-lg-3"}">
             <button type="button" class="owner-kpi-card owner-kpi-card--filter w-100 text-start${inReviewKpiClass}" data-owner-filter="in_review" aria-pressed="${state.ownerTaskFilter === "in_review"}">
               <div class="owner-kpi-icon text-danger"><i class="bi bi-chat-left-dots" aria-hidden="true"></i></div>
               <div>
@@ -4322,7 +4368,7 @@ function renderOwnerMain() {
           </div>
             </button>
           </div>
-          <div class="col-6 col-lg-3">
+          <div class="col-6 ${isEmpAssignList ? "col-lg-4" : "col-lg-3"}">
             <button type="button" class="owner-kpi-card owner-kpi-card--filter w-100 text-start${completedKpiClass}" data-owner-filter="completed" aria-pressed="${state.ownerTaskFilter === "completed"}">
               <div class="owner-kpi-icon text-success"><i class="bi bi-check-circle" aria-hidden="true"></i></div>
               <div>
@@ -4331,7 +4377,10 @@ function renderOwnerMain() {
               </div>
             </button>
             </div>
-          <div class="col-6 col-lg-3">
+          ${
+            isEmpAssignList
+              ? ""
+              : `<div class="col-6 col-lg-3">
             <button type="button" class="owner-kpi-card owner-kpi-card--filter w-100 text-start${empAssignedKpiClass}" data-owner-filter="employee_assigned" aria-pressed="${state.ownerTaskFilter === "employee_assigned"}">
               <div class="owner-kpi-icon text-info"><i class="bi bi-person-lines-fill" aria-hidden="true"></i></div>
               <div>
@@ -4339,7 +4388,8 @@ function renderOwnerMain() {
                 <div class="owner-kpi-label">Employee assigned</div>
               </div>
             </button>
-          </div>
+          </div>`
+          }
         </div>`
       : "";
 
@@ -4395,7 +4445,6 @@ function renderOwnerMain() {
                 <th scope="col" class="owner-task-cell owner-task-cell--grip border-end-0"><span class="visually-hidden">Reorder</span></th>
                 <th scope="col" class="owner-task-head owner-task-col--task">Task</th>
                 <th scope="col" class="owner-task-head owner-task-col--deadline text-nowrap">Deadline</th>
-                <th scope="col" class="owner-task-head owner-task-col--description">Description</th>
                 <th scope="col" class="owner-task-head owner-task-col--employees text-center text-nowrap">${escapeHtml(teamColLabel)}</th>
                 <th scope="col" class="owner-task-head owner-task-col--trail text-end"><span class="visually-hidden">Details</span></th>
               </tr>

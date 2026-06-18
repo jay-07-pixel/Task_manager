@@ -40,6 +40,12 @@ let lastUnreadTotal = 0;
 let manageMemberFilter = "";
 /** @type {boolean} */
 let chatPollInitialized = false;
+/** @type {{ id: string, displayName: string }[]} */
+let activeTypingUsers = [];
+/** @type {boolean} */
+let typingPulseActive = false;
+/** @type {number | null} */
+let typingStopTimer = null;
 
 function getChatPollMs() {
   if (document.hidden) return CHAT_POLL_MS_HIDDEN;
@@ -54,19 +60,42 @@ async function refreshActiveMessages() {
     activeThreadType === "group"
       ? `/api/chat/groups/${activeChatId}`
       : `/api/chat/conversations/${activeChatId}`;
-  const prevLastId = activeMessages[activeMessages.length - 1]?.id;
+  const prevFp = JSON.stringify(
+    activeMessages.map((m) => ({
+      id: m.id,
+      readAt: m.readAt ?? null,
+      seenCount: m.seenCount ?? null,
+      seenByAll: !!m.seenByAll,
+    }))
+  );
   const data = await d().api(`${base}/messages`);
   const next = data.messages ?? [];
-  const nextLastId = next[next.length - 1]?.id;
-  if (next.length === activeMessages.length && nextLastId === prevLastId) return;
+  const nextFp = JSON.stringify(
+    next.map((m) => ({
+      id: m.id,
+      readAt: m.readAt ?? null,
+      seenCount: m.seenCount ?? null,
+      seenByAll: !!m.seenByAll,
+    }))
+  );
+  const typingUsers = data.typingUsers ?? [];
+  const typingChanged =
+    JSON.stringify(typingUsers.map((u) => u.id)) !==
+    JSON.stringify(activeTypingUsers.map((u) => u.id));
+  if (nextFp === prevFp && !typingChanged) return;
 
+  const prevLastId = activeMessages[activeMessages.length - 1]?.id;
+  const nextLastId = next[next.length - 1]?.id;
   const incoming =
     nextLastId &&
     nextLastId !== prevLastId &&
     next[next.length - 1] &&
     !next[next.length - 1].isMine;
+
   activeMessages = next;
+  activeTypingUsers = typingUsers;
   renderMessages();
+  updateTypingIndicator();
 
   if (incoming) {
     try {
@@ -84,9 +113,44 @@ function onChatLivePayload(payload) {
     activeChatId = null;
     activeThreadIsGroup = false;
     activeMessages = [];
+    activeTypingUsers = [];
     setThreadVisible(false);
     syncGroupManageUi();
     void loadThreads();
+    return;
+  }
+  if (
+    payload.kind === "typing" &&
+    payload.threadType === activeThreadType &&
+    payload.threadId === activeChatId &&
+    isChatPanelOpen()
+  ) {
+    const meId = d().getUser()?.id;
+    if (payload.userId === meId) return;
+    if (payload.typing) {
+      const name = payload.displayName || "Someone";
+      const existing = activeTypingUsers.filter((u) => u.id !== payload.userId);
+      activeTypingUsers = [...existing, { id: payload.userId, displayName: name }];
+    } else {
+      activeTypingUsers = activeTypingUsers.filter((u) => u.id !== payload.userId);
+    }
+    updateTypingIndicator();
+    return;
+  }
+  if (
+    payload.kind === "read" &&
+    payload.threadType === activeThreadType &&
+    payload.threadId === activeChatId &&
+    isChatPanelOpen()
+  ) {
+    if (payload.threadType === "dm" && payload.readAt) {
+      activeMessages = activeMessages.map((m) =>
+        m.isMine && !m.readAt ? { ...m, readAt: payload.readAt } : m
+      );
+      renderMessages();
+    } else {
+      void refreshActiveMessages();
+    }
     return;
   }
   if (
@@ -195,6 +259,80 @@ function formatChatTime(iso) {
 
 const CHAT_MAX_FILE_BYTES = 5 * 1024 * 1024;
 const CHAT_MAX_FILE_MB = 5;
+
+function formatTypingLabel(users) {
+  if (!users.length) return "";
+  const names = users.map((u) => u.displayName || "Someone");
+  if (names.length === 1) return `${names[0]} is typing…`;
+  if (names.length === 2) return `${names[0]} and ${names[1]} are typing…`;
+  return `${names[0]} and ${names.length - 1} others are typing…`;
+}
+
+function updateTypingIndicator() {
+  const el = document.getElementById("team-chat-typing-status");
+  if (!el) return;
+  const label = formatTypingLabel(activeTypingUsers);
+  el.textContent = label;
+  el.classList.toggle("d-none", !label);
+}
+
+function messageStatusHtml(m) {
+  if (!m.isMine) return "";
+  if (activeThreadType === "group") {
+    const total = m.seenTotal ?? 0;
+    const count = m.seenCount ?? 0;
+    if (total <= 0) return "";
+    if (m.seenByAll) {
+      return `<span class="team-chat-msg-status"><i class="bi bi-check2-all" aria-hidden="true"></i> Seen by all</span>`;
+    }
+    if (count > 0) {
+      return `<span class="team-chat-msg-status"><i class="bi bi-check2-all" aria-hidden="true"></i> Seen by ${count}</span>`;
+    }
+    return `<span class="team-chat-msg-status team-chat-msg-status--sent"><i class="bi bi-check2" aria-hidden="true"></i> Sent</span>`;
+  }
+  if (m.readAt) {
+    return `<span class="team-chat-msg-status"><i class="bi bi-check2-all" aria-hidden="true"></i> Seen</span>`;
+  }
+  return `<span class="team-chat-msg-status team-chat-msg-status--sent"><i class="bi bi-check2" aria-hidden="true"></i> Sent</span>`;
+}
+
+async function postTyping(typing) {
+  if (!activeChatId || !activeThreadType) return;
+  const base =
+    activeThreadType === "group"
+      ? `/api/chat/groups/${activeChatId}`
+      : `/api/chat/conversations/${activeChatId}`;
+  try {
+    await d().api(`${base}/typing`, { method: "POST", body: JSON.stringify({ typing }) });
+  } catch {
+    /* ignore */
+  }
+}
+
+function stopTypingPulse() {
+  if (typingStopTimer != null) {
+    window.clearTimeout(typingStopTimer);
+    typingStopTimer = null;
+  }
+  if (typingPulseActive) {
+    typingPulseActive = false;
+    void postTyping(false);
+  }
+}
+
+function pulseTyping() {
+  if (!activeChatId || !activeThreadType || !isChatPanelOpen()) return;
+  if (!typingPulseActive) {
+    typingPulseActive = true;
+    void postTyping(true);
+  }
+  if (typingStopTimer != null) window.clearTimeout(typingStopTimer);
+  typingStopTimer = window.setTimeout(() => {
+    typingStopTimer = null;
+    typingPulseActive = false;
+    void postTyping(false);
+  }, 2800);
+}
 
 function previewText(body, hasAttachment) {
   const t = String(body || "").trim().replace(/\s+/g, " ");
@@ -509,6 +647,7 @@ export function teamChatOffcanvasHtml() {
                 <span id="team-chat-peer-avatar"></span>
                 <button type="button" class="team-chat-thread-head-main min-w-0 flex-grow-1 text-start border-0 bg-transparent p-0" id="team-chat-thread-head-main">
                   <div class="fw-semibold text-truncate" id="team-chat-peer-name">—</div>
+                  <div id="team-chat-typing-status" class="team-chat-typing-status small text-muted d-none" aria-live="polite"></div>
                   <div id="team-chat-peer-role"></div>
                 </button>
                 <button type="button" class="btn btn-sm btn-light border team-chat-group-manage-btn d-none" id="team-chat-group-manage-btn" title="Manage group" aria-label="Manage group">
@@ -948,7 +1087,10 @@ function renderMessages() {
           ${senderLine}
           <div class="team-chat-bubble">
             ${messageBodyHtml(m)}
-            <div class="team-chat-bubble-time tabular-nums">${d().escapeHtml(formatChatTime(m.createdAt))}</div>
+            <div class="team-chat-bubble-meta">
+              <div class="team-chat-bubble-time tabular-nums">${d().escapeHtml(formatChatTime(m.createdAt))}</div>
+              ${messageStatusHtml(m)}
+            </div>
           </div>
         </div>
       </div>`;
@@ -1048,10 +1190,13 @@ async function loadThreads() {
 }
 
 async function openThread(type, id) {
+  stopTypingPulse();
   clearPendingChatFile();
   activeThreadType = type === "group" ? "group" : "dm";
   activeChatId = id;
   activeThreadIsGroup = activeThreadType === "group";
+  activeTypingUsers = [];
+  updateTypingIndicator();
   mobileShowThread = isMobileChatLayout();
   syncGroupManageUi();
 
@@ -1074,6 +1219,7 @@ async function openThread(type, id) {
   try {
     const data = await d().api(`${base}/messages`);
     activeMessages = data.messages ?? [];
+    activeTypingUsers = data.typingUsers ?? [];
     if (activeThreadType === "group" && data.group) {
       updateThreadHeaderFromThread({
         type: "group",
@@ -1086,6 +1232,7 @@ async function openThread(type, id) {
       });
     }
     renderMessages();
+    updateTypingIndicator();
     try {
       await d().api(`${base}/read`, { method: "POST", body: "{}" });
       await loadThreads();
@@ -1163,6 +1310,7 @@ async function createGroup(e) {
 async function sendMessage(e) {
   e.preventDefault();
   if (!activeChatId || !activeThreadType) return;
+  stopTypingPulse();
   const input = document.getElementById("team-chat-input");
   const body = input?.value?.trim() || "";
   const file = pendingChatFile;
@@ -1321,6 +1469,12 @@ export function initTeamChat(chatDeps) {
   document.getElementById("team-chat-compose")?.addEventListener("submit", (e) => {
     void sendMessage(e);
   });
+  document.getElementById("team-chat-input")?.addEventListener("input", () => {
+    pulseTyping();
+  });
+  document.getElementById("team-chat-input")?.addEventListener("blur", () => {
+    stopTypingPulse();
+  });
   document.getElementById("team-chat-attach-btn")?.addEventListener("click", () => {
     document.getElementById("team-chat-file-input")?.click();
   });
@@ -1413,11 +1567,14 @@ export function initTeamChat(chatDeps) {
     void refreshChatData();
   });
   offcanvas.addEventListener("hidden.bs.offcanvas", () => {
+    stopTypingPulse();
     mobileShowThread = false;
     activeThreadType = null;
     activeChatId = null;
     activeThreadIsGroup = false;
     activeMessages = [];
+    activeTypingUsers = [];
+    updateTypingIndicator();
     syncGroupManageUi();
     setThreadVisible(false);
   });
