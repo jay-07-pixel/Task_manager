@@ -215,22 +215,118 @@ function isImageAttachment(m) {
   return /\.(jpe?g|png|gif|webp|bmp|svg)$/i.test(m.attachmentName || "");
 }
 
+function isPdfAttachment(m) {
+  if (m.attachmentMime === "application/pdf") return true;
+  return /\.pdf$/i.test(m.attachmentName || "");
+}
+
+function chatMediaDataAttrs(url, type, name, mime = "") {
+  return `data-media-url="${url}" data-media-type="${type}" data-media-name="${name}" data-media-mime="${d().escapeHtml(mime)}"`;
+}
+
+function openChatMediaLightbox({ url, type, name, mime }) {
+  const box = document.getElementById("team-chat-media-lightbox");
+  const inner = document.getElementById("team-chat-media-lightbox-inner");
+  if (!box || !inner || !url) return;
+  let html = "";
+  if (type === "image") {
+    html = `<img src="${d().escapeHtml(url)}" alt="${d().escapeHtml(name || "Image")}" class="team-chat-media-lightbox-image" />`;
+  } else if (type === "video") {
+    const videoMime = mime && mime.startsWith("video/") ? mime : "video/mp4";
+    html = `<video class="team-chat-media-lightbox-video" controls autoplay playsinline src="${d().escapeHtml(url)}" type="${d().escapeHtml(videoMime)}"></video>`;
+  } else if (type === "pdf") {
+    html = `<iframe class="team-chat-media-lightbox-pdf" src="${d().escapeHtml(url)}" title="${d().escapeHtml(name || "PDF")}"></iframe>`;
+  } else {
+    return;
+  }
+  inner.innerHTML = html;
+  box.classList.remove("d-none");
+  document.body.classList.add("team-chat-media-lightbox-open");
+}
+
+function closeChatMediaLightbox() {
+  const box = document.getElementById("team-chat-media-lightbox");
+  const inner = document.getElementById("team-chat-media-lightbox-inner");
+  if (inner) {
+    inner.querySelectorAll("video").forEach((v) => {
+      v.pause();
+      v.removeAttribute("src");
+      v.load();
+    });
+    inner.innerHTML = "";
+  }
+  box?.classList.add("d-none");
+  document.body.classList.remove("team-chat-media-lightbox-open");
+}
+
+let chatMediaLightboxWired = false;
+
+function wireChatMediaLightbox() {
+  if (chatMediaLightboxWired) return;
+  chatMediaLightboxWired = true;
+
+  document.getElementById("team-chat-messages")?.addEventListener("click", (e) => {
+    const open = e.target.closest(".js-chat-media-open");
+    if (!open) return;
+    e.preventDefault();
+    e.stopPropagation();
+    openChatMediaLightbox({
+      url: open.getAttribute("data-media-url") || "",
+      type: open.getAttribute("data-media-type") || "image",
+      name: open.getAttribute("data-media-name") || "",
+      mime: open.getAttribute("data-media-mime") || "",
+    });
+  });
+
+  document.getElementById("team-chat-media-lightbox")?.addEventListener("click", (e) => {
+    if (e.target.closest(".js-chat-media-lightbox-close") || e.target.classList.contains("team-chat-media-lightbox-backdrop")) {
+      closeChatMediaLightbox();
+    }
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !document.getElementById("team-chat-media-lightbox")?.classList.contains("d-none")) {
+      closeChatMediaLightbox();
+    }
+  });
+}
+
 function messageAttachmentHtml(m) {
   if (!m.attachmentUrl) return "";
   const name = m.attachmentName || "File";
   const url = d().escapeHtml(m.attachmentUrl);
   const safeName = d().escapeHtml(name);
+  const expandIcon = `<span class="team-chat-media-expand-icon" aria-hidden="true"><i class="bi bi-arrows-fullscreen"></i></span>`;
   if (isImageAttachment(m)) {
-    return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="team-chat-attach-image-link">
+    const attrs = chatMediaDataAttrs(url, "image", safeName, m.attachmentMime || "");
+    return `<button type="button" class="team-chat-attach-media-btn js-chat-media-open" ${attrs} aria-label="View image full screen" title="Full screen">
       <img src="${url}" alt="${safeName}" class="team-chat-attach-image" loading="lazy" />
-    </a>`;
+      ${expandIcon}
+    </button>`;
   }
   if (isVideoAttachment(m)) {
     const mime = m.attachmentMime && m.attachmentMime.startsWith("video/") ? m.attachmentMime : "video/mp4";
+    const attrs = chatMediaDataAttrs(url, "video", safeName, mime);
     return `<div class="team-chat-attach-video-wrap">
       <video class="team-chat-attach-video" controls playsinline preload="metadata" src="${url}" type="${d().escapeHtml(mime)}">
         <p class="small mb-0">Your browser cannot play this video inline.</p>
       </video>
+      <button type="button" class="team-chat-media-expand-btn js-chat-media-open" ${attrs} aria-label="View video full screen" title="Full screen">
+        <i class="bi bi-arrows-fullscreen" aria-hidden="true"></i>
+      </button>
+    </div>`;
+  }
+  if (isPdfAttachment(m)) {
+    const attrs = chatMediaDataAttrs(url, "pdf", safeName, "application/pdf");
+    return `<div class="team-chat-attach-file-row">
+      <button type="button" class="team-chat-attach-view-btn js-chat-media-open" ${attrs}>
+        <i class="bi bi-file-earmark-pdf" aria-hidden="true"></i>
+        <span class="text-truncate">${safeName}</span>
+        <span class="team-chat-attach-view-label">View</span>
+      </button>
+      <a href="${url}" class="team-chat-attach-file team-chat-attach-file--compact" download="${safeName}" title="Download">
+        <i class="bi bi-download" aria-hidden="true"></i>
+      </a>
     </div>`;
   }
   return `<a href="${url}" class="team-chat-attach-file" download="${safeName}">
@@ -502,6 +598,13 @@ export function teamChatOffcanvasHtml() {
           </form>
         </div>
       </div>
+    </div>
+    <div id="team-chat-media-lightbox" class="team-chat-media-lightbox d-none" role="dialog" aria-modal="true" aria-label="Full screen media">
+      <button type="button" class="team-chat-media-lightbox-backdrop js-chat-media-lightbox-close" aria-label="Close"></button>
+      <button type="button" class="team-chat-media-lightbox-close js-chat-media-lightbox-close" aria-label="Close">
+        <i class="bi bi-x-lg" aria-hidden="true"></i>
+      </button>
+      <div class="team-chat-media-lightbox-inner" id="team-chat-media-lightbox-inner"></div>
     </div>`;
 }
 
@@ -1207,6 +1310,8 @@ export function initTeamChat(chatDeps) {
   stopPolling();
   const offcanvas = document.getElementById("teamChatOffcanvas");
   if (!offcanvas) return;
+
+  wireChatMediaLightbox();
 
   document.getElementById("team-chat-search")?.addEventListener("input", (e) => {
     contactFilter = e.target.value || "";
