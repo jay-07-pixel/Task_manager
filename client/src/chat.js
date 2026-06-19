@@ -7,6 +7,7 @@ const CHAT_POLL_MS_OPEN = 2500;
 const CHAT_POLL_MS_ACTIVE = 3000;
 const CHAT_TYPING_DEBOUNCE_MS = 400;
 const CHAT_TYPING_IDLE_MS = 3000;
+const CHAT_DELETE_WINDOW_MS = 30 * 60 * 1000;
 
 /** @type {ChatDeps | null} */
 let deps = null;
@@ -49,6 +50,8 @@ let activeTypingUsers = [];
 let typingPulseActive = false;
 /** @type {number | null} */
 let typingStopTimer = null;
+/** @type {any | null} */
+let replyingTo = null;
 /** @type {number | null} */
 let typingDebounceTimer = null;
 
@@ -71,6 +74,9 @@ async function refreshActiveMessages() {
       readAt: m.readAt ?? null,
       seenCount: m.seenCount ?? null,
       seenByAll: !!m.seenByAll,
+      deleted: !!m.deleted,
+      body: m.body ?? "",
+      replyToId: m.replyTo?.id ?? null,
     }))
   );
   const data = await d().api(`${base}/messages`);
@@ -81,6 +87,9 @@ async function refreshActiveMessages() {
       readAt: m.readAt ?? null,
       seenCount: m.seenCount ?? null,
       seenByAll: !!m.seenByAll,
+      deleted: !!m.deleted,
+      body: m.body ?? "",
+      replyToId: m.replyTo?.id ?? null,
     }))
   );
   const typingUsers = data.typingUsers ?? [];
@@ -161,6 +170,15 @@ function onChatLivePayload(payload) {
       void refreshActiveMessages();
     }
     void loadThreads();
+    return;
+  }
+  if (
+    payload.kind === "deleted" &&
+    payload.threadType === activeThreadType &&
+    payload.threadId === activeChatId &&
+    isChatPanelOpen()
+  ) {
+    void refreshActiveMessages().then(() => loadThreads());
     return;
   }
   if (
@@ -353,11 +371,80 @@ function pulseTyping() {
   }, CHAT_TYPING_IDLE_MS);
 }
 
-function previewText(body, hasAttachment) {
+function previewText(body, hasAttachment, deleted = false) {
+  if (deleted) return "Message deleted";
   const t = String(body || "").trim().replace(/\s+/g, " ");
   if (t) return t.length > 72 ? `${t.slice(0, 69)}…` : t;
   if (hasAttachment) return "Attachment";
   return "No messages yet";
+}
+
+function messageCanDelete(m) {
+  if (!m?.isMine || m.deleted) return false;
+  const age = Date.now() - new Date(m.createdAt).getTime();
+  return age <= CHAT_DELETE_WINDOW_MS;
+}
+
+function replyQuotePreview(replyTo) {
+  if (!replyTo) return "";
+  if (replyTo.deleted) return "Message deleted";
+  const t = String(replyTo.body || "").trim();
+  if (t) return t.length > 120 ? `${t.slice(0, 117)}…` : t;
+  return "Attachment";
+}
+
+function clearReplyingTo() {
+  replyingTo = null;
+  renderReplyComposerPreview();
+}
+
+function startReplyToMessage(m) {
+  if (!m || m.deleted) return;
+  replyingTo = {
+    id: m.id,
+    senderName: m.isMine ? "You" : m.senderName || "Member",
+    body: replyQuotePreview(m),
+    deleted: false,
+  };
+  renderReplyComposerPreview();
+  document.getElementById("team-chat-input")?.focus();
+}
+
+function renderReplyComposerPreview() {
+  const wrap = document.getElementById("team-chat-reply-preview");
+  if (!wrap) return;
+  if (!replyingTo) {
+    wrap.classList.add("d-none");
+    wrap.innerHTML = "";
+    return;
+  }
+  wrap.classList.remove("d-none");
+  wrap.innerHTML = `
+    <div class="team-chat-reply-compose">
+      <div class="team-chat-reply-compose-main min-w-0">
+        <span class="team-chat-reply-compose-label">Replying to ${d().escapeHtml(replyingTo.senderName)}</span>
+        <span class="team-chat-reply-compose-text text-truncate">${d().escapeHtml(replyingTo.body)}</span>
+      </div>
+      <button type="button" class="btn btn-sm btn-link text-muted p-0 js-chat-reply-cancel" aria-label="Cancel reply">&times;</button>
+    </div>`;
+}
+
+async function deleteChatMessage(messageId) {
+  const base = activeThreadBase();
+  if (!base || !messageId) return;
+  if (!window.confirm("Delete this message? The other person will see it was removed.")) return;
+  try {
+    const data = await d().api(`${base}/messages/${messageId}`, { method: "DELETE" });
+    if (data.message) {
+      activeMessages = activeMessages.map((m) => (m.id === messageId ? data.message : m));
+      renderMessages();
+    } else {
+      void refreshActiveMessages();
+    }
+    await loadThreads();
+  } catch (err) {
+    d().showToast(err.message, "danger");
+  }
 }
 
 function isVideoAttachment(m) {
@@ -423,6 +510,20 @@ function wireChatMediaLightbox() {
   chatMediaLightboxWired = true;
 
   document.getElementById("team-chat-messages")?.addEventListener("click", (e) => {
+    const replyBtn = e.target.closest(".js-chat-reply");
+    if (replyBtn) {
+      e.preventDefault();
+      const messageId = replyBtn.getAttribute("data-message-id");
+      const message = activeMessages.find((m) => m.id === messageId);
+      if (message) startReplyToMessage(message);
+      return;
+    }
+    const deleteBtn = e.target.closest(".js-chat-delete");
+    if (deleteBtn) {
+      e.preventDefault();
+      void deleteChatMessage(deleteBtn.getAttribute("data-message-id"));
+      return;
+    }
     const playBtn = e.target.closest(".js-chat-inline-video-play");
     if (playBtn) {
       e.preventDefault();
@@ -511,13 +612,44 @@ function messageAttachmentHtml(m) {
   </a>`;
 }
 
+function messageReplyQuoteHtml(m) {
+  if (!m.replyTo) return "";
+  const name = d().escapeHtml(m.replyTo.senderName || "Member");
+  const text = d().escapeHtml(replyQuotePreview(m.replyTo));
+  return `<div class="team-chat-reply-quote" aria-label="Reply to ${name}">
+    <span class="team-chat-reply-quote-name">${name}</span>
+    <span class="team-chat-reply-quote-text">${text}</span>
+  </div>`;
+}
+
+function messageDeletedHtml() {
+  return `<div class="team-chat-bubble-deleted"><i class="bi bi-slash-circle me-1" aria-hidden="true"></i>This message was deleted</div>`;
+}
+
 function messageBodyHtml(m) {
+  if (m.deleted) {
+    return messageDeletedHtml();
+  }
   const attach = messageAttachmentHtml(m);
   const text = String(m.body || "").trim();
   const textHtml = text
     ? `<div class="team-chat-bubble-body text-break">${d().escapeHtml(m.body)}</div>`
     : "";
-  return `${attach}${textHtml}`;
+  return `${messageReplyQuoteHtml(m)}${attach}${textHtml}`;
+}
+
+function messageActionsHtml(m) {
+  if (m.deleted) return "";
+  const canDelete = messageCanDelete(m);
+  const replyBtn = `<button type="button" class="team-chat-msg-action js-chat-reply" data-message-id="${d().escapeHtml(m.id)}" aria-label="Reply" title="Reply">
+    <i class="bi bi-reply-fill" aria-hidden="true"></i>
+  </button>`;
+  const deleteBtn = canDelete
+    ? `<button type="button" class="team-chat-msg-action team-chat-msg-action--danger js-chat-delete" data-message-id="${d().escapeHtml(m.id)}" aria-label="Delete" title="Delete (30 min)">
+        <i class="bi bi-trash" aria-hidden="true"></i>
+      </button>`
+    : "";
+  return `<div class="team-chat-msg-actions">${replyBtn}${deleteBtn}</div>`;
 }
 
 function clearPendingChatFile() {
@@ -563,10 +695,11 @@ function renderAttachPreview() {
   });
 }
 
-async function postChatMessage(base, body, file) {
+async function postChatMessage(base, body, file, replyToMessageId) {
   const fd = new FormData();
   if (body) fd.append("body", body);
   if (file) fd.append("file", file);
+  if (replyToMessageId) fd.append("replyToMessageId", replyToMessageId);
   let res;
   try {
     res = await fetch(`${base}/messages`, {
@@ -694,6 +827,7 @@ export function teamChatOffcanvasHtml() {
               <div class="team-chat-messages flex-grow-1" id="team-chat-messages" aria-live="polite"></div>
               <div id="team-chat-typing-status" class="team-chat-typing-status px-3 small text-muted d-none" aria-live="polite"></div>
               <form class="team-chat-compose" id="team-chat-compose">
+                <div id="team-chat-reply-preview" class="d-none"></div>
                 <div id="team-chat-attach-preview" class="d-none"></div>
                 <div class="team-chat-compose-inner">
                   <input type="file" class="d-none" id="team-chat-file-input" accept="*/*" />
@@ -1045,7 +1179,7 @@ function renderThreadList() {
             <span class="team-chat-thread-item-time tabular-nums">${d().escapeHtml(formatChatTime(t.lastMessage?.createdAt || t.updatedAt))}</span>
           </span>
           <span class="team-chat-thread-item-bottom">
-            <span class="team-chat-thread-item-preview text-truncate">${d().escapeHtml(prefix + previewText(t.lastMessage?.body, t.lastMessage?.hasAttachment))}</span>
+            <span class="team-chat-thread-item-preview text-truncate">${d().escapeHtml(prefix + previewText(t.lastMessage?.body, t.lastMessage?.hasAttachment, t.lastMessage?.deleted))}</span>
             ${unread}
           </span>
         </span>
@@ -1120,16 +1254,17 @@ function renderMessages() {
         activeThreadIsGroup && !m.isMine
           ? `<div class="team-chat-bubble-sender">${d().escapeHtml(m.senderName || "Member")}</div>`
           : "";
-      return `<div class="team-chat-bubble-row${mine}">
+      return `<div class="team-chat-bubble-row${mine}" data-message-id="${d().escapeHtml(m.id)}">
         <div class="team-chat-bubble-wrap">
           ${senderLine}
-          <div class="team-chat-bubble">
+          <div class="team-chat-bubble${m.deleted ? " team-chat-bubble--deleted" : ""}">
             ${messageBodyHtml(m)}
             <div class="team-chat-bubble-meta">
               <div class="team-chat-bubble-time tabular-nums">${d().escapeHtml(formatChatTime(m.createdAt))}</div>
               ${messageStatusHtml(m)}
             </div>
           </div>
+          ${messageActionsHtml(m)}
         </div>
       </div>`;
     })
@@ -1181,7 +1316,7 @@ function isChatPanelOpen() {
 function notifyIncomingMessage(thread) {
   const isGroup = thread.type === "group";
   const name = isGroup ? thread.group?.name : thread.peer?.displayName || "Someone";
-  const preview = previewText(thread.lastMessage?.body, thread.lastMessage?.hasAttachment);
+  const preview = previewText(thread.lastMessage?.body, thread.lastMessage?.hasAttachment, thread.lastMessage?.deleted);
   const label = isGroup && thread.lastMessage?.senderName
     ? `${thread.lastMessage.senderName} in ${name}`
     : name;
@@ -1230,6 +1365,7 @@ async function loadThreads() {
 async function openThread(type, id) {
   stopTypingPulse();
   clearPendingChatFile();
+  clearReplyingTo();
   activeThreadType = type === "group" ? "group" : "dm";
   activeChatId = id;
   activeThreadIsGroup = activeThreadType === "group";
@@ -1355,10 +1491,12 @@ async function sendMessage(e) {
     activeThreadType === "group"
       ? `/api/chat/groups/${activeChatId}`
       : `/api/chat/conversations/${activeChatId}`;
+  const replyToMessageId = replyingTo?.id ?? null;
   try {
-    const data = await postChatMessage(base, body, file);
+    const data = await postChatMessage(base, body, file, replyToMessageId);
     if (input) input.value = "";
     clearPendingChatFile();
+    clearReplyingTo();
     if (data.message) activeMessages.push(data.message);
     renderMessages();
     await loadThreads();
@@ -1503,6 +1641,12 @@ export function initTeamChat(chatDeps) {
   document.getElementById("team-chat-compose")?.addEventListener("submit", (e) => {
     void sendMessage(e);
   });
+  document.getElementById("team-chat-compose")?.addEventListener("click", (e) => {
+    if (e.target.closest(".js-chat-reply-cancel")) {
+      e.preventDefault();
+      clearReplyingTo();
+    }
+  });
   document.getElementById("team-chat-input")?.addEventListener("input", () => {
     pulseTyping();
   });
@@ -1603,6 +1747,7 @@ export function initTeamChat(chatDeps) {
   });
   offcanvas.addEventListener("hidden.bs.offcanvas", () => {
     stopTypingPulse();
+    clearReplyingTo();
     mobileShowThread = false;
     activeThreadType = null;
     activeChatId = null;

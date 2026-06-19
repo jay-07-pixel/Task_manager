@@ -11,6 +11,7 @@ fs.mkdirSync(chatUploadsRoot, { recursive: true });
 
 export const CHAT_MAX_FILE_BYTES = 5 * 1024 * 1024;
 export const CHAT_MAX_FILE_MB = 5;
+export const CHAT_MESSAGE_DELETE_MS = 30 * 60 * 1000;
 
 export const chatFileUpload = multer({
   storage: multer.diskStorage({
@@ -185,16 +186,29 @@ const messageSenderSelect = {
   role: true,
 };
 
+const replyToMessageSelect = {
+  id: true,
+  body: true,
+  senderId: true,
+  deletedAt: true,
+  attachmentMime: true,
+  attachmentName: true,
+  sender: { select: { displayName: true } },
+};
+
 export const dmMessageSelect = {
   id: true,
   body: true,
   senderId: true,
   createdAt: true,
   readAt: true,
+  deletedAt: true,
+  replyToMessageId: true,
   attachmentPath: true,
   attachmentMime: true,
   attachmentName: true,
   sender: { select: messageSenderSelect },
+  replyTo: { select: replyToMessageSelect },
 };
 
 export const groupMessageSelect = {
@@ -202,23 +216,44 @@ export const groupMessageSelect = {
   body: true,
   senderId: true,
   createdAt: true,
+  deletedAt: true,
+  replyToMessageId: true,
   attachmentPath: true,
   attachmentMime: true,
   attachmentName: true,
   sender: { select: messageSenderSelect },
+  replyTo: { select: replyToMessageSelect },
 };
+
+/** @param {any} reply */
+function serializeReplyTo(reply) {
+  if (!reply) return null;
+  const deleted = !!reply.deletedAt;
+  return {
+    id: reply.id,
+    senderId: reply.senderId,
+    senderName: reply.sender.displayName,
+    deleted,
+    body: deleted
+      ? ""
+      : messagePreviewLabel(reply.body, reply.attachmentMime, reply.attachmentName),
+  };
+}
 
 /** @param {any} m @param {string} meId @param {"dm"|"group"} threadType @param {{ seenCount?: number, seenTotal?: number, seenByAll?: boolean }} [seen] */
 export function serializeChatMessage(m, meId, threadType, seen = null) {
+  const deleted = !!m.deletedAt;
   /** @type {Record<string, unknown>} */
   const out = {
     id: m.id,
-    body: m.body,
+    body: deleted ? "" : m.body,
     senderId: m.senderId,
     senderName: m.sender.displayName,
     senderRole: m.sender.role,
     createdAt: m.createdAt,
     isMine: m.senderId === meId,
+    deleted,
+    deletedAt: m.deletedAt ?? null,
   };
   if (m.readAt !== undefined) out.readAt = m.readAt;
   if (seen && m.senderId === meId) {
@@ -226,7 +261,7 @@ export function serializeChatMessage(m, meId, threadType, seen = null) {
     out.seenTotal = seen.seenTotal;
     out.seenByAll = seen.seenByAll;
   }
-  if (m.attachmentPath) {
+  if (!deleted && m.attachmentPath) {
     const urlBase =
       threadType === "group" ? `/api/chat/files/group/${m.id}` : `/api/chat/files/dm/${m.id}`;
     out.attachmentUrl = urlBase;
@@ -235,20 +270,27 @@ export function serializeChatMessage(m, meId, threadType, seen = null) {
     out.attachmentIsImage = isImageAttachment(m.attachmentMime, m.attachmentName);
     out.attachmentIsVideo = isVideoAttachment(m.attachmentMime, m.attachmentName);
   }
+  if (m.replyTo) {
+    out.replyTo = serializeReplyTo(m.replyTo);
+  }
   return out;
 }
 
 /** @param {any} last @param {string} meId */
 export function serializeLastMessage(last, meId, senderNameFallback = "Member") {
   if (!last) return null;
+  const deleted = !!last.deletedAt;
   return {
     id: last.id,
-    body: messagePreviewLabel(last.body, last.attachmentMime, last.attachmentName),
+    body: deleted
+      ? "Message deleted"
+      : messagePreviewLabel(last.body, last.attachmentMime, last.attachmentName),
     senderId: last.senderId,
     senderName: last.senderName ?? (last.senderId === meId ? "You" : senderNameFallback),
     createdAt: last.createdAt,
     isMine: last.senderId === meId,
-    hasAttachment: !!last.attachmentPath,
+    hasAttachment: !deleted && !!last.attachmentPath,
+    deleted,
   };
 }
 
@@ -269,5 +311,10 @@ export function parseOutgoingChatMessage(req) {
       ? resolveAttachmentContentType(file.mimetype, file.originalname)
       : null,
     attachmentName: file?.originalname ? path.basename(file.originalname).slice(0, 255) : null,
+    replyToMessageId:
+      typeof req.body?.replyToMessageId === "string" &&
+      /^[0-9a-f-]{36}$/i.test(req.body.replyToMessageId.trim())
+        ? req.body.replyToMessageId.trim()
+        : null,
   };
 }

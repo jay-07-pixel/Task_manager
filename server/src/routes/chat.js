@@ -1,5 +1,6 @@
 import { Router } from "express";
 import path from "path";
+import fs from "fs";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, requireOwner } from "../middleware/auth.js";
@@ -8,6 +9,7 @@ import { addChatLiveClient, removeChatLiveClient, publishChatLive } from "../lib
 import { getChatTypingUsers, setChatTyping } from "../lib/chatTyping.js";
 import {
   attachmentFilePath,
+  CHAT_MESSAGE_DELETE_MS,
   dmMessageSelect,
   groupMessageSelect,
   handleChatFileUpload,
@@ -32,6 +34,7 @@ const lastDmMessageSelect = {
   senderId: true,
   createdAt: true,
   readAt: true,
+  deletedAt: true,
   attachmentPath: true,
   attachmentMime: true,
   attachmentName: true,
@@ -42,6 +45,7 @@ const lastGroupMessageSelect = {
   body: true,
   senderId: true,
   createdAt: true,
+  deletedAt: true,
   attachmentPath: true,
   attachmentMime: true,
   attachmentName: true,
@@ -100,6 +104,149 @@ function serializeTypingUsers(threadType, threadId, meId) {
     id: u.userId,
     displayName: u.displayName,
   }));
+}
+
+function removeChatAttachmentFile(storedName) {
+  if (!storedName) return;
+  try {
+    const filePath = attachmentFilePath(storedName);
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  } catch {
+    /* ignore */
+  }
+}
+
+async function validateDmReply(conversationId, replyToMessageId) {
+  if (!replyToMessageId) return null;
+  const parent = await prisma.chatMessage.findFirst({
+    where: { id: replyToMessageId, conversationId },
+    select: { id: true },
+  });
+  if (!parent) return "Reply message not found in this chat.";
+  return null;
+}
+
+async function validateGroupReply(groupId, replyToMessageId) {
+  if (!replyToMessageId) return null;
+  const parent = await prisma.chatGroupMessage.findFirst({
+    where: { id: replyToMessageId, groupId },
+    select: { id: true },
+  });
+  if (!parent) return "Reply message not found in this chat.";
+  return null;
+}
+
+async function softDeleteDmMessage(req, res) {
+  const meId = req.session.userId;
+  const message = await prisma.chatMessage.findUnique({
+    where: { id: req.params.messageId },
+    include: { conversation: true },
+  });
+  if (!message || !userInConversation(message.conversation, meId)) {
+    return res.status(404).json({ error: "Message not found." });
+  }
+  if (message.senderId !== meId) {
+    return res.status(403).json({ error: "You can only delete your own messages." });
+  }
+  if (message.deletedAt) {
+    const existing = await prisma.chatMessage.findUnique({
+      where: { id: message.id },
+      select: dmMessageSelect,
+    });
+    return res.json({ message: serializeChatMessage(existing, meId, "dm") });
+  }
+  const age = Date.now() - new Date(message.createdAt).getTime();
+  if (age > CHAT_MESSAGE_DELETE_MS) {
+    return res.status(400).json({ error: "Messages can only be deleted within 30 minutes of sending." });
+  }
+
+  removeChatAttachmentFile(message.attachmentPath);
+
+  const updated = await prisma.chatMessage.update({
+    where: { id: message.id },
+    data: {
+      deletedAt: new Date(),
+      body: "",
+      attachmentPath: null,
+      attachmentMime: null,
+      attachmentName: null,
+    },
+    select: dmMessageSelect,
+  });
+
+  const serialized = serializeChatMessage(updated, meId, "dm");
+  res.json({ message: serialized });
+
+  publishChatLive([dmRecipientId(message.conversation, meId), meId], {
+    kind: "deleted",
+    threadType: "dm",
+    threadId: message.conversationId,
+    messageId: message.id,
+    deletedAt: updated.deletedAt.toISOString(),
+  });
+}
+
+async function softDeleteGroupMessage(req, res) {
+  const meId = req.session.userId;
+  const membership = await prisma.chatGroupMember.findUnique({
+    where: { groupId_userId: { groupId: req.params.id, userId: meId } },
+  });
+  if (!membership) {
+    return res.status(404).json({ error: "Group not found." });
+  }
+
+  const message = await prisma.chatGroupMessage.findFirst({
+    where: { id: req.params.messageId, groupId: membership.groupId },
+  });
+  if (!message) {
+    return res.status(404).json({ error: "Message not found." });
+  }
+  if (message.senderId !== meId) {
+    return res.status(403).json({ error: "You can only delete your own messages." });
+  }
+  if (message.deletedAt) {
+    const existing = await prisma.chatGroupMessage.findUnique({
+      where: { id: message.id },
+      select: groupMessageSelect,
+    });
+    return res.json({ message: serializeChatMessage(existing, meId, "group") });
+  }
+  const age = Date.now() - new Date(message.createdAt).getTime();
+  if (age > CHAT_MESSAGE_DELETE_MS) {
+    return res.status(400).json({ error: "Messages can only be deleted within 30 minutes of sending." });
+  }
+
+  removeChatAttachmentFile(message.attachmentPath);
+
+  const updated = await prisma.chatGroupMessage.update({
+    where: { id: message.id },
+    data: {
+      deletedAt: new Date(),
+      body: "",
+      attachmentPath: null,
+      attachmentMime: null,
+      attachmentName: null,
+    },
+    select: groupMessageSelect,
+  });
+
+  const serialized = serializeChatMessage(updated, meId, "group");
+  res.json({ message: serialized });
+
+  const members = await prisma.chatGroupMember.findMany({
+    where: { groupId: membership.groupId },
+    select: { userId: true },
+  });
+  publishChatLive(
+    members.map((m) => m.userId),
+    {
+      kind: "deleted",
+      threadType: "group",
+      threadId: membership.groupId,
+      messageId: message.id,
+      deletedAt: updated.deletedAt.toISOString(),
+    }
+  );
 }
 
 async function findPeerUser(peerUserId, currentUserId) {
@@ -433,6 +580,11 @@ router.post("/conversations/:id/messages", requireAuth, handleChatFileUpload, as
     return res.status(404).json({ error: "Conversation not found." });
   }
 
+  const replyErr = await validateDmReply(conversation.id, parsed.replyToMessageId);
+  if (replyErr) {
+    return res.status(400).json({ error: replyErr });
+  }
+
   const [message] = await prisma.$transaction([
     prisma.chatMessage.create({
       data: {
@@ -442,6 +594,7 @@ router.post("/conversations/:id/messages", requireAuth, handleChatFileUpload, as
         attachmentPath: parsed.attachmentPath,
         attachmentMime: parsed.attachmentMime,
         attachmentName: parsed.attachmentName,
+        replyToMessageId: parsed.replyToMessageId,
       },
       select: dmMessageSelect,
     }),
@@ -472,6 +625,10 @@ router.post("/conversations/:id/messages", requireAuth, handleChatFileUpload, as
     messageId: message.id,
     senderId: meId,
   });
+});
+
+router.delete("/conversations/:id/messages/:messageId", requireAuth, (req, res) => {
+  void softDeleteDmMessage(req, res);
 });
 
 router.post("/conversations/:id/read", requireAuth, async (req, res) => {
@@ -777,6 +934,11 @@ router.post("/groups/:id/messages", requireAuth, handleChatFileUpload, async (re
     return res.status(404).json({ error: "Group not found." });
   }
 
+  const replyErr = await validateGroupReply(membership.groupId, parsed.replyToMessageId);
+  if (replyErr) {
+    return res.status(400).json({ error: replyErr });
+  }
+
   const [message] = await prisma.$transaction([
     prisma.chatGroupMessage.create({
       data: {
@@ -786,6 +948,7 @@ router.post("/groups/:id/messages", requireAuth, handleChatFileUpload, async (re
         attachmentPath: parsed.attachmentPath,
         attachmentMime: parsed.attachmentMime,
         attachmentName: parsed.attachmentName,
+        replyToMessageId: parsed.replyToMessageId,
       },
       select: groupMessageSelect,
     }),
@@ -827,6 +990,10 @@ router.post("/groups/:id/messages", requireAuth, handleChatFileUpload, async (re
       );
     })
     .catch(() => {});
+});
+
+router.delete("/groups/:id/messages/:messageId", requireAuth, (req, res) => {
+  void softDeleteGroupMessage(req, res);
 });
 
 router.post("/groups/:id/read", requireAuth, async (req, res) => {
@@ -905,7 +1072,7 @@ async function sendDmAttachment(req, res) {
     where: { id: req.params.messageId },
     include: { conversation: true },
   });
-  if (!message?.attachmentPath || !userInConversation(message.conversation, meId)) {
+  if (!message?.attachmentPath || message.deletedAt || !userInConversation(message.conversation, meId)) {
     return res.status(404).json({ error: "File not found." });
   }
   const filePath = attachmentFilePath(message.attachmentPath);
@@ -923,7 +1090,7 @@ async function sendGroupAttachment(req, res) {
     where: { id: req.params.messageId },
     include: { group: { include: { members: { where: { userId: meId }, take: 1 } } } },
   });
-  if (!message?.attachmentPath || !message.group.members.length) {
+  if (!message?.attachmentPath || message.deletedAt || !message.group.members.length) {
     return res.status(404).json({ error: "File not found." });
   }
   const filePath = attachmentFilePath(message.attachmentPath);

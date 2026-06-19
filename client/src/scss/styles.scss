@@ -2958,6 +2958,131 @@ body {
   white-space: pre-wrap;
 }
 
+.team-chat-bubble--deleted {
+  opacity: 0.92;
+}
+
+.team-chat-bubble-deleted {
+  font-size: 0.86rem;
+  font-style: italic;
+  color: var(--bs-secondary-color);
+}
+
+.team-chat-bubble-row--mine .team-chat-bubble-deleted {
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.team-chat-reply-quote {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  margin-bottom: 0.45rem;
+  padding: 0.35rem 0.55rem;
+  border-radius: 0.45rem;
+  border-left: 3px solid rgba(var(--bs-primary-rgb), 0.55);
+  background: rgba(var(--bs-secondary-rgb), 0.08);
+}
+
+.team-chat-bubble-row--mine .team-chat-reply-quote {
+  border-left-color: rgba(255, 255, 255, 0.65);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.team-chat-reply-quote-name {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--bs-primary);
+}
+
+.team-chat-bubble-row--mine .team-chat-reply-quote-name {
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.team-chat-reply-quote-text {
+  font-size: 0.76rem;
+  color: var(--bs-secondary-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.team-chat-bubble-row--mine .team-chat-reply-quote-text {
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.team-chat-msg-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  margin-top: 0.2rem;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.team-chat-bubble-row:hover .team-chat-msg-actions,
+.team-chat-bubble-row:focus-within .team-chat-msg-actions {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .team-chat-msg-actions {
+    opacity: 1;
+  }
+}
+
+.team-chat-msg-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.65rem;
+  height: 1.65rem;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: rgba(var(--bs-secondary-rgb), 0.12);
+  color: var(--bs-secondary);
+  font-size: 0.78rem;
+}
+
+.team-chat-msg-action:hover {
+  background: rgba(var(--bs-primary-rgb), 0.14);
+  color: var(--bs-primary);
+}
+
+.team-chat-msg-action--danger:hover {
+  background: rgba(var(--bs-danger-rgb), 0.14);
+  color: var(--bs-danger);
+}
+
+.team-chat-reply-compose {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.45rem 0.65rem;
+  margin: 0 0.65rem 0.35rem;
+  border-radius: 0.55rem;
+  background: rgba(var(--bs-primary-rgb), 0.08);
+  border: 1px solid rgba(var(--bs-primary-rgb), 0.18);
+}
+
+.team-chat-reply-compose-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.team-chat-reply-compose-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--bs-primary);
+}
+
+.team-chat-reply-compose-text {
+  font-size: 0.78rem;
+  color: var(--bs-secondary-color);
+}
+
 .team-chat-bubble-row--mine .team-chat-bubble-time {
   color: rgba(255, 255, 255, 0.75);
 }

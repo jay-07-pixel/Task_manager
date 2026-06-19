@@ -8,6 +8,15 @@ const APK_FILENAME = "kalpanik-reminder.apk";
 /** @type {{ id: string; date: string; title: string; icon: string; body: string; action?: { label: string; type?: string; href?: string; download?: boolean } }[]} */
 export const ADMIN_ANNOUNCEMENTS = [
   {
+    id: "feature-chat-reply-delete-20260619",
+    date: "19-06-26",
+    title: "Reply & delete in chat",
+    icon: "bi-reply-fill",
+    body:
+      "Reply to a specific message in 1-to-1 and group chats. You can delete your own messages within 30 minutes — others will see that the message was removed.",
+    action: { label: "Open Messages", type: "open-chat" },
+  },
+  {
     id: "feature-updates-20260619",
     date: "19-06-26",
     title: "Important updates (since 18 Jun)",
