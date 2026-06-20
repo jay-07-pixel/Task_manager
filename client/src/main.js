@@ -3235,6 +3235,99 @@ function wireEmpSubmissionModal() {
 
   ta?.addEventListener("input", syncEmpSubmissionCharCount);
 
+  /** Clipboard paste (Ctrl+V) can include images/files. */
+  let fallbackProofFile = null;
+
+  function setEmpSubmissionProofFile(file, { showSuccessToast = true } = {}) {
+    if (!file || !preview || !previewWrap || !pdfPreview || !pdfName) return;
+
+    const fileErr = validateEmpSubmissionFile(file);
+    if (fileErr) {
+      showToast(fileErr, "warning");
+      return;
+    }
+
+    fallbackProofFile = file;
+
+    // Try to sync the real <input type="file"> for submit upload.
+    // If assignment fails (some browsers), we still keep `fallbackProofFile` as backup.
+    try {
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      fileInput.value = "";
+      fileInput.files = dt.files;
+    } catch {
+      // ignore: we'll rely on fallbackProofFile in submit handler
+    }
+
+    if (preview.src?.startsWith("blob:")) URL.revokeObjectURL(preview.src);
+    preview.removeAttribute("src");
+    preview.classList.add("d-none");
+    pdfPreview.classList.add("d-none");
+    pdfName.textContent = "";
+
+    if (isEmpSubmissionPdfFile(file)) {
+      pdfName.textContent = file.name || "document.pdf";
+      pdfPreview.classList.remove("d-none");
+    } else {
+      preview.src = URL.createObjectURL(file);
+      preview.classList.remove("d-none");
+    }
+    previewWrap.classList.remove("d-none");
+
+    if (showSuccessToast) showToast("Pasted image/file into submission.", "success");
+  }
+
+  function insertTextAtCaret(text) {
+    if (!ta) return;
+    const value = ta.value ?? "";
+    const start = ta.selectionStart ?? value.length;
+    const end = ta.selectionEnd ?? value.length;
+    const room = EMP_SUBMISSION_TEXT_MAX - value.length + (end - start);
+    if (room <= 0) return;
+    const clipped = (text || "").slice(0, room);
+    ta.value = value.slice(0, start) + clipped + value.slice(end);
+    // Put caret after inserted text (best-effort; selection APIs vary)
+    const nextPos = start + clipped.length;
+    try {
+      ta.setSelectionRange(nextPos, nextPos);
+    } catch {
+      // ignore
+    }
+    syncEmpSubmissionCharCount();
+  }
+
+  ta?.addEventListener("paste", (e) => {
+    // Only intercept when clipboard contains a file (image/pdf). Text paste should work normally.
+    const cd = e?.clipboardData;
+    if (!cd || !fileInput) return;
+
+    const items = cd.items;
+    if (!items || !items.length) return;
+
+    let pastedFile = null;
+    for (const item of items) {
+      if (item.kind !== "file") continue;
+      const f = item.getAsFile?.();
+      if (!f) continue;
+      if (/^image\/|application\/pdf/i.test(f.type) || /\.pdf$/i.test(f.name || "")) {
+        pastedFile = f;
+        break;
+      }
+    }
+
+    if (!pastedFile) return;
+
+    e.preventDefault();
+
+    // Also allow text from clipboard to be inserted (if present), even when an image exists.
+    const clipText = (cd.getData("text/plain") || "").trim();
+
+    setEmpSubmissionProofFile(pastedFile, { showSuccessToast: false });
+    if (clipText) insertTextAtCaret(clipText);
+    syncEmpSubmissionCharCount();
+  });
+
   pasteBtn?.addEventListener("click", async () => {
     if (!ta) return;
     if (!navigator.clipboard?.readText) {
@@ -3264,6 +3357,7 @@ function wireEmpSubmissionModal() {
     const file = fileInput.files?.[0];
     if (!file || !preview || !previewWrap || !pdfPreview || !pdfName) {
       resetEmpSubmissionPreview();
+      fallbackProofFile = null;
       return;
     }
     const fileErr = validateEmpSubmissionFile(file);
@@ -3271,8 +3365,10 @@ function wireEmpSubmissionModal() {
       showToast(fileErr, "warning");
       fileInput.value = "";
       resetEmpSubmissionPreview();
+      fallbackProofFile = null;
       return;
     }
+    fallbackProofFile = file;
     if (preview.src?.startsWith("blob:")) URL.revokeObjectURL(preview.src);
     preview.removeAttribute("src");
     preview.classList.add("d-none");
@@ -3295,7 +3391,7 @@ function wireEmpSubmissionModal() {
     if (!taskId || !ta || !errEl) return;
 
     const text = ta.value.trim();
-    const file = fileInput?.files?.[0] ?? null;
+    const file = fileInput?.files?.[0] ?? fallbackProofFile ?? null;
     errEl.classList.add("d-none");
     errEl.textContent = "";
 
@@ -3345,6 +3441,7 @@ function wireEmpSubmissionModal() {
 
   modalEl.addEventListener("hidden.bs.modal", () => {
     resetEmpSubmissionPreview();
+    fallbackProofFile = null;
     if (ta) ta.value = "";
     syncEmpSubmissionCharCount();
     const errEl = document.getElementById("emp-submission-error");
@@ -3352,6 +3449,11 @@ function wireEmpSubmissionModal() {
       errEl.textContent = "";
       errEl.classList.add("d-none");
     }
+  });
+
+  modalEl.addEventListener("shown.bs.modal", () => {
+    // Ensure clipboard file from a previous attempt doesn't leak into the next open.
+    fallbackProofFile = null;
   });
 }
 
