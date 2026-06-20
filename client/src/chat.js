@@ -1168,7 +1168,8 @@ function renderThreadList() {
         ? groupAvatarHtml(t.group.name)
         : contactAvatarHtml(t.peer.displayName, t.peer.role);
       const prefix = t.lastMessage?.isMine ? "You: " : t.lastMessage?.senderName && isGroup ? `${t.lastMessage.senderName}: ` : "";
-      return `<button type="button" class="team-chat-thread-item${active}${unreadRow}" data-thread-type="${t.type}" data-thread-id="${t.id}">
+      const typeCls = isGroup ? " team-chat-thread-item--group" : " team-chat-thread-item--dm";
+      return `<button type="button" class="team-chat-thread-item${typeCls}${active}${unreadRow}" data-thread-type="${t.type}" data-thread-id="${t.id}">
         ${avatar}
         <span class="team-chat-thread-item-main">
           <span class="team-chat-thread-item-top">
@@ -1240,6 +1241,8 @@ function renderContactList() {
 function renderMessages() {
   const host = document.getElementById("team-chat-messages");
   if (!host) return;
+  host.classList.toggle("team-chat-messages--group", activeThreadType === "group");
+  host.classList.toggle("team-chat-messages--dm", activeThreadType === "dm");
   if (!activeMessages.length) {
     host.innerHTML = `<div class="team-chat-messages-empty">
       <div class="team-chat-empty-icon team-chat-empty-icon--sm" aria-hidden="true"><i class="bi bi-emoji-smile"></i></div>
@@ -1250,11 +1253,12 @@ function renderMessages() {
   host.innerHTML = activeMessages
     .map((m) => {
       const mine = m.isMine ? " team-chat-bubble-row--mine" : "";
+      const typeCls = activeThreadType === "group" ? " team-chat-bubble-row--group" : " team-chat-bubble-row--dm";
       const senderLine =
         activeThreadIsGroup && !m.isMine
           ? `<div class="team-chat-bubble-sender">${d().escapeHtml(m.senderName || "Member")}</div>`
           : "";
-      return `<div class="team-chat-bubble-row${mine}" data-message-id="${d().escapeHtml(m.id)}">
+      return `<div class="team-chat-bubble-row${typeCls}${mine}" data-message-id="${d().escapeHtml(m.id)}">
         <div class="team-chat-bubble-wrap">
           ${senderLine}
           <div class="team-chat-bubble${m.deleted ? " team-chat-bubble--deleted" : ""}">
@@ -1306,6 +1310,8 @@ function setThreadVisible(open) {
   empty.classList.toggle("d-none", hasThread);
   active.classList.toggle("d-none", !hasThread);
   active.classList.toggle("d-flex", hasThread);
+  active.classList.toggle("team-chat-thread-active--group", hasThread && activeThreadType === "group");
+  active.classList.toggle("team-chat-thread-active--dm", hasThread && activeThreadType === "dm");
   sidebar.classList.toggle("d-none", hasThread && mobileShowThread && isMobileChatLayout());
 }
 

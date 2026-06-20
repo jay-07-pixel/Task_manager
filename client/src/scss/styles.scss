@@ -2781,6 +2781,49 @@ body {
   background: rgba(var(--bs-primary-rgb), 0.12);
 }
 
+.team-chat-thread-item--group {
+  border-left: 3px solid rgba(var(--bs-info-rgb), 0.55);
+  padding-left: 0.65rem;
+}
+
+.team-chat-thread-item--dm {
+  border-left: 3px solid transparent;
+}
+
+.team-chat-thread-item--group .team-chat-thread-item-name::before {
+  content: "Group";
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 0.4rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: 999px;
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--bs-info);
+  background: rgba(var(--bs-info-rgb), 0.14);
+  vertical-align: middle;
+}
+
+.team-chat-thread-item--dm .team-chat-thread-item-name::before {
+  content: "Direct";
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 0.4rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: 999px;
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--bs-secondary);
+  background: var(--bs-secondary-bg);
+  vertical-align: middle;
+}
+
 .team-chat-thread-item--unread .team-chat-thread-item-name {
   font-weight: 700;
 }
@@ -2847,6 +2890,16 @@ body {
   flex-shrink: 0;
 }
 
+.team-chat-thread-active--group .team-chat-thread-head {
+  border-bottom-color: rgba(var(--bs-info-rgb), 0.25);
+  background: linear-gradient(180deg, rgba(var(--bs-info-rgb), 0.1), var(--bs-body-bg));
+}
+
+.team-chat-thread-active--dm .team-chat-thread-head {
+  border-bottom-color: var(--bs-border-color);
+  background: var(--bs-body-bg);
+}
+
 .team-chat-thread-head-main {
   color: inherit;
   min-width: 0;
@@ -2897,6 +2950,22 @@ body {
   );
 }
 
+.team-chat-messages--group {
+  background: linear-gradient(
+    180deg,
+    rgba(var(--bs-info-rgb), 0.07) 0%,
+    var(--bs-body-bg) 14%
+  );
+}
+
+.team-chat-messages--dm {
+  background: linear-gradient(
+    180deg,
+    rgba(var(--bs-primary-rgb), 0.03) 0%,
+    var(--bs-body-bg) 12%
+  );
+}
+
 .team-chat-messages-empty {
   flex: 1 1 auto;
   display: flex;
@@ -2930,6 +2999,16 @@ body {
 
 .team-chat-bubble-row--mine {
   justify-content: flex-end;
+}
+
+.team-chat-bubble-row--group:not(.team-chat-bubble-row--mine) .team-chat-bubble {
+  background: rgba(var(--bs-info-rgb), 0.08);
+  border-color: rgba(var(--bs-info-rgb), 0.28);
+}
+
+.team-chat-bubble-row--group .team-chat-bubble-sender {
+  color: var(--bs-info);
+  font-weight: 700;
 }
 
 .team-chat-bubble {
