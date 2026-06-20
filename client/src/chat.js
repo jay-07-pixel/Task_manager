@@ -38,6 +38,8 @@ let contactFilter = "";
 let mobileShowThread = false;
 /** @type {"chats" | "people"} */
 let sidebarTab = "chats";
+/** @type {"all" | "group" | "dm"} */
+let threadTypeFilter = "all";
 /** @type {number} */
 let lastUnreadTotal = 0;
 /** @type {string} */
@@ -796,6 +798,11 @@ export function teamChatOffcanvasHtml() {
                   <i class="bi bi-people-fill me-1" aria-hidden="true"></i>New group
                 </button>
               </div>
+              <div class="team-chat-thread-type-tabs" role="tablist" aria-label="Chat type filters">
+                <button type="button" class="team-chat-thread-type-tab team-chat-thread-type-tab--active" data-chat-thread-type="all" aria-pressed="true">All</button>
+                <button type="button" class="team-chat-thread-type-tab" data-chat-thread-type="group" aria-pressed="false">Groups</button>
+                <button type="button" class="team-chat-thread-type-tab" data-chat-thread-type="dm" aria-pressed="false">1-to-1</button>
+              </div>
               <div id="team-chat-thread-list" aria-live="polite"></div>
             </div>
             <div class="team-chat-list-scroll d-none" id="team-chat-pane-people" role="tabpanel">
@@ -1144,13 +1151,34 @@ function setSidebarTab(tab) {
   document.getElementById("team-chat-pane-people")?.classList.toggle("d-none", sidebarTab !== "people");
 }
 
+function setThreadTypeFilter(nextFilter) {
+  threadTypeFilter =
+    nextFilter === "group" || nextFilter === "dm" || nextFilter === "all" ? nextFilter : "all";
+  document.querySelectorAll(".team-chat-thread-type-tab").forEach((btn) => {
+    const on = btn.getAttribute("data-chat-thread-type") === threadTypeFilter;
+    btn.classList.toggle("team-chat-thread-type-tab--active", on);
+    btn.setAttribute("aria-pressed", on ? "true" : "false");
+  });
+  renderThreadList();
+}
+
 function renderThreadList() {
   const host = document.getElementById("team-chat-thread-list");
   if (!host) return;
-  const list = filteredThreads();
+  const list = filteredThreads().filter((t) => {
+    if (threadTypeFilter === "group") return t.type === "group";
+    if (threadTypeFilter === "dm") return t.type === "dm";
+    return true;
+  });
   if (!list.length) {
+    const emptyByType =
+      threadTypeFilter === "group"
+        ? "No groups found."
+        : threadTypeFilter === "dm"
+          ? "No 1-to-1 chats found."
+          : "No chats match your search.";
     host.innerHTML = `<div class="team-chat-list-empty">
-      <p class="small text-muted mb-0">${contactFilter.trim() ? "No chats match your search." : "No conversations yet. Admins can create a group, or open People to DM someone."}</p>
+      <p class="small text-muted mb-0">${contactFilter.trim() ? emptyByType : "No conversations yet. Admins can create a group, or open People to DM someone."}</p>
     </div>`;
     return;
   }
@@ -1682,6 +1710,11 @@ export function initTeamChat(chatDeps) {
       setSidebarTab(btn.getAttribute("data-chat-tab") || "chats");
     });
   });
+  document.querySelectorAll(".team-chat-thread-type-tab").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      setThreadTypeFilter(btn.getAttribute("data-chat-thread-type") || "all");
+    });
+  });
   document.getElementById("team-chat-create-group-btn")?.addEventListener("click", () => {
     renderGroupMemberPicks();
     const modalEl = document.getElementById("teamChatCreateGroupModal");
@@ -1743,6 +1776,7 @@ export function initTeamChat(chatDeps) {
   });
 
   setSidebarTab("chats");
+  setThreadTypeFilter("all");
   syncAdminGroupUi();
   syncGroupManageUi();
   offcanvas.addEventListener("shown.bs.offcanvas", () => {
