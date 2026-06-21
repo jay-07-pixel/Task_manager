@@ -1568,6 +1568,13 @@ function ownerUserAvatarHtml(sizeClass = "") {
   return `<div class="admin-user-avatar ${sizeClass}" aria-hidden="true">${escapeHtml(initials)}</div>`;
 }
 
+function ownerAdminHeaderProfileHtml() {
+  const name = state.user?.displayName ? escapeHtml(state.user.displayName) : "Admin";
+  return `<div class="admin-header-profile" title="${name}" aria-label="Signed in as ${name}">
+    <img class="admin-header-profile-photo" src="/icons/admin-profile-avatar.png" alt="" width="40" height="40" />
+  </div>`;
+}
+
 function ownerRecurrenceShortLabel(task) {
   const recurrence = task.recurrence ?? "none";
   if (recurrence === "none") return "No Repeat";
@@ -4775,9 +4782,7 @@ function renderOwnerMain() {
         <button type="button" class="admin-icon-btn js-owner-refresh-tasks" aria-label="Refresh tasks" ${!list ? "disabled" : ""}>
           ${adminMsIcon("refresh")}
         </button>
-        <button type="button" class="admin-delete-list-btn" id="btn-delete-list" ${!list || isEmpAssignList ? "disabled" : ""} title="Delete list" aria-label="Delete list">
-          ${adminMsIcon("delete")}
-        </button>
+        ${ownerAdminHeaderProfileHtml()}
       </div>
     </header>
     ${kpiRow}
@@ -4788,20 +4793,6 @@ function renderOwnerMain() {
   `;
 
   wireAdminNotifications(state.user?.id, main);
-
-  document.getElementById("btn-delete-list")?.addEventListener("click", async () => {
-    if (!list || !window.confirm(`Delete list "${list.title}" and all its tasks?`)) return;
-    try {
-      await api(`/api/lists/${list.id}`, { method: "DELETE" });
-      state.activeListId = null;
-      await loadLists();
-      if (state.lists.length) state.activeListId = state.lists[0].id;
-      await loadTasks(state.activeListId);
-      renderOwnerChrome();
-    } catch (err) {
-      showToast(err.message, "danger");
-    }
-  });
 
   main.querySelectorAll(".js-owner-refresh-tasks").forEach((btn) => {
     btn.addEventListener("click", async () => {

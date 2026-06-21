@@ -489,21 +489,19 @@
     }
   }
 
-  .admin-delete-list-btn {
-    border: none;
-    background: transparent;
-    color: var(--admin-outline);
-    padding: 0.35rem;
-    border-radius: 999px;
+  .admin-header-profile {
+    flex-shrink: 0;
+    line-height: 0;
+  }
 
-    &:hover:not(:disabled) {
-      color: var(--admin-error);
-      background: rgba(186, 26, 26, 0.08);
-    }
-
-    &:disabled {
-      opacity: 0.3;
-    }
+  .admin-header-profile-photo {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid #d5d9dc;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(24, 26, 46, 0.08);
   }
 
   .admin-main-scroll {
