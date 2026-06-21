@@ -1763,6 +1763,7 @@ function leftNavInner() {
     <div class="owner-sidebar admin-sidebar d-flex flex-column h-100">
       <div class="admin-sidebar-profile">
         ${ownerSidebarLogoHtml()}
+        <div class="admin-sidebar-brand-title">Task Manager</div>
       </div>
       <button type="button" class="admin-create-task-btn js-owner-create-task">
         ${adminMsIcon("add")}

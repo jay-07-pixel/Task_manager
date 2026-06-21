@@ -43,7 +43,7 @@
     height: 100vh;
     background: var(--admin-surface-container-low);
     border-right: 1px solid var(--admin-outline-variant);
-    padding: 1.5rem 1rem;
+    padding: 0.75rem 1rem 1.5rem;
     flex-direction: column;
   }
 
@@ -53,19 +53,17 @@
 
   .admin-sidebar-profile {
     display: flex;
-    justify-content: center;
-    align-items: center;
-    margin-bottom: 2rem;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.35rem;
+    margin-top: 0;
+    margin-bottom: 1.5rem;
 
     /* Hide legacy username markup if an old bundle is still cached */
     .admin-sidebar-name,
     .owner-sidebar-brand-user,
-    .owner-sidebar-brand-title,
+    .owner-sidebar-brand .owner-sidebar-brand-title,
     .owner-role-badge {
-      display: none !important;
-    }
-
-    > :not(.admin-sidebar-logo) {
       display: none !important;
     }
   }
@@ -77,6 +75,18 @@
     max-width: 100%;
     object-fit: contain;
     display: block;
+    align-self: center;
+    margin-top: -0.25rem;
+  }
+
+  .admin-sidebar-brand-title {
+    font-weight: 700;
+    font-size: 1.0625rem;
+    line-height: 1.2;
+    letter-spacing: 0.02em;
+    color: var(--admin-primary);
+    text-align: right;
+    padding-right: 0.15rem;
   }
 
   .admin-user-avatar {
