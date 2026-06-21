@@ -1570,14 +1570,6 @@ function dismissAdminMobileNav() {
   bootstrap.Offcanvas.getInstance(el)?.hide();
 }
 
-function adminThemeToggleFooterHtml() {
-  const isDark = document.documentElement.getAttribute("data-bs-theme") === "dark";
-  return `<button type="button" class="admin-sidebar-footer-link js-admin-theme-toggle" aria-label="Theme toggle">
-    ${adminMsIcon(isDark ? "light_mode" : "dark_mode")}
-    <span>Theme Toggle</span>
-  </button>`;
-}
-
 function ownerSidebarLogoHtml() {
   return `<img class="admin-sidebar-logo" src="/icons/kalpanik-logo.png" alt="Kalpanik" width="128" height="128" />`;
 }
@@ -1888,17 +1880,6 @@ function leftNavInner() {
           </button>
         </div>
         <div class="list-group list-group-flush owner-list-nav js-list-host"></div>
-      </div>
-      <div class="admin-sidebar-footer">
-        ${adminThemeToggleFooterHtml()}
-        <button type="button" class="admin-sidebar-footer-link" data-bs-toggle="modal" data-bs-target="#teamAdminModal">
-          ${adminMsIcon("admin_panel_settings")}
-          <span>Manage Admin</span>
-        </button>
-        <button type="button" class="admin-sidebar-footer-link admin-sidebar-footer-link--danger js-logout">
-          ${adminMsIcon("logout")}
-          <span>Sign out</span>
-        </button>
       </div>
     </div>`;
 }
@@ -5029,7 +5010,7 @@ function wireChromeNav() {
   document.querySelectorAll(".js-logout").forEach((b) => b.addEventListener("click", logout));
   document.getElementById("leftNavOffcanvas")?.addEventListener("click", (e) => {
     const actionable = e.target.closest(
-      "[data-list-id], .js-owner-create-task, .admin-sidebar-nav-item, .team-chat-sidebar-nav-item, .js-admin-theme-toggle, .js-logout, [data-bs-target='#teamAdminModal']"
+      "[data-list-id], .js-owner-create-task, .admin-sidebar-nav-item, .team-chat-sidebar-nav-item"
     );
     if (!actionable || e.target.closest(".grip-handle, .js-new-list")) return;
     dismissAdminMobileNav();
