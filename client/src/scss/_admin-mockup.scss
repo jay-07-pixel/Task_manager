@@ -101,17 +101,21 @@
     justify-content: center;
     gap: 0.5rem;
     width: 100%;
-    padding: 1rem 1.5rem;
+    padding: 0.65rem 1rem;
     margin-bottom: 2rem;
     border: none;
-    border-radius: 0.75rem;
+    border-radius: 0.625rem;
     background: linear-gradient(135deg, #00535b 0%, #006d77 100%);
     color: #fff;
-    font-weight: 500;
-    font-size: 0.75rem;
+    font-weight: 600;
+    font-size: 0.9375rem;
     letter-spacing: 0.02em;
     box-shadow: 0 4px 14px rgba(0, 83, 91, 0.28);
     transition: transform 0.12s ease;
+
+    .material-symbols-outlined {
+      font-size: 1.25rem;
+    }
 
     &:hover {
       color: #fff;
