@@ -3662,16 +3662,6 @@ function ownerDelegationHistoryHtml(task) {
     </div>`;
 }
 
-function ownerTaskTeamCellHtml(task) {
-  const assignees = task.assignees ?? [];
-  const nAssigned = assignees.length;
-  if (nAssigned === 0) {
-    return `<span class="admin-team-unassigned">Unassigned</span>`;
-  }
-  const nDone = assignees.filter((a) => assigneeShowsSubmittedForOwner(a)).length;
-  return `<span class="admin-team-count tabular-nums">${nDone}/${nAssigned}</span>`;
-}
-
 function ownerMockAssigneeUpdatesHtml(taskId, assignee) {
   const total = assignee.progressUpdateCount ?? 0;
   const latest = assignee.latestProgressUpdate;
@@ -4587,7 +4577,6 @@ function ownerTaskGroupTbody(t) {
 
   const deadlineCell = formatOwnerTaskDeadlineMock(t);
   const recurrenceCell = ownerRecurrenceCellHtml(t);
-  const teamCell = ownerTaskTeamCellHtml(t);
 
   const descriptionFull = (t.notes || "").trim();
   const descriptionPanel = descriptionFull
@@ -4624,7 +4613,6 @@ function ownerTaskGroupTbody(t) {
       </td>
       <td class="owner-task-cell owner-task-col--recurrence align-middle">${recurrenceCell}</td>
       <td class="owner-task-cell owner-task-col--deadline align-middle text-nowrap tabular-nums">${deadlineCell}</td>
-      <td class="owner-task-cell owner-task-col--team align-middle">${teamCell}</td>
       <td class="owner-task-cell owner-task-col--trail align-middle text-end">
         <button
           type="button"
@@ -4641,7 +4629,7 @@ function ownerTaskGroupTbody(t) {
       </td>
     </tr>
     <tr class="owner-task-detail-row admin-task-detail-row">
-      <td colspan="6" class="p-0">
+      <td colspan="5" class="p-0">
         <div class="collapse owner-task-detail-collapse admin-task-detail-collapse" id="${detailId}">
           <div class="admin-task-expand-panel">
             <div class="admin-expand-section admin-expand-section--desc">
@@ -4768,7 +4756,6 @@ function renderOwnerMain() {
                 <th scope="col" class="owner-task-head owner-task-col--task">Task Title</th>
                 <th scope="col" class="owner-task-head owner-task-col--recurrence text-nowrap">Recurrence</th>
                 <th scope="col" class="owner-task-head owner-task-col--deadline text-nowrap">Deadline</th>
-                <th scope="col" class="owner-task-head owner-task-col--team text-nowrap">Team</th>
                 <th scope="col" class="owner-task-head owner-task-col--trail text-end">Actions</th>
               </tr>
             </thead>
