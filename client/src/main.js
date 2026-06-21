@@ -1570,9 +1570,90 @@ function ownerUserAvatarHtml(sizeClass = "") {
 
 function ownerAdminHeaderProfileHtml() {
   const name = state.user?.displayName ? escapeHtml(state.user.displayName) : "Admin";
-  return `<div class="admin-header-profile" title="${name}" aria-label="Signed in as ${name}">
-    <img class="admin-header-profile-photo" src="/icons/admin-profile-avatar.png" alt="" width="40" height="40" />
+  const isDark = document.documentElement.getAttribute("data-bs-theme") === "dark";
+  return `<div class="admin-header-profile-dropdown">
+    <button
+      type="button"
+      class="admin-header-profile-trigger"
+      title="${name}"
+      aria-label="Account menu for ${name}"
+      aria-haspopup="menu"
+      aria-expanded="false"
+    >
+      <img class="admin-header-profile-photo" src="/icons/admin-profile-avatar.png" alt="" width="40" height="40" />
+    </button>
+    <div class="admin-header-profile-menu" role="menu">
+      <button type="button" class="admin-header-profile-item js-admin-theme-toggle" role="menuitem">
+        ${adminMsIcon(isDark ? "light_mode" : "dark_mode")}
+        <span>Theme Toggle</span>
+      </button>
+      <button type="button" class="admin-header-profile-item js-admin-manage-admin" role="menuitem" data-bs-toggle="modal" data-bs-target="#teamAdminModal">
+        ${adminMsIcon("admin_panel_settings")}
+        <span>Manage Admin</span>
+      </button>
+      <div class="admin-header-profile-divider" role="separator"></div>
+      <button type="button" class="admin-header-profile-item admin-header-profile-item--danger js-logout" role="menuitem">
+        ${adminMsIcon("logout")}
+        <span>Sign out</span>
+      </button>
+    </div>
   </div>`;
+}
+
+function closeAdminHeaderProfileMenus() {
+  document.querySelectorAll(".admin-header-profile-dropdown.is-open").forEach((dropdown) => {
+    dropdown.classList.remove("is-open");
+    dropdown.querySelector(".admin-header-profile-trigger")?.setAttribute("aria-expanded", "false");
+  });
+}
+
+function wireAdminHeaderProfileMenu(root) {
+  root.querySelectorAll(".admin-header-profile-dropdown").forEach((dropdown) => {
+    const trigger = dropdown.querySelector(".admin-header-profile-trigger");
+    if (!trigger || trigger.dataset.wired === "1") return;
+    trigger.dataset.wired = "1";
+
+    trigger.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const willOpen = !dropdown.classList.contains("is-open");
+      closeAdminHeaderProfileMenus();
+      if (willOpen) {
+        dropdown.classList.add("is-open");
+        trigger.setAttribute("aria-expanded", "true");
+      }
+    });
+
+    dropdown.querySelectorAll(".admin-header-profile-item").forEach((item) => {
+      item.addEventListener("click", () => closeAdminHeaderProfileMenus());
+    });
+  });
+
+  root.querySelectorAll(".js-admin-theme-toggle").forEach((btn) => {
+    if (btn.dataset.wired === "1") return;
+    btn.dataset.wired = "1";
+    btn.addEventListener("click", () => {
+      const cur = document.documentElement.getAttribute("data-bs-theme") || "light";
+      setThemePreference(cur === "dark" ? "light" : "dark");
+      document.querySelectorAll(".js-admin-theme-toggle .material-symbols-outlined").forEach((icon) => {
+        icon.textContent = document.documentElement.getAttribute("data-bs-theme") === "dark" ? "light_mode" : "dark_mode";
+      });
+    });
+  });
+
+  root.querySelectorAll(".js-logout").forEach((btn) => {
+    if (btn.dataset.wired === "1") return;
+    btn.dataset.wired = "1";
+    btn.addEventListener("click", logout);
+  });
+}
+
+function ensureAdminHeaderProfileMenuDocListener() {
+  if (state.adminProfileMenuDocClickWired) return;
+  state.adminProfileMenuDocClickWired = true;
+  document.addEventListener("click", closeAdminHeaderProfileMenus);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeAdminHeaderProfileMenus();
+  });
 }
 
 function ownerRecurrenceShortLabel(task) {
@@ -4793,6 +4874,8 @@ function renderOwnerMain() {
   `;
 
   wireAdminNotifications(state.user?.id, main);
+  ensureAdminHeaderProfileMenuDocListener();
+  wireAdminHeaderProfileMenu(main);
 
   main.querySelectorAll(".js-owner-refresh-tasks").forEach((btn) => {
     btn.addEventListener("click", async () => {
