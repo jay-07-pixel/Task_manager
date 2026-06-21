@@ -1765,7 +1765,7 @@ function leftNavInner() {
           <span class="admin-sidebar-role">Administrator</span>
         </div>
       </div>
-      <button type="button" class="admin-create-task-btn js-owner-focus-quick-add">
+      <button type="button" class="admin-create-task-btn js-owner-create-task">
         ${adminMsIcon("add")}
         Create Task
       </button>
@@ -2009,14 +2009,13 @@ function fillModalAssigneeCheckboxes(selectedIds) {
   host.innerHTML = state.assignees
     .map(
       (u) => `
-    <div class="modal-assignee-option">
-      <div class="form-check mb-1">
-        <input class="form-check-input modal-assignee-cb" type="checkbox" value="${u.id}" id="modal-assignee-${u.id}" ${
+    <label class="admin-task-modal-employee-row modal-assignee-option" for="modal-assignee-${u.id}">
+      <input class="modal-assignee-cb admin-task-modal-employee-cb" type="checkbox" value="${u.id}" id="modal-assignee-${u.id}" ${
         set.has(u.id) ? "checked" : ""
       }>
-        <label class="form-check-label w-100" for="modal-assignee-${u.id}">${escapeHtml(u.displayName)}</label>
-      </div>
-    </div>`
+      <span class="admin-task-modal-employee-avatar" aria-hidden="true">${escapeHtml(assigneeInitials(u.displayName))}</span>
+      <span class="admin-task-modal-employee-name">${escapeHtml(u.displayName)}</span>
+    </label>`
     )
     .join("");
   refreshModalAssigneeChipsAndLabel();
@@ -2026,8 +2025,7 @@ function fillModalAssigneeCheckboxes(selectedIds) {
 function filterModalAssigneeOptions() {
   const q = (document.getElementById("modal-assignee-search")?.value || "").trim().toLowerCase();
   document.querySelectorAll("#modal-assignee-options .modal-assignee-option").forEach((row) => {
-    const label = row.querySelector("label");
-    const text = (label?.textContent || "").toLowerCase();
+    const text = (row.textContent || "").toLowerCase();
     row.classList.toggle("d-none", q.length > 0 && !text.includes(q));
   });
 }
@@ -2045,12 +2043,11 @@ function refreshModalAssigneeChipsAndLabel() {
     const u = usersById.get(cb.value);
     if (!u) continue;
     const chip = document.createElement("span");
-    chip.className =
-      "badge rounded-pill text-bg-primary d-inline-flex align-items-center gap-1 py-1 ps-2 pe-1 modal-assignee-chip";
+    chip.className = "admin-task-modal-chip modal-assignee-chip";
     const safeName = escapeHtml(u.displayName);
-    chip.innerHTML = `<span class="modal-assignee-chip-text">${safeName}</span><button type="button" class="btn btn-link text-white text-decoration-none p-0 lh-1 modal-assignee-chip-remove" data-user-id="${escapeHtml(
+    chip.innerHTML = `<span class="modal-assignee-chip-text">${safeName}</span><button type="button" class="admin-task-modal-chip-remove modal-assignee-chip-remove" data-user-id="${escapeHtml(
       u.id
-    )}" aria-label="Remove ${safeName}" style="font-size: 1rem; line-height: 1">&times;</button>`;
+    )}" aria-label="Remove ${safeName}">${adminMsIcon("close", "admin-task-modal-chip-close")}</button>`;
     chip.querySelector(".modal-assignee-chip-remove")?.addEventListener("click", (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
@@ -2064,7 +2061,7 @@ function refreshModalAssigneeChipsAndLabel() {
   }
 
   if (selected.length === 0) {
-    labelEl.textContent = "Select employees…";
+    labelEl.textContent = "Assign to…";
   } else if (selected.length === 1) {
     const u = usersById.get(selected[0].value);
     labelEl.textContent = u?.displayName ?? "1 selected";
@@ -2092,6 +2089,10 @@ function wireModalAssigneePicker() {
 
   document.getElementById("modal-assignee-panel")?.addEventListener("shown.bs.collapse", () => {
     document.getElementById("modal-assignee-search")?.focus();
+    document.querySelector("#modal-assignee-toggle .modal-assignee-chevron")?.classList.add("is-open");
+  });
+  document.getElementById("modal-assignee-panel")?.addEventListener("hidden.bs.collapse", () => {
+    document.querySelector("#modal-assignee-toggle .modal-assignee-chevron")?.classList.remove("is-open");
   });
 
   modal.addEventListener("hidden.bs.modal", () => {
@@ -2390,44 +2391,45 @@ function updateModalSaveEnabled() {
 
 function taskModalHtml() {
   return `
-    <div class="modal fade" id="taskModal" tabindex="-1" aria-labelledby="taskModalLabel">
-      <div class="modal-dialog modal-dialog-scrollable">
-        <div class="modal-content">
-          <div class="modal-header border-0 pb-0 align-items-start">
-            <div class="flex-grow-1 me-2">
-              <label class="visually-hidden" for="modal-title" id="taskModalLabel">Title</label>
-              <input type="text" class="form-control form-control-lg border-0 border-bottom rounded-0 shadow-none px-0 task-modal-title-input" id="modal-title" placeholder="Add title" autocomplete="off" />
-            </div>
-            <button type="button" class="btn-close mt-1" data-bs-dismiss="modal" aria-label="Close"></button>
+    <div class="modal fade admin-task-modal" id="taskModal" tabindex="-1" aria-labelledby="taskModalLabel">
+      <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable admin-task-modal-dialog">
+        <div class="modal-content admin-task-modal-card border-0">
+          <div class="admin-task-modal-header">
+            <label class="visually-hidden" for="modal-title" id="taskModalLabel">Task title</label>
+            <input type="text" class="admin-task-modal-title-input" id="modal-title" placeholder="Enter task title..." autocomplete="off" />
+            <button type="button" class="admin-task-modal-close" data-bs-dismiss="modal" aria-label="Close">
+              ${adminMsIcon("close", "admin-task-modal-close-icon")}
+            </button>
           </div>
-          <div class="modal-body pt-3">
+          <div class="admin-task-modal-body">
             <input type="hidden" id="modal-task-id" />
-            <div id="modal-schedule-wrap">
-              <div class="d-flex align-items-start gap-2 mb-3">
-                <i class="bi bi-clock text-secondary fs-5 mt-1 flex-shrink-0" aria-hidden="true"></i>
-                <div class="flex-grow-1">
-                  <div class="row g-2 align-items-end" id="modal-schedule-dates-row">
-                    <div class="col-sm-6" id="modal-due-wrap">
-                      <label class="form-label small text-muted mb-0" for="modal-due">Date</label>
-                      <input class="form-control" type="date" id="modal-due" />
+            <div id="modal-schedule-wrap" class="admin-task-modal-section">
+              <div class="admin-task-modal-row">
+                <span class="admin-task-modal-row-icon">${adminMsIcon("schedule")}</span>
+                <div class="admin-task-modal-row-content">
+                  <div class="admin-task-modal-datetime-row">
+                    <div class="row g-2 flex-grow-1" id="modal-schedule-dates-row">
+                      <div class="col-sm-6" id="modal-due-wrap">
+                        <input class="admin-task-modal-input" type="date" id="modal-due" aria-label="Due date" />
+                      </div>
+                      <div class="col-sm-6 d-none" id="modal-custom-end-wrap">
+                        <input class="admin-task-modal-input" type="date" id="modal-custom-end-display" disabled tabindex="-1" aria-readonly="true" aria-label="Repeat end date" />
+                      </div>
                     </div>
-                    <div class="col-sm-6 d-none" id="modal-custom-end-wrap">
-                      <label class="form-label small text-muted mb-0" for="modal-custom-end-display">To</label>
-                      <input class="form-control" type="date" id="modal-custom-end-display" disabled tabindex="-1" aria-readonly="true" />
-                    </div>
-                  </div>
-                  <div class="row g-2 mt-2 align-items-end">
-                    <div class="col-sm-6" id="modal-time-wrap">
-                      <label class="form-label small text-muted mb-0" for="modal-due-time">Time</label>
-                      <input class="form-control" type="time" id="modal-due-time" value="12:00" />
+                    <div class="admin-task-modal-datetime-row mt-2" id="modal-time-wrap">
+                      <input class="admin-task-modal-input" type="time" id="modal-due-time" value="12:00" aria-label="Due time" />
                     </div>
                   </div>
-                  <div class="form-check mt-2">
-                    <input class="form-check-input" type="checkbox" id="modal-all-day" />
-                    <label class="form-check-label" for="modal-all-day">All day</label>
-                  </div>
-                  <label class="form-label small text-muted mt-2 mb-0" for="modal-repeat">Repeat</label>
-                  <select class="form-select form-select-sm mt-1" id="modal-repeat">
+                  <label class="admin-task-modal-check">
+                    <input type="checkbox" id="modal-all-day" />
+                    <span>All day</span>
+                  </label>
+                </div>
+              </div>
+              <div class="admin-task-modal-row admin-task-modal-row--recurrence">
+                <span class="admin-task-modal-row-icon">${adminMsIcon("repeat")}</span>
+                <div class="admin-task-modal-select-wrap flex-grow-1">
+                  <select class="admin-task-modal-select" id="modal-repeat" aria-label="Repeat">
                     <option value="none">Does not repeat</option>
                     <option value="daily">Daily</option>
                     <option value="weekly">Weekly</option>
@@ -2435,81 +2437,68 @@ function taskModalHtml() {
                     <option value="yearly">Yearly</option>
                     <option value="custom">Custom…</option>
                   </select>
-                  <div id="modal-custom-repeat-card" class="modal-custom-repeat-card d-none mt-2" aria-live="polite">
-                    <div class="modal-custom-repeat-card__head">
-                      <span class="modal-custom-repeat-card__badge" id="modal-custom-repeat-freq">Every day</span>
-                      <button type="button" class="btn btn-link btn-sm p-0 modal-custom-repeat-card__edit" id="modal-custom-repeat-edit">
-                        <i class="bi bi-pencil-square me-1" aria-hidden="true"></i>Edit
-                      </button>
-                    </div>
-                    <div class="modal-custom-repeat-card__range" id="modal-custom-repeat-range">
-                      <span class="modal-custom-repeat-card__date" id="modal-custom-repeat-from">—</span>
-                      <span class="modal-custom-repeat-card__arrow" aria-hidden="true"><i class="bi bi-arrow-right"></i></span>
-                      <span class="modal-custom-repeat-card__date" id="modal-custom-repeat-to">—</span>
-                    </div>
-                    <p class="modal-custom-repeat-card__meta small text-muted mb-0" id="modal-custom-repeat-meta"></p>
-                  </div>
+                  <span class="admin-task-modal-select-chevron">${adminMsIcon("expand_more")}</span>
                 </div>
               </div>
-            </div>
-            <div class="d-flex align-items-start gap-2 mb-3">
-              <i class="bi bi-text-left text-secondary fs-5 mt-1 flex-shrink-0" aria-hidden="true"></i>
-              <div class="flex-grow-1">
-                <label class="form-label visually-hidden" for="modal-notes">Description</label>
-                <textarea class="form-control" id="modal-notes" rows="4" placeholder="Add description"></textarea>
-              </div>
-            </div>
-            <div class="d-flex align-items-start gap-2 mb-3" id="modal-list-wrap">
-              <i class="bi bi-list-task text-secondary fs-5 mt-2 flex-shrink-0" aria-hidden="true"></i>
-              <div class="flex-grow-1">
-                <label class="form-label small text-muted mb-0" for="modal-move-list">List</label>
-                <select class="form-select form-select-sm mt-1" id="modal-move-list"></select>
-              </div>
-            </div>
-            <div class="d-flex align-items-start gap-2 mb-3" id="modal-assignee-wrap">
-              <i class="bi bi-people text-secondary fs-5 mt-2 flex-shrink-0" aria-hidden="true"></i>
-              <div class="flex-grow-1">
-                <label class="form-label small text-muted mb-0" id="modal-assignee-label" for="modal-assignee-toggle">Assign to</label>
-                <div class="modal-assignee-picker mt-1">
-                  <button
-                    class="btn btn-outline-secondary w-100 text-start d-flex justify-content-between align-items-center gap-2"
-                    type="button"
-                    data-bs-toggle="collapse"
-                    data-bs-target="#modal-assignee-panel"
-                    aria-expanded="false"
-                    aria-controls="modal-assignee-panel"
-                    id="modal-assignee-toggle"
-                  >
-                    <span id="modal-assignee-toggle-label" class="text-truncate">Select employees…</span>
-                    <i class="bi bi-chevron-down small flex-shrink-0 modal-assignee-chevron" aria-hidden="true"></i>
+              <div id="modal-custom-repeat-card" class="admin-task-modal-custom-repeat d-none" aria-live="polite">
+                <div class="admin-task-modal-custom-repeat-head">
+                  <span class="admin-task-modal-custom-repeat-badge" id="modal-custom-repeat-freq">Every day</span>
+                  <button type="button" class="admin-task-modal-custom-repeat-edit" id="modal-custom-repeat-edit">
+                    ${adminMsIcon("edit")} Edit
                   </button>
-                  <div class="collapse border rounded bg-body mt-1 shadow-sm" id="modal-assignee-panel">
-                    <label class="visually-hidden" for="modal-assignee-search">Search employees</label>
-                    <div class="p-2 border-bottom">
-                      <div class="input-group input-group-sm">
-                        <span class="input-group-text bg-body border-end-0 ps-2 pe-0 text-muted"><i class="bi bi-search" aria-hidden="true"></i></span>
-                        <input
-                          type="search"
-                          class="form-control border-start-0"
-                          id="modal-assignee-search"
-                          placeholder="Search employees"
-                          autocomplete="off"
-                        />
-                      </div>
-                    </div>
-                    <div id="modal-assignee-options" class="px-2 py-2" style="max-height: 11rem; overflow-y: auto"></div>
-                  </div>
                 </div>
-                <div id="modal-assignee-chips" class="d-flex flex-wrap gap-1 mt-2" role="list" aria-label="Selected assignees"></div>
-                <p class="small text-muted mb-0 mt-1">Open the list to search and select one or more employees. Selected names appear below.</p>
+                <div class="admin-task-modal-custom-repeat-range" id="modal-custom-repeat-range">
+                  <span id="modal-custom-repeat-from">—</span>
+                  <span aria-hidden="true">→</span>
+                  <span id="modal-custom-repeat-to">—</span>
+                </div>
+                <p class="admin-task-modal-custom-repeat-meta" id="modal-custom-repeat-meta"></p>
+              </div>
+            </div>
+            <div class="admin-task-modal-row admin-task-modal-row--top">
+              <span class="admin-task-modal-row-icon">${adminMsIcon("notes")}</span>
+              <textarea class="admin-task-modal-textarea" id="modal-notes" rows="3" placeholder="Add description..." aria-label="Description"></textarea>
+            </div>
+            <div class="admin-task-modal-row" id="modal-list-wrap">
+              <span class="admin-task-modal-row-icon">${adminMsIcon("assignment")}</span>
+              <div class="admin-task-modal-select-wrap flex-grow-1">
+                <select class="admin-task-modal-select" id="modal-move-list" aria-label="List"></select>
+                <span class="admin-task-modal-select-chevron">${adminMsIcon("expand_more")}</span>
+              </div>
+            </div>
+            <div class="admin-task-modal-section" id="modal-assignee-wrap">
+              <div class="admin-task-modal-row">
+                <span class="admin-task-modal-row-icon">${adminMsIcon("group")}</span>
+                <button
+                  class="admin-task-modal-assign-toggle"
+                  type="button"
+                  data-bs-toggle="collapse"
+                  data-bs-target="#modal-assignee-panel"
+                  aria-expanded="false"
+                  aria-controls="modal-assignee-panel"
+                  id="modal-assignee-toggle"
+                >
+                  <span id="modal-assignee-toggle-label" class="text-truncate">Assign to…</span>
+                  <span class="admin-task-modal-assign-chevron modal-assignee-chevron">${adminMsIcon("expand_more")}</span>
+                </button>
+              </div>
+              <div class="collapse admin-task-modal-assign-panel" id="modal-assignee-panel">
+                <div class="admin-task-modal-assign-search-wrap">
+                  ${adminMsIcon("search", "admin-task-modal-search-icon")}
+                  <input type="search" class="admin-task-modal-assign-search" id="modal-assignee-search" placeholder="Search employees..." autocomplete="off" aria-label="Search employees" />
+                </div>
+                <div id="modal-assignee-chips" class="admin-task-modal-chips" role="list" aria-label="Selected assignees"></div>
+                <div id="modal-assignee-options" class="admin-task-modal-employee-list"></div>
               </div>
             </div>
           </div>
-          <div class="modal-footer d-flex justify-content-between flex-wrap gap-2 border-0 pt-0">
-            <button type="button" class="btn btn-outline-danger" id="modal-delete">Delete task</button>
-            <div class="ms-auto">
-              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-              <button type="button" class="btn btn-primary" id="modal-save">Save</button>
+          <div class="admin-task-modal-footer">
+            <button type="button" class="admin-task-modal-delete" id="modal-delete">
+              ${adminMsIcon("delete")} Delete task
+            </button>
+            <div class="admin-task-modal-footer-actions">
+              <button type="button" class="admin-task-modal-btn-secondary" data-bs-dismiss="modal">Close</button>
+              <button type="button" class="admin-task-modal-btn-save" id="modal-save">Save</button>
             </div>
           </div>
         </div>
@@ -4023,18 +4012,77 @@ function captureOwnerUiState() {
   const main = document.getElementById("main-column");
   return {
     expandedTaskIds: captureOwnerExpandedTaskIds(),
-    quickAddTitle: document.getElementById("quick-add-title")?.value ?? "",
     scrollTop: main?.scrollTop ?? 0,
   };
 }
 
 function restoreOwnerUiState(ui) {
   if (!ui) return;
-  const input = document.getElementById("quick-add-title");
-  if (input && ui.quickAddTitle) input.value = ui.quickAddTitle;
   const main = document.getElementById("main-column");
   if (main && ui.scrollTop > 0) main.scrollTop = ui.scrollTop;
   restoreOwnerExpandedTaskIds(ui.expandedTaskIds);
+}
+
+async function ownerCreateTaskFromSidebar() {
+  openOwnerCreateTaskModal();
+}
+
+function ownerTaskModalLists() {
+  return state.lists.filter((l) => !isEmployeeAssignmentsList(l));
+}
+
+function populateTaskModalListOptions(selectedListId) {
+  const select = document.getElementById("modal-move-list");
+  if (!select) return;
+  const lists = ownerTaskModalLists();
+  select.innerHTML = lists
+    .map(
+      (l) =>
+        `<option value="${l.id}" ${l.id === selectedListId ? "selected" : ""}>${escapeHtml(l.title)}</option>`
+    )
+    .join("");
+  select.disabled = lists.length === 0;
+}
+
+function openOwnerCreateTaskModal() {
+  const lists = ownerTaskModalLists();
+  if (!lists.length) {
+    showToast("Create a list first.", "warning");
+    return;
+  }
+  let listId = state.activeListId;
+  const activeList = state.lists.find((l) => l.id === listId);
+  if (!listId || isEmployeeAssignmentsList(activeList)) {
+    listId = lists[0].id;
+  }
+
+  const modalEl = document.getElementById("taskModal");
+  if (!modalEl) return;
+  modalEl.dataset.mode = "create";
+  document.getElementById("modal-task-id").value = "";
+  document.getElementById("modal-title").value = "";
+  document.getElementById("modal-notes").value = "";
+  pendingCustomRecurrence = null;
+  fillModalDueFields({ allDay: false, recurrence: "none", dueAt: null });
+  syncModalCustomRepeatUi();
+  document.getElementById("modal-schedule-wrap")?.classList.remove("d-none");
+  document.getElementById("modal-list-wrap")?.classList.remove("d-none");
+  document.getElementById("modal-assignee-wrap")?.classList.remove("d-none");
+  populateTaskModalListOptions(listId);
+  fillModalAssigneeCheckboxes([]);
+  document.getElementById("modal-delete")?.classList.add("d-none");
+
+  const panel = document.getElementById("modal-assignee-panel");
+  if (panel?.classList.contains("show")) {
+    bootstrap.Collapse.getOrCreateInstance(panel).hide();
+  }
+
+  const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+  modal.show();
+  queueMicrotask(() => {
+    document.getElementById("modal-title")?.focus();
+  });
+  updateModalSaveEnabled();
 }
 
 function isOwnerInteractiveBusy() {
@@ -4285,7 +4333,7 @@ function initIncompleteSortables(listId) {
 function openTaskModal(task) {
   const modalEl = document.getElementById("taskModal");
   const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
-  modalEl.dataset.mode = "root";
+  modalEl.dataset.mode = "edit";
   document.getElementById("modal-task-id").value = task.id;
   document.getElementById("modal-title").value = task.title;
   document.getElementById("modal-notes").value = task.notes || "";
@@ -4294,6 +4342,7 @@ function openTaskModal(task) {
       ? { ...task.recurrenceRule }
       : null;
   fillModalDueFields(task);
+  syncModalCustomRepeatUi();
   document.getElementById("modal-schedule-wrap").classList.remove("d-none");
   document.getElementById("modal-list-wrap").classList.remove("d-none");
   document.getElementById("modal-assignee-wrap").classList.remove("d-none");
@@ -4301,13 +4350,7 @@ function openTaskModal(task) {
   document.getElementById("modal-delete").classList.remove("d-none");
 
   fillModalAssigneeCheckboxes((task.assignees ?? []).map((a) => a.id));
-
-  document.getElementById("modal-move-list").innerHTML = state.lists
-    .map(
-      (l) =>
-        `<option value="${l.id}" ${l.id === task.listId ? "selected" : ""}>${escapeHtml(l.title)}</option>`
-    )
-    .join("");
+  populateTaskModalListOptions(task.listId);
 
   modal.show();
   updateModalSaveEnabled();
@@ -4317,7 +4360,17 @@ function wireTaskModal() {
   const modalEl = document.getElementById("taskModal");
   wireModalAssigneePicker();
   const saveHandler = async () => {
-    const id = document.getElementById("modal-task-id").value;
+    const id = (document.getElementById("modal-task-id").value || "").trim();
+    const listId = document.getElementById("modal-move-list").value;
+    const title = document.getElementById("modal-title").value?.trim();
+    if (!title) {
+      showToast("Enter a task title.", "warning");
+      return;
+    }
+    if (!listId) {
+      showToast("Select a list.", "warning");
+      return;
+    }
     const rec = document.getElementById("modal-repeat").value;
     let recurrenceRule = null;
     if (rec === "custom") {
@@ -4338,7 +4391,7 @@ function wireTaskModal() {
     }
     const dueAt = buildDueAtFromModal();
     const body = {
-      title: document.getElementById("modal-title").value,
+      title,
       notes: document.getElementById("modal-notes").value,
       dueAt,
       dueTimeZone: dueAt ? getBrowserDueTimeZone() : null,
@@ -4348,17 +4401,22 @@ function wireTaskModal() {
       assigneeIds: getSelectedAssigneeIdsFromModal(),
     };
     try {
-      await api(`/api/tasks/${id}`, { method: "PATCH", body: JSON.stringify(body) });
-      const moveList = document.getElementById("modal-move-list").value;
-      const task = findTaskById(id);
-      if (task && moveList && moveList !== task.listId) {
-        await api(`/api/tasks/${id}/move`, { method: "POST", body: JSON.stringify({ listId: moveList }) });
-        state.activeListId = moveList;
-        await loadLists();
+      if (!id) {
+        await api(`/api/tasks/lists/${listId}`, { method: "POST", body: JSON.stringify(body) });
+        state.activeListId = listId;
+      } else {
+        await api(`/api/tasks/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+        const task = findTaskById(id);
+        if (task && listId && listId !== task.listId) {
+          await api(`/api/tasks/${id}/move`, { method: "POST", body: JSON.stringify({ listId }) });
+          state.activeListId = listId;
+          await loadLists();
+        }
       }
       await loadTasks(state.activeListId);
       bootstrap.Modal.getInstance(modalEl).hide();
       renderOwnerChrome();
+      showToast(id ? "Task saved." : "Task created.", "success");
     } catch (err) {
       showToast(err.message, "danger");
     }
@@ -4572,9 +4630,6 @@ function renderOwnerMain() {
 
   const isEmpAssignList = isEmployeeAssignmentsList(list);
   const useEmpAssignColumns = isEmpAssignList || state.ownerTaskFilter === "employee_assigned";
-  const pageSubtitle = isEmpAssignList
-    ? "Tasks assigned by one employee to another."
-    : "Assign tasks, review progress updates, and check final submissions.";
 
   const metrics = ownerDashboardMetrics();
   const activeKpiClass = state.ownerTaskFilter === "active" ? " admin-kpi-card--active" : "";
@@ -4619,7 +4674,7 @@ function renderOwnerMain() {
         : `<div class="owner-empty-state py-5 px-3">
         <i class="bi bi-clipboard2-plus owner-empty-icon text-primary" aria-hidden="true"></i>
         <p class="owner-empty-title mb-1">No tasks yet</p>
-        <p class="owner-empty-desc text-muted small mb-0">Use quick add below to create the first task for this list.</p>
+        <p class="owner-empty-desc text-muted small mb-0">Click <strong>Create Task</strong> in the sidebar to add the first task.</p>
           </div>`
       : state.ownerTaskFilter === "completed"
         ? `<div class="owner-empty-state py-5 px-3">
@@ -4668,7 +4723,6 @@ function renderOwnerMain() {
     <header class="admin-dash-header">
       <div>
         <h1 class="admin-dash-title">Admin Dashboard</h1>
-        <p class="admin-dash-subtitle d-none d-md-block">${list ? `${escapeHtml(list.title)} · ${escapeHtml(pageSubtitle)}` : "Select a list from the sidebar to manage tasks."}</p>
       </div>
       <div class="admin-dash-utilities">
         ${ownerTrialTopBannerHtml()}
@@ -4685,13 +4739,6 @@ function renderOwnerMain() {
     ${kpiRow}
     <section class="owner-task-panel" aria-label="Tasks">
       ${tableBlock}
-    </section>
-    <section class="admin-quick-add owner-quick-add-bar flex-shrink-0 ${state.ownerTaskFilter === "completed" || state.ownerTaskFilter === "in_review" || state.ownerTaskFilter === "employee_assigned" || isEmpAssignList ? "d-none" : ""}" aria-label="Quick add task">
-      <div class="admin-quick-add-inner">
-        <span class="admin-quick-add-icon">${adminMsIcon("bolt")}</span>
-        <input class="admin-quick-add-input" id="quick-add-title" placeholder="Add a new task..." ${!list ? "disabled" : ""} aria-label="Quick add task" />
-        <button class="admin-quick-add-btn" type="button" id="quick-add-btn" ${!list ? "disabled" : ""}>Add</button>
-      </div>
     </section>
     </div>
   `;
@@ -4830,27 +4877,6 @@ function renderOwnerMain() {
     });
   });
 
-  async function doQuickAdd() {
-    const input = document.getElementById("quick-add-title");
-    const title = input.value.trim();
-    if (!title || !listId) return;
-    try {
-      await api(`/api/tasks/lists/${listId}`, { method: "POST", body: JSON.stringify({ title }) });
-      input.value = "";
-      await loadTasks(listId);
-      renderOwnerMain();
-    } catch (err) {
-      showToast(err.message, "danger");
-    }
-  }
-  document.getElementById("quick-add-btn")?.addEventListener("click", doQuickAdd);
-  document.getElementById("quick-add-title")?.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      doQuickAdd();
-    }
-  });
-
   if (state.ownerTaskFilter === "active" && visibleTasks.length > 0) {
   initIncompleteSortables(listId);
   } else {
@@ -4879,11 +4905,9 @@ function wireChromeNav() {
       }
     })
   );
-  document.querySelectorAll(".js-owner-focus-quick-add").forEach((btn) => {
+  document.querySelectorAll(".js-owner-create-task").forEach((btn) => {
     btn.addEventListener("click", () => {
-      const input = document.getElementById("quick-add-title");
-      input?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-      input?.focus();
+      openOwnerCreateTaskModal();
     });
   });
   document.querySelectorAll(".js-admin-theme-toggle").forEach((btn) => {
