@@ -2392,7 +2392,7 @@ function updateModalSaveEnabled() {
 function taskModalHtml() {
   return `
     <div class="modal fade admin-task-modal" id="taskModal" tabindex="-1" aria-labelledby="taskModalLabel">
-      <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable admin-task-modal-dialog">
+      <div class="modal-dialog modal-dialog-centered admin-task-modal-dialog">
         <div class="modal-content admin-task-modal-card border-0">
           <div class="admin-task-modal-header">
             <label class="visually-hidden" for="modal-title" id="taskModalLabel">Task title</label>
