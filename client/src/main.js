@@ -1559,6 +1559,10 @@ function adminThemeToggleFooterHtml() {
   </button>`;
 }
 
+function ownerSidebarLogoHtml() {
+  return `<img class="admin-sidebar-logo" src="/icons/kalpanik-logo.png" alt="Kalpanik" width="48" height="48" />`;
+}
+
 function ownerUserAvatarHtml(sizeClass = "") {
   const initials = ownerProfileInitials();
   return `<div class="admin-user-avatar ${sizeClass}" aria-hidden="true">${escapeHtml(initials)}</div>`;
@@ -1759,7 +1763,7 @@ function leftNavInner() {
   return `
     <div class="owner-sidebar admin-sidebar d-flex flex-column h-100">
       <div class="admin-sidebar-profile">
-        ${ownerUserAvatarHtml()}
+        ${ownerSidebarLogoHtml()}
         <div class="min-w-0">
           <div class="admin-sidebar-name text-truncate">${displayName}</div>
           <span class="admin-sidebar-role">Administrator</span>

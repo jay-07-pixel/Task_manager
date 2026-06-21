@@ -58,6 +58,14 @@
     margin-bottom: 2rem;
   }
 
+  .admin-sidebar-logo {
+    flex-shrink: 0;
+    width: 3rem;
+    height: 3rem;
+    object-fit: contain;
+    display: block;
+  }
+
   .admin-user-avatar {
     flex-shrink: 0;
     width: 3rem;
