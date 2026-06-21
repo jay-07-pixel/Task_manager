@@ -3658,6 +3658,114 @@ function ownerDelegationHistoryHtml(task) {
     </div>`;
 }
 
+function ownerTaskTeamCellHtml(task) {
+  const assignees = task.assignees ?? [];
+  const nAssigned = assignees.length;
+  if (nAssigned === 0) {
+    return `<span class="admin-team-unassigned">Unassigned</span>`;
+  }
+  const nDone = assignees.filter((a) => assigneeShowsSubmittedForOwner(a)).length;
+  return `<span class="admin-team-count tabular-nums">${nDone}/${nAssigned}</span>`;
+}
+
+function ownerMockAssigneeUpdatesHtml(taskId, assignee) {
+  const total = assignee.progressUpdateCount ?? 0;
+  const latest = assignee.latestProgressUpdate;
+  const badge =
+    total > 0
+      ? `<span class="admin-expand-count-badge tabular-nums" aria-label="${total} update${total === 1 ? "" : "s"}">${total}</span>`
+      : "";
+  if (!total || !latest?.message) {
+    return `<div class="admin-expand-col-block">
+      <div class="admin-expand-col-head"><span class="admin-expand-col-label">Updates</span></div>
+      <p class="admin-expand-empty">No updates</p>
+    </div>`;
+  }
+  const snippet = ownerLatestUpdateSnippet(latest.message, 72);
+  return `<div class="admin-expand-col-block">
+    <div class="admin-expand-col-head">
+      <span class="admin-expand-col-label">Updates</span>
+      ${badge}
+    </div>
+    <button type="button" class="admin-expand-snippet-btn owner-view-progress-btn" data-view-progress-task-id="${taskId}" data-view-progress-user-id="${escapeHtml(assignee.id)}" data-view-progress-user-name="${escapeHtml(assignee.displayName)}" title="${escapeHtml((latest.message || "").trim())}">
+      <span class="admin-expand-snippet">"${escapeHtml(snippet)}"</span>
+    </button>
+  </div>`;
+}
+
+function ownerMockAssigneeSubmissionHtml(taskId, assignee) {
+  if (!assigneeHasSubmission(assignee)) {
+    return `<div class="admin-expand-col-block admin-expand-col-block--submission">
+      <span class="admin-expand-col-label">Submission</span>
+      <p class="admin-expand-empty">No submission yet</p>
+    </div>`;
+  }
+  const view = resolveAssigneeSubmissionForView(assignee);
+  const when = view.submittedAt ? formatProgressUpdateTime(view.submittedAt) : "";
+  return `<div class="admin-expand-col-block admin-expand-col-block--submission">
+    <span class="admin-expand-col-label">Submission</span>
+    <button type="button" class="admin-expand-view-submission owner-view-submission-btn" data-view-submission-task-id="${taskId}" data-view-submission-user-id="${escapeHtml(assignee.id)}" aria-label="View submission for ${escapeHtml(assignee.displayName)}">View submission</button>
+    ${when ? `<span class="admin-expand-submission-meta tabular-nums">${escapeHtml(when)}</span>` : ""}
+  </div>`;
+}
+
+function ownerMockAssigneeCardHtml(task, assignee, { isEmpAssignList = false } = {}) {
+  const rolledSubmission = assigneeRolledRecurringSubmission(assignee);
+  const isDone = assigneeShowsSubmittedForOwner(assignee);
+  const statusLabel = assignee.assigneeDone
+    ? "Submitted"
+    : rolledSubmission
+      ? "Submitted"
+      : "Pending";
+  const statusClass = isDone ? "admin-expand-status--submitted" : "admin-expand-status--pending";
+  const avatarClass = isDone ? "admin-expand-card-avatar--done" : "admin-expand-card-avatar--pending";
+  let chainLine = "";
+  if (isEmpAssignList && assignee.assignedBy?.displayName) {
+    chainLine = `${escapeHtml(assignee.assignedBy.displayName)} → ${escapeHtml(assignee.displayName)}`;
+  } else if (!isEmpAssignList && assignee.assignedBy?.displayName) {
+    chainLine = `${escapeHtml(assignee.assignedBy.displayName)} → ${escapeHtml(assignee.displayName)}`;
+  } else {
+    chainLine = `<span class="admin-expand-chain-direct">Direct Assignment</span>`;
+  }
+  return `<article class="admin-expand-card">
+    <div class="admin-expand-card-head">
+      <div class="admin-expand-card-avatar ${avatarClass}" aria-hidden="true">${escapeHtml(assigneeInitials(assignee.displayName))}</div>
+      <div class="admin-expand-card-ident min-w-0">
+        <div class="admin-expand-card-name-row">
+          <span class="admin-expand-card-name">${escapeHtml(assignee.displayName)}</span>
+          <span class="admin-expand-status ${statusClass}">${statusLabel}</span>
+        </div>
+        <p class="admin-expand-card-chain">${chainLine}</p>
+      </div>
+    </div>
+    <div class="admin-expand-card-grid">
+      ${ownerMockAssigneeUpdatesHtml(task.id, assignee)}
+      ${ownerMockAssigneeSubmissionHtml(task.id, assignee)}
+    </div>
+  </article>`;
+}
+
+function syncAdminTaskExpandIcon(btn) {
+  if (!btn) return;
+  const icon = btn.querySelector(".admin-task-expand-icon .material-symbols-outlined");
+  if (!icon) return;
+  const expanded = btn.getAttribute("aria-expanded") === "true";
+  icon.textContent = expanded ? "expand_less" : "expand_more";
+  btn.closest(".owner-task-row")?.classList.toggle("admin-task-row--expanded", expanded);
+}
+
+function wireAdminTaskExpandPanel(root) {
+  root.querySelectorAll(".owner-task-expand-btn").forEach((btn) => {
+    syncAdminTaskExpandIcon(btn);
+  });
+  root.querySelectorAll(".owner-task-detail-collapse").forEach((el) => {
+    const targetId = el.id;
+    const btn = root.querySelector(`[data-bs-target="#${targetId}"]`);
+    el.addEventListener("show.bs.collapse", () => syncAdminTaskExpandIcon(btn));
+    el.addEventListener("hide.bs.collapse", () => syncAdminTaskExpandIcon(btn));
+  });
+}
+
 function ownerAssigneeSubmissionHtml(taskId, assignee) {
   if (!assigneeHasSubmission(assignee)) {
     return `<span class="owner-assignee-empty-hint text-muted small">No submission yet</span>`;
@@ -4021,6 +4129,7 @@ function restoreOwnerUiState(ui) {
   const main = document.getElementById("main-column");
   if (main && ui.scrollTop > 0) main.scrollTop = ui.scrollTop;
   restoreOwnerExpandedTaskIds(ui.expandedTaskIds);
+  document.querySelectorAll(".owner-task-expand-btn").forEach((btn) => syncAdminTaskExpandIcon(btn));
 }
 
 async function ownerCreateTaskFromSidebar() {
@@ -4470,83 +4579,31 @@ function ownerTaskGroupTbody(t) {
   const assignees = t.assignees ?? [];
   const nAssigned = assignees.length;
   const nDone = assignees.filter((a) => assigneeShowsSubmittedForOwner(a)).length;
-  const progressNumbers =
-    nAssigned === 0 ? "Unassigned" : `${nDone}\u00a0/\u00a0${nAssigned}`;
-  const progressPillClass =
-    nAssigned === 0
-      ? "owner-team-count-pill owner-team-count-pill--unassigned fw-bold"
-      : "owner-team-count-pill";
   const detailId = `owner-task-detail-${t.id}`;
 
   const deadlineCell = formatOwnerTaskDeadlineMock(t);
   const recurrenceCell = ownerRecurrenceCellHtml(t);
-  const activeListForRow = state.lists.find((l) => l.id === state.activeListId);
-  const showTeamHint = isEmployeeAssignmentsList(activeListForRow) || state.ownerTaskFilter === "employee_assigned";
-  const teamHint = showTeamHint
-    ? `<div class="owner-task-team-hint small text-muted mt-1">${ownerEmployeesCellHtml(t)}</div>`
-    : "";
+  const teamCell = ownerTaskTeamCellHtml(t);
 
-  const descriptionPanel = ownerTaskDescriptionDetailHtml(t.notes);
+  const descriptionFull = (t.notes || "").trim();
+  const descriptionPanel = descriptionFull
+    ? `<p class="admin-expand-desc-text">${escapeHtml(descriptionFull)}</p>`
+    : `<p class="admin-expand-desc-text admin-expand-desc-text--empty">No description.</p>`;
 
   const assigneeCards =
     assignees.length === 0
-      ? `<p class="owner-assignee-empty fw-bold text-danger small mb-0 px-1">No assignees yet. Edit the task to add people.</p>`
-      : assignees
-          .map((a) => {
-            const rolledSubmission = assigneeRolledRecurringSubmission(a);
-            const statusClass = assigneeShowsSubmittedForOwner(a)
-              ? "owner-assignee-status--done"
-              : "owner-assignee-status--pending";
-            const statusLabel = a.assigneeDone
-              ? "Submitted"
-              : rolledSubmission
-                ? "Submitted · next due"
-                : "Pending";
-            const assignedByNote =
-              !isEmpAssignList && a.assignedBy?.displayName
-                ? `<div class="small text-info owner-delegated-by-note"><i class="bi bi-arrow-right-short" aria-hidden="true"></i>${escapeHtml(a.assignedBy.displayName)} → ${escapeHtml(a.displayName)}</div>`
-                : "";
-            return `<article class="owner-team-card">
-                <div class="owner-team-card-head">
-                  <div class="owner-team-avatar" aria-hidden="true">${escapeHtml(assigneeInitials(a.displayName))}</div>
-                  <div class="owner-team-ident min-w-0">
-                    <div class="owner-team-name text-truncate">${escapeHtml(a.displayName)}</div>
-                    <span class="owner-assignee-status ${statusClass}">${statusLabel}</span>
-                    ${assignedByNote}
-                  </div>
-                </div>
-                <div class="owner-team-card-grid">
-                  <div class="owner-team-col owner-team-col--updates">
-                    <div class="owner-team-col-head">
-                      <span class="owner-team-col-label">Updates</span>
-                      ${ownerUpdateTotalCountBadgeHtml(a.progressUpdateCount ?? 0)}
-                    </div>
-                    ${ownerAssigneeUpdatesHtml(t.id, a)}
-                  </div>
-                  <div class="owner-team-col owner-team-col--submission">
-                    <span class="owner-team-col-label">Submission</span>
-                    ${ownerAssigneeSubmissionHtml(t.id, a)}
-                  </div>
-                </div>
-              </article>`;
-          })
-          .join("");
+      ? `<p class="admin-expand-empty admin-expand-empty--warn">No assignees yet. Edit the task to add people.</p>`
+      : assignees.map((a) => ownerMockAssigneeCardHtml(t, a, { isEmpAssignList })).join("");
 
   const hasUnreadUpdates = assignees.some((a) => (a.unreadProgressUpdateCount ?? 0) > 0);
   const expandUnreadClass = hasUnreadUpdates ? " owner-task-expand-btn--unread" : "";
 
-  const assigneeMarkDoneControl = `<div class="owner-mark-done-wrap">
-      <button
-        type="button"
-        class="btn btn-sm btn-primary d-inline-flex align-items-center gap-2 owner-mark-done-open"
-        data-task-id="${t.id}"
-        aria-haspopup="dialog"
-        aria-controls="ownerMarkDoneModal"
-      >
-        <i class="bi bi-check-lg" aria-hidden="true"></i>
-        <span>Mark assignees done</span>
-      </button>
-    </div>`;
+  const assigneeMarkDoneControl = `<button type="button" class="admin-expand-mark-done owner-mark-done-open" data-task-id="${t.id}" aria-haspopup="dialog" aria-controls="ownerMarkDoneModal">Mark assignees done</button>`;
+
+  const progressBadge =
+    nAssigned === 0
+      ? `<span class="admin-expand-team-pill admin-expand-team-pill--unassigned">Unassigned</span>`
+      : `<span class="admin-expand-team-pill tabular-nums">${nDone} / ${nAssigned}</span>`;
 
   const groupDone = t.completed ? "owner-task-group--completed" : "";
 
@@ -4557,15 +4614,13 @@ function ownerTaskGroupTbody(t) {
         <span class="task-grip grip-handle" title="Drag to reorder">${adminMsIcon("drag_indicator")}</span>
       </td>
       <td class="owner-task-cell owner-task-col--task align-middle">
-        <div class="min-w-0">
-          <button type="button" class="btn btn-link text-start text-decoration-none p-0 owner-task-open-details" data-open-id="${
+        <button type="button" class="btn btn-link text-start text-decoration-none p-0 owner-task-open-details" data-open-id="${
           t.id
         }" aria-label="Open task details">${escapeHtml(t.title)}</button>
-          ${teamHint}
-        </div>
       </td>
       <td class="owner-task-cell owner-task-col--recurrence align-middle">${recurrenceCell}</td>
       <td class="owner-task-cell owner-task-col--deadline align-middle text-nowrap tabular-nums">${deadlineCell}</td>
+      <td class="owner-task-cell owner-task-col--team align-middle">${teamCell}</td>
       <td class="owner-task-cell owner-task-col--trail align-middle text-end">
         <button
           type="button"
@@ -4574,36 +4629,34 @@ function ownerTaskGroupTbody(t) {
           data-bs-target="#${detailId}"
           aria-expanded="false"
           aria-controls="${detailId}"
-          aria-label="Assignees and actions${hasUnreadUpdates ? " — unread updates" : ""}"
+          aria-label="Task details${hasUnreadUpdates ? " — unread updates" : ""}"
         >
           ${hasUnreadUpdates ? `<span class="owner-task-expand-unread-dot" aria-hidden="true"></span>` : ""}
-          ${adminMsIcon("expand_more")}
+          <span class="admin-task-expand-icon">${adminMsIcon("expand_more")}</span>
         </button>
       </td>
     </tr>
-    <tr class="owner-task-detail-row">
-      <td colspan="5" class="p-0">
-        <div class="collapse owner-task-detail-collapse" id="${detailId}">
-          <div class="owner-task-detail-inner">
-            <div class="owner-task-desc-panel px-3 pt-3 pb-3 border-bottom">
-              <h3 class="owner-task-detail-heading small text-secondary mb-2">Description</h3>
+    <tr class="owner-task-detail-row admin-task-detail-row">
+      <td colspan="6" class="p-0">
+        <div class="collapse owner-task-detail-collapse admin-task-detail-collapse" id="${detailId}">
+          <div class="admin-task-expand-panel">
+            <div class="admin-expand-section admin-expand-section--desc">
+              <h4 class="admin-expand-section-label">Description</h4>
               ${descriptionPanel}
             </div>
-            <div class="owner-team-progress px-3 pt-3 pb-2">
-              <div class="owner-team-progress-head d-flex align-items-center justify-content-between gap-2 mb-3">
-                <h3 class="owner-task-detail-heading small text-secondary mb-0">Team progress</h3>
-                <span class="${progressPillClass} small tabular-nums">
-                  <i class="bi bi-people me-1" aria-hidden="true"></i>${progressNumbers}
-                </span>
+            <div class="admin-expand-section">
+              <div class="admin-expand-section-head">
+                <h4 class="admin-expand-section-label mb-0">Team Progress</h4>
+                ${progressBadge}
               </div>
-              <div class="owner-team-cards">${assigneeCards}</div>
+              <div class="admin-expand-cards">${assigneeCards}</div>
               ${isEmpAssignList ? "" : ownerDelegationHistoryHtml(t)}
             </div>
-            <div class="px-3 py-3 mt-2 d-flex flex-wrap align-items-center justify-content-between gap-2 border-top owner-task-detail-actions">
+            <div class="admin-expand-actions">
               ${assigneeMarkDoneControl}
-              <div class="d-flex align-items-center gap-1 owner-task-actions">
-                <button type="button" class="owner-action-tile owner-action-tile--edit" data-open-id="${t.id}" title="Edit" aria-label="Edit task"><i class="bi bi-pencil"></i></button>
-                <button type="button" class="owner-action-tile owner-action-tile--danger" data-delete-id="${t.id}" title="Delete" aria-label="Delete task"><i class="bi bi-trash"></i></button>
+              <div class="admin-expand-icon-actions">
+                <button type="button" class="admin-expand-icon-btn" data-open-id="${t.id}" title="Edit task" aria-label="Edit task">${adminMsIcon("edit")}</button>
+                <button type="button" class="admin-expand-icon-btn admin-expand-icon-btn--danger" data-delete-id="${t.id}" title="Delete task" aria-label="Delete task">${adminMsIcon("delete")}</button>
               </div>
             </div>
           </div>
@@ -4711,6 +4764,7 @@ function renderOwnerMain() {
                 <th scope="col" class="owner-task-head owner-task-col--task">Task Title</th>
                 <th scope="col" class="owner-task-head owner-task-col--recurrence text-nowrap">Recurrence</th>
                 <th scope="col" class="owner-task-head owner-task-col--deadline text-nowrap">Deadline</th>
+                <th scope="col" class="owner-task-head owner-task-col--team text-nowrap">Team</th>
                 <th scope="col" class="owner-task-head owner-task-col--trail text-end">Actions</th>
               </tr>
             </thead>
@@ -4882,6 +4936,8 @@ function renderOwnerMain() {
   } else {
     destroyTaskSortables();
   }
+
+  wireAdminTaskExpandPanel(main);
 }
 
 function wireChromeNav() {
