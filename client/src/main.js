@@ -1551,6 +1551,25 @@ function adminMsIcon(name, extraClass = "") {
   return `<span class="material-symbols-outlined ${extraClass}" aria-hidden="true">${escapeHtml(name)}</span>`;
 }
 
+function adminMobileNavToggleHtml() {
+  return `<button
+    type="button"
+    class="admin-nav-toggle d-lg-none"
+    data-bs-toggle="offcanvas"
+    data-bs-target="#leftNavOffcanvas"
+    aria-controls="leftNavOffcanvas"
+    aria-label="Open navigation menu"
+  >
+    ${adminMsIcon("menu")}
+  </button>`;
+}
+
+function dismissAdminMobileNav() {
+  const el = document.getElementById("leftNavOffcanvas");
+  if (!el) return;
+  bootstrap.Offcanvas.getInstance(el)?.hide();
+}
+
 function adminThemeToggleFooterHtml() {
   const isDark = document.documentElement.getAttribute("data-bs-theme") === "dark";
   return `<button type="button" class="admin-sidebar-footer-link js-admin-theme-toggle" aria-label="Theme toggle">
@@ -4379,6 +4398,7 @@ function bindListNavHandlers() {
         renderOwnerMain();
         renderListContentOnly();
         initListSortable();
+        dismissAdminMobileNav();
       });
       btn.querySelector(".list-title-edit")?.addEventListener("dblclick", async (ev) => {
         ev.stopPropagation();
@@ -4853,6 +4873,7 @@ function renderOwnerMain() {
   main.innerHTML = `
     <div class="admin-main-scroll d-flex flex-column">
     <header class="admin-dash-header">
+      ${adminMobileNavToggleHtml()}
       <div class="admin-dash-heading">
         <h1 class="admin-dash-title">Admin Dashboard</h1>
         <p class="admin-dash-subtitle">Welcome ${adminWelcomeName}</p>
@@ -5006,6 +5027,13 @@ function renderOwnerMain() {
 
 function wireChromeNav() {
   document.querySelectorAll(".js-logout").forEach((b) => b.addEventListener("click", logout));
+  document.getElementById("leftNavOffcanvas")?.addEventListener("click", (e) => {
+    const actionable = e.target.closest(
+      "[data-list-id], .js-owner-create-task, .admin-sidebar-nav-item, .team-chat-sidebar-nav-item, .js-admin-theme-toggle, .js-logout, [data-bs-target='#teamAdminModal']"
+    );
+    if (!actionable || e.target.closest(".grip-handle, .js-new-list")) return;
+    dismissAdminMobileNav();
+  });
   document.querySelectorAll(".js-new-list").forEach((b) =>
     b.addEventListener("click", async () => {
       const title = await openListNameModal({
@@ -5042,32 +5070,17 @@ function wireChromeNav() {
 }
 
 function renderOwnerChrome() {
-  const activeList = state.lists.find((l) => l.id === state.activeListId);
-  const mobileListTitle = activeList ? escapeHtml(activeList.title) : "Lists";
-
   app.innerHTML = `
     <div class="owner-shell admin-mockup-ui min-h-main">
-        <div class="owner-topbar d-lg-none d-flex align-items-center justify-content-between gap-2 p-3">
-          <button class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="offcanvas" data-bs-target="#leftNavOffcanvas" aria-label="Open lists">
-            <i class="bi bi-list me-1" aria-hidden="true"></i>Lists
-          </button>
-          <span class="owner-topbar-title text-truncate fw-semibold small">${mobileListTitle}</span>
-          <div class="d-flex align-items-center gap-1 flex-shrink-0">
-            ${adminNotificationsBellHtml(state.user?.id)}
-            <button type="button" class="btn btn-primary btn-sm js-new-list" aria-label="New list">
-              <i class="bi bi-plus-lg" aria-hidden="true"></i>
-            </button>
-          </div>
-        </div>
         <aside class="admin-fixed-sidebar d-none d-lg-flex">
           ${leftNavInner()}
         </aside>
-        <div class="offcanvas offcanvas-start owner-offcanvas" tabindex="-1" id="leftNavOffcanvas" aria-labelledby="leftNavLabel">
-          <div class="offcanvas-header owner-offcanvas-header border-0">
-            <h2 class="offcanvas-title h5 mb-0 text-white" id="leftNavLabel">Lists</h2>
-            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+        <div class="offcanvas offcanvas-start admin-mobile-nav" tabindex="-1" id="leftNavOffcanvas" aria-labelledby="leftNavLabel">
+          <div class="offcanvas-header admin-mobile-nav-header border-0">
+            <h2 class="offcanvas-title h6 mb-0" id="leftNavLabel">Menu</h2>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
           </div>
-          <div class="offcanvas-body pt-0">${leftNavInner()}</div>
+          <div class="offcanvas-body admin-mobile-nav-body pt-0">${leftNavInner()}</div>
         </div>
         <div class="admin-main-host">
           <div id="main-column" class="owner-main-panel owner-main-fill d-flex flex-column w-100"></div>
