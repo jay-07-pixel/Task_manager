@@ -1560,7 +1560,7 @@ function adminThemeToggleFooterHtml() {
 }
 
 function ownerSidebarLogoHtml() {
-  return `<img class="admin-sidebar-logo" src="/icons/kalpanik-logo.png" alt="Kalpanik" width="48" height="48" />`;
+  return `<img class="admin-sidebar-logo" src="/icons/kalpanik-logo.png" alt="Kalpanik" width="80" height="80" />`;
 }
 
 function ownerUserAvatarHtml(sizeClass = "") {
@@ -1766,7 +1766,6 @@ function leftNavInner() {
         ${ownerSidebarLogoHtml()}
         <div class="min-w-0">
           <div class="admin-sidebar-name text-truncate">${displayName}</div>
-          <span class="admin-sidebar-role">Administrator</span>
         </div>
       </div>
       <button type="button" class="admin-create-task-btn js-owner-create-task">
