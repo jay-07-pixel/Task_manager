@@ -13,6 +13,7 @@ import {
 import {
   teamChatOffcanvasHtml,
   teamChatSidebarButtonHtml,
+  teamChatSidebarNavItemHtml,
   initTeamChat,
   stopPolling as stopChatPolling,
   refreshUnreadBadges,
@@ -1542,6 +1543,103 @@ function ownerDashboardMetrics() {
   return { total: tasks.length, active, done, inReview, employeeAssigned };
 }
 
+function ownerProfileInitials() {
+  return assigneeInitials(state.user?.displayName);
+}
+
+function ownerUserAvatarHtml(sizeClass = "") {
+  const initials = ownerProfileInitials();
+  return `<div class="admin-user-avatar ${sizeClass}" aria-hidden="true">${escapeHtml(initials)}</div>`;
+}
+
+function ownerRecurrenceShortLabel(task) {
+  const recurrence = task.recurrence ?? "none";
+  if (recurrence === "none") return "No Repeat";
+  if (recurrence === "daily") return "Daily";
+  if (recurrence === "weekly") return "Weekly";
+  if (recurrence === "monthly") return "Monthly";
+  if (recurrence === "yearly") return "Yearly";
+  if (recurrence === "custom" && task.recurrenceRule && typeof task.recurrenceRule === "object") {
+    const rule = task.recurrenceRule;
+    const every = Math.max(1, Number(rule.every) || 1);
+    const unit = rule.unit || "day";
+    if (unit === "month" && every === 3) return "Quarterly";
+    if (unit === "week" && every === 1) return "Weekly";
+    if (unit === "day" && every === 1) return "Daily";
+    return formatCustomRecurrenceFrequency(rule);
+  }
+  const pattern = formatEmpRecurrencePattern(task);
+  return pattern || "Custom";
+}
+
+function ownerRecurrenceCellHtml(task) {
+  const label = ownerRecurrenceShortLabel(task);
+  const isNone = label === "No Repeat";
+  const cls = isNone ? "admin-recurrence-pill--none" : "admin-recurrence-pill--repeat";
+  return `<span class="admin-recurrence-pill ${cls}">${escapeHtml(label)}</span>`;
+}
+
+function formatOwnerTaskDeadlineMock(task) {
+  if (!task.dueAt) return `<span class="admin-deadline admin-deadline--none">—</span>`;
+  const due = new Date(task.dueAt);
+  if (Number.isNaN(due.getTime())) return `<span class="admin-deadline admin-deadline--none">—</span>`;
+
+  const recurrence = task.recurrence ?? "none";
+  if (recurrence === "weekly") {
+    const weekday = due.toLocaleDateString(undefined, { weekday: "long" });
+    return `<span class="admin-deadline">Every ${escapeHtml(weekday)}</span>`;
+  }
+
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfTomorrow = new Date(startOfToday);
+  startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
+  const endOfTomorrow = new Date(startOfTomorrow);
+  endOfTomorrow.setDate(endOfTomorrow.getDate() + 1);
+
+  const diffMs = due.getTime() - now.getTime();
+  const isSameDay = (a, b) =>
+    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+
+  if (isSameDay(due, startOfTomorrow) || (diffMs > 0 && diffMs <= 36 * 60 * 60 * 1000 && !isSameDay(due, startOfToday))) {
+    const timeStr = due.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+    return `<span class="admin-deadline admin-deadline--urgent">Tomorrow, ${escapeHtml(timeStr)}</span>`;
+  }
+  if (isSameDay(due, startOfToday) && diffMs >= 0) {
+    const timeStr = due.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+    return `<span class="admin-deadline admin-deadline--urgent">Today, ${escapeHtml(timeStr)}</span>`;
+  }
+
+  const dateStr = due.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  const isUrgent = diffMs >= 0 && diffMs <= 48 * 60 * 60 * 1000;
+  const cls = isUrgent ? " admin-deadline--urgent" : "";
+  return `<span class="admin-deadline${cls}">${escapeHtml(dateStr)}</span>`;
+}
+
+function ownerTrialTopBannerHtml() {
+  const info = ownerTrialStatusInfo();
+  if (info.isExpired) {
+    const endStr = info.end.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    return `<div class="admin-trial-banner admin-trial-banner--expired">Free trial ended (${escapeHtml(endStr)}). <a href="mailto:support@kalpanik.in">Contact Support</a></div>`;
+  }
+  if (!info.hasStarted) return "";
+  const endStr = info.end.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return `<div class="admin-trial-banner">Free trial ends in <strong>${info.daysRemaining}</strong> day${info.daysRemaining === 1 ? "" : "s"} (${escapeHtml(endStr)}). <a href="mailto:support@kalpanik.in">Contact Support</a></div>`;
+}
+
+function ownerKpiCardHtml(filterKey, label, icon, count, total, activeClass = "") {
+  const pct = total > 0 ? Math.min(100, Math.round((count / total) * 100)) : count > 0 ? 100 : 8;
+  const pressed = state.ownerTaskFilter === filterKey;
+  return `<button type="button" class="admin-kpi-card admin-kpi-card--filter${activeClass}" data-owner-filter="${filterKey}" aria-pressed="${pressed}">
+    <div class="admin-kpi-card-body">
+      <div class="admin-kpi-card-icon"><i class="bi bi-${icon}" aria-hidden="true"></i></div>
+      <div class="admin-kpi-card-num tabular-nums">${count}</div>
+    </div>
+    <div class="admin-kpi-card-label">${escapeHtml(label)}</div>
+    <div class="admin-kpi-bar" aria-hidden="true"><div class="admin-kpi-bar-fill" style="width: ${pct}%"></div></div>
+  </button>`;
+}
+
 function ownerFilteredTasks() {
   const activeList = state.lists.find((l) => l.id === state.activeListId);
   const tasks = state.tasks;
@@ -1646,30 +1744,35 @@ function bindOwnerDescriptionPopups(root) {
 function leftNavInner() {
   const displayName = state.user ? escapeHtml(state.user.displayName) : "";
   return `
-    <div class="owner-sidebar d-flex flex-column h-100">
-      <div class="owner-sidebar-brand">
-        <div class="owner-sidebar-brand-icon" aria-hidden="true"><i class="bi bi-kanban-fill"></i></div>
+    <div class="owner-sidebar admin-sidebar d-flex flex-column h-100">
+      <div class="admin-sidebar-profile">
+        ${ownerUserAvatarHtml()}
         <div class="min-w-0">
-          <div class="owner-sidebar-brand-title">Task Manager</div>
-          <div class="owner-sidebar-brand-user text-truncate">${displayName}</div>
-          <span class="badge rounded-pill owner-role-badge mt-1">Admin</span>
+          <div class="admin-sidebar-name text-truncate">${displayName}</div>
+          <span class="admin-sidebar-role">Administrator</span>
         </div>
       </div>
-      <button type="button" class="btn btn-primary w-100 owner-sidebar-new-list js-new-list">
-        <i class="bi bi-plus-lg me-1" aria-hidden="true"></i>New list
+      <button type="button" class="admin-create-task-btn js-owner-focus-quick-add">
+        <i class="bi bi-plus-lg me-2" aria-hidden="true"></i>Create Task
       </button>
-      <p class="owner-sidebar-label mb-2">Employee assignments</p>
-      <div class="list-group list-group-flush owner-list-nav owner-emp-assign-nav js-emp-assign-list-host mb-1"></div>
-      <p class="owner-sidebar-label mb-2 mt-2">Your lists</p>
+      <nav class="admin-sidebar-nav" aria-label="Dashboard sections">
+        <div class="js-emp-assign-list-host owner-emp-assign-nav"></div>
+        ${teamChatSidebarNavItemHtml()}
+      </nav>
+      <div class="admin-your-lists-head">
+        <span>YOUR LISTS</span>
+        <button type="button" class="admin-your-lists-add js-new-list" aria-label="New list">+</button>
+      </div>
       <div class="list-group list-group-flush flex-grow-1 overflow-auto owner-list-nav js-list-host"></div>
-      <div class="owner-sidebar-footer">
-        ${teamChatSidebarButtonHtml()}
-        <button type="button" class="btn btn-outline-primary w-100 mb-2" data-bs-toggle="modal" data-bs-target="#teamAdminModal">
-          <i class="bi bi-person-badge me-1" aria-hidden="true"></i>Manage admins
+      <div class="admin-sidebar-footer">
+        <div class="admin-theme-toggle-wrap">${themeIconToggleMarkup()}</div>
+        <button type="button" class="admin-sidebar-footer-link" data-bs-toggle="modal" data-bs-target="#teamAdminModal">
+          <i class="bi bi-person-gear" aria-hidden="true"></i>
+          <span>Manage Admin</span>
         </button>
-        <div class="d-flex justify-content-center mb-2">${themeIconToggleMarkup()}</div>
-        <button type="button" class="btn btn-outline-danger w-100 js-logout">
-          <i class="bi bi-box-arrow-right me-1" aria-hidden="true"></i>Sign out
+        <button type="button" class="admin-sidebar-footer-link admin-sidebar-footer-link--danger js-logout">
+          <i class="bi bi-box-arrow-right" aria-hidden="true"></i>
+          <span>Sign out</span>
         </button>
       </div>
     </div>`;
@@ -4053,19 +4156,19 @@ function isEmployeeAssignmentsList(list) {
 
 function ownerListNavButtonHtml(list, { pinned = false } = {}) {
   const active = list.id === state.activeListId;
-  const icon = pinned
-    ? "bi-person-lines-fill"
-    : `bi-folder2${active ? "-open" : ""}`;
+  const icon = pinned ? "bi-person-lines-fill" : `bi-folder2${active ? "-open" : ""}`;
   const grip = pinned
     ? ""
     : `<i class="bi bi-grip-vertical grip-handle flex-shrink-0" title="Drag to reorder"></i>`;
+  const title = pinned ? "Employee Assignments" : list.title;
+  const itemClass = pinned
+    ? "admin-sidebar-nav-item owner-list-item owner-list-item--pinned"
+    : "list-group-item list-group-item-action owner-list-item d-flex justify-content-between align-items-center gap-2";
   return `
-    <button type="button" class="list-group-item list-group-item-action owner-list-item d-flex justify-content-between align-items-center gap-2 ${
-      active ? "active" : ""
-    }${pinned ? " owner-list-item--pinned" : ""}" data-list-id="${list.id}"${pinned ? ' data-pinned="1"' : ""}>
-      <span class="d-flex align-items-center gap-2 min-w-0">
+    <button type="button" class="${itemClass} ${active ? "active" : ""}" data-list-id="${list.id}"${pinned ? ' data-pinned="1"' : ""}>
+      <span class="d-flex align-items-center gap-2 min-w-0 flex-grow-1">
         <i class="bi ${icon} flex-shrink-0" aria-hidden="true"></i>
-        <span class="text-truncate ${pinned ? "" : "list-title-edit"}" title="${pinned ? "Tasks assigned between employees" : "Double-click to rename"}">${escapeHtml(list.title)}</span>
+        <span class="text-truncate ${pinned ? "" : "list-title-edit"}" title="${pinned ? "Tasks assigned between employees" : "Double-click to rename"}">${escapeHtml(title)}</span>
       </span>
       ${grip}
     </button>`;
@@ -4297,7 +4400,13 @@ function ownerTaskGroupTbody(t) {
       : "owner-team-count-pill";
   const detailId = `owner-task-detail-${t.id}`;
 
-  const deadlineCell = formatOwnerTaskDeadline(t);
+  const deadlineCell = formatOwnerTaskDeadlineMock(t);
+  const recurrenceCell = ownerRecurrenceCellHtml(t);
+  const activeListForRow = state.lists.find((l) => l.id === state.activeListId);
+  const showTeamHint = isEmployeeAssignmentsList(activeListForRow) || state.ownerTaskFilter === "employee_assigned";
+  const teamHint = showTeamHint
+    ? `<div class="owner-task-team-hint small text-muted mt-1">${ownerEmployeesCellHtml(t)}</div>`
+    : "";
 
   const descriptionPanel = ownerTaskDescriptionDetailHtml(t.notes);
 
@@ -4369,21 +4478,22 @@ function ownerTaskGroupTbody(t) {
         <span class="task-grip grip-handle d-inline-flex align-items-center justify-content-center rounded p-1" title="Drag to reorder"><i class="bi bi-grip-vertical fs-5"></i></span>
       </td>
       <td class="owner-task-cell owner-task-col--task align-middle">
-        <div class="owner-task-title-row d-inline-flex flex-wrap align-items-center gap-1 min-w-0">
-          <button type="button" class="btn btn-link text-start text-body fw-semibold text-decoration-none p-0 owner-task-open-details" data-open-id="${
+        <div class="admin-task-title-cell">
+          <i class="bi bi-journal-text admin-task-doc-icon" aria-hidden="true"></i>
+          <div class="min-w-0">
+            <button type="button" class="btn btn-link text-start text-body fw-semibold text-decoration-none p-0 owner-task-open-details" data-open-id="${
           t.id
         }" aria-label="Open task details">${escapeHtml(t.title)}</button>
-          ${ownerTaskRecurrenceBadgeHtml(t)}
+            ${teamHint}
+          </div>
         </div>
       </td>
-      <td class="owner-task-cell owner-task-col--deadline align-middle text-center small text-nowrap tabular-nums">${deadlineCell}</td>
-      <td class="owner-task-cell owner-task-col--employees align-middle text-end small">
-        ${ownerEmployeesCellHtml(t)}
-      </td>
+      <td class="owner-task-cell owner-task-col--recurrence align-middle">${recurrenceCell}</td>
+      <td class="owner-task-cell owner-task-col--deadline align-middle text-nowrap tabular-nums">${deadlineCell}</td>
       <td class="owner-task-cell owner-task-col--trail align-middle text-end">
         <button
           type="button"
-          class="btn btn-sm btn-outline-primary owner-task-expand-btn${expandUnreadClass}"
+          class="btn btn-sm owner-task-expand-btn${expandUnreadClass}"
           data-bs-toggle="collapse"
           data-bs-target="#${detailId}"
           aria-expanded="false"
@@ -4445,66 +4555,35 @@ function renderOwnerMain() {
   const isEmpAssignList = isEmployeeAssignmentsList(list);
   const useEmpAssignColumns = isEmpAssignList || state.ownerTaskFilter === "employee_assigned";
   const pageSubtitle = isEmpAssignList
-    ? "Tasks assigned by one employee to another. The Team column shows who assigned whom."
+    ? "Tasks assigned by one employee to another."
     : "Assign tasks, review progress updates, and check final submissions.";
-  const teamColLabel = isEmpAssignList ? "Assigned by → to" : "Team";
 
   const metrics = ownerDashboardMetrics();
-  const activeKpiClass =
-    state.ownerTaskFilter === "active" ? " owner-kpi-card--active owner-kpi-card--active-primary" : "";
-  const inReviewKpiClass =
-    state.ownerTaskFilter === "in_review" ? " owner-kpi-card--active owner-kpi-card--active-danger" : "";
+  const activeKpiClass = state.ownerTaskFilter === "active" ? " admin-kpi-card--active" : "";
+  const inReviewKpiClass = state.ownerTaskFilter === "in_review" ? " admin-kpi-card--active" : "";
   const empAssignedKpiClass =
-    state.ownerTaskFilter === "employee_assigned"
-      ? " owner-kpi-card--active owner-kpi-card--active-info"
-      : "";
-  const completedKpiClass =
-    state.ownerTaskFilter === "completed" ? " owner-kpi-card--active owner-kpi-card--active-success" : "";
-  const kpiRow =
-    list && metrics.total > 0
-      ? `<div class="row g-3 mb-4 owner-kpi-row">
-          <div class="col-6 ${isEmpAssignList ? "col-lg-4" : "col-lg-3"}">
-            <button type="button" class="owner-kpi-card owner-kpi-card--filter w-100 text-start${activeKpiClass}" data-owner-filter="active" aria-pressed="${state.ownerTaskFilter === "active"}">
-              <div class="owner-kpi-icon text-primary"><i class="bi bi-list-task" aria-hidden="true"></i></div>
-              <div>
-                <div class="owner-kpi-value tabular-nums">${metrics.active}</div>
-                <div class="owner-kpi-label">Active tasks</div>
-              </div>
-            </button>
-            </div>
-          <div class="col-6 ${isEmpAssignList ? "col-lg-4" : "col-lg-3"}">
-            <button type="button" class="owner-kpi-card owner-kpi-card--filter w-100 text-start${inReviewKpiClass}" data-owner-filter="in_review" aria-pressed="${state.ownerTaskFilter === "in_review"}">
-              <div class="owner-kpi-icon text-danger"><i class="bi bi-chat-left-dots" aria-hidden="true"></i></div>
-              <div>
-                <div class="owner-kpi-value tabular-nums">${metrics.inReview}</div>
-                <div class="owner-kpi-label">In review</div>
-          </div>
-            </button>
-          </div>
-          <div class="col-6 ${isEmpAssignList ? "col-lg-4" : "col-lg-3"}">
-            <button type="button" class="owner-kpi-card owner-kpi-card--filter w-100 text-start${completedKpiClass}" data-owner-filter="completed" aria-pressed="${state.ownerTaskFilter === "completed"}">
-              <div class="owner-kpi-icon text-success"><i class="bi bi-check-circle" aria-hidden="true"></i></div>
-              <div>
-                <div class="owner-kpi-value tabular-nums">${metrics.done}</div>
-                <div class="owner-kpi-label">Completed</div>
-              </div>
-            </button>
-            </div>
+    state.ownerTaskFilter === "employee_assigned" ? " admin-kpi-card--active" : "";
+  const completedKpiClass = state.ownerTaskFilter === "completed" ? " admin-kpi-card--active" : "";
+  const kpiTotal = Math.max(metrics.total, 1);
+  const kpiRow = list
+    ? `<div class="admin-kpi-grid">
+          ${ownerKpiCardHtml("active", "Active", "lightning-charge-fill", metrics.active, kpiTotal, activeKpiClass)}
+          ${ownerKpiCardHtml("in_review", "In Review", "pencil-square", metrics.inReview, kpiTotal, inReviewKpiClass)}
+          ${ownerKpiCardHtml("completed", "Completed", "check-circle", metrics.done, kpiTotal, completedKpiClass)}
           ${
             isEmpAssignList
               ? ""
-              : `<div class="col-6 col-lg-3">
-            <button type="button" class="owner-kpi-card owner-kpi-card--filter w-100 text-start${empAssignedKpiClass}" data-owner-filter="employee_assigned" aria-pressed="${state.ownerTaskFilter === "employee_assigned"}">
-              <div class="owner-kpi-icon text-info"><i class="bi bi-person-lines-fill" aria-hidden="true"></i></div>
-              <div>
-                <div class="owner-kpi-value tabular-nums">${metrics.employeeAssigned}</div>
-                <div class="owner-kpi-label">Employee assigned</div>
-              </div>
-            </button>
-          </div>`
+              : ownerKpiCardHtml(
+                  "employee_assigned",
+                  "Employee Assigned",
+                  "people-fill",
+                  metrics.employeeAssigned,
+                  kpiTotal,
+                  empAssignedKpiClass
+                )
           }
         </div>`
-      : "";
+    : "";
 
   const emptyMessage = !list
     ? `<div class="owner-empty-state py-5 px-3">
@@ -4552,14 +4631,14 @@ function renderOwnerMain() {
     !list || visibleTasks.length === 0
       ? emptyMessage
       : `<div class="table-responsive owner-task-table-wrap">
-          <table class="table table-hover align-middle mb-0 owner-task-table${useEmpAssignColumns ? " owner-task-table--emp-assign" : ""}" id="owner-task-table-sort">
+          <table class="table table-hover align-middle mb-0 owner-task-table admin-task-table${useEmpAssignColumns ? " owner-task-table--emp-assign" : ""}" id="owner-task-table-sort">
             <thead>
               <tr>
                 <th scope="col" class="owner-task-cell owner-task-cell--grip border-end-0"><span class="visually-hidden">Reorder</span></th>
-                <th scope="col" class="owner-task-head owner-task-col--task">Task</th>
-                <th scope="col" class="owner-task-head owner-task-col--deadline text-nowrap text-center">Deadline</th>
-                <th scope="col" class="owner-task-head owner-task-col--employees text-nowrap text-end">${escapeHtml(teamColLabel)}</th>
-                <th scope="col" class="owner-task-head owner-task-col--trail text-end"><span class="visually-hidden">Details</span></th>
+                <th scope="col" class="owner-task-head owner-task-col--task">Task Title</th>
+                <th scope="col" class="owner-task-head owner-task-col--recurrence text-nowrap">Recurrence</th>
+                <th scope="col" class="owner-task-head owner-task-col--deadline text-nowrap">Deadline</th>
+                <th scope="col" class="owner-task-head owner-task-col--trail text-end"><span class="visually-hidden">Actions</span></th>
               </tr>
             </thead>
             ${tbodyInner}
@@ -4567,24 +4646,20 @@ function renderOwnerMain() {
         </div>`;
 
   main.innerHTML = `
-    <header class="owner-page-header d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+    <header class="admin-dash-header">
       <div>
-        <p class="owner-page-eyebrow mb-1">Admin dashboard</p>
-        <h2 class="owner-page-title h4 mb-0">${list ? escapeHtml(list.title) : "Select a list"}</h2>
-        <p class="owner-page-sub text-muted small mb-0 mt-1">${escapeHtml(pageSubtitle)}</p>
-        ${ownerTrialStatusChipHtml()}
+        <h1 class="admin-dash-title">ADMIN DASHBOARD</h1>
+        <p class="admin-dash-subtitle">${list ? `${escapeHtml(list.title)} · ${escapeHtml(pageSubtitle)}` : "Select a list from the sidebar to manage tasks."}</p>
       </div>
-      <div class="d-flex flex-wrap gap-2 align-items-center owner-toolbar">
-        <div class="d-none d-lg-block">${adminNotificationsBellHtml(state.user?.id)}</div>
-        ${
-          isEmpAssignList
-            ? `<button type="button" class="btn btn-outline-primary btn-sm js-owner-refresh-tasks" aria-label="Refresh employee assignments">
-                <i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>Refresh
-              </button>`
-            : ""
-        }
-        <button type="button" class="btn btn-outline-danger btn-sm" id="btn-delete-list" ${!list || isEmpAssignList ? "disabled" : ""}>
-          <i class="bi bi-trash me-1" aria-hidden="true"></i>Delete list
+        <div class="admin-dash-utilities">
+        ${ownerTrialTopBannerHtml()}
+        ${adminNotificationsBellHtml(state.user?.id)}
+        <button type="button" class="admin-util-btn js-owner-refresh-tasks" aria-label="Refresh tasks" ${!list ? "disabled" : ""}>
+          <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
+        </button>
+        ${ownerUserAvatarHtml("admin-user-avatar--sm")}
+        <button type="button" class="admin-delete-list-btn" id="btn-delete-list" ${!list || isEmpAssignList ? "disabled" : ""} title="Delete list">
+          <i class="bi bi-trash" aria-hidden="true"></i>
         </button>
       </div>
     </header>
@@ -4592,14 +4667,11 @@ function renderOwnerMain() {
     <section class="owner-task-panel" aria-label="Tasks">
       ${tableBlock}
     </section>
-    <section class="owner-quick-add-bar mt-auto flex-shrink-0 ${state.ownerTaskFilter === "completed" || state.ownerTaskFilter === "in_review" || state.ownerTaskFilter === "employee_assigned" || isEmpAssignList ? "d-none" : ""}" aria-label="Quick add task">
-      <label class="owner-quick-add-label form-label" for="quick-add-title">Quick add task</label>
-      <div class="input-group">
-        <span class="input-group-text"><i class="bi bi-plus-lg" aria-hidden="true"></i></span>
-        <input class="form-control" id="quick-add-title" placeholder="Task title…" ${!list ? "disabled" : ""} />
-        <button class="btn btn-primary px-4" type="button" id="quick-add-btn" ${!list ? "disabled" : ""}>
-          <i class="bi bi-plus-circle me-1 d-none d-sm-inline" aria-hidden="true"></i>Add
-        </button>
+    <section class="admin-quick-add owner-quick-add-bar mt-auto flex-shrink-0 ${state.ownerTaskFilter === "completed" || state.ownerTaskFilter === "in_review" || state.ownerTaskFilter === "employee_assigned" || isEmpAssignList ? "d-none" : ""}" aria-label="Quick add task">
+      <div class="admin-quick-add-inner">
+        <span class="admin-quick-add-icon"><i class="bi bi-lightning-charge-fill" aria-hidden="true"></i></span>
+        <input class="admin-quick-add-input" id="quick-add-title" placeholder="Add a new task..." ${!list ? "disabled" : ""} aria-label="Quick add task" />
+        <button class="admin-quick-add-btn" type="button" id="quick-add-btn" ${!list ? "disabled" : ""}>Add</button>
       </div>
     </section>
   `;
@@ -4625,14 +4697,11 @@ function renderOwnerMain() {
       if (!listId) return;
       btn.disabled = true;
       try {
-      await loadTasks(listId);
-      renderOwnerMain();
-        showToast(
-          state.tasks.length ? "Employee assignments refreshed." : "No employee assignments found yet.",
-          state.tasks.length ? "success" : "info"
-        );
-    } catch (err) {
-      showToast(err.message, "danger");
+        await loadTasks(listId);
+        renderOwnerMain();
+        showToast("Tasks refreshed.", "success");
+      } catch (err) {
+        showToast(err.message, "danger");
       } finally {
         btn.disabled = false;
       }
@@ -4790,6 +4859,13 @@ function wireChromeNav() {
       }
     })
   );
+  document.querySelectorAll(".js-owner-focus-quick-add").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const input = document.getElementById("quick-add-title");
+      input?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      input?.focus();
+    });
+  });
 }
 
 function renderOwnerChrome() {
@@ -4797,7 +4873,7 @@ function renderOwnerChrome() {
   const mobileListTitle = activeList ? escapeHtml(activeList.title) : "Lists";
 
   app.innerHTML = `
-    <div class="owner-shell min-h-main">
+    <div class="owner-shell admin-mockup-ui min-h-main">
       <div class="container-fluid owner-shell-inner py-3 py-lg-4 d-flex flex-column">
         <div class="owner-topbar d-lg-none d-flex align-items-center justify-content-between gap-2 mb-3">
           <button class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="offcanvas" data-bs-target="#leftNavOffcanvas" aria-label="Open lists">

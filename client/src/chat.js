@@ -1840,3 +1840,11 @@ export function teamChatSidebarButtonHtml() {
     <span class="badge rounded-pill text-bg-danger ms-1 d-none js-chat-unread-badge">0</span>
   </button>`;
 }
+
+export function teamChatSidebarNavItemHtml() {
+  return `<button type="button" class="admin-sidebar-nav-item js-open-team-chat">
+    <i class="bi bi-chat-dots" aria-hidden="true"></i>
+    <span>Messages</span>
+    <span class="admin-nav-badge d-none js-chat-unread-badge">0</span>
+  </button>`;
+}
