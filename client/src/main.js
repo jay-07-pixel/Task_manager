@@ -1599,7 +1599,7 @@ function ownerAdminHeaderProfileHtml() {
       aria-haspopup="menu"
       aria-expanded="false"
     >
-      <img class="admin-header-profile-photo" src="/icons/admin-profile-avatar.png" alt="" width="40" height="40" />
+      <img class="admin-header-profile-photo" src="/icons/admin-profile-avatar.png" alt="" width="48" height="48" />
     </button>
     <div class="admin-header-profile-menu" role="menu">
       <button type="button" class="admin-header-profile-item js-admin-theme-toggle" role="menuitem">

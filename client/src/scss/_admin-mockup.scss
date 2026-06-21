@@ -600,26 +600,31 @@
     background: transparent;
     padding: 0;
     line-height: 0;
-    border-radius: 999px;
+    width: 3rem;
+    height: 3rem;
+    border-radius: 50%;
+    overflow: hidden;
     cursor: pointer;
+    flex-shrink: 0;
 
     &:hover .admin-header-profile-photo,
     &:focus-visible .admin-header-profile-photo {
-      border-color: var(--admin-primary-container);
-      box-shadow: 0 0 0 3px rgba(0, 83, 91, 0.12);
+      transform: scale(1.42);
     }
   }
 
   .admin-header-profile-photo {
-    width: 2.5rem;
-    height: 2.5rem;
+    width: 100%;
+    height: 100%;
     border-radius: 50%;
     object-fit: cover;
-    border: 3px solid #d5d9dc;
-    background: #fff;
-    box-shadow: 0 1px 3px rgba(24, 26, 46, 0.08);
+    border: none;
+    box-shadow: none;
+    background: transparent;
     display: block;
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    transform: scale(1.35);
+    transform-origin: center center;
+    transition: transform 0.15s ease;
   }
 
   .admin-header-profile-menu {
