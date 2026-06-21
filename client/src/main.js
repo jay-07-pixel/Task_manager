@@ -4663,6 +4663,9 @@ function renderOwnerMain() {
   if (!main) return;
   const list = state.lists.find((l) => l.id === state.activeListId);
   const listId = state.activeListId;
+  const adminWelcomeName = state.user?.displayName
+    ? escapeHtml(state.user.displayName)
+    : "Admin";
 
   const filteredTasks = ownerFilteredTasks();
   const visibleTasks = [...filteredTasks].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
@@ -4762,8 +4765,9 @@ function renderOwnerMain() {
   main.innerHTML = `
     <div class="admin-main-scroll d-flex flex-column">
     <header class="admin-dash-header">
-      <div>
+      <div class="admin-dash-heading">
         <h1 class="admin-dash-title">Admin Dashboard</h1>
+        <p class="admin-dash-subtitle">Welcome ${adminWelcomeName}</p>
       </div>
       <div class="admin-dash-utilities">
         ${ownerTrialTopBannerHtml()}
