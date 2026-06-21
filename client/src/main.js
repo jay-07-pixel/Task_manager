@@ -4611,8 +4611,8 @@ function ownerTaskGroupTbody(t) {
           t.id
         }" aria-label="Open task details">${escapeHtml(t.title)}</button>
       </td>
-      <td class="owner-task-cell owner-task-col--recurrence align-middle">${recurrenceCell}</td>
       <td class="owner-task-cell owner-task-col--deadline align-middle text-nowrap tabular-nums">${deadlineCell}</td>
+      <td class="owner-task-cell owner-task-col--recurrence align-middle">${recurrenceCell}</td>
       <td class="owner-task-cell owner-task-col--trail align-middle text-end">
         <button
           type="button"
@@ -4754,8 +4754,8 @@ function renderOwnerMain() {
               <tr>
                 <th scope="col" class="owner-task-cell owner-task-cell--icon"><span class="visually-hidden">Type</span></th>
                 <th scope="col" class="owner-task-head owner-task-col--task">Task Title</th>
-                <th scope="col" class="owner-task-head owner-task-col--recurrence text-nowrap">Recurrence</th>
                 <th scope="col" class="owner-task-head owner-task-col--deadline text-nowrap">Deadline</th>
+                <th scope="col" class="owner-task-head owner-task-col--recurrence text-nowrap">Recurrence</th>
                 <th scope="col" class="owner-task-head owner-task-col--trail text-end">Actions</th>
               </tr>
             </thead>
