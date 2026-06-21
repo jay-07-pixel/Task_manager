@@ -1560,7 +1560,7 @@ function adminThemeToggleFooterHtml() {
 }
 
 function ownerSidebarLogoHtml() {
-  return `<img class="admin-sidebar-logo" src="/icons/kalpanik-logo.png" alt="Kalpanik" width="80" height="80" />`;
+  return `<img class="admin-sidebar-logo" src="/icons/kalpanik-logo.png" alt="Kalpanik" width="128" height="128" />`;
 }
 
 function ownerUserAvatarHtml(sizeClass = "") {
@@ -1759,14 +1759,10 @@ function bindOwnerDescriptionPopups(root) {
 }
 
 function leftNavInner() {
-  const displayName = state.user ? escapeHtml(state.user.displayName) : "";
   return `
     <div class="owner-sidebar admin-sidebar d-flex flex-column h-100">
       <div class="admin-sidebar-profile">
         ${ownerSidebarLogoHtml()}
-        <div class="min-w-0">
-          <div class="admin-sidebar-name text-truncate">${displayName}</div>
-        </div>
       </div>
       <button type="button" class="admin-create-task-btn js-owner-create-task">
         ${adminMsIcon("add")}
