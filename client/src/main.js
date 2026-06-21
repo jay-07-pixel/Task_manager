@@ -4770,7 +4770,6 @@ function renderOwnerMain() {
         <button type="button" class="admin-icon-btn js-owner-refresh-tasks" aria-label="Refresh tasks" ${!list ? "disabled" : ""}>
           ${adminMsIcon("refresh")}
         </button>
-        ${ownerUserAvatarHtml("admin-user-avatar--sm")}
         <button type="button" class="admin-delete-list-btn" id="btn-delete-list" ${!list || isEmpAssignList ? "disabled" : ""} title="Delete list" aria-label="Delete list">
           ${adminMsIcon("delete")}
         </button>

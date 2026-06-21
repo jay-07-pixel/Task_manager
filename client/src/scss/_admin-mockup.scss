@@ -56,6 +56,18 @@
     justify-content: center;
     align-items: center;
     margin-bottom: 2rem;
+
+    /* Hide legacy username markup if an old bundle is still cached */
+    .admin-sidebar-name,
+    .owner-sidebar-brand-user,
+    .owner-sidebar-brand-title,
+    .owner-role-badge {
+      display: none !important;
+    }
+
+    > :not(.admin-sidebar-logo) {
+      display: none !important;
+    }
   }
 
   .admin-sidebar-logo {
