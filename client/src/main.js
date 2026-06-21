@@ -1547,6 +1547,18 @@ function ownerProfileInitials() {
   return assigneeInitials(state.user?.displayName);
 }
 
+function adminMsIcon(name, extraClass = "") {
+  return `<span class="material-symbols-outlined ${extraClass}" aria-hidden="true">${escapeHtml(name)}</span>`;
+}
+
+function adminThemeToggleFooterHtml() {
+  const isDark = document.documentElement.getAttribute("data-bs-theme") === "dark";
+  return `<button type="button" class="admin-sidebar-footer-link js-admin-theme-toggle" aria-label="Theme toggle">
+    ${adminMsIcon(isDark ? "light_mode" : "dark_mode")}
+    <span>Theme Toggle</span>
+  </button>`;
+}
+
 function ownerUserAvatarHtml(sizeClass = "") {
   const initials = ownerProfileInitials();
   return `<div class="admin-user-avatar ${sizeClass}" aria-hidden="true">${escapeHtml(initials)}</div>`;
@@ -1576,7 +1588,8 @@ function ownerRecurrenceCellHtml(task) {
   const label = ownerRecurrenceShortLabel(task);
   const isNone = label === "No Repeat";
   const cls = isNone ? "admin-recurrence-pill--none" : "admin-recurrence-pill--repeat";
-  return `<span class="admin-recurrence-pill ${cls}">${escapeHtml(label)}</span>`;
+  const repeatIcon = isNone ? "" : adminMsIcon("repeat", "admin-recurrence-icon");
+  return `<span class="admin-recurrence-pill ${cls}">${repeatIcon}${escapeHtml(label)}</span>`;
 }
 
 function formatOwnerTaskDeadlineMock(task) {
@@ -1627,12 +1640,12 @@ function ownerTrialTopBannerHtml() {
   return `<div class="admin-trial-banner">Free trial ends in <strong>${info.daysRemaining}</strong> day${info.daysRemaining === 1 ? "" : "s"} (${escapeHtml(endStr)}). <a href="mailto:support@kalpanik.in">Contact Support</a></div>`;
 }
 
-function ownerKpiCardHtml(filterKey, label, icon, count, total, activeClass = "") {
+function ownerKpiCardHtml(filterKey, label, msIcon, count, total, activeClass = "") {
   const pct = total > 0 ? Math.min(100, Math.round((count / total) * 100)) : count > 0 ? 100 : 8;
   const pressed = state.ownerTaskFilter === filterKey;
   return `<button type="button" class="admin-kpi-card admin-kpi-card--filter${activeClass}" data-owner-filter="${filterKey}" aria-pressed="${pressed}">
     <div class="admin-kpi-card-body">
-      <div class="admin-kpi-card-icon"><i class="bi bi-${icon}" aria-hidden="true"></i></div>
+      <div class="admin-kpi-card-icon">${adminMsIcon(msIcon)}</div>
       <div class="admin-kpi-card-num tabular-nums">${count}</div>
     </div>
     <div class="admin-kpi-card-label">${escapeHtml(label)}</div>
@@ -1753,25 +1766,30 @@ function leftNavInner() {
         </div>
       </div>
       <button type="button" class="admin-create-task-btn js-owner-focus-quick-add">
-        <i class="bi bi-plus-lg me-2" aria-hidden="true"></i>Create Task
+        ${adminMsIcon("add")}
+        Create Task
       </button>
       <nav class="admin-sidebar-nav" aria-label="Dashboard sections">
         <div class="js-emp-assign-list-host owner-emp-assign-nav"></div>
         ${teamChatSidebarNavItemHtml()}
       </nav>
-      <div class="admin-your-lists-head">
-        <span>YOUR LISTS</span>
-        <button type="button" class="admin-your-lists-add js-new-list" aria-label="New list">+</button>
+      <div class="admin-your-lists-section">
+        <div class="admin-your-lists-head">
+          <span>Your lists</span>
+          <button type="button" class="admin-your-lists-add js-new-list" aria-label="New list" title="New list">
+            ${adminMsIcon("add")}
+          </button>
+        </div>
+        <div class="list-group list-group-flush owner-list-nav js-list-host"></div>
       </div>
-      <div class="list-group list-group-flush flex-grow-1 overflow-auto owner-list-nav js-list-host"></div>
       <div class="admin-sidebar-footer">
-        <div class="admin-theme-toggle-wrap">${themeIconToggleMarkup()}</div>
+        ${adminThemeToggleFooterHtml()}
         <button type="button" class="admin-sidebar-footer-link" data-bs-toggle="modal" data-bs-target="#teamAdminModal">
-          <i class="bi bi-person-gear" aria-hidden="true"></i>
+          ${adminMsIcon("admin_panel_settings")}
           <span>Manage Admin</span>
         </button>
         <button type="button" class="admin-sidebar-footer-link admin-sidebar-footer-link--danger js-logout">
-          <i class="bi bi-box-arrow-right" aria-hidden="true"></i>
+          ${adminMsIcon("logout")}
           <span>Sign out</span>
         </button>
       </div>
@@ -4156,18 +4174,20 @@ function isEmployeeAssignmentsList(list) {
 
 function ownerListNavButtonHtml(list, { pinned = false } = {}) {
   const active = list.id === state.activeListId;
-  const icon = pinned ? "bi-person-lines-fill" : `bi-folder2${active ? "-open" : ""}`;
+  const icon = pinned ? "assignment_ind" : "folder";
   const grip = pinned
-    ? ""
-    : `<i class="bi bi-grip-vertical grip-handle flex-shrink-0" title="Drag to reorder"></i>`;
+    ? active
+      ? adminMsIcon("chevron_right", "admin-nav-chevron")
+      : ""
+    : `<span class="grip-handle">${adminMsIcon("drag_indicator")}</span>`;
   const title = pinned ? "Employee Assignments" : list.title;
   const itemClass = pinned
     ? "admin-sidebar-nav-item owner-list-item owner-list-item--pinned"
     : "list-group-item list-group-item-action owner-list-item d-flex justify-content-between align-items-center gap-2";
   return `
     <button type="button" class="${itemClass} ${active ? "active" : ""}" data-list-id="${list.id}"${pinned ? ' data-pinned="1"' : ""}>
-      <span class="d-flex align-items-center gap-2 min-w-0 flex-grow-1">
-        <i class="bi ${icon} flex-shrink-0" aria-hidden="true"></i>
+      <span class="admin-nav-item-left min-w-0">
+        ${adminMsIcon(icon)}
         <span class="text-truncate ${pinned ? "" : "list-title-edit"}" title="${pinned ? "Tasks assigned between employees" : "Double-click to rename"}">${escapeHtml(title)}</span>
       </span>
       ${grip}
@@ -4474,18 +4494,16 @@ function ownerTaskGroupTbody(t) {
 
   return `<tbody class="owner-task-group ${groupDone}" data-task-id="${t.id}">
     <tr class="task-sort-row owner-task-row ${t.completed ? "owner-task-row--completed" : ""}" data-task-id="${t.id}">
-      <td class="owner-task-cell owner-task-cell--grip text-center align-middle">
-        <span class="task-grip grip-handle d-inline-flex align-items-center justify-content-center rounded p-1" title="Drag to reorder"><i class="bi bi-grip-vertical fs-5"></i></span>
+      <td class="owner-task-cell owner-task-cell--icon text-center align-middle">
+        ${adminMsIcon("assignment", "admin-task-type-icon")}
+        <span class="task-grip grip-handle" title="Drag to reorder">${adminMsIcon("drag_indicator")}</span>
       </td>
       <td class="owner-task-cell owner-task-col--task align-middle">
-        <div class="admin-task-title-cell">
-          <i class="bi bi-journal-text admin-task-doc-icon" aria-hidden="true"></i>
-          <div class="min-w-0">
-            <button type="button" class="btn btn-link text-start text-body fw-semibold text-decoration-none p-0 owner-task-open-details" data-open-id="${
+        <div class="min-w-0">
+          <button type="button" class="btn btn-link text-start text-decoration-none p-0 owner-task-open-details" data-open-id="${
           t.id
         }" aria-label="Open task details">${escapeHtml(t.title)}</button>
-            ${teamHint}
-          </div>
+          ${teamHint}
         </div>
       </td>
       <td class="owner-task-cell owner-task-col--recurrence align-middle">${recurrenceCell}</td>
@@ -4501,7 +4519,7 @@ function ownerTaskGroupTbody(t) {
           aria-label="Assignees and actions${hasUnreadUpdates ? " — unread updates" : ""}"
         >
           ${hasUnreadUpdates ? `<span class="owner-task-expand-unread-dot" aria-hidden="true"></span>` : ""}
-          <i class="bi bi-chevron-down" aria-hidden="true"></i>
+          ${adminMsIcon("expand_more")}
         </button>
       </td>
     </tr>
@@ -4567,16 +4585,16 @@ function renderOwnerMain() {
   const kpiTotal = Math.max(metrics.total, 1);
   const kpiRow = list
     ? `<div class="admin-kpi-grid">
-          ${ownerKpiCardHtml("active", "Active", "lightning-charge-fill", metrics.active, kpiTotal, activeKpiClass)}
-          ${ownerKpiCardHtml("in_review", "In Review", "pencil-square", metrics.inReview, kpiTotal, inReviewKpiClass)}
-          ${ownerKpiCardHtml("completed", "Completed", "check-circle", metrics.done, kpiTotal, completedKpiClass)}
+          ${ownerKpiCardHtml("active", "Active", "bolt", metrics.active, kpiTotal, activeKpiClass)}
+          ${ownerKpiCardHtml("in_review", "In Review", "rate_review", metrics.inReview, kpiTotal, inReviewKpiClass)}
+          ${ownerKpiCardHtml("completed", "Completed", "check_circle", metrics.done, kpiTotal, completedKpiClass)}
           ${
             isEmpAssignList
               ? ""
               : ownerKpiCardHtml(
                   "employee_assigned",
                   "Employee Assigned",
-                  "people-fill",
+                  "group",
                   metrics.employeeAssigned,
                   kpiTotal,
                   empAssignedKpiClass
@@ -4634,11 +4652,11 @@ function renderOwnerMain() {
           <table class="table table-hover align-middle mb-0 owner-task-table admin-task-table${useEmpAssignColumns ? " owner-task-table--emp-assign" : ""}" id="owner-task-table-sort">
             <thead>
               <tr>
-                <th scope="col" class="owner-task-cell owner-task-cell--grip border-end-0"><span class="visually-hidden">Reorder</span></th>
+                <th scope="col" class="owner-task-cell owner-task-cell--icon"><span class="visually-hidden">Type</span></th>
                 <th scope="col" class="owner-task-head owner-task-col--task">Task Title</th>
                 <th scope="col" class="owner-task-head owner-task-col--recurrence text-nowrap">Recurrence</th>
                 <th scope="col" class="owner-task-head owner-task-col--deadline text-nowrap">Deadline</th>
-                <th scope="col" class="owner-task-head owner-task-col--trail text-end"><span class="visually-hidden">Actions</span></th>
+                <th scope="col" class="owner-task-head owner-task-col--trail text-end">Actions</th>
               </tr>
             </thead>
             ${tbodyInner}
@@ -4646,20 +4664,21 @@ function renderOwnerMain() {
         </div>`;
 
   main.innerHTML = `
+    <div class="admin-main-scroll d-flex flex-column">
     <header class="admin-dash-header">
       <div>
-        <h1 class="admin-dash-title">ADMIN DASHBOARD</h1>
-        <p class="admin-dash-subtitle">${list ? `${escapeHtml(list.title)} · ${escapeHtml(pageSubtitle)}` : "Select a list from the sidebar to manage tasks."}</p>
+        <h1 class="admin-dash-title">Admin Dashboard</h1>
+        <p class="admin-dash-subtitle d-none d-md-block">${list ? `${escapeHtml(list.title)} · ${escapeHtml(pageSubtitle)}` : "Select a list from the sidebar to manage tasks."}</p>
       </div>
-        <div class="admin-dash-utilities">
+      <div class="admin-dash-utilities">
         ${ownerTrialTopBannerHtml()}
         ${adminNotificationsBellHtml(state.user?.id)}
-        <button type="button" class="admin-util-btn js-owner-refresh-tasks" aria-label="Refresh tasks" ${!list ? "disabled" : ""}>
-          <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
+        <button type="button" class="admin-icon-btn js-owner-refresh-tasks" aria-label="Refresh tasks" ${!list ? "disabled" : ""}>
+          ${adminMsIcon("refresh")}
         </button>
         ${ownerUserAvatarHtml("admin-user-avatar--sm")}
-        <button type="button" class="admin-delete-list-btn" id="btn-delete-list" ${!list || isEmpAssignList ? "disabled" : ""} title="Delete list">
-          <i class="bi bi-trash" aria-hidden="true"></i>
+        <button type="button" class="admin-delete-list-btn" id="btn-delete-list" ${!list || isEmpAssignList ? "disabled" : ""} title="Delete list" aria-label="Delete list">
+          ${adminMsIcon("delete")}
         </button>
       </div>
     </header>
@@ -4667,13 +4686,14 @@ function renderOwnerMain() {
     <section class="owner-task-panel" aria-label="Tasks">
       ${tableBlock}
     </section>
-    <section class="admin-quick-add owner-quick-add-bar mt-auto flex-shrink-0 ${state.ownerTaskFilter === "completed" || state.ownerTaskFilter === "in_review" || state.ownerTaskFilter === "employee_assigned" || isEmpAssignList ? "d-none" : ""}" aria-label="Quick add task">
+    <section class="admin-quick-add owner-quick-add-bar flex-shrink-0 ${state.ownerTaskFilter === "completed" || state.ownerTaskFilter === "in_review" || state.ownerTaskFilter === "employee_assigned" || isEmpAssignList ? "d-none" : ""}" aria-label="Quick add task">
       <div class="admin-quick-add-inner">
-        <span class="admin-quick-add-icon"><i class="bi bi-lightning-charge-fill" aria-hidden="true"></i></span>
+        <span class="admin-quick-add-icon">${adminMsIcon("bolt")}</span>
         <input class="admin-quick-add-input" id="quick-add-title" placeholder="Add a new task..." ${!list ? "disabled" : ""} aria-label="Quick add task" />
         <button class="admin-quick-add-btn" type="button" id="quick-add-btn" ${!list ? "disabled" : ""}>Add</button>
       </div>
     </section>
+    </div>
   `;
 
   wireAdminNotifications(state.user?.id, main);
@@ -4866,6 +4886,15 @@ function wireChromeNav() {
       input?.focus();
     });
   });
+  document.querySelectorAll(".js-admin-theme-toggle").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const cur = document.documentElement.getAttribute("data-bs-theme") || "light";
+      setThemePreference(cur === "dark" ? "light" : "dark");
+      document.querySelectorAll(".js-admin-theme-toggle .material-symbols-outlined").forEach((icon) => {
+        icon.textContent = document.documentElement.getAttribute("data-bs-theme") === "dark" ? "light_mode" : "dark_mode";
+      });
+    });
+  });
 }
 
 function renderOwnerChrome() {
@@ -4874,8 +4903,7 @@ function renderOwnerChrome() {
 
   app.innerHTML = `
     <div class="owner-shell admin-mockup-ui min-h-main">
-      <div class="container-fluid owner-shell-inner py-3 py-lg-4 d-flex flex-column">
-        <div class="owner-topbar d-lg-none d-flex align-items-center justify-content-between gap-2 mb-3">
+        <div class="owner-topbar d-lg-none d-flex align-items-center justify-content-between gap-2 p-3">
           <button class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="offcanvas" data-bs-target="#leftNavOffcanvas" aria-label="Open lists">
             <i class="bi bi-list me-1" aria-hidden="true"></i>Lists
           </button>
@@ -4887,22 +4915,19 @@ function renderOwnerChrome() {
             </button>
           </div>
         </div>
-        <div class="row g-3 g-lg-4 owner-shell-row flex-lg-grow-1">
-          <aside class="col-lg-3 d-none d-lg-flex owner-sidebar-col">
-            <div class="owner-sidebar-panel w-100">${leftNavInner()}</div>
-          </aside>
-          <div class="offcanvas offcanvas-start owner-offcanvas" tabindex="-1" id="leftNavOffcanvas" aria-labelledby="leftNavLabel">
-            <div class="offcanvas-header owner-offcanvas-header border-0">
-              <h2 class="offcanvas-title h5 mb-0 text-white" id="leftNavLabel">Lists</h2>
-              <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Close"></button>
-            </div>
-            <div class="offcanvas-body pt-0">${leftNavInner()}</div>
+        <aside class="admin-fixed-sidebar d-none d-lg-flex">
+          ${leftNavInner()}
+        </aside>
+        <div class="offcanvas offcanvas-start owner-offcanvas" tabindex="-1" id="leftNavOffcanvas" aria-labelledby="leftNavLabel">
+          <div class="offcanvas-header owner-offcanvas-header border-0">
+            <h2 class="offcanvas-title h5 mb-0 text-white" id="leftNavLabel">Lists</h2>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Close"></button>
           </div>
-          <main class="col-12 col-lg-9 d-flex owner-main-col">
-            <div id="main-column" class="owner-main-panel owner-main-fill p-3 p-lg-4 d-flex flex-column w-100"></div>
-          </main>
+          <div class="offcanvas-body pt-0">${leftNavInner()}</div>
         </div>
-      </div>
+        <div class="admin-main-host">
+          <div id="main-column" class="owner-main-panel owner-main-fill d-flex flex-column w-100"></div>
+        </div>
       ${taskModalHtml()}
       ${customRecurrenceModalHtml()}
       ${listNameModalHtml()}

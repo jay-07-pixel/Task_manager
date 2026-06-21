@@ -1843,8 +1843,10 @@ export function teamChatSidebarButtonHtml() {
 
 export function teamChatSidebarNavItemHtml() {
   return `<button type="button" class="admin-sidebar-nav-item js-open-team-chat">
-    <i class="bi bi-chat-dots" aria-hidden="true"></i>
-    <span>Messages</span>
+    <span class="admin-nav-item-left">
+      <span class="material-symbols-outlined" aria-hidden="true">chat</span>
+      <span>Messages</span>
+    </span>
     <span class="admin-nav-badge d-none js-chat-unread-badge">0</span>
   </button>`;
 }
