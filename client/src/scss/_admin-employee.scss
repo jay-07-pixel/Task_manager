@@ -150,6 +150,68 @@
     margin-top: 0.35rem;
     margin-bottom: 0.15rem;
   }
+
+  .emp-task-desc-box {
+    max-width: 11rem;
+    min-height: 1.55rem;
+    padding: 0.2rem 0.45rem;
+    border-color: rgba(190, 200, 202, 0.55);
+    background: #fff;
+    font-size: 0.75rem;
+    line-height: 1.25;
+  }
+
+  .emp-task-desc-box--empty {
+    max-width: 11rem;
+    background: rgba(244, 242, 255, 0.65);
+  }
+
+  .emp-task-desc-box.owner-task-desc-box--clickable {
+    background: #fff;
+
+    &:hover {
+      border-color: rgba(0, 83, 91, 0.45);
+      background: rgba(169, 236, 229, 0.12);
+    }
+  }
+
+  .emp-task-desc-box .owner-task-desc-preview,
+  .emp-task-desc-box .emp-task-desc-full {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: left;
+  }
+
+  .emp-task-desc-box--expanded {
+    max-width: 100%;
+    width: 100%;
+    align-items: flex-start;
+    white-space: normal;
+
+    .emp-task-desc-full {
+      display: block !important;
+      white-space: pre-wrap;
+      word-break: break-word;
+      overflow: visible;
+      text-overflow: unset;
+      max-height: 7.5rem;
+      overflow-y: auto;
+      line-height: 1.4;
+    }
+
+    .emp-task-desc-chevron {
+      transform: rotate(180deg);
+    }
+  }
+
+  .emp-task-desc-chevron {
+    flex-shrink: 0;
+    font-size: 0.65rem;
+    color: #00535b;
+    opacity: 0.75;
+    transition: transform 0.15s ease;
+  }
 }
 
 @media (max-width: 767.98px) {

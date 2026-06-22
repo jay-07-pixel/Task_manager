@@ -1886,6 +1886,43 @@ function ownerEmployeesCellHtml(task) {
   return `<span class="text-muted me-1"><i class="bi bi-people" aria-hidden="true"></i></span><span class="tabular-nums">${nDone}\u00a0/\u00a0${nAssigned}</span>`;
 }
 
+function taskDescriptionPreviewWords(text, maxWords = 2) {
+  const words = (text || "").trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return "";
+  if (words.length <= maxWords) return words.join(" ");
+  return `${words.slice(0, maxWords).join(" ")}…`;
+}
+
+function empTaskDescriptionBoxHtml(notesRaw, taskId) {
+  if (!notesRaw) {
+    return `<div class="owner-task-desc-box emp-task-desc-box emp-task-desc-box--empty small text-muted fst-italic mb-0">No description</div>`;
+  }
+  const wordCount = notesRaw.split(/\s+/).filter(Boolean).length;
+  const preview = taskDescriptionPreviewWords(notesRaw, 2);
+  if (wordCount <= 2) {
+    return `<div class="owner-task-desc-box emp-task-desc-box owner-task-desc-box--static small text-body-secondary mb-0">${escapeHtml(notesRaw)}</div>`;
+  }
+  return `<button type="button" class="owner-task-desc-box emp-task-desc-box owner-task-desc-box--clickable js-emp-desc-toggle small text-body-secondary mb-0" data-task-id="${escapeHtml(taskId)}" aria-expanded="false" aria-label="Show full description">
+    <span class="owner-task-desc-preview emp-task-desc-preview">${escapeHtml(preview)}</span>
+    <span class="emp-task-desc-full d-none">${escapeHtml(notesRaw)}</span>
+    <i class="bi bi-chevron-down emp-task-desc-chevron" aria-hidden="true"></i>
+  </button>`;
+}
+
+function bindEmpDescriptionToggles(root) {
+  root.querySelectorAll(".js-emp-desc-toggle").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const expanded = btn.classList.toggle("emp-task-desc-box--expanded");
+      btn.setAttribute("aria-expanded", expanded ? "true" : "false");
+      const preview = btn.querySelector(".emp-task-desc-preview");
+      const full = btn.querySelector(".emp-task-desc-full");
+      if (preview) preview.classList.toggle("d-none", expanded);
+      if (full) full.classList.toggle("d-none", !expanded);
+    });
+  });
+}
+
 function ownerTaskDescriptionDetailHtml(notes) {
   const full = (notes || "").trim().replace(/\s+/g, " ");
   if (!full) {
@@ -5590,11 +5627,7 @@ function empTaskTableRows(tasks) {
         ? employeeHasArchivedSubmission(me) || employeeHasCurrentSubmission(me)
         : employeeHasCurrentSubmission(me);
       const notesRaw = (t.notes || "").trim().replace(/\s+/g, " ");
-      const notesPreview = notesRaw.length > 100 ? `${notesRaw.slice(0, 97)}…` : notesRaw;
-      const descriptionBox =
-        notesPreview.length > 0
-          ? `<div class="owner-task-desc-box small text-body-secondary text-truncate mb-0" title="${escapeHtml(notesRaw)}">${escapeHtml(notesPreview)}</div>`
-          : `<div class="owner-task-desc-box small text-muted fst-italic mb-0">No description</div>`;
+      const descriptionBox = empTaskDescriptionBoxHtml(notesRaw, t.id);
       const updateCount = employeeAwaitingFreshOccurrence(t, me) ? 0 : (me?.progressUpdateCount ?? 0);
       const updateBadge =
         updateCount > 0
@@ -5963,6 +5996,8 @@ function renderEmployeeMain() {
       if (task) void openEmpProgressUpdateModal(task);
     });
   });
+
+  bindEmpDescriptionToggles(main);
 
   main.querySelectorAll(".emp-view-submission").forEach((btn) => {
     btn.addEventListener("click", () => {
