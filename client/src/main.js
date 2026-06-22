@@ -5598,7 +5598,7 @@ function empTaskTableRows(tasks) {
       const updateCount = employeeAwaitingFreshOccurrence(t, me) ? 0 : (me?.progressUpdateCount ?? 0);
       const updateBadge =
         updateCount > 0
-          ? `<span class="badge rounded-pill text-bg-secondary ms-1 tabular-nums">${updateCount}</span>`
+          ? `<span class="emp-update-count tabular-nums">${updateCount}</span>`
           : "";
       const archivedNotesRaw = (me?.lastSubmissionText || "").trim().replace(/\s+/g, " ");
       const archivedNotesPreview =
@@ -5612,19 +5612,19 @@ function empTaskTableRows(tasks) {
         : "";
       const submissionBtn = submitted
         ? hasViewableSubmission
-          ? `<button type="button" class="btn btn-sm btn-outline-primary emp-view-submission" data-task-id="${t.id}" data-user-id="${escapeHtml(state.user?.id || "")}"><i class="bi bi-eye me-1" aria-hidden="true"></i>View</button>`
+          ? `<button type="button" class="btn btn-sm btn-outline-primary emp-view-submission emp-action-btn" data-task-id="${t.id}" data-user-id="${escapeHtml(state.user?.id || "")}"><i class="bi bi-eye me-1" aria-hidden="true"></i>View</button>`
           : me?.lastSubmittedAt
             ? `<span class="small text-success text-nowrap"><i class="bi bi-check-circle me-1" aria-hidden="true"></i>${escapeHtml(formatProgressUpdateTime(me.lastSubmittedAt))}</span>`
             : `<span class="small text-success"><i class="bi bi-check-circle me-1" aria-hidden="true"></i>Submitted</span>`
-        : `<button type="button" class="btn btn-sm btn-primary emp-open-submit" data-task-id="${t.id}"><i class="bi bi-send me-1" aria-hidden="true"></i>Submit</button>`;
+        : `<button type="button" class="btn btn-sm btn-primary emp-open-submit emp-action-btn" data-task-id="${t.id}"><i class="bi bi-send me-1" aria-hidden="true"></i>Submit</button>`;
       const assignedByLine = me?.assignedBy?.displayName
         ? `<div class="small text-muted emp-assigned-by-line mt-1">From ${escapeHtml(me.assignedBy.displayName)}</div>`
         : "";
       const showRecurrenceOnActive = displayMode === "active" && (t.recurrence ?? "none") !== "none";
       const recurrenceLines = showRecurrenceOnActive ? empActiveRecurrenceLinesHtml(t) : "";
       const submissionCell = `<div class="d-flex flex-column align-items-end gap-1 emp-task-actions">
-          <button type="button" class="btn btn-sm emp-open-progress-update emp-update-btn" data-task-id="${t.id}">
-            <i class="bi bi-chat-left-dots me-1" aria-hidden="true"></i>Update${updateBadge}
+          <button type="button" class="btn btn-sm emp-open-progress-update emp-update-btn emp-action-btn" data-task-id="${t.id}">
+            <i class="bi bi-chat-left-dots" aria-hidden="true"></i><span>Update</span>${updateBadge}
           </button>
           ${submissionBtn}
         </div>`;

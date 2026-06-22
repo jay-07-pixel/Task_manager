@@ -1595,7 +1595,13 @@ body {
     padding-top: 0.15rem !important;
   }
 
-  .emp-owner-task-table tbody tr.emp-task-row .emp-col-proof .btn,
+  .emp-owner-task-table tbody tr.emp-task-row .emp-col-proof .emp-action-btn {
+    width: 100%;
+    max-width: none;
+    justify-content: center;
+  }
+
+  .emp-owner-task-table tbody tr.emp-task-row .emp-col-proof .btn:not(.emp-action-btn),
   .emp-owner-task-table tbody tr.emp-task-row .emp-col-proof .emp-upload-proof {
     width: 100%;
     justify-content: center;

@@ -63,6 +63,38 @@
       }
     }
 
+    .emp-task-actions {
+      .emp-action-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.35rem;
+        min-width: 7.5rem;
+        width: 7.5rem;
+        max-width: 100%;
+        white-space: nowrap;
+        flex-wrap: nowrap;
+        padding: 0.35rem 0.65rem;
+        line-height: 1.2;
+      }
+
+      .emp-update-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        min-width: 1.125rem;
+        height: 1.125rem;
+        padding: 0 0.3rem;
+        border-radius: 999px;
+        font-size: 0.625rem;
+        font-weight: 700;
+        line-height: 1;
+        background: #00535b;
+        color: #fff;
+      }
+    }
+
     .emp-update-btn {
       border: 1px solid rgba(0, 83, 91, 0.5);
       color: #00535b;
@@ -73,12 +105,6 @@
         background: rgba(169, 236, 229, 0.45);
         border-color: #00535b;
         color: #004a52;
-      }
-
-      .badge {
-        background: #00535b !important;
-        color: #fff !important;
-        vertical-align: middle;
       }
     }
   }
