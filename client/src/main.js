@@ -1429,8 +1429,10 @@ async function prepareEmployeePushOnLogin() {
 
 const EMP_PUSH_PRIMED_KEY = "taskmgr-push-primed";
 
-function wireEmpEnablePush() {
-  document.querySelectorAll(".js-emp-enable-push").forEach((btn) => {
+function wireEmpEnablePush(root = document) {
+  root.querySelectorAll(".js-emp-enable-push").forEach((btn) => {
+    if (btn.dataset.wired === "1") return;
+    btn.dataset.wired = "1";
     btn.addEventListener("click", () => {
       if (!isPushSupported()) {
         showToast("This browser does not support background reminders.", "warning");
@@ -5911,6 +5913,7 @@ function renderEmployeeMain() {
 
   ensureAdminHeaderProfileMenuDocListener();
   wireAdminHeaderProfileMenu(main);
+  wireEmpEnablePush(main);
 
   main.querySelectorAll("[data-emp-filter-kpi]").forEach((btn) => {
     btn.addEventListener("click", () => {
