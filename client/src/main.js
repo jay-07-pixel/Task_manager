@@ -1089,7 +1089,7 @@ function renderAuthForm() {
           <div class="card auth-card">
             <div class="auth-card-head sea-blue-gradient">
               <div class="auth-brand-row">
-                <img class="auth-brand-logo" src="/icons/kalpanik-logo.png" alt="Kalpanik" width="72" height="72" />
+                <img class="auth-brand-logo" src="/icons/kalpanik-logo.png" alt="Kalpanik" width="112" height="112" />
                 <div>
                   <div class="auth-brand-title">Task Manager</div>
                   <p class="auth-brand-sub">Organize lists, assign people, track what&rsquo;s done.</p>
