@@ -3118,6 +3118,9 @@ body {
   font-size: 0.92rem;
   line-height: 1.45;
   white-space: pre-wrap;
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
 }
 
 .team-chat-bubble--deleted {

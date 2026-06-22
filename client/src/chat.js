@@ -449,6 +449,48 @@ async function deleteChatMessage(messageId) {
   }
 }
 
+function chatMessageCopyText(m) {
+  if (!m || m.deleted) return "";
+  const parts = [];
+  const text = String(m.body || "").trim();
+  if (text) parts.push(text);
+  if (m.attachmentUrl) {
+    const name = (m.attachmentName || "Attachment").trim();
+    const url = m.attachmentUrl.startsWith("http")
+      ? m.attachmentUrl
+      : `${window.location.origin}${m.attachmentUrl}`;
+    parts.push(name ? `${name}: ${url}` : url);
+  }
+  return parts.join("\n");
+}
+
+async function copyChatMessage(messageId) {
+  const message = activeMessages.find((m) => m.id === messageId);
+  const text = chatMessageCopyText(message);
+  if (!text) {
+    d().showToast("Nothing to copy.", "warning");
+    return;
+  }
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      ta.remove();
+    }
+    d().showToast("Message copied.", "success");
+  } catch {
+    d().showToast("Could not copy message. Allow clipboard access and try again.", "warning");
+  }
+}
+
 function isVideoAttachment(m) {
   if (m.attachmentIsVideo) return true;
   if (typeof m.attachmentMime === "string" && m.attachmentMime.startsWith("video/")) return true;
@@ -512,6 +554,12 @@ function wireChatMediaLightbox() {
   chatMediaLightboxWired = true;
 
   document.getElementById("team-chat-messages")?.addEventListener("click", (e) => {
+    const copyBtn = e.target.closest(".js-chat-copy");
+    if (copyBtn) {
+      e.preventDefault();
+      void copyChatMessage(copyBtn.getAttribute("data-message-id"));
+      return;
+    }
     const replyBtn = e.target.closest(".js-chat-reply");
     if (replyBtn) {
       e.preventDefault();
@@ -643,6 +691,9 @@ function messageBodyHtml(m) {
 function messageActionsHtml(m) {
   if (m.deleted) return "";
   const canDelete = messageCanDelete(m);
+  const copyBtn = `<button type="button" class="team-chat-msg-action js-chat-copy" data-message-id="${d().escapeHtml(m.id)}" aria-label="Copy" title="Copy">
+    <i class="bi bi-clipboard" aria-hidden="true"></i>
+  </button>`;
   const replyBtn = `<button type="button" class="team-chat-msg-action js-chat-reply" data-message-id="${d().escapeHtml(m.id)}" aria-label="Reply" title="Reply">
     <i class="bi bi-reply-fill" aria-hidden="true"></i>
   </button>`;
@@ -651,7 +702,7 @@ function messageActionsHtml(m) {
         <i class="bi bi-trash" aria-hidden="true"></i>
       </button>`
     : "";
-  return `<div class="team-chat-msg-actions">${replyBtn}${deleteBtn}</div>`;
+  return `<div class="team-chat-msg-actions">${copyBtn}${replyBtn}${deleteBtn}</div>`;
 }
 
 function clearPendingChatFile() {
