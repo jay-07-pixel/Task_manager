@@ -120,6 +120,35 @@
     box-shadow: 0 0 0 0.15rem rgba(0, 83, 91, 0.15);
   }
 
+  .auth-password-group .form-control {
+    border-right: 0;
+  }
+
+  .auth-password-toggle {
+    border: 1px solid var(--admin-outline-variant);
+    border-left: 0;
+    background: var(--admin-surface-container-low);
+    color: var(--admin-on-surface-variant);
+    padding-inline: 0.75rem;
+    cursor: pointer;
+    transition: color 0.15s ease, background-color 0.15s ease;
+
+    &:hover {
+      color: var(--admin-primary);
+      background: var(--admin-surface-container-high);
+    }
+
+    &:focus-visible {
+      outline: 2px solid var(--admin-primary);
+      outline-offset: -2px;
+      z-index: 3;
+    }
+  }
+
+  .auth-password-group:focus-within .auth-password-toggle {
+    border-color: var(--admin-primary);
+  }
+
   .auth-forgot-link {
     color: var(--admin-primary);
     font-weight: 500;
@@ -223,5 +252,16 @@
     background: #2a2a38;
     border-color: var(--admin-outline-variant);
     color: #a9ece5;
+  }
+
+  .auth-password-toggle {
+    background: #2a2a38;
+    border-color: var(--admin-outline-variant);
+    color: #b0b0c0;
+
+    &:hover {
+      color: #a9ece5;
+      background: #3a3a48;
+    }
   }
 }

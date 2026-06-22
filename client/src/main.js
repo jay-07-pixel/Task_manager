@@ -114,6 +114,28 @@ function wireThemeIconToggles() {
   syncThemeIconButtons();
 }
 
+function wireAuthPasswordToggles(root = document) {
+  const scope = root instanceof Element ? root : document;
+  scope.querySelectorAll("[data-password-toggle]").forEach((btn) => {
+    if (btn.dataset.wiredPasswordToggle === "1") return;
+    btn.dataset.wiredPasswordToggle = "1";
+    btn.addEventListener("click", () => {
+      const group = btn.closest(".auth-password-group");
+      const input = group?.querySelector("input");
+      if (!input) return;
+      const show = input.type === "password";
+      input.type = show ? "text" : "password";
+      const icon = btn.querySelector("i");
+      if (icon) {
+        icon.classList.toggle("bi-eye", !show);
+        icon.classList.toggle("bi-eye-slash", show);
+      }
+      btn.setAttribute("aria-label", show ? "Hide password" : "Show password");
+      btn.setAttribute("aria-pressed", String(show));
+    });
+  });
+}
+
 function themeIconToggleMarkup() {
   return `<div class="theme-icon-toggles d-inline-flex gap-1 justify-content-center" role="group" aria-label="Theme">
       <button type="button" class="btn btn-sm theme-icon-btn btn-outline-secondary js-theme-light" title="Light mode" aria-label="Light mode"><i class="bi bi-sun-fill" aria-hidden="true"></i></button>
@@ -753,16 +775,22 @@ function forgotPasswordModalHtml() {
             <div id="fp-step-password" class="d-none">
               <div class="mb-3">
                 <label class="auth-field-label" for="fp-new-password">New password</label>
-                <div class="input-group auth-input-group">
+                <div class="input-group auth-input-group auth-password-group">
                   <span class="input-group-text"><i class="bi bi-shield-lock" aria-hidden="true"></i></span>
                   <input class="form-control" id="fp-new-password" type="password" minlength="6" autocomplete="new-password" placeholder="Min. 6 characters" required />
+                  <button type="button" class="input-group-text auth-password-toggle" data-password-toggle aria-label="Show password" aria-pressed="false" title="Show password">
+                    <i class="bi bi-eye" aria-hidden="true"></i>
+                  </button>
                 </div>
               </div>
               <div class="mb-0">
                 <label class="auth-field-label" for="fp-confirm-password">Confirm password</label>
-                <div class="input-group auth-input-group">
+                <div class="input-group auth-input-group auth-password-group">
                   <span class="input-group-text"><i class="bi bi-shield-lock" aria-hidden="true"></i></span>
                   <input class="form-control" id="fp-confirm-password" type="password" minlength="6" autocomplete="new-password" placeholder="Repeat password" required />
+                  <button type="button" class="input-group-text auth-password-toggle" data-password-toggle aria-label="Show password" aria-pressed="false" title="Show password">
+                    <i class="bi bi-eye" aria-hidden="true"></i>
+                  </button>
                 </div>
               </div>
               <p class="form-text text-danger d-none mb-0 mt-2" id="fp-reset-error" role="alert"></p>
@@ -813,6 +841,7 @@ function wireForgotPasswordModal() {
   const modalEl = document.getElementById("forgotPasswordModal");
   if (!modalEl || modalEl.dataset.wiredForgot === "1") return;
   modalEl.dataset.wiredForgot = "1";
+  wireAuthPasswordToggles(modalEl);
 
   const emailEl = document.getElementById("fp-email");
   const otpEl = document.getElementById("fp-otp");
@@ -1089,9 +1118,12 @@ function renderAuthForm() {
                     </div>
                     <div class="mb-3">
                       <label class="auth-field-label" for="login-password">Password</label>
-                    <div class="input-group auth-input-group">
+                    <div class="input-group auth-input-group auth-password-group">
                       <span class="input-group-text"><i class="bi bi-key" aria-hidden="true"></i></span>
                       <input class="form-control" id="login-password" name="password" type="password" autocomplete="current-password" placeholder="••••••••" required />
+                      <button type="button" class="input-group-text auth-password-toggle" data-password-toggle aria-label="Show password" aria-pressed="false" title="Show password">
+                        <i class="bi bi-eye" aria-hidden="true"></i>
+                      </button>
                     </div>
                     </div>
                     <div class="text-end mb-3">
@@ -1141,9 +1173,12 @@ function renderAuthForm() {
                       </div>
                       <div class="mb-2">
                         <label class="auth-field-label" for="reg-password">Password</label>
-                        <div class="input-group input-group-sm auth-input-group">
+                        <div class="input-group input-group-sm auth-input-group auth-password-group">
                           <span class="input-group-text"><i class="bi bi-shield-lock" aria-hidden="true"></i></span>
                           <input class="form-control" id="reg-password" name="password" type="password" minlength="6" autocomplete="new-password" placeholder="Min. 6 characters" required />
+                          <button type="button" class="input-group-text auth-password-toggle" data-password-toggle aria-label="Show password" aria-pressed="false" title="Show password">
+                            <i class="bi bi-eye" aria-hidden="true"></i>
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -1272,6 +1307,7 @@ function renderAuthForm() {
   wireRegisterOtp();
   void wireRegisterTurnstile();
   wireThemeIconToggles();
+  wireAuthPasswordToggles(app);
 }
 
 async function logout() {
