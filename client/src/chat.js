@@ -1316,9 +1316,17 @@ function renderContactList() {
   });
 }
 
-function renderMessages() {
+function isChatNearBottom(host, threshold = 120) {
+  if (!host) return true;
+  return host.scrollHeight - host.scrollTop - host.clientHeight <= threshold;
+}
+
+function renderMessages(options = {}) {
   const host = document.getElementById("team-chat-messages");
   if (!host) return;
+  const forceBottom = options.scrollToBottom === true;
+  const distanceFromBottom = host.scrollHeight - host.scrollTop - host.clientHeight;
+  const stickToBottom = forceBottom || isChatNearBottom(host);
   host.classList.toggle("team-chat-messages--group", activeThreadType === "group");
   host.classList.toggle("team-chat-messages--dm", activeThreadType === "dm");
   if (!activeMessages.length) {
@@ -1351,7 +1359,11 @@ function renderMessages() {
       </div>`;
     })
     .join("");
-  host.scrollTop = host.scrollHeight;
+  if (stickToBottom) {
+    host.scrollTop = host.scrollHeight;
+  } else {
+    host.scrollTop = Math.max(0, host.scrollHeight - host.clientHeight - distanceFromBottom);
+  }
 }
 
 function isMobileChatLayout() {
@@ -1489,7 +1501,7 @@ async function openThread(type, id) {
         peer: data.conversation.peer,
       });
     }
-    renderMessages();
+    renderMessages({ scrollToBottom: true });
     updateTypingIndicator();
     await markActiveThreadRead();
     await loadThreads();
@@ -1582,7 +1594,7 @@ async function sendMessage(e) {
     clearPendingChatFile();
     clearReplyingTo();
     if (data.message) activeMessages.push(data.message);
-    renderMessages();
+    renderMessages({ scrollToBottom: true });
     await loadThreads();
   } catch (err) {
     d().showToast(err.message, "danger");
