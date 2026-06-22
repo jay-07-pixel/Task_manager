@@ -351,6 +351,29 @@ async function loadAssigneeProofRows(taskId, userId, { archived = false } = {}) 
   });
 }
 
+/** Current submission first; archived only when requested or current is empty. */
+async function resolveAssigneeSubmissionPayload(taskId, userId, row, { archivedOnly = false } = {}) {
+  const currentText = (row.submissionText ?? "").trim();
+  const currentProofRows = await loadAssigneeProofRows(taskId, userId, { archived: false });
+  const hasCurrent =
+    !!currentText || currentProofRows.length > 0 || !!row.completionProofPath;
+
+  if (!archivedOnly && hasCurrent) {
+    return {
+      view: resolveAssigneeCurrentSubmissionView(row),
+      proofRows: currentProofRows,
+      proofArchived: false,
+    };
+  }
+
+  const archivedProofRows = await loadAssigneeProofRows(taskId, userId, { archived: true });
+  return {
+    view: resolveAssigneeArchivedSubmissionView(row),
+    proofRows: archivedProofRows,
+    proofArchived: true,
+  };
+}
+
 async function deleteAssigneeProofFiles(taskId, userId, { archived = null } = {}) {
   const where = { taskId, userId };
   if (archived === true) where.archived = true;
@@ -1203,16 +1226,17 @@ router.get("/:id/submission", requireAuth, async (req, res) => {
   }
 
   const wantArchived = req.query.archived === "1" || req.query.archived === "true";
-  const view = wantArchived
-    ? resolveAssigneeArchivedSubmissionView(row)
-    : isSelfEmployee
-      ? resolveAssigneeCurrentSubmissionView(row)
-      : resolveAssigneeSubmissionView(row);
-  const proofRows = await loadAssigneeProofRows(task.id, assigneeUserId, { archived: wantArchived });
-  let completionProofUrls = proofUrlsFromRows(task.id, assigneeUserId, proofRows, wantArchived);
+  const archivedOnly = !isSelfEmployee && wantArchived;
+  const { view, proofRows, proofArchived } = await resolveAssigneeSubmissionPayload(
+    task.id,
+    assigneeUserId,
+    row,
+    { archivedOnly }
+  );
+  let completionProofUrls = proofUrlsFromRows(task.id, assigneeUserId, proofRows, proofArchived);
   if (!completionProofUrls.length && view.proofPath) {
     completionProofUrls = [
-      `/api/tasks/${task.id}/completion-proof/${assigneeUserId}${wantArchived ? "?archived=1" : ""}`,
+      `/api/tasks/${task.id}/completion-proof/${assigneeUserId}${proofArchived ? "?archived=1" : ""}`,
     ];
   }
   res.json({

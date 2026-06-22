@@ -6149,7 +6149,10 @@ function renderEmployeeMain() {
       const taskId = btn.getAttribute("data-task-id");
       const userId = btn.getAttribute("data-user-id") || state.user?.id;
       if (!taskId || !userId) return;
-      const archived = state.empFilter === "submitted";
+      const task = state.empTasks.find((t) => t.id === taskId);
+      const me = employeeMyAssignee(task);
+      const archived =
+        employeeHasArchivedSubmission(me) && !employeeHasCurrentSubmission(me);
       void openSubmissionDetailForAssignee(taskId, userId, { archived }).catch((err) => {
         showToast(err.message || "Could not load submission.", "danger");
       });
