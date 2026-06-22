@@ -58,12 +58,14 @@ model User {
 }
 
 model TaskList {
-  id        String   @id @default(uuid())
-  ownerId   String   @map("owner_id")
+  id        String    @id @default(uuid())
+  ownerId   String    @map("owner_id")
   title     String
-  sortOrder Int      @default(0) @map("sort_order")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  sortOrder Int       @default(0) @map("sort_order")
+  pinned    Boolean   @default(false)
+  pinnedAt  DateTime? @map("pinned_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
 
   owner User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   tasks Task[]

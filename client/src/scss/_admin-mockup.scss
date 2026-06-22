@@ -295,8 +295,38 @@
       color: var(--admin-outline);
     }
 
+    .list-pin-hint,
+    .list-pin-badge {
+      display: inline-flex;
+      align-items: center;
+      flex-shrink: 0;
+      color: var(--admin-outline);
+      transition: opacity 0.15s ease, color 0.15s ease;
+
+      .material-symbols-outlined {
+        font-size: 1rem !important;
+      }
+    }
+
+    .list-pin-hint {
+      opacity: 0;
+    }
+
+    .list-pin-badge {
+      opacity: 0.85;
+      color: var(--admin-primary);
+    }
+
     &:hover .grip-handle {
       opacity: 0.6;
+    }
+
+    &:hover .list-pin-hint {
+      opacity: 0.55;
+    }
+
+    &.owner-list-item--user-pinned {
+      background: rgba(0, 83, 91, 0.06);
     }
 
     &.active {
@@ -304,8 +334,11 @@
       color: #fff;
 
       .material-symbols-outlined,
-      .grip-handle {
+      .grip-handle,
+      .list-pin-hint,
+      .list-pin-badge {
         color: #fff !important;
+        opacity: 1;
       }
     }
   }

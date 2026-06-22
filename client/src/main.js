@@ -4676,6 +4676,9 @@ function bindListNavHandlers() {
           showToast(err.message, "danger");
         }
       });
+      if (host.classList.contains("js-list-host")) {
+        wireListPinHold(btn);
+      }
     });
   });
 }
@@ -4684,23 +4687,106 @@ function isEmployeeAssignmentsList(list) {
   return list?.kind === "employee_assignments" || list?.title === "Employee assignments";
 }
 
-function ownerListNavButtonHtml(list, { pinned = false } = {}) {
+const LIST_PIN_HOLD_MS = 550;
+
+function compareListTitles(a, b) {
+  return String(a?.title || "").localeCompare(String(b?.title || ""), undefined, { sensitivity: "base" });
+}
+
+function sortUserLists(lists) {
+  const pinned = lists
+    .filter((l) => l.pinned)
+    .sort((a, b) => {
+      const ta = a.pinnedAt ? new Date(a.pinnedAt).getTime() : 0;
+      const tb = b.pinnedAt ? new Date(b.pinnedAt).getTime() : 0;
+      if (ta !== tb) return ta - tb;
+      return compareListTitles(a, b);
+    });
+  const unpinned = lists.filter((l) => !l.pinned).sort(compareListTitles);
+  return [...pinned, ...unpinned];
+}
+
+async function toggleListPin(listId) {
+  const list = state.lists.find((x) => x.id === listId);
+  if (!list || isEmployeeAssignmentsList(list)) return;
+  const nextPinned = !list.pinned;
+  try {
+    await api(`/api/lists/${listId}/pin`, {
+      method: "PATCH",
+      body: JSON.stringify({ pinned: nextPinned }),
+    });
+    showToast(
+      nextPinned ? `"${list.title}" pinned to top.` : `"${list.title}" unpinned.`,
+      "success"
+    );
+    await loadLists();
+    renderListContentOnly();
+  } catch (err) {
+    showToast(err.message, "danger");
+  }
+}
+
+function wireListPinHold(btn) {
+  if (btn.dataset.systemPinned === "1" || btn.dataset.wiredListPinHold === "1") return;
+  btn.dataset.wiredListPinHold = "1";
+  let timer = null;
+  let holdFired = false;
+
+  const clearTimer = () => {
+    if (timer != null) {
+      window.clearTimeout(timer);
+      timer = null;
+    }
+  };
+
+  btn.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0 || e.target.closest(".grip-handle")) return;
+    holdFired = false;
+    clearTimer();
+    timer = window.setTimeout(() => {
+      holdFired = true;
+      void toggleListPin(btn.getAttribute("data-list-id"));
+    }, LIST_PIN_HOLD_MS);
+  });
+
+  btn.addEventListener("pointerup", (e) => {
+    clearTimer();
+    if (holdFired) {
+      e.preventDefault();
+      e.stopPropagation();
+      holdFired = false;
+    }
+  });
+
+  btn.addEventListener("pointerleave", clearTimer);
+  btn.addEventListener("pointercancel", clearTimer);
+}
+
+function ownerListNavButtonHtml(list, { systemPinned = false } = {}) {
   const active = list.id === state.activeListId;
-  const icon = pinned ? "assignment_ind" : "folder";
-  const grip = pinned
+  const userPinned = !systemPinned && !!list.pinned;
+  const icon = systemPinned ? "assignment_ind" : "folder";
+  const grip = systemPinned
     ? active
       ? adminMsIcon("chevron_right", "admin-nav-chevron")
       : ""
-    : `<span class="grip-handle">${adminMsIcon("drag_indicator")}</span>`;
-  const title = pinned ? "Employee Assignments" : list.title;
-  const itemClass = pinned
+    : userPinned
+      ? `<span class="list-pin-badge" title="Hold to unpin">${adminMsIcon("push_pin")}</span>`
+      : `<span class="list-pin-hint" title="Hold to pin">${adminMsIcon("push_pin")}</span>`;
+  const title = systemPinned ? "Employee Assignments" : list.title;
+  const holdHint = systemPinned
+    ? "Tasks assigned between employees"
+    : userPinned
+      ? "Hold to unpin from top"
+      : "Hold to pin to top · double-click to rename";
+  const itemClass = systemPinned
     ? "admin-sidebar-nav-item owner-list-item owner-list-item--pinned"
-    : "list-group-item list-group-item-action owner-list-item d-flex justify-content-between align-items-center gap-2";
+    : `list-group-item list-group-item-action owner-list-item d-flex justify-content-between align-items-center gap-2${userPinned ? " owner-list-item--user-pinned" : ""}`;
   return `
-    <button type="button" class="${itemClass} ${active ? "active" : ""}" data-list-id="${list.id}"${pinned ? ' data-pinned="1"' : ""}>
+    <button type="button" class="${itemClass} ${active ? "active" : ""}" data-list-id="${list.id}"${systemPinned ? ' data-system-pinned="1"' : ""}${userPinned ? ' data-user-pinned="1"' : ""}>
       <span class="admin-nav-item-left min-w-0">
         ${adminMsIcon(icon)}
-        <span class="text-truncate ${pinned ? "" : "list-title-edit"}" title="${pinned ? "Tasks assigned between employees" : "Double-click to rename"}">${escapeHtml(title)}</span>
+        <span class="text-truncate ${systemPinned ? "" : "list-title-edit"}" title="${holdHint}">${escapeHtml(title)}</span>
       </span>
       ${grip}
     </button>`;
@@ -4708,8 +4794,8 @@ function ownerListNavButtonHtml(list, { pinned = false } = {}) {
 
 function renderListContentOnly() {
   const pinnedLists = state.lists.filter((l) => isEmployeeAssignmentsList(l));
-  const userLists = state.lists.filter((l) => !isEmployeeAssignmentsList(l));
-  const pinnedHtml = pinnedLists.map((l) => ownerListNavButtonHtml(l, { pinned: true })).join("");
+  const userLists = sortUserLists(state.lists.filter((l) => !isEmployeeAssignmentsList(l)));
+  const pinnedHtml = pinnedLists.map((l) => ownerListNavButtonHtml(l, { systemPinned: true })).join("");
   const userHtml = userLists.map((l) => ownerListNavButtonHtml(l)).join("");
   document.querySelectorAll(".js-emp-assign-list-host").forEach((host) => {
     host.innerHTML =
@@ -4724,7 +4810,7 @@ function renderListContentOnly() {
 
 function renderListGroup() {
   renderListContentOnly();
-  initListSortable();
+  destroyListSortable();
 }
 
 function destroyListSortable() {
@@ -4734,32 +4820,6 @@ function destroyListSortable() {
 
 function initListSortable() {
   destroyListSortable();
-  const userLists = state.lists.filter((l) => !isEmployeeAssignmentsList(l));
-  if (userLists.length < 2) return;
-  document.querySelectorAll(".js-list-host").forEach((host) => {
-    const s = Sortable.create(host, {
-      handle: ".grip-handle",
-      filter: "[data-pinned]",
-      animation: 150,
-      onEnd: async () => {
-        const orderedIds = [...host.querySelectorAll("[data-list-id]")].map((el) =>
-          el.getAttribute("data-list-id")
-        );
-        try {
-          await api("/api/lists/reorder/bulk", {
-            method: "PATCH",
-            body: JSON.stringify({ orderedIds }),
-          });
-          await loadLists();
-          renderListContentOnly();
-          initListSortable();
-        } catch (err) {
-          showToast(err.message, "danger");
-        }
-      },
-    });
-    listSortables.push(s);
-  });
 }
 
 function destroyTaskSortables() {

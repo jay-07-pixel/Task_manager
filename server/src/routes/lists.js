@@ -37,12 +37,13 @@ router.get("/", async (req, res) => {
   await ensureEmployeeAssignmentsList(req.session.userId);
   const lists = await prisma.taskList.findMany({
     where: { ownerId: req.session.userId },
-    orderBy: { sortOrder: "asc" },
-    select: { id: true, title: true, sortOrder: true },
+    orderBy: [{ pinned: "desc" }, { pinnedAt: "asc" }, { title: "asc" }],
+    select: { id: true, title: true, sortOrder: true, pinned: true, pinnedAt: true },
   });
   res.json({
     lists: lists.map((l) => ({
       ...l,
+      pinnedAt: l.pinnedAt?.toISOString() ?? null,
       kind: listKind(l.title),
     })),
   });
@@ -70,7 +71,14 @@ router.post("/", async (req, res) => {
     },
   });
   res.status(201).json({
-    list: { id: list.id, title: list.title, sortOrder: list.sortOrder, kind: listKind(list.title) },
+    list: {
+      id: list.id,
+      title: list.title,
+      sortOrder: list.sortOrder,
+      pinned: list.pinned,
+      pinnedAt: list.pinnedAt?.toISOString() ?? null,
+      kind: listKind(list.title),
+    },
   });
 });
 
@@ -98,6 +106,44 @@ router.patch("/:id", async (req, res) => {
       id: updated.id,
       title: updated.title,
       sortOrder: updated.sortOrder,
+      pinned: updated.pinned,
+      pinnedAt: updated.pinnedAt?.toISOString() ?? null,
+      kind: listKind(updated.title),
+    },
+  });
+});
+
+const pinListSchema = z.object({
+  pinned: z.boolean(),
+});
+
+router.patch("/:id/pin", async (req, res) => {
+  const list = await prisma.taskList.findFirst({
+    where: { id: req.params.id, ownerId: req.session.userId },
+  });
+  if (!list) return res.status(404).json({ error: "List not found" });
+  if (list.title === EMPLOYEE_ASSIGNMENTS_LIST_TITLE) {
+    return res.status(400).json({ error: "This list cannot be pinned or unpinned" });
+  }
+  const parsed = pinListSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.flatten() });
+  }
+  const pinned = parsed.data.pinned;
+  const updated = await prisma.taskList.update({
+    where: { id: list.id },
+    data: {
+      pinned,
+      pinnedAt: pinned ? new Date() : null,
+    },
+  });
+  res.json({
+    list: {
+      id: updated.id,
+      title: updated.title,
+      sortOrder: updated.sortOrder,
+      pinned: updated.pinned,
+      pinnedAt: updated.pinnedAt?.toISOString() ?? null,
       kind: listKind(updated.title),
     },
   });
