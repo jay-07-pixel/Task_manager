@@ -165,7 +165,7 @@
     background: transparent;
     color: var(--admin-on-surface-variant);
     font-weight: 500;
-    font-size: 0.75rem;
+    font-size: 0.875rem;
     letter-spacing: 0.02em;
     text-align: left;
     transition: background 0.12s ease, color 0.12s ease;
@@ -726,7 +726,7 @@
     .admin-sidebar-nav-item,
     .owner-list-item.owner-list-item--pinned,
     .list-group-item.owner-list-item {
-      font-size: 0.8125rem;
+      font-size: 0.9375rem;
     }
   }
 

@@ -2,6 +2,7 @@
 
 @import "bootstrap-icons/font/bootstrap-icons.css";
 @import "admin-mockup";
+@import "admin-chat";
 
 [data-bs-theme="light"] {
   color-scheme: light;
@@ -2824,40 +2825,6 @@ body {
 
 .team-chat-thread-item--dm {
   border-left: 3px solid transparent;
-}
-
-.team-chat-thread-item--group .team-chat-thread-item-name::before {
-  content: "Group";
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  margin-right: 0.4rem;
-  padding: 0.05rem 0.35rem;
-  border-radius: 999px;
-  font-size: 0.58rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--bs-info);
-  background: rgba(var(--bs-info-rgb), 0.14);
-  vertical-align: middle;
-}
-
-.team-chat-thread-item--dm .team-chat-thread-item-name::before {
-  content: "Direct";
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  margin-right: 0.4rem;
-  padding: 0.05rem 0.35rem;
-  border-radius: 999px;
-  font-size: 0.58rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--bs-secondary);
-  background: var(--bs-secondary-bg);
-  vertical-align: middle;
 }
 
 .team-chat-thread-item--unread .team-chat-thread-item-name {

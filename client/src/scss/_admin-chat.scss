@@ -1,0 +1,398 @@
+/* Team chat — align with admin MD3 theme when owner dashboard mockup is active */
+.owner-shell.admin-mockup-ui {
+  .team-chat-offcanvas {
+    --bs-primary: #00535b;
+    --bs-primary-rgb: 0, 83, 91;
+    --bs-body-bg: #fbf8ff;
+    --bs-body-color: #181a2e;
+    --bs-tertiary-bg: #f4f2ff;
+    --bs-secondary-color: #3e494a;
+    --bs-secondary-rgb: 62, 73, 74;
+    --bs-border-color: rgba(190, 200, 202, 0.65);
+    --bs-info-rgb: 35, 104, 99;
+    --bs-danger-rgb: 186, 26, 26;
+
+    font-family: "Inter", system-ui, -apple-system, sans-serif;
+    color: #181a2e;
+    background: #fbf8ff;
+    border-left-color: rgba(190, 200, 202, 0.65);
+    box-shadow: -8px 0 32px rgba(24, 26, 46, 0.1);
+  }
+
+  .team-chat-header {
+    background: linear-gradient(135deg, rgba(0, 83, 91, 0.08) 0%, #fbf8ff 55%);
+    border-bottom: 1px solid rgba(190, 200, 202, 0.45);
+  }
+
+  .team-chat-header-icon {
+    border-radius: 0.625rem;
+    background: linear-gradient(135deg, #00535b 0%, #006d77 100%);
+    box-shadow: 0 4px 14px rgba(0, 83, 91, 0.22);
+
+    .material-symbols-outlined {
+      font-size: 1.25rem;
+    }
+  }
+
+  .team-chat-header-subtitle {
+    font-size: 0.8125rem;
+    color: #3e494a;
+    margin: 0;
+  }
+
+  .team-chat-notify-btn,
+  .team-chat-back-btn,
+  .team-chat-group-manage-btn,
+  .team-chat-attach-btn {
+    border-color: rgba(190, 200, 202, 0.65) !important;
+    background: #fff !important;
+    color: #3e494a !important;
+
+    &:hover {
+      background: rgba(169, 236, 229, 0.2) !important;
+      color: #00535b !important;
+      border-color: rgba(0, 83, 91, 0.25) !important;
+    }
+  }
+
+  .team-chat-sidebar {
+    background: #f4f2ff;
+    border-right-color: rgba(190, 200, 202, 0.45);
+  }
+
+  .team-chat-search {
+    background: #fff;
+    border-color: rgba(190, 200, 202, 0.55);
+    border-radius: 0.625rem;
+
+    .form-control {
+      color: #181a2e;
+      font-size: 0.875rem;
+
+      &::placeholder {
+        color: #6f797a;
+      }
+    }
+  }
+
+  .team-chat-tab {
+    border-radius: 0.5rem;
+    font-weight: 500;
+    color: #3e494a;
+
+    &--active {
+      background: linear-gradient(135deg, #00535b 0%, #006d77 100%);
+      color: #fff;
+      box-shadow: 0 4px 12px rgba(0, 83, 91, 0.22);
+    }
+  }
+
+  .team-chat-thread-type-tab {
+    border-radius: 0.5rem;
+    border-color: rgba(190, 200, 202, 0.55);
+    background: #fff;
+    color: #3e494a;
+    font-weight: 500;
+
+    &:hover {
+      border-color: rgba(0, 83, 91, 0.35);
+      color: #00535b;
+      background: rgba(169, 236, 229, 0.12);
+    }
+
+    &--active {
+      background: linear-gradient(135deg, #00535b 0%, #006d77 100%);
+      border-color: transparent;
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(0, 83, 91, 0.2);
+
+      &:hover {
+        color: #fff;
+      }
+    }
+  }
+
+  .team-chat-create-group-btn,
+  .team-chat-send-btn {
+    background: linear-gradient(135deg, #00535b 0%, #006d77 100%) !important;
+    border: none !important;
+    color: #fff !important;
+    font-weight: 600;
+    box-shadow: 0 4px 12px rgba(0, 83, 91, 0.22);
+
+    &:hover {
+      color: #fff !important;
+      filter: brightness(1.05);
+    }
+  }
+
+  .team-chat-create-group-btn {
+    border-radius: 0.625rem !important;
+  }
+
+  .team-chat-send-btn {
+    border-radius: 999px !important;
+  }
+
+  .team-chat-thread-item,
+  .team-chat-contact-item {
+    border-radius: 0.5rem;
+    margin: 0 0.5rem 0.25rem;
+    transition: background 0.12s ease;
+
+    &:hover {
+      background: rgba(169, 236, 229, 0.15);
+    }
+  }
+
+  .team-chat-thread-item--active {
+    background: rgba(169, 236, 229, 0.28) !important;
+    border-left: 3px solid #00535b;
+  }
+
+  .team-chat-thread-item--unread .team-chat-thread-item-name {
+    color: #00535b;
+  }
+
+  .team-chat-unread-badge {
+    background: #ba1a1a !important;
+  }
+
+  .team-chat-group-badge,
+  .team-chat-role-pill {
+    color: #00535b;
+    background: rgba(169, 236, 229, 0.35);
+  }
+
+  .team-chat-role-pill--admin {
+    background: rgba(0, 83, 91, 0.12);
+    color: #00535b;
+  }
+
+  .team-chat-thread {
+    background: #fbf8ff;
+  }
+
+  .team-chat-thread-empty {
+    background: linear-gradient(180deg, rgba(169, 236, 229, 0.08) 0%, #fbf8ff 45%);
+  }
+
+  .team-chat-empty-card {
+    border-color: rgba(190, 200, 202, 0.55);
+    border-radius: 0.75rem;
+    background: #fff;
+  }
+
+  .team-chat-empty-icon {
+    border-radius: 0.75rem;
+    color: #00535b;
+    background: rgba(169, 236, 229, 0.35);
+  }
+
+  .team-chat-thread-head {
+    background: #fbf8ff;
+    border-bottom-color: rgba(190, 200, 202, 0.45);
+  }
+
+  .team-chat-thread-active--group .team-chat-thread-head {
+    border-bottom-color: rgba(0, 83, 91, 0.2);
+    background: linear-gradient(180deg, rgba(169, 236, 229, 0.2), #fbf8ff);
+  }
+
+  .team-chat-messages--group,
+  .team-chat-messages--dm {
+    background: #fbf8ff;
+  }
+
+  .team-chat-bubble {
+    background: #fff;
+    border-color: rgba(190, 200, 202, 0.45);
+    border-radius: 0.75rem;
+  }
+
+  .team-chat-bubble-row--mine .team-chat-bubble {
+    background: linear-gradient(135deg, #00535b 0%, #006d77 100%);
+    border-color: transparent;
+    color: #fff;
+  }
+
+  .team-chat-bubble-row--group .team-chat-bubble-sender {
+    color: #006d77;
+  }
+
+  .team-chat-reply-quote {
+    border-left-color: rgba(0, 83, 91, 0.45);
+    background: rgba(169, 236, 229, 0.15);
+  }
+
+  .team-chat-reply-quote-name {
+    color: #00535b;
+  }
+
+  .team-chat-compose {
+    background: #fbf8ff;
+    border-top-color: rgba(190, 200, 202, 0.45);
+  }
+
+  .team-chat-compose-inner {
+    background: #fff;
+    border-color: rgba(190, 200, 202, 0.55);
+    border-radius: 0.75rem;
+  }
+
+  .team-chat-input {
+    background: transparent;
+    color: #181a2e;
+    font-size: 0.9375rem;
+
+    &::placeholder {
+      color: #6f797a;
+    }
+
+    &:focus {
+      box-shadow: none;
+      border-color: transparent;
+    }
+  }
+
+  .team-chat-typing-status {
+    background: #fbf8ff;
+    border-top-color: rgba(190, 200, 202, 0.35);
+    color: #3e494a;
+  }
+
+  .team-chat-reply-compose {
+    background: rgba(169, 236, 229, 0.15);
+    border-color: rgba(0, 83, 91, 0.18);
+  }
+
+  .team-chat-reply-compose-label {
+    color: #00535b;
+  }
+
+  .team-chat-group-modal-content {
+    border-radius: 0.75rem;
+    border-color: rgba(190, 200, 202, 0.55);
+    background: #fbf8ff;
+  }
+
+  .team-chat-group-modal-body .form-control {
+    border-color: rgba(190, 200, 202, 0.65);
+    background: #fff;
+    border-radius: 0.5rem;
+
+    &:focus {
+      border-color: #00535b;
+      box-shadow: 0 0 0 3px rgba(0, 83, 91, 0.12);
+    }
+  }
+
+  .team-chat-member-pick-list {
+    border-color: rgba(190, 200, 202, 0.55);
+    background: #fff;
+    border-radius: 0.5rem;
+  }
+
+  .team-chat-member-pick-row {
+    background: #fff;
+    border-bottom-color: rgba(190, 200, 202, 0.35);
+
+    &:hover,
+    &--on {
+      background: rgba(169, 236, 229, 0.15);
+    }
+  }
+
+  #team-chat-group-submit,
+  #team-chat-manage-group-submit {
+    background: linear-gradient(135deg, #00535b 0%, #006d77 100%) !important;
+    border: none !important;
+    color: #fff !important;
+    font-weight: 600;
+    border-radius: 0.5rem !important;
+
+    &:hover {
+      color: #fff !important;
+      filter: brightness(1.05);
+    }
+  }
+
+  .team-chat-attach-preview {
+    background: #f4f2ff;
+    border-color: rgba(190, 200, 202, 0.45);
+  }
+
+  .team-chat-attach-preview-icon {
+    color: #00535b;
+    background: #fff;
+  }
+}
+
+[data-bs-theme="dark"] .owner-shell.admin-mockup-ui {
+  .team-chat-offcanvas {
+    --bs-body-bg: #121218;
+    --bs-body-color: #e8e8f0;
+    --bs-tertiary-bg: #1e1e28;
+    --bs-secondary-color: #b0b0c0;
+    --bs-border-color: #3a3a48;
+
+    color: #e8e8f0;
+    background: #121218;
+    border-left-color: #3a3a48;
+    box-shadow: -8px 0 32px rgba(0, 0, 0, 0.35);
+  }
+
+  .team-chat-header {
+    background: linear-gradient(135deg, rgba(0, 83, 91, 0.25) 0%, #121218 55%);
+    border-bottom-color: #3a3a48;
+  }
+
+  .team-chat-header-subtitle {
+    color: #b0b0c0;
+  }
+
+  .team-chat-sidebar {
+    background: #1e1e28;
+    border-right-color: #3a3a48;
+  }
+
+  .team-chat-search,
+  .team-chat-compose-inner,
+  .team-chat-empty-card,
+  .team-chat-bubble,
+  .team-chat-member-pick-list,
+  .team-chat-member-pick-row,
+  .team-chat-group-modal-content {
+    background: #1e1e28;
+    border-color: #3a3a48;
+  }
+
+  .team-chat-thread,
+  .team-chat-thread-head,
+  .team-chat-messages--group,
+  .team-chat-messages--dm,
+  .team-chat-compose,
+  .team-chat-typing-status {
+    background: #121218;
+    border-color: #3a3a48;
+  }
+
+  .team-chat-thread-type-tab {
+    background: #1e1e28;
+    border-color: #3a3a48;
+    color: #b0b0c0;
+  }
+
+  .team-chat-notify-btn,
+  .team-chat-back-btn,
+  .team-chat-group-manage-btn,
+  .team-chat-attach-btn {
+    background: #1e1e28 !important;
+    border-color: #3a3a48 !important;
+    color: #e8e8f0 !important;
+  }
+
+  .team-chat-thread-item--active {
+    background: rgba(0, 83, 91, 0.35) !important;
+  }
+}

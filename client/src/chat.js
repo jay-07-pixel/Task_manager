@@ -764,13 +764,13 @@ function rolePillHtml(roleOrLabel) {
 
 export function teamChatOffcanvasHtml() {
   return `
-    <div class="offcanvas offcanvas-end team-chat-offcanvas" tabindex="-1" id="teamChatOffcanvas" aria-labelledby="teamChatOffcanvasLabel">
+    <div class="offcanvas offcanvas-end team-chat-offcanvas admin-chat-offcanvas" tabindex="-1" id="teamChatOffcanvas" aria-labelledby="teamChatOffcanvasLabel">
       <div class="offcanvas-header team-chat-header border-0">
         <div class="team-chat-header-brand min-w-0 flex-grow-1">
-          <div class="team-chat-header-icon" aria-hidden="true"><i class="bi bi-chat-heart-fill"></i></div>
+          <div class="team-chat-header-icon" aria-hidden="true"><span class="material-symbols-outlined">forum</span></div>
           <div class="min-w-0">
             <h2 class="offcanvas-title h5 mb-0" id="teamChatOffcanvasLabel">Messages</h2>
-            <p class="small text-muted mb-0">Chat with your team</p>
+            <p class="team-chat-header-subtitle">Chat with your team</p>
           </div>
         </div>
         <button type="button" class="btn btn-sm btn-light border team-chat-notify-btn d-none js-chat-enable-push" id="team-chat-enable-push" title="Enable message notifications">
@@ -877,7 +877,7 @@ export function teamChatOffcanvasHtml() {
             </div>
             <div class="modal-footer border-top-0 pt-0">
               <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-              <button type="submit" class="btn btn-dark" id="team-chat-group-submit">Create group</button>
+              <button type="submit" class="btn btn-primary" id="team-chat-group-submit">Create group</button>
             </div>
           </form>
         </div>
@@ -910,7 +910,7 @@ export function teamChatOffcanvasHtml() {
               <button type="button" class="btn btn-link text-danger text-decoration-none px-0" id="team-chat-delete-group-btn">Delete group</button>
               <div class="team-chat-group-modal-actions">
                 <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="submit" class="btn btn-dark" id="team-chat-manage-group-submit">Save</button>
+                <button type="submit" class="btn btn-primary" id="team-chat-manage-group-submit">Save</button>
               </div>
             </div>
           </form>
@@ -1203,7 +1203,6 @@ function renderThreadList() {
           <span class="team-chat-thread-item-top">
             <span class="team-chat-thread-item-title-wrap">
               <span class="team-chat-thread-item-name text-truncate">${d().escapeHtml(title)}</span>
-              ${isGroup ? `<span class="team-chat-group-badge">Group</span>` : ""}
             </span>
             <span class="team-chat-thread-item-time tabular-nums">${d().escapeHtml(formatChatTime(t.lastMessage?.createdAt || t.updatedAt))}</span>
           </span>
