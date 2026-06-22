@@ -83,10 +83,26 @@ model TaskAssignee {
   task                Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
   user                User      @relation("TaskAssigneeUser", fields: [userId], references: [id], onDelete: Cascade)
   assignedBy          User?     @relation("TaskAssignedBy", fields: [assignedByUserId], references: [id], onDelete: SetNull)
+  submissionProofs    TaskSubmissionProof[]
 
   @@id([taskId, userId])
   @@map("task_assignee")
   @@index([userId])
+}
+
+model TaskSubmissionProof {
+  id        String   @id @default(uuid())
+  taskId    String   @map("task_id")
+  userId    String   @map("user_id")
+  filePath  String   @map("file_path") @db.VarChar(512)
+  sortOrder Int      @default(0) @map("sort_order")
+  archived  Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  assignee TaskAssignee @relation(fields: [taskId, userId], references: [taskId, userId], onDelete: Cascade)
+
+  @@index([taskId, userId, archived])
+  @@map("task_submission_proof")
 }
 
 model TaskDelegation {

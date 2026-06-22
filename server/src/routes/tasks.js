@@ -23,6 +23,7 @@ const router = Router();
 
 const SUBMISSION_TEXT_MAX = 2000;
 const SUBMISSION_REQUIRED_MSG = "Please provide submission text or upload an image or PDF.";
+const MAX_SUBMISSION_PROOFS = 10;
 const PROGRESS_UPDATE_TEXT_MAX = 2000;
 
 const progressUpdateTypeSchema = z.enum(["started", "in_progress", "blocked", "update"]);
@@ -31,11 +32,12 @@ const progressUpdateBodySchema = z.object({
   message: z.string().trim().min(1).max(PROGRESS_UPDATE_TEXT_MAX),
 });
 
-/** @param {{ submissionText?: string | null, completionProofPath?: string | null } | null | undefined} row */
+/** @param {{ submissionText?: string | null, completionProofPath?: string | null, submissionProofs?: { archived?: boolean }[] } | null | undefined} row */
 function assigneeHasSubmissionContent(row) {
   if (!row) return false;
   const text = (row.submissionText ?? "").trim();
-  return text.length > 0 || !!row.completionProofPath;
+  const proofCount = (row.submissionProofs ?? []).filter((p) => !p.archived).length;
+  return text.length > 0 || !!row.completionProofPath || proofCount > 0;
 }
 
 /** Recurring task rolled to next due — employee has not submitted the new occurrence yet. */
@@ -114,6 +116,9 @@ const taskAssigneeInclude = {
     include: {
       user: { select: { id: true, displayName: true, email: true } },
       assignedBy: { select: { id: true, displayName: true, role: true } },
+      submissionProofs: {
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+      },
     },
   },
 };
@@ -338,6 +343,50 @@ function deleteProofFile(storedName) {
   fs.unlink(full, () => {});
 }
 
+async function loadAssigneeProofRows(taskId, userId, { archived = false } = {}) {
+  return prisma.taskSubmissionProof.findMany({
+    where: { taskId, userId, archived },
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+  });
+}
+
+async function deleteAssigneeProofFiles(taskId, userId, { archived = null } = {}) {
+  const where = { taskId, userId };
+  if (archived === true) where.archived = true;
+  else if (archived === false) where.archived = false;
+  const rows = await prisma.taskSubmissionProof.findMany({
+    where,
+    select: { filePath: true },
+  });
+  for (const row of rows) {
+    deleteProofFile(row.filePath);
+  }
+  await prisma.taskSubmissionProof.deleteMany({ where });
+}
+
+function buildProofFileUrl(taskId, userId, proofId, archived = false) {
+  const suffix = archived ? "?archived=1" : "";
+  return `/api/tasks/${taskId}/completion-proof/${userId}/${proofId}${suffix}`;
+}
+
+function proofUrlsFromRows(taskId, userId, rows, archived = false) {
+  return rows.map((p) => buildProofFileUrl(taskId, userId, p.id, archived));
+}
+
+function currentProofUrlsForAssignee(task, assigneeUserId, row) {
+  const proofs = (row.submissionProofs ?? []).filter((p) => !p.archived);
+  if (proofs.length) return proofUrlsFromRows(task.id, assigneeUserId, proofs);
+  if (row.completionProofPath) return [`/api/tasks/${task.id}/completion-proof/${assigneeUserId}`];
+  return [];
+}
+
+function archivedProofUrlsForAssignee(task, userId, row) {
+  const proofs = (row.submissionProofs ?? []).filter((p) => p.archived);
+  if (proofs.length) return proofUrlsFromRows(task.id, userId, proofs, true);
+  if (row.lastCompletionProofPath) return [`/api/tasks/${task.id}/completion-proof/${userId}?archived=1`];
+  return [];
+}
+
 function proofAbsolutePath(storedName) {
   if (!storedName || /[\\/]/.test(storedName)) return null;
   const full = path.join(uploadsRoot, path.basename(storedName));
@@ -404,21 +453,27 @@ function readSubmissionTextFromBody(req) {
 }
 
 /** @param {import("express").Request} req */
-function getProofUploadFile(req) {
-  if (req.file) return req.file;
+function getProofUploadFiles(req) {
+  if (req.file) return [req.file];
   const files = req.files;
-  if (!files) return null;
+  if (!files) return [];
   if (Array.isArray(files)) {
-    return files.find((f) => f.fieldname === "proof") ?? null;
+    return files.filter((f) => f.fieldname === "proof");
   }
-  return files.proof?.[0] ?? null;
+  if (files.proof) {
+    return Array.isArray(files.proof) ? files.proof : [files.proof];
+  }
+  return [];
 }
 
 function handleProofUpload(req, res, next) {
-  proofUpload.fields([{ name: "proof", maxCount: 1 }])(req, res, (err) => {
+  proofUpload.fields([{ name: "proof", maxCount: MAX_SUBMISSION_PROOFS }])(req, res, (err) => {
     if (!err) return next();
     if (err.code === "LIMIT_FILE_SIZE") {
-      return res.status(400).json({ error: "File must be 5 MB or smaller." });
+      return res.status(400).json({ error: "Each file must be 5 MB or smaller." });
+    }
+    if (err.code === "LIMIT_UNEXPECTED_FILE" || err.code === "LIMIT_FIELD_COUNT") {
+      return res.status(400).json({ error: `You can upload up to ${MAX_SUBMISSION_PROOFS} images per submission.` });
     }
     const msg = err.message || "Upload failed";
     if (/Only JPEG|images are allowed|PDF files are allowed/i.test(msg)) {
@@ -593,15 +648,17 @@ export function serializeTask(t) {
       recurrenceRule = null;
     }
   }
-  const assignees = (t.assignments ?? []).map((a) => ({
+  const assignees = (t.assignments ?? []).map((a) => {
+    const proofUrls = currentProofUrlsForAssignee(t, a.userId, a);
+    const archivedProofUrls = archivedProofUrlsForAssignee(t, a.userId, a);
+    return {
     id: a.user.id,
     displayName: a.user.displayName,
     email: a.user.email,
     assigneeDone: a.assigneeDone,
     submissionText: (a.submissionText ?? "").trim() || null,
-    completionProofUrl: a.completionProofPath
-      ? `/api/tasks/${t.id}/completion-proof/${a.userId}`
-      : null,
+    completionProofUrl: proofUrls[0] ?? null,
+    completionProofUrls: proofUrls,
     progressUpdateCount: a.progressUpdateCount ?? 0,
     unreadProgressUpdateCount: a.unreadProgressUpdateCount ?? 0,
     latestProgressUpdate: a.latestProgressUpdate ?? null,
@@ -612,10 +669,10 @@ export function serializeTask(t) {
     lastSubmittedAt:
       a.lastSubmittedAt instanceof Date ? a.lastSubmittedAt.toISOString() : (a.lastSubmittedAt ?? null),
     lastSubmissionText: (a.lastSubmissionText ?? "").trim() || null,
-    lastCompletionProofUrl: a.lastCompletionProofPath
-      ? `/api/tasks/${t.id}/completion-proof/${a.user.id}?archived=1`
-      : null,
-  }));
+    lastCompletionProofUrl: archivedProofUrls[0] ?? null,
+    lastCompletionProofUrls: archivedProofUrls,
+  };
+  });
   const delegations = (t.delegations ?? []).map(serializeDelegation);
   return {
     id: t.id,
@@ -1108,21 +1165,28 @@ router.get("/:id/submission", requireAuth, async (req, res) => {
     : isSelfEmployee
       ? resolveAssigneeCurrentSubmissionView(row)
       : resolveAssigneeSubmissionView(row);
+  const proofRows = await loadAssigneeProofRows(task.id, assigneeUserId, { archived: wantArchived });
+  let completionProofUrls = proofUrlsFromRows(task.id, assigneeUserId, proofRows, wantArchived);
+  if (!completionProofUrls.length && view.proofPath) {
+    completionProofUrls = [
+      `/api/tasks/${task.id}/completion-proof/${assigneeUserId}${wantArchived ? "?archived=1" : ""}`,
+    ];
+  }
   res.json({
     taskTitle: task.title,
     assigneeUserId,
     submissionText: view.submissionText,
-    completionProofUrl: view.proofPath
-      ? `/api/tasks/${task.id}/completion-proof/${assigneeUserId}${view.archived ? "?archived=1" : ""}`
-      : null,
+    completionProofUrl: completionProofUrls[0] ?? null,
+    completionProofUrls,
     submittedAt:
       view.submittedAt instanceof Date ? view.submittedAt.toISOString() : (view.submittedAt ?? null),
     archived: view.archived,
   });
 });
 
-router.get("/:id/completion-proof/:assigneeUserId", requireAuth, async (req, res) => {
+async function serveAssigneeProofFile(req, res) {
   const assigneeUserId = req.params.assigneeUserId;
+  const proofId = req.params.proofId;
   const task = await prisma.task.findFirst({
     where: { id: req.params.id },
     include: { list: true, assignments: { include: { user: { select: { id: true } } } } },
@@ -1131,11 +1195,6 @@ router.get("/:id/completion-proof/:assigneeUserId", requireAuth, async (req, res
     return res.status(404).send("Not found");
   }
   const row = task.assignments.find((a) => a.userId === assigneeUserId);
-  const useArchived = req.query.archived === "1" || req.query.archived === "true";
-  const proofPath = useArchived ? row?.lastCompletionProofPath : row?.completionProofPath;
-  if (!proofPath) {
-    return res.status(404).send("Not found");
-  }
   const isOwner = task.list.ownerId === req.session.userId;
   const isSelfEmployee =
     req.session.role === "employee" &&
@@ -1144,12 +1203,45 @@ router.get("/:id/completion-proof/:assigneeUserId", requireAuth, async (req, res
   if (!isOwner && !isSelfEmployee) {
     return res.status(403).send("Forbidden");
   }
+
+  const useArchived = req.query.archived === "1" || req.query.archived === "true";
+  let proofPath = null;
+  if (proofId) {
+    const proof = await prisma.taskSubmissionProof.findFirst({
+      where: { id: proofId, taskId: task.id, userId: assigneeUserId },
+    });
+    if (!proof) {
+      return res.status(404).send("Not found");
+    }
+    if (useArchived && !proof.archived) {
+      return res.status(404).send("Not found");
+    }
+    if (!useArchived && proof.archived) {
+      return res.status(404).send("Not found");
+    }
+    proofPath = proof.filePath;
+  } else {
+    proofPath = useArchived ? row?.lastCompletionProofPath : row?.completionProofPath;
+    if (!proofPath) {
+      const rows = await loadAssigneeProofRows(task.id, assigneeUserId, { archived: useArchived });
+      proofPath = rows[0]?.filePath ?? null;
+    }
+  }
+  if (!proofPath) {
+    return res.status(404).send("Not found");
+  }
   const full = proofAbsolutePath(proofPath);
   if (!full) {
     return res.status(404).send("Not found");
   }
   res.type(proofContentType(proofPath));
   res.sendFile(full);
+}
+
+router.get("/:id/completion-proof/:assigneeUserId/:proofId", requireAuth, serveAssigneeProofFile);
+
+router.get("/:id/completion-proof/:assigneeUserId", requireAuth, async (req, res) => {
+  await serveAssigneeProofFile(req, res);
 });
 
 router.post("/:id/completion-proof", requireAuth, handleProofUpload, async (req, res) => {
@@ -1168,17 +1260,38 @@ router.post("/:id/completion-proof", requireAuth, handleProofUpload, async (req,
 
     const my = task.assignments.find((a) => a.userId === req.session.userId);
     const submissionText = readSubmissionTextFromBody(req).trim();
-    const proofFile = getProofUploadFile(req);
+    const proofFiles = getProofUploadFiles(req);
     if (submissionText.length > SUBMISSION_TEXT_MAX) {
       return res.status(400).json({ error: `Submission notes must be ${SUBMISSION_TEXT_MAX} characters or fewer.` });
     }
+    if (proofFiles.length > MAX_SUBMISSION_PROOFS) {
+      return res.status(400).json({ error: `You can upload up to ${MAX_SUBMISSION_PROOFS} images per submission.` });
+    }
+    const pdfCount = proofFiles.filter((f) => f.mimetype === "application/pdf").length;
+    if (pdfCount > 0 && proofFiles.length > 1) {
+      return res.status(400).json({ error: "Submit one PDF alone, or upload multiple images." });
+    }
 
     let completionProofPath = my?.completionProofPath ?? null;
-    if (proofFile) {
+    if (proofFiles.length > 0) {
+      await deleteAssigneeProofFiles(task.id, req.session.userId, { archived: false });
       if (my?.completionProofPath) {
         deleteProofFile(my.completionProofPath);
       }
-      completionProofPath = proofFile.filename;
+      await prisma.taskSubmissionProof.createMany({
+        data: proofFiles.map((f, index) => ({
+          id: randomUUID(),
+          taskId: task.id,
+          userId: req.session.userId,
+          filePath: f.filename,
+          sortOrder: index,
+          archived: false,
+        })),
+      });
+      completionProofPath = proofFiles[0].filename;
+    } else {
+      const existingProofs = await loadAssigneeProofRows(task.id, req.session.userId, { archived: false });
+      completionProofPath = existingProofs[0]?.filePath ?? my?.completionProofPath ?? null;
     }
 
     if (!submissionText && !completionProofPath) {
@@ -1251,10 +1364,13 @@ router.post("/lists/:listId/clear-completed", requireOwner, async (req, res) => 
   if (!list) return res.status(404).json({ error: "List not found" });
   const toRemove = await prisma.task.findMany({
     where: { listId: list.id, completed: true },
-    include: { assignments: { select: { completionProofPath: true } } },
+    include: { assignments: { include: { submissionProofs: true } } },
   });
   for (const t of toRemove) {
     for (const a of t.assignments) {
+      for (const p of a.submissionProofs ?? []) {
+        deleteProofFile(p.filePath);
+      }
       if (a.completionProofPath) deleteProofFile(a.completionProofPath);
     }
   }
@@ -1393,6 +1509,9 @@ router.patch("/:id", requireAuth, async (req, res) => {
       if (!assigneeDone && row.completionProofPath) {
         deleteProofFile(row.completionProofPath);
       }
+      if (!assigneeDone) {
+        await deleteAssigneeProofFiles(task.id, userId, { archived: false });
+      }
       await prisma.taskAssignee.update({
         where: { taskId_userId: { taskId: task.id, userId } },
         data: assigneeDone
@@ -1424,8 +1543,12 @@ router.patch("/:id", requireAuth, async (req, res) => {
       const v = parsed.data.completed;
       if (!v) {
         for (const a of task.assignments) {
+          for (const p of a.submissionProofs ?? []) {
+            deleteProofFile(p.filePath);
+          }
           if (a.completionProofPath) deleteProofFile(a.completionProofPath);
         }
+        await prisma.taskSubmissionProof.deleteMany({ where: { taskId: task.id } });
         await prisma.taskAssignee.updateMany({
           where: { taskId: task.id },
           data: clearAssigneeSubmissionUpdate(false),
@@ -1462,6 +1585,9 @@ router.patch("/:id", requireAuth, async (req, res) => {
     }
     if (parsed.data.assigneeIds !== undefined) {
       for (const a of task.assignments) {
+        for (const p of a.submissionProofs ?? []) {
+          deleteProofFile(p.filePath);
+        }
         if (a.completionProofPath) deleteProofFile(a.completionProofPath);
       }
       const resolved = await resolveEmployeeIds(parsed.data.assigneeIds);
@@ -1491,6 +1617,7 @@ router.patch("/:id", requireAuth, async (req, res) => {
     const prevPath = myRow?.completionProofPath;
     if (d.completed === false) {
       if (prevPath) deleteProofFile(prevPath);
+      await deleteAssigneeProofFiles(task.id, req.session.userId, { archived: false });
       await prisma.taskAssignee.update({
         where: { taskId_userId: { taskId: task.id, userId: req.session.userId } },
         data: clearAssigneeSubmissionUpdate(false),
@@ -1556,7 +1683,7 @@ router.delete("/:id", requireAuth, async (req, res) => {
     where: { id: req.params.id },
     include: {
       list: true,
-      assignments: { select: { assignedByUserId: true, completionProofPath: true } },
+      assignments: { include: { submissionProofs: true } },
     },
   });
   if (!task) {
@@ -1577,6 +1704,9 @@ router.delete("/:id", requireAuth, async (req, res) => {
   }
 
   for (const a of task.assignments) {
+    for (const p of a.submissionProofs ?? []) {
+      deleteProofFile(p.filePath);
+    }
     if (a.completionProofPath) deleteProofFile(a.completionProofPath);
   }
   await prisma.task.delete({ where: { id: task.id } });

@@ -192,7 +192,8 @@ const proofBlobUrls = new Set();
 
 const EMP_SUBMISSION_TEXT_MAX = 2000;
 const EMP_SUBMISSION_FILE_MAX_BYTES = 5 * 1024 * 1024;
-const EMP_SUBMISSION_REQUIRED_MSG = "Please provide submission text or upload a file.";
+const EMP_SUBMISSION_MAX_IMAGES = 10;
+const EMP_SUBMISSION_REQUIRED_MSG = "Please provide submission text or upload at least one image.";
 const PROGRESS_UPDATE_TEXT_MAX = 2000;
 const PROGRESS_UPDATE_TYPES = [
   {
@@ -261,7 +262,24 @@ function validateEmpSubmissionFile(file) {
     return "Only JPEG, PNG, GIF, WebP images, or PDF files are allowed.";
   }
   if (file.size > EMP_SUBMISSION_FILE_MAX_BYTES) {
-    return "File must be 5 MB or smaller.";
+    return "Each file must be 5 MB or smaller.";
+  }
+  return null;
+}
+
+function validateEmpSubmissionFileSet(files) {
+  if (!files?.length) return null;
+  const pdfs = files.filter(isEmpSubmissionPdfFile);
+  if (pdfs.length > 0) {
+    if (files.length > 1) return "Submit one PDF alone, or upload multiple images.";
+    return validateEmpSubmissionFile(pdfs[0]);
+  }
+  if (files.length > EMP_SUBMISSION_MAX_IMAGES) {
+    return `You can attach up to ${EMP_SUBMISSION_MAX_IMAGES} images.`;
+  }
+  for (const file of files) {
+    const err = validateEmpSubmissionFile(file);
+    if (err) return err;
   }
   return null;
 }
@@ -2723,8 +2741,9 @@ function submissionDetailModalHtml() {
               <div id="submission-detail-text" class="submission-detail-text border rounded p-3 bg-body-secondary small mb-0"></div>
             </div>
             <div id="submission-detail-file-wrap" class="submission-detail-file-wrap d-none">
-              <p id="submission-detail-file-label" class="small text-uppercase text-secondary fw-semibold mb-2">Attachment</p>
-              <div id="submission-detail-image-frame" class="submission-detail-image-frame rounded border bg-black d-flex align-items-center justify-content-center">
+              <p id="submission-detail-file-label" class="small text-uppercase text-secondary fw-semibold mb-2">Attachments</p>
+              <div id="submission-detail-gallery" class="submission-detail-gallery d-none"></div>
+              <div id="submission-detail-image-frame" class="submission-detail-image-frame rounded border bg-black d-flex align-items-center justify-content-center d-none">
                 <img id="submission-detail-img" src="" class="w-100" style="max-height: min(70vh, 720px); object-fit: contain;" alt="Submission image" />
               </div>
               <iframe id="submission-detail-pdf" class="w-100 rounded border d-none" style="height: min(70vh, 720px);" title="Submission PDF"></iframe>
@@ -2875,20 +2894,15 @@ function empSubmissionModalHtml() {
             </div>
             <p id="emp-submission-error" class="admin-emp-modal-error d-none" role="alert"></p>
             <hr class="admin-emp-modal-divider" />
-            <label class="admin-emp-modal-label" for="emp-submission-image">Submission file <span class="admin-emp-modal-label-optional">(image or PDF, optional)</span></label>
+            <label class="admin-emp-modal-label" for="emp-submission-image">Submission images <span class="admin-emp-modal-label-optional">(up to ${EMP_SUBMISSION_MAX_IMAGES}, or one PDF)</span></label>
             <input
               type="file"
               class="admin-emp-modal-file"
               id="emp-submission-image"
               accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,.pdf"
+              multiple
             />
-            <div id="emp-submission-preview-wrap" class="mt-2 d-none">
-              <img id="emp-submission-preview" src="" alt="Selected image preview" class="submission-preview-thumb admin-emp-modal-preview-img d-none" />
-              <div id="emp-submission-preview-pdf" class="admin-emp-modal-preview-pdf d-none d-flex align-items-center gap-2">
-                <i class="bi bi-file-earmark-pdf text-danger fs-4" aria-hidden="true"></i>
-                <span id="emp-submission-preview-name" class="small text-break"></span>
-              </div>
-            </div>
+            <div id="emp-submission-preview-wrap" class="emp-submission-preview-grid mt-2 d-none"></div>
           </div>
           ${adminEmpModalFooterHtml("Cancel", "emp-submission-submit", "Submit")}
         </div>
@@ -3245,21 +3259,30 @@ function assigneeHasSubmission(a) {
   if (!a) return false;
   return !!(
     a.submissionText?.trim() ||
-    a.completionProofUrl ||
+    assigneeProofUrls(a).length ||
     a.lastSubmissionText?.trim() ||
-    a.lastCompletionProofUrl
+    assigneeProofUrls(a, { archived: true }).length
   );
+}
+
+function assigneeProofUrls(assignee, { archived = false } = {}) {
+  if (!assignee) return [];
+  const listKey = archived ? "lastCompletionProofUrls" : "completionProofUrls";
+  const urls = assignee[listKey];
+  if (Array.isArray(urls) && urls.length) return urls;
+  const single = archived ? assignee.lastCompletionProofUrl : assignee.completionProofUrl;
+  return single ? [single] : [];
 }
 
 /** Current occurrence only — excludes archived fields after a recurring roll. */
 function employeeHasCurrentSubmission(a) {
   if (!a) return false;
-  return !!(a.submissionText?.trim() || a.completionProofUrl);
+  return !!(a.submissionText?.trim() || assigneeProofUrls(a).length);
 }
 
 function employeeHasArchivedSubmission(a) {
   if (!a) return false;
-  return !!(a.lastSubmissionText?.trim() || a.lastCompletionProofUrl);
+  return !!(a.lastSubmissionText?.trim() || assigneeProofUrls(a, { archived: true }).length);
 }
 
 /** Recurring task rolled forward; employee has not submitted the new occurrence yet. */
@@ -3290,22 +3313,25 @@ function assigneeRolledRecurringSubmission(assignee) {
 
 function resolveAssigneeSubmissionForView(assignee) {
   if (!assignee) {
-    return { submissionText: "", proofUrl: null, archived: false, submittedAt: null };
+    return { submissionText: "", proofUrl: null, proofUrls: [], archived: false, submittedAt: null };
   }
   const currentText = assignee.submissionText?.trim() || "";
-  const currentProof = assignee.completionProofUrl || null;
-  if (currentText || currentProof) {
+  const currentProofUrls = assigneeProofUrls(assignee);
+  if (currentText || currentProofUrls.length) {
     return {
       submissionText: currentText,
-      proofUrl: currentProof,
+      proofUrl: currentProofUrls[0] ?? null,
+      proofUrls: currentProofUrls,
       archived: false,
       submittedAt: assignee.lastSubmittedAt ?? null,
     };
   }
+  const archivedProofUrls = assigneeProofUrls(assignee, { archived: true });
   return {
     submissionText: assignee.lastSubmissionText?.trim() || "",
-    proofUrl: assignee.lastCompletionProofUrl || null,
-    archived: !!(assignee.lastSubmissionText?.trim() || assignee.lastCompletionProofUrl),
+    proofUrl: archivedProofUrls[0] ?? null,
+    proofUrls: archivedProofUrls,
+    archived: !!(assignee.lastSubmissionText?.trim() || archivedProofUrls.length),
     submittedAt: assignee.lastSubmittedAt ?? null,
   };
 }
@@ -3321,6 +3347,7 @@ function lookupAssigneeSubmission(taskId, userId) {
     taskTitle: task.title,
     submissionText: view.submissionText,
     proofUrl: view.proofUrl,
+    proofUrls: view.proofUrls,
     archived: view.archived,
     submittedAt: view.submittedAt,
   };
@@ -3329,6 +3356,8 @@ function lookupAssigneeSubmission(taskId, userId) {
 function clearSubmissionDetailMedia() {
   const img = document.getElementById("submission-detail-img");
   const pdf = document.getElementById("submission-detail-pdf");
+  const gallery = document.getElementById("submission-detail-gallery");
+  const imageFrame = document.getElementById("submission-detail-image-frame");
   if (img?.src?.startsWith("blob:")) {
     URL.revokeObjectURL(img.src);
     proofBlobUrls.delete(img.src);
@@ -3345,9 +3374,20 @@ function clearSubmissionDetailMedia() {
     pdf.removeAttribute("src");
     pdf.classList.add("d-none");
   }
+  if (gallery) {
+    gallery.querySelectorAll("img").forEach((node) => {
+      if (node.src?.startsWith("blob:")) {
+        URL.revokeObjectURL(node.src);
+        proofBlobUrls.delete(node.src);
+      }
+    });
+    gallery.innerHTML = "";
+    gallery.classList.add("d-none");
+  }
+  imageFrame?.classList.add("d-none");
 }
 
-async function openSubmissionDetailModal({ title, submissionText, proofUrl }) {
+async function openSubmissionDetailModal({ title, submissionText, proofUrl, proofUrls }) {
   const modalEl = document.getElementById("submissionDetailModal");
   const titleEl = document.getElementById("submissionDetailTitle");
   const textWrap = document.getElementById("submission-detail-text-wrap");
@@ -3355,14 +3395,16 @@ async function openSubmissionDetailModal({ title, submissionText, proofUrl }) {
   const fileWrap = document.getElementById("submission-detail-file-wrap");
   const fileLabel = document.getElementById("submission-detail-file-label");
   const imageFrame = document.getElementById("submission-detail-image-frame");
+  const gallery = document.getElementById("submission-detail-gallery");
   const img = document.getElementById("submission-detail-img");
   const pdf = document.getElementById("submission-detail-pdf");
   const emptyEl = document.getElementById("submission-detail-empty");
-  if (!modalEl || !titleEl || !textWrap || !textEl || !fileWrap || !fileLabel || !imageFrame || !img || !pdf || !emptyEl) return;
+  if (!modalEl || !titleEl || !textWrap || !textEl || !fileWrap || !fileLabel || !imageFrame || !gallery || !img || !pdf || !emptyEl) return;
 
   const text = (submissionText || "").trim();
   const hasText = text.length > 0;
-  const hasFile = !!proofUrl;
+  const urls = (proofUrls?.length ? proofUrls : proofUrl ? [proofUrl] : []).filter(Boolean);
+  const hasFile = urls.length > 0;
 
   titleEl.textContent = title || "Submission";
   clearSubmissionDetailMedia();
@@ -3386,12 +3428,13 @@ async function openSubmissionDetailModal({ title, submissionText, proofUrl }) {
   const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
   modal.show();
 
-  if (hasFile) {
-    try {
-      const resource = await fetchProofResource(proofUrl);
+  if (!hasFile) return;
+
+  try {
+    if (urls.length === 1) {
+      const resource = await fetchProofResource(urls[0]);
       if (resource.kind === "pdf") {
         fileLabel.textContent = "PDF";
-        imageFrame.classList.add("d-none");
         pdf.src = resource.url;
         pdf.classList.remove("d-none");
       } else {
@@ -3400,10 +3443,27 @@ async function openSubmissionDetailModal({ title, submissionText, proofUrl }) {
         img.src = resource.url;
         img.classList.remove("d-none");
       }
-    } catch (err) {
-      modal.hide();
-      showToast(err.message || "Could not load submission file.", "danger");
+      return;
     }
+
+    fileLabel.textContent = `${urls.length} images`;
+    gallery.classList.remove("d-none");
+    for (const url of urls) {
+      const resource = await fetchProofResource(url);
+      if (resource.kind === "pdf") {
+        pdf.src = resource.url;
+        pdf.classList.remove("d-none");
+        continue;
+      }
+      const node = document.createElement("img");
+      node.src = resource.url;
+      node.alt = "Submission image";
+      node.className = "submission-detail-gallery-img";
+      gallery.appendChild(node);
+    }
+  } catch (err) {
+    modal.hide();
+    showToast(err.message || "Could not load submission file.", "danger");
   }
 }
 
@@ -3421,10 +3481,16 @@ async function openSubmissionDetailForAssignee(taskId, userId, { archived = fals
   const data = await api(`/api/tasks/${taskId}/submission${q}`);
   const when = data.submittedAt ? formatProgressUpdateTime(data.submittedAt) : "";
   const title = data.archived && when ? `${data.taskTitle} — submitted ${when}` : data.taskTitle;
+  const proofUrls =
+    data.completionProofUrls?.length > 0
+      ? data.completionProofUrls
+      : data.completionProofUrl
+        ? [data.completionProofUrl]
+        : [];
   await openSubmissionDetailModal({
     title,
     submissionText: data.submissionText,
-    proofUrl: data.completionProofUrl,
+    proofUrls,
   });
 }
 
@@ -3446,21 +3512,21 @@ function syncEmpSubmissionCharCount() {
   counter.classList.toggle("text-danger", len >= EMP_SUBMISSION_TEXT_MAX);
 }
 
+/** @type {Map<File, string>} */
+const empSubmissionPreviewUrls = new Map();
+
 function resetEmpSubmissionPreview() {
   const input = document.getElementById("emp-submission-image");
   const wrap = document.getElementById("emp-submission-preview-wrap");
-  const preview = document.getElementById("emp-submission-preview");
-  const pdfPreview = document.getElementById("emp-submission-preview-pdf");
-  const pdfName = document.getElementById("emp-submission-preview-name");
   if (input) input.value = "";
-  if (preview?.src?.startsWith("blob:")) URL.revokeObjectURL(preview.src);
-  if (preview) {
-    preview.removeAttribute("src");
-    preview.classList.add("d-none");
+  for (const url of empSubmissionPreviewUrls.values()) {
+    URL.revokeObjectURL(url);
   }
-  if (pdfPreview) pdfPreview.classList.add("d-none");
-  if (pdfName) pdfName.textContent = "";
-  if (wrap) wrap.classList.add("d-none");
+  empSubmissionPreviewUrls.clear();
+  if (wrap) {
+    wrap.innerHTML = "";
+    wrap.classList.add("d-none");
+  }
 }
 
 function openEmpSubmissionModal(task) {
@@ -3487,10 +3553,12 @@ function openEmpSubmissionModal(task) {
   window.setTimeout(() => ta.focus(), 300);
 }
 
-async function submitEmployeeSubmission(taskId, submissionText, file) {
+async function submitEmployeeSubmission(taskId, submissionText, files) {
   const fd = new FormData();
   fd.append("submissionText", submissionText);
-  if (file) fd.append("proof", file);
+  for (const file of files ?? []) {
+    fd.append("proof", file);
+  }
   let res;
   try {
     res = await fetch(`/api/tasks/${taskId}/completion-proof`, {
@@ -3529,53 +3597,92 @@ function wireEmpSubmissionModal() {
   const fileInput = document.getElementById("emp-submission-image");
   const submitBtn = document.getElementById("emp-submission-submit");
   const previewWrap = document.getElementById("emp-submission-preview-wrap");
-  const preview = document.getElementById("emp-submission-preview");
-  const pdfPreview = document.getElementById("emp-submission-preview-pdf");
-  const pdfName = document.getElementById("emp-submission-preview-name");
 
   ta?.addEventListener("input", syncEmpSubmissionCharCount);
 
-  /** Clipboard paste (Ctrl+V) can include images/files. */
-  let fallbackProofFile = null;
+  let selectedProofFiles = [];
 
-  function setEmpSubmissionProofFile(file, { showSuccessToast = true } = {}) {
-    if (!file || !preview || !previewWrap || !pdfPreview || !pdfName) return;
-
-    const fileErr = validateEmpSubmissionFile(file);
-    if (fileErr) {
-      showToast(fileErr, "warning");
-      return;
-    }
-
-    fallbackProofFile = file;
-
-    // Try to sync the real <input type="file"> for submit upload.
-    // If assignment fails (some browsers), we still keep `fallbackProofFile` as backup.
+  function syncEmpSubmissionFileInput() {
+    if (!fileInput) return;
     try {
       const dt = new DataTransfer();
-      dt.items.add(file);
-      fileInput.value = "";
+      for (const file of selectedProofFiles) {
+        dt.items.add(file);
+      }
       fileInput.files = dt.files;
     } catch {
-      // ignore: we'll rely on fallbackProofFile in submit handler
+      /* ignore: submit uses selectedProofFiles directly */
     }
+  }
 
-    if (preview.src?.startsWith("blob:")) URL.revokeObjectURL(preview.src);
-    preview.removeAttribute("src");
-    preview.classList.add("d-none");
-    pdfPreview.classList.add("d-none");
-    pdfName.textContent = "";
-
-    if (isEmpSubmissionPdfFile(file)) {
-      pdfName.textContent = file.name || "document.pdf";
-      pdfPreview.classList.remove("d-none");
-    } else {
-      preview.src = URL.createObjectURL(file);
-      preview.classList.remove("d-none");
+  function renderEmpSubmissionPreview() {
+    if (!previewWrap) return;
+    for (const url of empSubmissionPreviewUrls.values()) {
+      URL.revokeObjectURL(url);
+    }
+    empSubmissionPreviewUrls.clear();
+    previewWrap.innerHTML = "";
+    if (!selectedProofFiles.length) {
+      previewWrap.classList.add("d-none");
+      return;
     }
     previewWrap.classList.remove("d-none");
 
-    if (showSuccessToast) showToast("Pasted image/file into submission.", "success");
+    if (selectedProofFiles.length === 1 && isEmpSubmissionPdfFile(selectedProofFiles[0])) {
+      const file = selectedProofFiles[0];
+      previewWrap.innerHTML = `<div class="admin-emp-modal-preview-pdf d-flex align-items-center gap-2 w-100">
+        <i class="bi bi-file-earmark-pdf text-danger fs-4" aria-hidden="true"></i>
+        <span class="small text-break">${escapeHtml(file.name || "document.pdf")}</span>
+        <button type="button" class="btn btn-sm btn-outline-danger ms-auto" data-remove-proof-index="0" aria-label="Remove PDF">Remove</button>
+      </div>`;
+    } else {
+      selectedProofFiles.forEach((file, index) => {
+        const url = URL.createObjectURL(file);
+        empSubmissionPreviewUrls.set(file, url);
+        const tile = document.createElement("div");
+        tile.className = "emp-submission-preview-item";
+        tile.innerHTML = `<img src="${url}" alt="" class="emp-submission-preview-thumb" />
+          <button type="button" class="emp-submission-preview-remove" data-remove-proof-index="${index}" aria-label="Remove image">&times;</button>`;
+        previewWrap.appendChild(tile);
+      });
+    }
+
+    previewWrap.querySelectorAll("[data-remove-proof-index]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const idx = Number(btn.getAttribute("data-remove-proof-index"));
+        if (Number.isNaN(idx)) return;
+        selectedProofFiles.splice(idx, 1);
+        syncEmpSubmissionFileInput();
+        renderEmpSubmissionPreview();
+      });
+    });
+  }
+
+  function addEmpSubmissionFiles(incoming) {
+    const next = [...selectedProofFiles];
+    for (const file of incoming) {
+      if (!file) continue;
+      const candidate = isEmpSubmissionPdfFile(file) ? [file] : [...next.filter((f) => !isEmpSubmissionPdfFile(f)), file];
+      const err = validateEmpSubmissionFileSet(candidate);
+      if (err) {
+        showToast(err, "warning");
+        continue;
+      }
+      if (isEmpSubmissionPdfFile(file)) {
+        next.length = 0;
+        next.push(file);
+        break;
+      }
+      if (next.some(isEmpSubmissionPdfFile)) continue;
+      if (next.length >= EMP_SUBMISSION_MAX_IMAGES) {
+        showToast(`You can attach up to ${EMP_SUBMISSION_MAX_IMAGES} images.`, "warning");
+        break;
+      }
+      next.push(file);
+    }
+    selectedProofFiles = next;
+    syncEmpSubmissionFileInput();
+    renderEmpSubmissionPreview();
   }
 
   function insertTextAtCaret(text) {
@@ -3587,45 +3694,40 @@ function wireEmpSubmissionModal() {
     if (room <= 0) return;
     const clipped = (text || "").slice(0, room);
     ta.value = value.slice(0, start) + clipped + value.slice(end);
-    // Put caret after inserted text (best-effort; selection APIs vary)
     const nextPos = start + clipped.length;
     try {
       ta.setSelectionRange(nextPos, nextPos);
     } catch {
-      // ignore
+      /* ignore */
     }
     syncEmpSubmissionCharCount();
   }
 
   ta?.addEventListener("paste", (e) => {
-    // Only intercept when clipboard contains a file (image/pdf). Text paste should work normally.
     const cd = e?.clipboardData;
     if (!cd || !fileInput) return;
 
     const items = cd.items;
     if (!items || !items.length) return;
 
-    let pastedFile = null;
+    const pastedFiles = [];
     for (const item of items) {
       if (item.kind !== "file") continue;
       const f = item.getAsFile?.();
       if (!f) continue;
       if (/^image\/|application\/pdf/i.test(f.type) || /\.pdf$/i.test(f.name || "")) {
-        pastedFile = f;
-        break;
+        pastedFiles.push(f);
       }
     }
 
-    if (!pastedFile) return;
+    if (!pastedFiles.length) return;
 
     e.preventDefault();
-
-    // Also allow text from clipboard to be inserted (if present), even when an image exists.
     const clipText = (cd.getData("text/plain") || "").trim();
-
-    setEmpSubmissionProofFile(pastedFile, { showSuccessToast: false });
+    addEmpSubmissionFiles(pastedFiles);
     if (clipText) insertTextAtCaret(clipText);
     syncEmpSubmissionCharCount();
+    if (pastedFiles.length) showToast("Pasted image into submission.", "success");
   });
 
   pasteBtn?.addEventListener("click", async () => {
@@ -3654,34 +3756,10 @@ function wireEmpSubmissionModal() {
   });
 
   fileInput?.addEventListener("change", () => {
-    const file = fileInput.files?.[0];
-    if (!file || !preview || !previewWrap || !pdfPreview || !pdfName) {
-      resetEmpSubmissionPreview();
-      fallbackProofFile = null;
-      return;
-    }
-    const fileErr = validateEmpSubmissionFile(file);
-    if (fileErr) {
-      showToast(fileErr, "warning");
-      fileInput.value = "";
-      resetEmpSubmissionPreview();
-      fallbackProofFile = null;
-      return;
-    }
-    fallbackProofFile = file;
-    if (preview.src?.startsWith("blob:")) URL.revokeObjectURL(preview.src);
-    preview.removeAttribute("src");
-    preview.classList.add("d-none");
-    pdfPreview.classList.add("d-none");
-    pdfName.textContent = "";
-    if (isEmpSubmissionPdfFile(file)) {
-      pdfName.textContent = file.name || "document.pdf";
-      pdfPreview.classList.remove("d-none");
-    } else {
-      preview.src = URL.createObjectURL(file);
-      preview.classList.remove("d-none");
-    }
-    previewWrap.classList.remove("d-none");
+    const files = [...(fileInput.files ?? [])];
+    if (!files.length) return;
+    addEmpSubmissionFiles(files);
+    fileInput.value = "";
   });
 
   submitBtn?.addEventListener("click", async () => {
@@ -3691,11 +3769,11 @@ function wireEmpSubmissionModal() {
     if (!taskId || !ta || !errEl) return;
 
     const text = ta.value.trim();
-    const file = fileInput?.files?.[0] ?? fallbackProofFile ?? null;
+    const files = selectedProofFiles.length ? [...selectedProofFiles] : [...(fileInput?.files ?? [])];
     errEl.classList.add("d-none");
     errEl.textContent = "";
 
-    if (!text && !file) {
+    if (!text && !files.length) {
       errEl.textContent = EMP_SUBMISSION_REQUIRED_MSG;
       errEl.classList.remove("d-none");
       return;
@@ -3705,19 +3783,17 @@ function wireEmpSubmissionModal() {
       errEl.classList.remove("d-none");
       return;
     }
-    if (file) {
-      const fileErr = validateEmpSubmissionFile(file);
-      if (fileErr) {
-        errEl.textContent = fileErr;
-        errEl.classList.remove("d-none");
-        return;
-      }
+    const fileErr = validateEmpSubmissionFileSet(files);
+    if (fileErr) {
+      errEl.textContent = fileErr;
+      errEl.classList.remove("d-none");
+      return;
     }
 
     submitBtn.disabled = true;
     try {
       const task = state.empTasks.find((t) => t.id === taskId);
-      const result = await submitEmployeeSubmission(taskId, ta.value, file);
+      const result = await submitEmployeeSubmission(taskId, ta.value, files);
       if (task?.dueAt) clearReminderForTask(taskId, task.dueAt);
       bootstrap.Modal.getInstance(modalEl)?.hide();
       if (result?.task) {
@@ -3740,8 +3816,8 @@ function wireEmpSubmissionModal() {
   });
 
   modalEl.addEventListener("hidden.bs.modal", () => {
+    selectedProofFiles = [];
     resetEmpSubmissionPreview();
-    fallbackProofFile = null;
     if (ta) ta.value = "";
     syncEmpSubmissionCharCount();
     const errEl = document.getElementById("emp-submission-error");
@@ -3752,8 +3828,7 @@ function wireEmpSubmissionModal() {
   });
 
   modalEl.addEventListener("shown.bs.modal", () => {
-    // Ensure clipboard file from a previous attempt doesn't leak into the next open.
-    fallbackProofFile = null;
+    selectedProofFiles = [];
   });
 }
 
@@ -4268,6 +4343,7 @@ function ownerTasksFingerprintFrom(tasks) {
         x.assigneeDone,
         x.submissionText ?? "",
         x.completionProofUrl ?? "",
+        (x.completionProofUrls ?? []).join("|"),
         x.progressUpdateCount ?? 0,
         x.unreadProgressUpdateCount ?? 0,
         x.latestProgressUpdate?.message ?? "",
