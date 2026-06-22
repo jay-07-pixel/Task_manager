@@ -14,6 +14,7 @@ import {
   shouldRollOnEmployeeComplete,
 } from "../lib/recurrenceRoll.js";
 import { requireAuth, requireOwner } from "../middleware/auth.js";
+import { isVideoAttachment } from "../lib/chatUpload.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const uploadsRoot = path.join(__dirname, "..", "..", "uploads", "completion-proofs");
@@ -22,7 +23,7 @@ fs.mkdirSync(uploadsRoot, { recursive: true });
 const router = Router();
 
 const SUBMISSION_TEXT_MAX = 2000;
-const SUBMISSION_REQUIRED_MSG = "Please provide submission text or upload an image or PDF.";
+const SUBMISSION_REQUIRED_MSG = "Please provide submission text or upload an image, video, or PDF.";
 const MAX_SUBMISSION_PROOFS = 10;
 const PROGRESS_UPDATE_TEXT_MAX = 2000;
 
@@ -402,8 +403,46 @@ function proofContentType(storedName) {
     ".gif": "image/gif",
     ".webp": "image/webp",
     ".pdf": "application/pdf",
+    ".mp4": "video/mp4",
+    ".m4v": "video/mp4",
+    ".webm": "video/webm",
+    ".mov": "video/quicktime",
+    ".mkv": "video/x-matroska",
+    ".avi": "video/x-msvideo",
+    ".3gp": "video/3gpp",
+    ".3g2": "video/3gpp2",
+    ".ogv": "video/ogg",
+    ".mpeg": "video/mpeg",
+    ".mpg": "video/mpeg",
   };
   return map[ext] || "application/octet-stream";
+}
+
+const PROOF_ALLOWED_EXTENSIONS = new Set([
+  ".jpg",
+  ".jpeg",
+  ".png",
+  ".gif",
+  ".webp",
+  ".pdf",
+  ".mp4",
+  ".m4v",
+  ".webm",
+  ".mov",
+  ".mkv",
+  ".avi",
+  ".3gp",
+  ".3g2",
+  ".ogv",
+  ".mpeg",
+  ".mpg",
+]);
+
+function isProofUploadAllowed(file) {
+  if (/^image\/(jpeg|png|gif|webp)$/.test(file.mimetype) || file.mimetype === "application/pdf") {
+    return true;
+  }
+  return isVideoAttachment(file.mimetype, file.originalname);
 }
 
 /** @param {unknown} err */
@@ -429,19 +468,23 @@ const proofUpload = multer({
       cb(null, uploadsRoot);
     },
     filename: (req, file, cb) => {
-      const ext = path.extname(file.originalname).toLowerCase();
-      const safeExt = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".pdf"].includes(ext) ? ext : ".jpg";
+      let ext = path.extname(file.originalname).toLowerCase();
+      if (!PROOF_ALLOWED_EXTENSIONS.has(ext)) {
+        if (isVideoAttachment(file.mimetype, file.originalname)) ext = ".mp4";
+        else if (file.mimetype === "application/pdf") ext = ".pdf";
+        else ext = ".jpg";
+      }
       const uid = req.session?.userId || "anon";
-      cb(null, `${req.params.id}-${uid}-${randomUUID()}${safeExt}`);
+      cb(null, `${req.params.id}-${uid}-${randomUUID()}${ext}`);
     },
   }),
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
-    if (/^image\/(jpeg|png|gif|webp)$/.test(file.mimetype) || file.mimetype === "application/pdf") {
+    if (isProofUploadAllowed(file)) {
       cb(null, true);
       return;
     }
-    cb(new Error("Only JPEG, PNG, GIF, WebP images, or PDF files are allowed"));
+    cb(new Error("Only JPEG, PNG, GIF, WebP images, MP4/WebM/MOV videos, or PDF files are allowed"));
   },
 });
 
@@ -476,7 +519,7 @@ function handleProofUpload(req, res, next) {
       return res.status(400).json({ error: `You can upload up to ${MAX_SUBMISSION_PROOFS} images per submission.` });
     }
     const msg = err.message || "Upload failed";
-    if (/Only JPEG|images are allowed|PDF files are allowed/i.test(msg)) {
+    if (/Only JPEG|images are allowed|videos are allowed|PDF files are allowed/i.test(msg)) {
       return res.status(400).json({ error: msg });
     }
     return next(err);
@@ -1269,7 +1312,7 @@ router.post("/:id/completion-proof", requireAuth, handleProofUpload, async (req,
     }
     const pdfCount = proofFiles.filter((f) => f.mimetype === "application/pdf").length;
     if (pdfCount > 0 && proofFiles.length > 1) {
-      return res.status(400).json({ error: "Submit one PDF alone, or upload multiple images." });
+      return res.status(400).json({ error: "Submit one PDF alone, or upload multiple images and videos." });
     }
 
     let completionProofPath = my?.completionProofPath ?? null;

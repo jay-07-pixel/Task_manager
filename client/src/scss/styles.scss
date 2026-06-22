@@ -372,6 +372,20 @@ body {
   background: #000;
 }
 
+.submission-detail-gallery-video,
+.submission-detail-video {
+  width: 100%;
+  max-height: min(40vh, 360px);
+  object-fit: contain;
+  border-radius: 0.375rem;
+  border: 1px solid var(--bs-border-color);
+  background: #000;
+}
+
+.submission-detail-video {
+  max-height: min(70vh, 720px);
+}
+
 .emp-submission-preview-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
@@ -390,6 +404,11 @@ body {
   border: 1px solid var(--bs-border-color);
   display: block;
   background: var(--bs-body-bg);
+}
+
+.emp-submission-preview-item video.emp-submission-preview-thumb {
+  object-fit: cover;
+  background: #000;
 }
 
 .emp-submission-preview-remove {

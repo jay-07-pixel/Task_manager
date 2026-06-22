@@ -193,7 +193,7 @@ const proofBlobUrls = new Set();
 const EMP_SUBMISSION_TEXT_MAX = 2000;
 const EMP_SUBMISSION_FILE_MAX_BYTES = 5 * 1024 * 1024;
 const EMP_SUBMISSION_MAX_IMAGES = 10;
-const EMP_SUBMISSION_REQUIRED_MSG = "Please provide submission text or upload at least one image.";
+const EMP_SUBMISSION_REQUIRED_MSG = "Please provide submission text or upload at least one image or video.";
 const PROGRESS_UPDATE_TEXT_MAX = 2000;
 const PROGRESS_UPDATE_TYPES = [
   {
@@ -254,12 +254,21 @@ function isEmpSubmissionPdfFile(file) {
   return /^application\/pdf$/i.test(file.type) || /\.pdf$/i.test(file.name || "");
 }
 
+function isEmpSubmissionVideoFile(file) {
+  return /^video\//i.test(file.type) || /\.(mp4|m4v|webm|mov|mkv|avi|3gp|3g2|ogv|mpeg|mpg)$/i.test(file.name || "");
+}
+
+function isEmpSubmissionImageFile(file) {
+  return /^image\/(jpeg|png|gif|webp)$/i.test(file.type);
+}
+
 function validateEmpSubmissionFile(file) {
   if (!file) return null;
-  const isImage = /^image\/(jpeg|png|gif|webp)$/i.test(file.type);
+  const isImage = isEmpSubmissionImageFile(file);
   const isPdf = isEmpSubmissionPdfFile(file);
-  if (!isImage && !isPdf) {
-    return "Only JPEG, PNG, GIF, WebP images, or PDF files are allowed.";
+  const isVideo = isEmpSubmissionVideoFile(file);
+  if (!isImage && !isPdf && !isVideo) {
+    return "Only JPEG, PNG, GIF, WebP images, MP4/WebM/MOV videos, or PDF files are allowed.";
   }
   if (file.size > EMP_SUBMISSION_FILE_MAX_BYTES) {
     return "Each file must be 5 MB or smaller.";
@@ -271,16 +280,25 @@ function validateEmpSubmissionFileSet(files) {
   if (!files?.length) return null;
   const pdfs = files.filter(isEmpSubmissionPdfFile);
   if (pdfs.length > 0) {
-    if (files.length > 1) return "Submit one PDF alone, or upload multiple images.";
+    if (files.length > 1) return "Submit one PDF alone, or upload multiple images and videos.";
     return validateEmpSubmissionFile(pdfs[0]);
   }
   if (files.length > EMP_SUBMISSION_MAX_IMAGES) {
-    return `You can attach up to ${EMP_SUBMISSION_MAX_IMAGES} images.`;
+    return `You can attach up to ${EMP_SUBMISSION_MAX_IMAGES} images or videos.`;
   }
   for (const file of files) {
     const err = validateEmpSubmissionFile(file);
     if (err) return err;
   }
+  return null;
+}
+
+function proofResourceKind(mime, proofUrl) {
+  if (mime === "application/pdf" || /\.pdf(?:\?|$)/i.test(proofUrl)) return "pdf";
+  if (mime.startsWith("video/") || /\.(mp4|m4v|webm|mov|mkv|avi|3gp|3g2|ogv|mpeg|mpg)(?:\?|$)/i.test(proofUrl)) {
+    return "video";
+  }
+  if (mime.startsWith("image/")) return "image";
   return null;
 }
 
@@ -294,14 +312,13 @@ async function fetchProofResource(proofUrl) {
   }
   const blob = await res.blob();
   const mime = (blob.type || "").toLowerCase();
-  const isPdf = mime === "application/pdf" || /\.pdf(?:\?|$)/i.test(proofUrl);
-  const isImage = mime.startsWith("image/");
-  if (!isImage && !isPdf) {
-    throw new Error("Submission file is missing or not a supported image or PDF.");
+  const kind = proofResourceKind(mime, proofUrl);
+  if (!kind) {
+    throw new Error("Submission file is missing or not a supported image, video, or PDF.");
   }
   const blobUrl = URL.createObjectURL(blob);
   proofBlobUrls.add(blobUrl);
-  return { url: blobUrl, kind: isPdf ? "pdf" : "image" };
+  return { url: blobUrl, kind, mime };
 }
 
 async function refreshMe() {
@@ -2746,6 +2763,7 @@ function submissionDetailModalHtml() {
               <div id="submission-detail-image-frame" class="submission-detail-image-frame rounded border bg-black d-flex align-items-center justify-content-center d-none">
                 <img id="submission-detail-img" src="" class="w-100" style="max-height: min(70vh, 720px); object-fit: contain;" alt="Submission image" />
               </div>
+              <video id="submission-detail-video" class="submission-detail-video w-100 rounded border bg-black d-none" style="max-height: min(70vh, 720px);" controls playsinline preload="metadata"></video>
               <iframe id="submission-detail-pdf" class="w-100 rounded border d-none" style="height: min(70vh, 720px);" title="Submission PDF"></iframe>
             </div>
             <p id="submission-detail-empty" class="text-muted small mb-0 d-none">No submission content.</p>
@@ -2894,12 +2912,12 @@ function empSubmissionModalHtml() {
             </div>
             <p id="emp-submission-error" class="admin-emp-modal-error d-none" role="alert"></p>
             <hr class="admin-emp-modal-divider" />
-            <label class="admin-emp-modal-label" for="emp-submission-image">Submission images <span class="admin-emp-modal-label-optional">(up to ${EMP_SUBMISSION_MAX_IMAGES}, or one PDF)</span></label>
+            <label class="admin-emp-modal-label" for="emp-submission-image">Submission files <span class="admin-emp-modal-label-optional">(up to ${EMP_SUBMISSION_MAX_IMAGES} images/videos, or one PDF)</span></label>
             <input
               type="file"
               class="admin-emp-modal-file"
               id="emp-submission-image"
-              accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,.pdf"
+              accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm,video/quicktime,video/3gpp,application/pdf,.pdf,.mp4,.webm,.mov"
               multiple
             />
             <div id="emp-submission-preview-wrap" class="emp-submission-preview-grid mt-2 d-none"></div>
@@ -3355,6 +3373,7 @@ function lookupAssigneeSubmission(taskId, userId) {
 
 function clearSubmissionDetailMedia() {
   const img = document.getElementById("submission-detail-img");
+  const video = document.getElementById("submission-detail-video");
   const pdf = document.getElementById("submission-detail-pdf");
   const gallery = document.getElementById("submission-detail-gallery");
   const imageFrame = document.getElementById("submission-detail-image-frame");
@@ -3366,6 +3385,16 @@ function clearSubmissionDetailMedia() {
     img.removeAttribute("src");
     img.classList.add("d-none");
   }
+  if (video) {
+    if (video.src?.startsWith("blob:")) {
+      URL.revokeObjectURL(video.src);
+      proofBlobUrls.delete(video.src);
+    }
+    video.pause();
+    video.removeAttribute("src");
+    video.load();
+    video.classList.add("d-none");
+  }
   if (pdf?.src?.startsWith("blob:")) {
     URL.revokeObjectURL(pdf.src);
     proofBlobUrls.delete(pdf.src);
@@ -3375,16 +3404,37 @@ function clearSubmissionDetailMedia() {
     pdf.classList.add("d-none");
   }
   if (gallery) {
-    gallery.querySelectorAll("img").forEach((node) => {
+    gallery.querySelectorAll("img, video").forEach((node) => {
       if (node.src?.startsWith("blob:")) {
         URL.revokeObjectURL(node.src);
         proofBlobUrls.delete(node.src);
+      }
+      if (node.tagName === "VIDEO") {
+        node.pause();
       }
     });
     gallery.innerHTML = "";
     gallery.classList.add("d-none");
   }
   imageFrame?.classList.add("d-none");
+}
+
+function appendSubmissionDetailGalleryItem(gallery, resource) {
+  if (resource.kind === "video") {
+    const node = document.createElement("video");
+    node.src = resource.url;
+    node.controls = true;
+    node.playsInline = true;
+    node.preload = "metadata";
+    node.className = "submission-detail-gallery-video";
+    gallery.appendChild(node);
+    return;
+  }
+  const node = document.createElement("img");
+  node.src = resource.url;
+  node.alt = "Submission image";
+  node.className = "submission-detail-gallery-img";
+  gallery.appendChild(node);
 }
 
 async function openSubmissionDetailModal({ title, submissionText, proofUrl, proofUrls }) {
@@ -3397,9 +3447,10 @@ async function openSubmissionDetailModal({ title, submissionText, proofUrl, proo
   const imageFrame = document.getElementById("submission-detail-image-frame");
   const gallery = document.getElementById("submission-detail-gallery");
   const img = document.getElementById("submission-detail-img");
+  const video = document.getElementById("submission-detail-video");
   const pdf = document.getElementById("submission-detail-pdf");
   const emptyEl = document.getElementById("submission-detail-empty");
-  if (!modalEl || !titleEl || !textWrap || !textEl || !fileWrap || !fileLabel || !imageFrame || !gallery || !img || !pdf || !emptyEl) return;
+  if (!modalEl || !titleEl || !textWrap || !textEl || !fileWrap || !fileLabel || !imageFrame || !gallery || !img || !video || !pdf || !emptyEl) return;
 
   const text = (submissionText || "").trim();
   const hasText = text.length > 0;
@@ -3437,6 +3488,10 @@ async function openSubmissionDetailModal({ title, submissionText, proofUrl, proo
         fileLabel.textContent = "PDF";
         pdf.src = resource.url;
         pdf.classList.remove("d-none");
+      } else if (resource.kind === "video") {
+        fileLabel.textContent = "Video";
+        video.src = resource.url;
+        video.classList.remove("d-none");
       } else {
         fileLabel.textContent = "Image";
         imageFrame.classList.remove("d-none");
@@ -3446,7 +3501,7 @@ async function openSubmissionDetailModal({ title, submissionText, proofUrl, proo
       return;
     }
 
-    fileLabel.textContent = `${urls.length} images`;
+    fileLabel.textContent = `${urls.length} attachments`;
     gallery.classList.remove("d-none");
     for (const url of urls) {
       const resource = await fetchProofResource(url);
@@ -3455,11 +3510,7 @@ async function openSubmissionDetailModal({ title, submissionText, proofUrl, proo
         pdf.classList.remove("d-none");
         continue;
       }
-      const node = document.createElement("img");
-      node.src = resource.url;
-      node.alt = "Submission image";
-      node.className = "submission-detail-gallery-img";
-      gallery.appendChild(node);
+      appendSubmissionDetailGalleryItem(gallery, resource);
     }
   } catch (err) {
     modal.hide();
@@ -3641,8 +3692,11 @@ function wireEmpSubmissionModal() {
         empSubmissionPreviewUrls.set(file, url);
         const tile = document.createElement("div");
         tile.className = "emp-submission-preview-item";
-        tile.innerHTML = `<img src="${url}" alt="" class="emp-submission-preview-thumb" />
-          <button type="button" class="emp-submission-preview-remove" data-remove-proof-index="${index}" aria-label="Remove image">&times;</button>`;
+        const media = isEmpSubmissionVideoFile(file)
+          ? `<video src="${url}" class="emp-submission-preview-thumb" muted playsinline preload="metadata"></video>`
+          : `<img src="${url}" alt="" class="emp-submission-preview-thumb" />`;
+        tile.innerHTML = `${media}
+          <button type="button" class="emp-submission-preview-remove" data-remove-proof-index="${index}" aria-label="Remove file">&times;</button>`;
         previewWrap.appendChild(tile);
       });
     }
@@ -3675,7 +3729,7 @@ function wireEmpSubmissionModal() {
       }
       if (next.some(isEmpSubmissionPdfFile)) continue;
       if (next.length >= EMP_SUBMISSION_MAX_IMAGES) {
-        showToast(`You can attach up to ${EMP_SUBMISSION_MAX_IMAGES} images.`, "warning");
+        showToast(`You can attach up to ${EMP_SUBMISSION_MAX_IMAGES} images or videos.`, "warning");
         break;
       }
       next.push(file);
@@ -3715,7 +3769,7 @@ function wireEmpSubmissionModal() {
       if (item.kind !== "file") continue;
       const f = item.getAsFile?.();
       if (!f) continue;
-      if (/^image\/|application\/pdf/i.test(f.type) || /\.pdf$/i.test(f.name || "")) {
+      if (/^image\/|^video\/|application\/pdf/i.test(f.type) || /\.(pdf|mp4|webm|mov|m4v)$/i.test(f.name || "")) {
         pastedFiles.push(f);
       }
     }
@@ -3727,7 +3781,7 @@ function wireEmpSubmissionModal() {
     addEmpSubmissionFiles(pastedFiles);
     if (clipText) insertTextAtCaret(clipText);
     syncEmpSubmissionCharCount();
-    if (pastedFiles.length) showToast("Pasted image into submission.", "success");
+    if (pastedFiles.length) showToast("Pasted file into submission.", "success");
   });
 
   pasteBtn?.addEventListener("click", async () => {
