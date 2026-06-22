@@ -490,7 +490,7 @@
     }
 
     .admin-kpi-card {
-      padding: 1rem;
+      padding: 0.85rem;
     }
 
     .admin-mobile-nav-body .admin-sidebar-logo {
@@ -659,12 +659,38 @@
       padding: 0 0.75rem 0.85rem;
     }
 
+    .admin-kpi-grid {
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .admin-kpi-card {
+      padding: 0.65rem 0.75rem;
+    }
+
+    .admin-kpi-card-body {
+      margin-bottom: 0.25rem;
+    }
+
+    .admin-kpi-card-icon {
+      padding: 0.35rem;
+
+      .material-symbols-outlined {
+        font-size: 1rem;
+      }
+    }
+
     .admin-kpi-card-num {
-      font-size: 1.25rem;
+      font-size: 1.125rem;
     }
 
     .admin-kpi-card-label {
-      font-size: 0.6875rem;
+      font-size: 0.625rem;
+      margin-bottom: 0.45rem;
+    }
+
+    .admin-kpi-bar {
+      height: 3px;
     }
 
     .admin-create-task-btn {
@@ -899,20 +925,16 @@
   /* KPI cards */
   .admin-kpi-grid {
     display: grid;
-    grid-template-columns: repeat(1, minmax(0, 1fr));
-    gap: 1.5rem;
-    margin-bottom: 2rem;
-  }
-
-  @media (min-width: 576px) {
-    .admin-kpi-grid {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.65rem;
+    margin-bottom: 1.25rem;
   }
 
   @media (min-width: 992px) {
     .admin-kpi-grid {
       grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2rem;
     }
   }
 
