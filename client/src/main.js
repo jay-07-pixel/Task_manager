@@ -12,7 +12,6 @@ import {
 } from "./sw-register.js";
 import {
   teamChatOffcanvasHtml,
-  teamChatSidebarButtonHtml,
   teamChatSidebarNavItemHtml,
   initTeamChat,
   stopPolling as stopChatPolling,
@@ -1741,6 +1740,87 @@ function ownerTrialTopBannerHtml() {
   if (!info.hasStarted) return "";
   const endStr = info.end.toLocaleDateString(undefined, { month: "short", day: "numeric" });
   return `<div class="admin-trial-banner">Free trial ends in <strong>${info.daysRemaining}</strong> day${info.daysRemaining === 1 ? "" : "s"} (${escapeHtml(endStr)}). <a href="mailto:support@kalpanik.in">Contact Support</a></div>`;
+}
+
+function empMobileNavToggleHtml() {
+  return `<button
+    type="button"
+    class="admin-nav-toggle d-lg-none"
+    data-bs-toggle="offcanvas"
+    data-bs-target="#empNavOffcanvas"
+    aria-controls="empNavOffcanvas"
+    aria-label="Open navigation menu"
+  >
+    ${adminMsIcon("menu")}
+  </button>`;
+}
+
+function dismissEmpMobileNav() {
+  const el = document.getElementById("empNavOffcanvas");
+  if (!el) return;
+  bootstrap.Offcanvas.getInstance(el)?.hide();
+}
+
+function employeeAdminHeaderProfileHtml() {
+  const name = state.user?.displayName ? escapeHtml(state.user.displayName) : "Employee";
+  const isDark = document.documentElement.getAttribute("data-bs-theme") === "dark";
+  const pushItem = isPushSupported()
+    ? `<button type="button" class="admin-header-profile-item js-emp-enable-push" role="menuitem">
+        ${adminMsIcon("notifications")}
+        <span class="js-emp-push-btn-label">${escapeHtml(empPushButtonLabel())}</span>
+      </button>`
+    : "";
+  const apkUrl = employeeApkDownloadUrl();
+  const playStore = kalpanikPlayStoreUrl();
+  const apkItem = `<a class="admin-header-profile-item" role="menuitem" href="${escapeHtml(apkUrl)}" download="kalpanik-reminder.apk">
+      ${adminMsIcon("android")}
+      <span>Download app (APK)</span>
+    </a>`;
+  const playItem = playStore
+    ? `<a class="admin-header-profile-item" role="menuitem" href="${escapeHtml(playStore)}" target="_blank" rel="noopener noreferrer">
+        ${adminMsIcon("shop")}
+        <span>Get on Play Store</span>
+      </a>`
+    : "";
+  return `<div class="admin-header-profile-dropdown">
+    <button
+      type="button"
+      class="admin-header-profile-trigger"
+      title="${name}"
+      aria-label="Account menu for ${name}"
+      aria-haspopup="menu"
+      aria-expanded="false"
+    >
+      <img class="admin-header-profile-photo" src="/icons/admin-profile-avatar.png" alt="" width="48" height="48" />
+    </button>
+    <div class="admin-header-profile-menu" role="menu">
+      <button type="button" class="admin-header-profile-item js-admin-theme-toggle" role="menuitem">
+        ${adminMsIcon(isDark ? "light_mode" : "dark_mode")}
+        <span>Theme Toggle</span>
+      </button>
+      ${pushItem}
+      ${apkItem}
+      ${playItem}
+      <div class="admin-header-profile-divider" role="separator"></div>
+      <button type="button" class="admin-header-profile-item admin-header-profile-item--danger js-logout" role="menuitem">
+        ${adminMsIcon("logout")}
+        <span>Sign out</span>
+      </button>
+    </div>
+  </div>`;
+}
+
+function employeeKpiCardHtml(filterKey, label, msIcon, count, total, activeClass = "") {
+  const pct = total > 0 ? Math.min(100, Math.round((count / total) * 100)) : count > 0 ? 100 : 8;
+  const pressed = state.empFilter === filterKey;
+  return `<button type="button" class="admin-kpi-card admin-kpi-card--filter${activeClass}" data-emp-filter-kpi="${filterKey}" aria-pressed="${pressed}">
+    <div class="admin-kpi-card-body">
+      <div class="admin-kpi-card-icon">${adminMsIcon(msIcon)}</div>
+      <div class="admin-kpi-card-num tabular-nums">${count}</div>
+    </div>
+    <div class="admin-kpi-card-label">${escapeHtml(label)}</div>
+    <div class="admin-kpi-bar" aria-hidden="true"><div class="admin-kpi-bar-fill" style="width: ${pct}%"></div></div>
+  </button>`;
 }
 
 function ownerKpiCardHtml(filterKey, label, msIcon, count, total, activeClass = "") {
@@ -5443,26 +5523,21 @@ function empFilterSubtitle(filter) {
 }
 
 function empNavFilterButtonHtml(f, active) {
-  const icon =
+  const msIconName =
     f.id === "submitted"
-      ? active
-        ? "bi-check-circle-fill"
-        : "bi-check-circle"
+      ? "check_circle"
       : f.id === "all"
-        ? "bi-collection"
+        ? "inventory_2"
         : f.id === "assigned-by-me"
-          ? "bi-person-plus"
-          : "bi-list-task";
-  return `
-    <button type="button" class="list-group-item list-group-item-action owner-list-item d-flex justify-content-between align-items-center gap-2 ${
-      active ? "active" : ""
-    }" data-emp-filter="${f.id}">
-      <span class="d-flex align-items-center gap-2 min-w-0">
-        <i class="bi ${icon} flex-shrink-0" aria-hidden="true"></i>
-        <span class="text-truncate">${f.label}</span>
-      </span>
-      <span class="badge rounded-pill bg-body-secondary text-body border tabular-nums flex-shrink-0">${f.count}</span>
-    </button>`;
+          ? "group_add"
+          : "task_alt";
+  return `<button type="button" class="admin-sidebar-nav-item${active ? " active" : ""}" data-emp-filter="${f.id}">
+    <span class="admin-nav-item-left">
+      ${adminMsIcon(msIconName)}
+      <span>${escapeHtml(f.label)}</span>
+    </span>
+    <span class="admin-nav-count tabular-nums">${f.count}</span>
+  </button>`;
 }
 
 function empFilteredTasks() {
@@ -5634,81 +5709,29 @@ function empAssignedByMeCardsHtml(tasks) {
 }
 
 function empLeftNavInner() {
-  const displayName = state.user ? escapeHtml(state.user.displayName) : "";
-  const metrics = employeeDashboardMetrics();
-  const appBtn = empMobileAppButtonsHtml();
-
   return `
-    <div class="owner-sidebar d-flex flex-column h-100">
-      <div class="owner-sidebar-brand">
-        <div class="owner-sidebar-brand-icon" aria-hidden="true"><i class="bi bi-person-workspace"></i></div>
-        <div class="min-w-0">
-          <div class="owner-sidebar-brand-title">Task Manager</div>
-          <div class="owner-sidebar-brand-user text-truncate">${displayName}</div>
-          <span class="badge rounded-pill emp-role-badge mt-1">Employee</span>
-                  </div>
-                </div>
-      <button type="button" class="btn btn-primary w-100 owner-sidebar-new-list js-emp-create-task">
-        <i class="bi bi-plus-lg me-1" aria-hidden="true"></i>Create & assign task
+    <div class="owner-sidebar admin-sidebar d-flex flex-column h-100">
+      <div class="admin-sidebar-profile">
+        ${ownerSidebarLogoHtml()}
+        <div class="admin-sidebar-brand-title">Task Manager</div>
+      </div>
+      <button type="button" class="admin-create-task-btn js-emp-create-task">
+        ${adminMsIcon("add")}
+        Create & assign
       </button>
-      <button type="button" class="btn btn-outline-primary w-100 mb-2 js-emp-refresh">
-        <i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>Refresh tasks
-      </button>
-      ${teamChatSidebarButtonHtml()}
-      <p class="owner-sidebar-label mb-2">My work</p>
-      <div class="list-group list-group-flush flex-grow-1 overflow-auto owner-list-nav js-emp-nav-host"></div>
-      <div class="owner-sidebar-footer">
-        ${empRemindersButtonHtml()}
-        ${appBtn}
-        <div class="d-flex justify-content-center mb-2">${themeIconToggleMarkup()}</div>
-        <button type="button" class="btn btn-outline-danger w-100 js-logout">
-          <i class="bi bi-box-arrow-right me-1" aria-hidden="true"></i>Sign out
-        </button>
-                  </div>
+      <nav class="admin-sidebar-nav" aria-label="My work">
+        <div class="js-emp-nav-host"></div>
+        ${teamChatSidebarNavItemHtml()}
+      </nav>
     </div>`;
 }
 
 function syncEmpTopbarTitle() {
-  const title = empFilterLabel(state.empFilter);
-  document.querySelectorAll(".owner-topbar-title").forEach((el) => {
-    el.textContent = title;
-  });
+  /* Legacy hook — employee dashboard title is fixed in admin header */
 }
 
 function renderEmpMobileFilters() {
-  const host = document.getElementById("emp-mobile-filters");
-  if (!host) return;
-  const metrics = employeeDashboardMetrics();
-  const assignedMetrics = employeeAssignedByMeMetrics();
-  const filters = [
-    { id: "active", label: "Active", count: metrics.active },
-    { id: "submitted", label: "Submitted", count: metrics.done },
-    { id: "all", label: "All", count: metrics.total },
-    { id: "assigned-by-me", label: "I assigned", count: assignedMetrics.total },
-  ];
-  host.innerHTML = filters
-    .map((f) => {
-      const active = state.empFilter === f.id;
-      return `<button type="button" class="btn btn-sm emp-filter-chip ${
-        active ? "btn-primary" : "btn-outline-primary"
-      }" data-emp-filter="${f.id}">
-        ${f.label}
-        <span class="badge rounded-pill ms-1 ${
-          active ? "text-bg-light" : "bg-body-secondary text-body border"
-        } tabular-nums">${f.count}</span>
-      </button>`;
-    })
-    .join("");
-  host.querySelectorAll("[data-emp-filter]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      state.empFilter = btn.getAttribute("data-emp-filter") || "active";
-      renderEmpListContentOnly();
-      renderEmployeeMain();
-      syncEmpTopbarTitle();
-      const offcanvas = document.getElementById("empNavOffcanvas");
-      if (offcanvas) bootstrap.Offcanvas.getInstance(offcanvas)?.hide();
-    });
-  });
+  /* Mobile filters use admin KPI cards in renderEmployeeMain */
 }
 
 function renderEmpListContentOnly() {
@@ -5726,14 +5749,11 @@ function renderEmpListContentOnly() {
     { id: "assigned-by-me", label: "Assigned by me", icon: "person-plus", count: assignedMetrics.total },
     state.empFilter === "assigned-by-me"
   );
-  const html = `${myWorkHtml}
-    <p class="owner-sidebar-label mb-2 mt-3 px-2">Assigned by me</p>
-    ${assignedHtml}`;
+  const html = myWorkHtml + assignedHtml;
   document.querySelectorAll(".js-emp-nav-host").forEach((host) => {
     host.innerHTML = html;
   });
   bindEmpNavHandlers();
-  renderEmpMobileFilters();
 }
 
 function bindEmpNavHandlers() {
@@ -5742,15 +5762,16 @@ function bindEmpNavHandlers() {
       state.empFilter = btn.getAttribute("data-emp-filter") || "active";
       renderEmpListContentOnly();
       renderEmployeeMain();
-      syncEmpTopbarTitle();
-      const offcanvas = document.getElementById("empNavOffcanvas");
-      if (offcanvas) bootstrap.Offcanvas.getInstance(offcanvas)?.hide();
+      dismissEmpMobileNav();
     });
   });
 }
 
 function wireEmpChromeNav() {
-  document.querySelectorAll(".js-logout").forEach((b) => b.addEventListener("click", logout));
+  document.getElementById("empNavOffcanvas")?.addEventListener("click", (e) => {
+    const actionable = e.target.closest("[data-emp-filter], .js-emp-create-task, .js-open-team-chat");
+    if (actionable) dismissEmpMobileNav();
+  });
   wireEmpEnablePush();
   document.querySelectorAll(".js-emp-create-task").forEach((b) =>
     b.addEventListener("click", () => void openEmpCreateTaskModal())
@@ -5758,7 +5779,7 @@ function wireEmpChromeNav() {
   document.querySelectorAll(".js-emp-refresh").forEach((b) =>
     b.addEventListener("click", () => void empRefreshDashboard(b))
   );
-  wireThemeIconToggles();
+  ensureAdminHeaderProfileMenuDocListener();
 }
 
 function renderEmployeeMain() {
@@ -5766,8 +5787,7 @@ function renderEmployeeMain() {
   if (!main) return;
 
   const isAssignedByMe = state.empFilter === "assigned-by-me";
-  const filterTitle = empFilterLabel(state.empFilter);
-  const filterSubtitle = empFilterSubtitle(state.empFilter);
+  const welcomeName = state.user?.displayName ? escapeHtml(state.user.displayName) : "Employee";
 
   let kpiRow = "";
   let tableSection = "";
@@ -5777,54 +5797,34 @@ function renderEmployeeMain() {
     tableSection = `<section class="owner-task-panel emp-assigned-by-me-panel" aria-label="Tasks assigned by me">
       ${empAssignedByMeCardsHtml(assignedList)}
     </section>`;
+    const assignedMetrics = employeeAssignedByMeMetrics();
+    const assignedTotal = Math.max(assignedMetrics.total, 1);
+    kpiRow = `<div class="admin-kpi-grid">
+      ${employeeKpiCardHtml("active", "Active", "task_alt", employeeDashboardMetrics().active, Math.max(employeeDashboardMetrics().total, 1), state.empFilter === "active" ? " admin-kpi-card--active" : "")}
+      ${employeeKpiCardHtml("submitted", "Submitted", "check_circle", employeeDashboardMetrics().done, Math.max(employeeDashboardMetrics().total, 1), state.empFilter === "submitted" ? " admin-kpi-card--active" : "")}
+      ${employeeKpiCardHtml("all", "All assigned", "inventory_2", employeeDashboardMetrics().total, Math.max(employeeDashboardMetrics().total, 1), state.empFilter === "all" ? " admin-kpi-card--active" : "")}
+      ${employeeKpiCardHtml("assigned-by-me", "I assigned", "group_add", assignedMetrics.total, assignedTotal, " admin-kpi-card--active")}
+    </div>`;
   } else {
     const metrics = employeeDashboardMetrics();
+    const assignedMetrics = employeeAssignedByMeMetrics();
     const filtered = empFilteredTasks();
     const tableBody = empTaskTableRows(filtered);
-    kpiRow =
-      metrics.total > 0
-        ? `<div class="row g-3 mb-4 owner-kpi-row">
-            <div class="col-6 col-xl-3">
-              <div class="owner-kpi-card">
-                <div class="owner-kpi-icon text-primary"><i class="bi bi-list-task" aria-hidden="true"></i></div>
-                <div>
-                  <div class="owner-kpi-value tabular-nums">${metrics.active}</div>
-                  <div class="owner-kpi-label">Active tasks</div>
-                </div>
-                  </div>
-                </div>
-            <div class="col-6 col-xl-3">
-              <div class="owner-kpi-card">
-                <div class="owner-kpi-icon text-success"><i class="bi bi-check-circle" aria-hidden="true"></i></div>
-                <div>
-                  <div class="owner-kpi-value tabular-nums">${metrics.done}</div>
-                  <div class="owner-kpi-label">Submitted</div>
-                  </div>
-                </div>
-              </div>
-            <div class="col-6 col-xl-3">
-              <div class="owner-kpi-card">
-                <div class="owner-kpi-icon text-warning"><i class="bi bi-alarm" aria-hidden="true"></i></div>
-                <div>
-                  <div class="owner-kpi-value tabular-nums">${metrics.dueSoon}</div>
-                  <div class="owner-kpi-label">Due in 24h</div>
-                </div>
-              </div>
-            </div>
-            <div class="col-6 col-xl-3">
-              <div class="owner-kpi-card">
-                <div class="owner-kpi-icon text-info"><i class="bi bi-collection" aria-hidden="true"></i></div>
-                <div>
-                  <div class="owner-kpi-value tabular-nums">${metrics.total}</div>
-                  <div class="owner-kpi-label">Total assigned</div>
-                </div>
-              </div>
-            </div>
-          </div>`
-        : "";
+    const kpiTotal = Math.max(metrics.total, 1);
+    const assignedTotal = Math.max(assignedMetrics.total, 1);
+    const activeKpiClass = state.empFilter === "active" ? " admin-kpi-card--active" : "";
+    const submittedKpiClass = state.empFilter === "submitted" ? " admin-kpi-card--active" : "";
+    const allKpiClass = state.empFilter === "all" ? " admin-kpi-card--active" : "";
+    const assignedKpiClass = state.empFilter === "assigned-by-me" ? " admin-kpi-card--active" : "";
+    kpiRow = `<div class="admin-kpi-grid">
+      ${employeeKpiCardHtml("active", "Active", "task_alt", metrics.active, kpiTotal, activeKpiClass)}
+      ${employeeKpiCardHtml("submitted", "Submitted", "check_circle", metrics.done, kpiTotal, submittedKpiClass)}
+      ${employeeKpiCardHtml("all", "All assigned", "inventory_2", metrics.total, kpiTotal, allKpiClass)}
+      ${employeeKpiCardHtml("assigned-by-me", "I assigned", "group_add", assignedMetrics.total, assignedTotal, assignedKpiClass)}
+    </div>`;
     tableSection = `<section class="owner-task-panel" aria-label="Assigned tasks">
       <div class="table-responsive owner-task-table-wrap">
-        <table class="table table-hover align-middle mb-0 owner-task-table emp-owner-task-table">
+        <table class="table table-hover align-middle mb-0 owner-task-table admin-task-table emp-owner-task-table">
           <thead>
             <tr>
               <th scope="col" class="owner-task-head text-center" style="width:3rem;"><span class="visually-hidden">Done</span></th>
@@ -5841,24 +5841,37 @@ function renderEmployeeMain() {
   }
 
   main.innerHTML = `
-    <header class="owner-page-header emp-page-header d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3 mb-md-4">
-      <div class="min-w-0">
-        <p class="owner-page-eyebrow mb-1 d-none d-md-block">Employee dashboard</p>
-        <h2 class="owner-page-title h4 mb-0 text-truncate d-none d-md-block">${escapeHtml(filterTitle)}</h2>
-        <p class="owner-page-sub text-muted small mb-0 mt-1 d-none d-md-block">${escapeHtml(filterSubtitle)}</p>
-                </div>
-      <div class="d-none d-md-flex flex-wrap gap-2 owner-toolbar">
-        <button type="button" class="btn btn-primary btn-sm js-emp-create-task">
-          <i class="bi bi-plus-lg me-1" aria-hidden="true"></i>Create & assign
-        </button>
-        <button type="button" class="btn btn-outline-secondary btn-sm js-emp-refresh">
-          <i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i>Refresh
-        </button>
-              </div>
-    </header>
-    ${kpiRow}
-    ${tableSection}
+    <div class="admin-main-scroll d-flex flex-column">
+      <header class="admin-dash-header">
+        ${empMobileNavToggleHtml()}
+        <div class="admin-dash-heading">
+          <h1 class="admin-dash-title">My Dashboard</h1>
+          <p class="admin-dash-subtitle">Welcome ${welcomeName}</p>
+        </div>
+        <div class="admin-dash-utilities">
+          <button type="button" class="admin-icon-btn js-emp-refresh" aria-label="Refresh tasks">
+            ${adminMsIcon("refresh")}
+          </button>
+          ${employeeAdminHeaderProfileHtml()}
+        </div>
+      </header>
+      ${kpiRow}
+      ${tableSection}
+    </div>
   `;
+
+  ensureAdminHeaderProfileMenuDocListener();
+  wireAdminHeaderProfileMenu(main);
+
+  main.querySelectorAll("[data-emp-filter-kpi]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const filter = btn.getAttribute("data-emp-filter-kpi");
+      if (!filter) return;
+      state.empFilter = filter;
+      renderEmpListContentOnly();
+      renderEmployeeMain();
+    });
+  });
 
   if (isAssignedByMe) {
     main.querySelectorAll(".js-emp-refresh").forEach((btn) => {
@@ -5961,36 +5974,20 @@ function renderEmployeeMain() {
 }
 
 function renderEmployeeChrome() {
-  const filterTitle = empFilterLabel(state.empFilter);
-
   app.innerHTML = `
-    <div class="owner-shell emp-shell min-h-main">
-      <div class="container-fluid owner-shell-inner py-2 py-md-3 py-lg-4 d-flex flex-column">
-        <div class="owner-topbar d-lg-none d-flex align-items-center justify-content-between gap-2 mb-2">
-          <button class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="offcanvas" data-bs-target="#empNavOffcanvas" aria-label="Open menu">
-            <i class="bi bi-list me-1" aria-hidden="true"></i>Menu
-          </button>
-          <span class="owner-topbar-title text-truncate fw-semibold small">${escapeHtml(filterTitle)}</span>
-          <button type="button" class="btn btn-primary btn-sm js-emp-refresh" aria-label="Refresh tasks">
-            <i class="bi bi-arrow-clockwise" aria-hidden="true"></i>
-                </button>
-              </div>
-        <div id="emp-mobile-filters" class="emp-mobile-filters d-lg-none mb-2" aria-label="Task filters"></div>
-        <div class="row g-2 g-md-3 g-lg-4 owner-shell-row flex-lg-grow-1">
-          <aside class="col-lg-3 d-none d-lg-flex owner-sidebar-col">
-            <div class="owner-sidebar-panel sticky-lg-top w-100">${empLeftNavInner()}</div>
-          </aside>
-          <div class="offcanvas offcanvas-start owner-offcanvas emp-offcanvas" tabindex="-1" id="empNavOffcanvas" aria-labelledby="empNavLabel">
-            <div class="offcanvas-header owner-offcanvas-header border-0">
-              <h2 class="offcanvas-title h5 mb-0 text-white" id="empNavLabel">My work</h2>
-              <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" aria-label="Close"></button>
-            </div>
-            <div class="offcanvas-body pt-0">${empLeftNavInner()}</div>
-          </div>
-          <main class="col-12 col-lg-9 d-flex owner-main-col">
-            <div id="emp-main-column" class="owner-main-panel owner-main-fill p-2 p-sm-3 p-lg-4 d-flex flex-column w-100"></div>
-          </main>
+    <div class="owner-shell admin-mockup-ui emp-shell min-h-main">
+      <aside class="admin-fixed-sidebar d-none d-lg-flex">
+        ${empLeftNavInner()}
+      </aside>
+      <div class="offcanvas offcanvas-start admin-mobile-nav" tabindex="-1" id="empNavOffcanvas" aria-labelledby="empNavLabel">
+        <div class="offcanvas-header admin-mobile-nav-header border-0">
+          <h2 class="offcanvas-title h6 mb-0" id="empNavLabel">Menu</h2>
+          <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
         </div>
+        <div class="offcanvas-body admin-mobile-nav-body pt-0">${empLeftNavInner()}</div>
+      </div>
+      <div class="admin-main-host">
+        <div id="emp-main-column" class="owner-main-panel owner-main-fill d-flex flex-column w-100"></div>
       </div>
       ${submissionDetailModalHtml()}
       ${empSubmissionModalHtml()}

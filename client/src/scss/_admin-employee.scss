@@ -1,0 +1,113 @@
+/* Employee dashboard — extend admin MD3 theme (scoped with emp-shell) */
+.owner-shell.admin-mockup-ui.emp-shell {
+  .admin-nav-count {
+    flex-shrink: 0;
+    min-width: 1.35rem;
+    padding: 0.1rem 0.4rem;
+    border-radius: 999px;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    line-height: 1.2;
+    text-align: center;
+    color: var(--admin-on-surface-variant);
+    background: rgba(190, 200, 202, 0.35);
+  }
+
+  .admin-sidebar-nav-item.active .admin-nav-count {
+    color: var(--admin-on-secondary-container);
+    background: rgba(0, 83, 91, 0.15);
+  }
+
+  .owner-task-table.emp-owner-task-table {
+    thead th {
+      color: var(--admin-on-surface-variant);
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      border-bottom-color: rgba(190, 200, 202, 0.55);
+    }
+
+    tbody tr.emp-task-row {
+      border-bottom-color: rgba(190, 200, 202, 0.35);
+    }
+
+    tbody tr.emp-task-row:hover {
+      background: rgba(169, 236, 229, 0.08);
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #00535b 0%, #006d77 100%);
+      border: none;
+    }
+
+    .btn-outline-primary {
+      border-color: rgba(0, 83, 91, 0.45);
+      color: #00535b;
+
+      &:hover {
+        background: rgba(169, 236, 229, 0.2);
+        border-color: #00535b;
+        color: #00535b;
+      }
+    }
+
+    .btn-outline-secondary {
+      border-color: rgba(190, 200, 202, 0.65);
+      color: var(--admin-on-surface-variant);
+
+      &:hover {
+        background: rgba(169, 236, 229, 0.15);
+        border-color: rgba(0, 83, 91, 0.35);
+        color: #00535b;
+      }
+    }
+  }
+
+  .emp-assigned-out-card {
+    border-color: rgba(190, 200, 202, 0.55);
+    background: #fff;
+    border-radius: 0.75rem;
+    box-shadow: 0 2px 8px rgba(24, 26, 46, 0.06);
+  }
+
+  .emp-assigned-out-card-label {
+    color: var(--admin-on-surface-variant);
+  }
+
+  .emp-assigned-out-card-title {
+    color: var(--admin-on-surface);
+  }
+
+  .owner-empty-state .owner-empty-icon {
+    color: #00535b !important;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .owner-shell.admin-mockup-ui.emp-shell {
+    .emp-owner-task-table tbody tr.emp-task-row {
+      border-color: rgba(190, 200, 202, 0.55) !important;
+      background: #fff;
+      border-radius: 0.75rem;
+      box-shadow: 0 2px 8px rgba(24, 26, 46, 0.06);
+    }
+
+    .emp-owner-task-table tbody tr.emp-task-row.owner-task-row--completed {
+      background: rgba(169, 236, 229, 0.12);
+    }
+  }
+}
+
+[data-bs-theme="dark"] .owner-shell.admin-mockup-ui.emp-shell {
+  .emp-assigned-out-card,
+  .emp-owner-task-table tbody tr.emp-task-row {
+    background: #1e1e28;
+    border-color: #3a3a48 !important;
+  }
+
+  .admin-nav-count {
+    background: #3a3a48;
+    color: #b0b0c0;
+  }
+}
