@@ -16,6 +16,8 @@
   --admin-error: #ba1a1a;
   --admin-sidebar-w: 16rem;
   --admin-topbar-h: 4rem;
+  --admin-header-action-size: 2.25rem;
+  --admin-header-action-icon: 1.25rem;
 
   font-family: "Inter", system-ui, -apple-system, sans-serif;
   background: var(--admin-background);
@@ -388,17 +390,6 @@
   .admin-dash-heading {
     min-width: 0;
     flex: 1 1 auto;
-    overflow: hidden;
-  }
-
-  .admin-dash-title,
-  .admin-dash-subtitle {
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .admin-dash-subtitle {
-    white-space: nowrap;
   }
 
   .admin-nav-toggle {
@@ -406,20 +397,23 @@
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    width: 2.5rem;
-    height: 2.5rem;
-    border: 1px solid var(--admin-outline-variant);
-    border-radius: 0.625rem;
-    background: #fff;
-    color: var(--admin-primary);
+    width: var(--admin-header-action-size);
+    height: var(--admin-header-action-size);
+    min-width: var(--admin-header-action-size);
+    min-height: var(--admin-header-action-size);
+    border: none;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--admin-on-surface-variant);
     padding: 0;
 
     .material-symbols-outlined {
-      font-size: 1.5rem;
+      font-size: var(--admin-header-action-icon);
     }
 
     &:hover {
       background: rgba(169, 236, 229, 0.2);
+      color: var(--admin-primary);
     }
   }
 
@@ -443,37 +437,55 @@
   @media (max-width: 991.98px) {
     .admin-dash-header {
       display: grid;
-      grid-template-columns: auto minmax(0, 1fr) auto;
+      grid-template-columns: auto 1fr;
+      grid-template-rows: auto auto;
       grid-template-areas:
-        "menu heading utilities";
+        "menu utilities"
+        "heading heading";
       align-items: center;
-      gap: 0.5rem 0.75rem;
+      gap: 0.35rem 0.5rem;
       padding: 0.65rem 1rem;
       margin: 0 -1rem 1rem;
     }
 
     .admin-nav-toggle {
       grid-area: menu;
+      justify-self: start;
     }
 
     .admin-dash-heading {
       grid-area: heading;
+      width: 100%;
+      min-width: 0;
+      padding-top: 0.15rem;
     }
 
     .admin-dash-utilities {
       grid-area: utilities;
-      gap: 0.35rem;
+      gap: 0.15rem;
       flex-wrap: nowrap;
+      justify-content: flex-end;
+      justify-self: end;
     }
 
     .admin-dash-title {
-      font-size: 1rem;
-      letter-spacing: 0.08em;
+      font-size: 0.9375rem;
+      letter-spacing: 0.05em;
+      line-height: 1.25;
+      white-space: normal;
+      overflow: visible;
+      text-overflow: unset;
+      word-break: break-word;
     }
 
     .admin-dash-subtitle {
       font-size: 0.8125rem;
-      margin-top: 0.25rem;
+      margin-top: 0.2rem;
+      line-height: 1.3;
+      white-space: normal;
+      overflow: visible;
+      text-overflow: unset;
+      word-break: break-word;
     }
 
     .admin-trial-banner {
@@ -625,34 +637,22 @@
 
   @media (max-width: 575.98px) {
     .admin-dash-header {
-      gap: 0.35rem 0.5rem;
+      gap: 0.3rem 0.4rem;
       padding: 0.55rem 0.75rem;
       margin: 0 -0.75rem 0.85rem;
     }
 
     .admin-dash-title {
-      font-size: 0.8125rem;
-      letter-spacing: 0.06em;
+      font-size: 0.875rem;
+      letter-spacing: 0.04em;
     }
 
     .admin-dash-subtitle {
       font-size: 0.75rem;
-      margin-top: 0.2rem;
     }
 
     .admin-dash-utilities {
-      gap: 0.2rem;
-    }
-
-    .admin-icon-btn,
-    .admin-dash-utilities .admin-notif-btn {
-      width: 2rem;
-      height: 2rem;
-    }
-
-    .admin-header-profile-trigger {
-      width: 2.65rem;
-      height: 2.65rem;
+      gap: 0.1rem;
     }
 
     .admin-main-scroll {
@@ -736,13 +736,21 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 2.25rem;
-      height: 2.25rem;
+      width: var(--admin-header-action-size);
+      height: var(--admin-header-action-size);
+      min-width: var(--admin-header-action-size);
+      min-height: var(--admin-header-action-size);
+      flex-shrink: 0;
       border: none;
       border-radius: 999px;
       background: transparent;
       color: var(--admin-on-surface-variant);
       padding: 0;
+
+      .material-symbols-outlined,
+      .bi {
+        font-size: var(--admin-header-action-icon);
+      }
 
       &:hover {
         background: rgba(169, 236, 229, 0.2);
@@ -792,13 +800,20 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 2.25rem;
-    height: 2.25rem;
+    width: var(--admin-header-action-size);
+    height: var(--admin-header-action-size);
+    min-width: var(--admin-header-action-size);
+    min-height: var(--admin-header-action-size);
+    flex-shrink: 0;
     border: none;
     border-radius: 999px;
     background: transparent;
     color: var(--admin-on-surface-variant);
     padding: 0;
+
+    .material-symbols-outlined {
+      font-size: var(--admin-header-action-icon);
+    }
 
     &:hover:not(:disabled) {
       background: rgba(169, 236, 229, 0.2);
@@ -828,16 +843,18 @@
     background: transparent;
     padding: 0;
     line-height: 0;
-    width: 3rem;
-    height: 3rem;
+    width: var(--admin-header-action-size);
+    height: var(--admin-header-action-size);
+    min-width: var(--admin-header-action-size);
+    min-height: var(--admin-header-action-size);
+    flex-shrink: 0;
     border-radius: 50%;
     overflow: hidden;
     cursor: pointer;
-    flex-shrink: 0;
 
     &:hover .admin-header-profile-photo,
     &:focus-visible .admin-header-profile-photo {
-      transform: scale(1.42);
+      opacity: 0.92;
     }
   }
 
@@ -848,11 +865,11 @@
     object-fit: cover;
     border: none;
     box-shadow: none;
-    background: transparent;
+    background: #e8ecef;
     display: block;
-    transform: scale(1.35);
+    transform: scale(1.2);
     transform-origin: center center;
-    transition: transform 0.15s ease;
+    transition: opacity 0.15s ease;
   }
 
   .admin-header-profile-menu {
