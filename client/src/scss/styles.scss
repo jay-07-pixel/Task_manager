@@ -1095,11 +1095,11 @@ body {
 
 /* Owner task table — mobile: stack rows as cards (no column overlap) */
 @media (max-width: 767.98px) {
-  .owner-task-table-wrap {
+  .owner-task-table:not(.admin-task-table) .owner-task-table-wrap {
     overflow: visible;
   }
 
-  .owner-task-table {
+  .owner-task-table:not(.admin-task-table) {
     width: 100%;
     table-layout: auto;
     display: block;
@@ -1107,31 +1107,31 @@ body {
     border-spacing: 0;
   }
 
-  .owner-task-table thead {
+  .owner-shell:not(.admin-mockup-ui) .owner-task-table thead {
     display: none;
   }
 
-  .owner-task-table tbody {
+  .owner-shell:not(.admin-mockup-ui) .owner-task-table tbody {
     display: block;
   }
 
-  .owner-task-table tbody.owner-task-empty {
+  .owner-shell:not(.admin-mockup-ui) .owner-task-table tbody.owner-task-empty {
     display: block;
   }
 
-  .owner-task-table tbody.owner-task-empty tr,
-  .owner-task-table tbody.owner-task-empty td {
+  .owner-shell:not(.admin-mockup-ui) .owner-task-table tbody.owner-task-empty tr,
+  .owner-shell:not(.admin-mockup-ui) .owner-task-table tbody.owner-task-empty td {
     display: block;
     width: 100% !important;
     border: none !important;
   }
 
-  .owner-task-table tbody.owner-task-group {
+  .owner-shell:not(.admin-mockup-ui) .owner-task-table tbody.owner-task-group {
     display: block;
     margin-bottom: 0.85rem;
   }
 
-  .owner-task-table tbody.owner-task-group tr.task-sort-row {
+  .owner-shell:not(.admin-mockup-ui) .owner-task-table tbody.owner-task-group tr.task-sort-row {
     display: grid;
     grid-template-columns: 2.35rem minmax(0, 1fr) auto auto 2.6rem;
     grid-template-areas: "grip task deadline emp expand";
@@ -1143,7 +1143,7 @@ body {
     background-color: var(--bs-body-bg);
   }
 
-  .owner-task-table tbody.owner-task-group tr.task-sort-row > td {
+  .owner-shell:not(.admin-mockup-ui) .owner-task-table tbody.owner-task-group tr.task-sort-row > td {
     display: block;
     border: none !important;
     padding: 0 !important;
@@ -1152,20 +1152,20 @@ body {
     max-width: none !important;
   }
 
-  .owner-task-table tbody.owner-task-group tr.task-sort-row .owner-task-cell--grip {
+  .owner-shell:not(.admin-mockup-ui) .owner-task-table tbody.owner-task-group tr.task-sort-row .owner-task-cell--grip {
     grid-area: grip;
     justify-self: center;
     align-self: start;
     padding-top: 0.15rem !important;
   }
 
-  .owner-task-table tbody.owner-task-group tr.task-sort-row .owner-task-col--task {
+  .owner-shell:not(.admin-mockup-ui) .owner-task-table tbody.owner-task-group tr.task-sort-row .owner-task-col--task {
     grid-area: task;
     min-width: 0;
     align-self: start;
   }
 
-  .owner-task-table tbody.owner-task-group tr.task-sort-row .owner-task-col--task .owner-task-open-details {
+  .owner-shell:not(.admin-mockup-ui) .owner-task-table tbody.owner-task-group tr.task-sort-row .owner-task-col--task .owner-task-open-details {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1174,7 +1174,7 @@ body {
     max-width: 100%;
   }
 
-  .owner-task-table tbody.owner-task-group tr.task-sort-row .owner-task-col--deadline {
+  .owner-shell:not(.admin-mockup-ui) .owner-task-table tbody.owner-task-group tr.task-sort-row .owner-task-col--deadline {
     grid-area: deadline;
     font-size: 0.75rem;
     justify-self: center;
@@ -1182,11 +1182,11 @@ body {
     white-space: nowrap;
   }
 
-  .owner-task-table tbody.owner-task-group tr.task-sort-row .owner-task-col--deadline::before {
+  .owner-shell:not(.admin-mockup-ui) .owner-task-table tbody.owner-task-group tr.task-sort-row .owner-task-col--deadline::before {
     content: none;
   }
 
-  .owner-task-table tbody.owner-task-group tr.task-sort-row .owner-task-col--employees {
+  .owner-shell:not(.admin-mockup-ui) .owner-task-table tbody.owner-task-group tr.task-sort-row .owner-task-col--employees {
     grid-area: emp;
     text-align: end !important;
     font-size: 0.75rem;
@@ -1197,28 +1197,28 @@ body {
     text-overflow: ellipsis;
   }
 
-  .owner-task-table tbody.owner-task-group tr.task-sort-row .owner-task-col--employees:has(.owner-task-unassigned) {
+  .owner-shell:not(.admin-mockup-ui) .owner-task-table tbody.owner-task-group tr.task-sort-row .owner-task-col--employees:has(.owner-task-unassigned) {
     max-width: none;
     overflow: visible;
   }
 
-  .owner-task-table tbody.owner-task-group tr.task-sort-row .owner-task-col--employees::before {
+  .owner-shell:not(.admin-mockup-ui) .owner-task-table tbody.owner-task-group tr.task-sort-row .owner-task-col--employees::before {
     content: none;
   }
 
-  .owner-task-table tbody.owner-task-group tr.task-sort-row .owner-task-col--trail {
+  .owner-shell:not(.admin-mockup-ui) .owner-task-table tbody.owner-task-group tr.task-sort-row .owner-task-col--trail {
     grid-area: expand;
     justify-self: end;
     align-self: start;
   }
 
-  .owner-task-table tbody.owner-task-group tr.owner-task-detail-row {
+  .owner-shell:not(.admin-mockup-ui) .owner-task-table tbody.owner-task-group tr.owner-task-detail-row {
     display: block;
     border: none;
     background: transparent;
   }
 
-  .owner-task-table tbody.owner-task-group tr.owner-task-detail-row > td {
+  .owner-shell:not(.admin-mockup-ui) .owner-task-table tbody.owner-task-group tr.owner-task-detail-row > td {
     display: block;
     width: 100% !important;
     max-width: 100% !important;
