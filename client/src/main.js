@@ -5264,13 +5264,36 @@ function taskCreatedMetaHtml(createdAt) {
   const short = formatTaskCreatedDate(createdAt, { short: true });
   if (!full || !short) return "";
   const dtAttr = escapeHtml(String(createdAt).slice(0, 19));
-  return `<span class="task-created-meta">
-    <span class="task-created-meta-label">Created:</span>
+  return `<div class="emp-task-date-row task-created-row">
+    <span class="emp-task-date-label">Created:</span>
     <time class="task-created-meta-date tabular-nums" datetime="${dtAttr}">
       <span class="task-created-meta-full d-none d-md-inline">${escapeHtml(full)}</span>
       <span class="task-created-meta-short d-md-none">${escapeHtml(short)}</span>
     </time>
-  </span>`;
+  </div>`;
+}
+
+function empTaskDatesCellHtml(t, submitted, submittedWhen) {
+  const created = taskCreatedMetaHtml(t.createdAt);
+  if (submitted && submittedWhen) {
+    return `<div class="emp-task-dates-stack">
+      ${created}
+      <div class="emp-task-date-row">
+        <span class="emp-task-date-label">Submitted:</span>
+        <span class="text-success tabular-nums">${escapeHtml(formatEmpDue(submittedWhen))}</span>
+      </div>
+    </div>`;
+  }
+  const deadlineValue = t.dueAt
+    ? `<span class="tabular-nums">${escapeHtml(formatEmpDue(t.dueAt))}</span>`
+    : `<span class="text-muted">—</span>`;
+  return `<div class="emp-task-dates-stack">
+    ${created}
+    <div class="emp-task-date-row">
+      <span class="emp-task-date-label">Deadline:</span>
+      ${deadlineValue}
+    </div>
+  </div>`;
 }
 
 function formatEmpRecurrencePattern(task) {
@@ -5306,10 +5329,7 @@ function ownerTaskRecurrenceBadgeHtml(task) {
 function empActiveRecurrenceLinesHtml(task) {
   const pattern = formatEmpRecurrencePattern(task);
   if (!pattern) return "";
-  const dueLine = task.dueAt
-    ? `<div class="emp-recurrence-due tabular-nums fw-semibold text-body-secondary">Due ${escapeHtml(formatEmpDue(task.dueAt))}</div>`
-    : "";
-  return `<div class="emp-recurrence-lines small text-muted mt-1"><div class="emp-recurrence-pattern">${escapeHtml(pattern)}</div>${dueLine}</div>`;
+  return `<div class="emp-recurrence-lines small text-muted mt-1"><div class="emp-recurrence-pattern">${escapeHtml(pattern)}</div></div>`;
 }
 
 async function loadEmployeeTasks() {
@@ -5658,17 +5678,7 @@ function empTaskTableRows(tasks) {
         </div>`;
       const rowDone = submitted ? "owner-task-row--completed" : "";
       const submittedWhen = me?.lastSubmittedAt || me?.assigneeDoneAt || null;
-      const deadlineDisplay = submitted && submittedWhen
-        ? `<span class="text-success small text-nowrap"><i class="bi bi-check-circle me-1" aria-hidden="true"></i><span class="emp-deadline-full d-none d-md-inline">Submitted ${escapeHtml(formatEmpDue(submittedWhen))}</span><span class="emp-deadline-short d-md-none">${escapeHtml(
-            String(submittedWhen).slice(0, 10)
-          )}</span></span>`
-        : t.dueAt
-          ? `<span class="text-body tabular-nums emp-deadline-full d-none d-md-inline">${escapeHtml(
-              formatEmpDue(t.dueAt)
-            )}</span><span class="text-body tabular-nums emp-deadline-short d-md-none" title="${escapeHtml(formatEmpDue(t.dueAt))}">Due ${escapeHtml(
-              t.dueAt.slice(0, 10)
-            )}</span>`
-          : `<span class="text-muted">—</span>`;
+      const datesCell = empTaskDatesCellHtml(t, submitted, submittedWhen);
       return `<tr class="owner-task-row emp-task-row ${rowDone}" data-task-id="${t.id}">
         <td class="owner-task-cell emp-col-check text-center align-middle">
           <input type="checkbox" class="form-check-input emp-task-check" data-task-id="${t.id}" ${
@@ -5677,12 +5687,11 @@ function empTaskTableRows(tasks) {
         </td>
         <td class="owner-task-cell owner-task-col--task emp-col-task align-middle">
           <span class="fw-semibold emp-task-title ${submitted ? "text-muted text-decoration-line-through" : ""}">${escapeHtml(t.title)}</span>
-          ${taskCreatedMetaHtml(t.createdAt)}
           ${assignedByLine}
           ${recurrenceLines}
           ${archivedNotesLine}
         </td>
-        <td class="owner-task-cell owner-task-col--deadline emp-col-deadline align-middle small">${deadlineDisplay}</td>
+        <td class="owner-task-cell owner-task-col--deadline emp-col-deadline align-middle small">${datesCell}</td>
         <td class="owner-task-cell emp-col-desc align-middle">${descriptionBox}</td>
         <td class="owner-task-cell emp-col-proof text-end align-middle">${submissionCell}</td>
       </tr>`;
@@ -5869,7 +5878,7 @@ function renderEmployeeMain() {
             <tr>
               <th scope="col" class="owner-task-head text-center" style="width:3rem;"><span class="visually-hidden">Done</span></th>
               <th scope="col" class="owner-task-head owner-task-col--task">Task</th>
-              <th scope="col" class="owner-task-head owner-task-col--deadline text-nowrap text-center">Deadline</th>
+              <th scope="col" class="owner-task-head owner-task-col--deadline text-nowrap text-center">Dates</th>
               <th scope="col" class="owner-task-head">Description</th>
               <th scope="col" class="owner-task-head text-end" style="width:9rem;">Actions</th>
             </tr>

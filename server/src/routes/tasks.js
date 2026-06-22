@@ -637,6 +637,7 @@ export function serializeTask(t) {
     completed: t.completed,
     starred: t.starred,
     sortOrder: t.sortOrder,
+    createdAt: t.createdAt?.toISOString?.() ?? t.createdAt ?? null,
   };
 }
 

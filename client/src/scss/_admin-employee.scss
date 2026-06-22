@@ -146,6 +146,40 @@
     flex-shrink: 0;
   }
 
+  .owner-task-title-wrap .task-created-row {
+    margin-top: 0.2rem;
+    font-size: 0.75rem;
+  }
+
+  .emp-task-dates-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    min-width: 0;
+  }
+
+  .emp-task-date-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.3rem;
+    line-height: 1.35;
+  }
+
+  .emp-task-date-label {
+    font-weight: 600;
+    font-size: 0.6875rem;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--admin-outline);
+    flex-shrink: 0;
+  }
+
+  .emp-col-deadline .emp-task-dates-stack {
+    font-size: 0.8125rem;
+    color: var(--admin-on-surface);
+  }
+
   .emp-assigned-out-card-head .task-created-meta {
     margin-top: 0.35rem;
     margin-bottom: 0.15rem;

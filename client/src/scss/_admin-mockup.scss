@@ -583,7 +583,7 @@
       line-height: 1.3;
     }
 
-    .admin-task-table tbody.owner-task-group tr.task-sort-row .owner-task-title-wrap .task-created-meta {
+    .admin-task-table tbody.owner-task-group tr.task-sort-row .owner-task-title-wrap .task-created-row {
       font-size: 0.6875rem;
       line-height: 1.25;
     }
@@ -1096,22 +1096,14 @@
       max-width: 100%;
     }
 
-    .task-created-meta {
-      display: inline-flex;
-      flex-wrap: wrap;
-      align-items: baseline;
-      gap: 0.25rem;
-      max-width: 100%;
+    .owner-task-title-wrap .task-created-row {
+      margin-top: 0.15rem;
       font-size: 0.75rem;
-      line-height: 1.3;
       color: var(--admin-on-surface-variant);
     }
 
-    .task-created-meta-label {
-      font-weight: 600;
-      letter-spacing: 0.02em;
-      color: var(--admin-outline);
-      flex-shrink: 0;
+    .owner-task-title-wrap .task-created-row .emp-task-date-label {
+      font-size: 0.6875rem;
     }
 
     .task-created-meta-date {

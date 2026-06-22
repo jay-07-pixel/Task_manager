@@ -1557,14 +1557,14 @@ body {
   }
 
   .emp-owner-task-table tbody tr.emp-task-row .emp-col-deadline::before {
-    content: "Deadline";
+    content: "Dates";
     display: block;
     font-weight: 600;
     font-size: 0.65rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: var(--bs-secondary);
-    margin-bottom: 0.2rem;
+    margin-bottom: 0.35rem;
   }
 
   .emp-owner-task-table tbody tr.emp-task-row .emp-col-desc {
