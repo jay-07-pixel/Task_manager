@@ -592,32 +592,45 @@
 
     .admin-task-table tbody.owner-task-group tr.task-sort-row .owner-task-col--deadline {
       grid-row: 2;
-      grid-column: 1 / -1;
-      display: flex;
-      align-items: center;
-      justify-content: flex-start;
+      grid-column: 2;
+      justify-self: start;
+      align-self: center;
+      display: block;
       font-size: 0.75rem;
+      line-height: 1.25;
       text-align: left !important;
       white-space: nowrap;
-      padding-left: calc(1.75rem + 0.5rem);
-      z-index: 1;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      padding-left: 0;
     }
 
     .admin-task-table tbody.owner-task-group tr.task-sort-row .owner-task-col--recurrence {
       grid-row: 2;
-      grid-column: 1 / -1;
-      display: flex;
-      align-items: center;
-      justify-content: flex-end;
-      z-index: 2;
-      pointer-events: none;
-      max-width: none;
-      overflow: visible;
+      grid-column: 3;
+      justify-self: end;
+      align-self: center;
+      display: block;
+      max-width: 100%;
+      overflow: hidden;
+      pointer-events: auto;
     }
 
     .admin-task-table tbody.owner-task-group tr.task-sort-row .owner-task-col--recurrence .admin-recurrence-pill {
-      max-width: min(100%, 9rem);
-      pointer-events: auto;
+      max-width: min(100%, 7.5rem);
+    }
+
+    .admin-task-table tbody.owner-task-group tr.task-sort-row .admin-deadline {
+      display: inline-block;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      vertical-align: middle;
+    }
+
+    .admin-task-table tbody.owner-task-group tr.task-sort-row .admin-deadline--none {
+      color: var(--admin-outline);
     }
 
     .admin-task-table tbody.owner-task-group tr.owner-task-detail-row {
