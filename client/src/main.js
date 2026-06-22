@@ -1659,6 +1659,15 @@ function ownerUserAvatarHtml(sizeClass = "") {
   return `<div class="admin-user-avatar ${sizeClass}" aria-hidden="true">${escapeHtml(initials)}</div>`;
 }
 
+const KALPANIK_WEBSITE_URL = "https://kalpanik.in/";
+
+function adminHeaderVisitUsItemHtml() {
+  return `<a class="admin-header-profile-item" role="menuitem" href="${KALPANIK_WEBSITE_URL}" target="_blank" rel="noopener noreferrer">
+      ${adminMsIcon("language")}
+      <span>Visit us</span>
+    </a>`;
+}
+
 function ownerAdminHeaderProfileHtml() {
   const name = state.user?.displayName ? escapeHtml(state.user.displayName) : "Admin";
   const isDark = document.documentElement.getAttribute("data-bs-theme") === "dark";
@@ -1682,6 +1691,7 @@ function ownerAdminHeaderProfileHtml() {
         ${adminMsIcon("admin_panel_settings")}
         <span>Manage Admin</span>
       </button>
+      ${adminHeaderVisitUsItemHtml()}
       <div class="admin-header-profile-divider" role="separator"></div>
       <button type="button" class="admin-header-profile-item admin-header-profile-item--danger js-logout" role="menuitem">
         ${adminMsIcon("logout")}
@@ -1882,6 +1892,7 @@ function employeeAdminHeaderProfileHtml() {
       ${pushItem}
       ${apkItem}
       ${playItem}
+      ${adminHeaderVisitUsItemHtml()}
       <div class="admin-header-profile-divider" role="separator"></div>
       <button type="button" class="admin-header-profile-item admin-header-profile-item--danger js-logout" role="menuitem">
         ${adminMsIcon("logout")}
