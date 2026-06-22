@@ -704,14 +704,14 @@ async function wireForgotTurnstile() {
 
 function forgotPasswordModalHtml() {
   return `
-    <div class="modal fade" id="forgotPasswordModal" tabindex="-1" aria-labelledby="forgotPasswordModalTitle" aria-hidden="true">
-      <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h2 class="modal-title h5" id="forgotPasswordModalTitle">Reset password</h2>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+    <div class="modal fade admin-emp-modal" id="forgotPasswordModal" tabindex="-1" aria-labelledby="forgotPasswordModalTitle" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered admin-emp-modal-dialog">
+        <div class="modal-content admin-emp-modal-card">
+          <div class="modal-header admin-emp-modal-header border-0 pb-0">
+            <h2 class="admin-emp-modal-title" id="forgotPasswordModalTitle">Reset password</h2>
+            <button type="button" class="admin-emp-modal-close" data-bs-dismiss="modal" aria-label="Close"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
           </div>
-          <div class="modal-body">
+          <div class="modal-body admin-emp-modal-body pt-2">
             <p class="text-muted small mb-3">Owners and employees can reset their password with a code sent to their registered email.</p>
             <div id="fp-step-verify">
               <div class="mb-3">
@@ -730,7 +730,7 @@ function forgotPasswordModalHtml() {
                     </div>
                     <p class="form-text text-danger d-none mb-0" id="fp-turnstile-hint" role="alert">Complete CAPTCHA before sending code.</p>
                   </div>
-                  <button type="button" class="btn btn-outline-primary auth-reg-action-btn" id="fp-btn-send-otp" disabled>Send code</button>
+                  <button type="button" class="btn btn-outline-primary auth-reg-action-btn auth-admin-outline" id="fp-btn-send-otp" disabled>Send code</button>
                 </div>
                 <div class="auth-reg-divider" aria-hidden="true"></div>
                 <div class="auth-reg-otp-row">
@@ -741,7 +741,7 @@ function forgotPasswordModalHtml() {
                       <input class="form-control font-monospace text-center" id="fp-otp" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="000000" disabled />
                     </div>
                   </div>
-                  <button type="button" class="btn btn-primary auth-reg-action-btn" id="fp-btn-verify-otp" disabled>Verify</button>
+                  <button type="button" class="btn btn-primary auth-reg-action-btn auth-admin-submit" id="fp-btn-verify-otp" disabled>Verify</button>
                 </div>
                 <div class="auth-reg-otp-meta">
                   <small class="text-muted" id="fp-otp-countdown">Complete CAPTCHA, then send code.</small>
@@ -768,9 +768,9 @@ function forgotPasswordModalHtml() {
               <p class="form-text text-danger d-none mb-0 mt-2" id="fp-reset-error" role="alert"></p>
             </div>
           </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
-            <button type="button" class="btn btn-primary d-none" id="fp-btn-reset-password">Update password</button>
+          <div class="modal-footer admin-emp-modal-footer border-0">
+            <button type="button" class="btn admin-task-modal-btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="button" class="btn admin-task-modal-btn-save d-none" id="fp-btn-reset-password">Update password</button>
           </div>
         </div>
       </div>
@@ -1054,16 +1054,16 @@ function wireRegisterPhoneDigits() {
 
 function renderAuthForm() {
   app.innerHTML = `
-    <div class="auth-page">
+    <div class="auth-page auth-shell admin-mockup-ui">
       <div class="container px-3">
         <div class="auth-wrap">
           <div class="card auth-card">
-            <div class="auth-card-head">
+            <div class="auth-card-head sea-blue-gradient">
               <div class="auth-brand-row">
-                <div class="auth-brand-icon" aria-hidden="true"><i class="bi bi-kanban-fill"></i></div>
+                <img class="auth-brand-logo" src="/icons/kalpanik-logo.png" alt="Kalpanik" width="72" height="72" />
                 <div>
-                  <div class="auth-brand-title text-white">Task Manager</div>
-                  <p class="auth-brand-sub text-white">Organize lists, assign people, track what&rsquo;s done.</p>
+                  <div class="auth-brand-title">Task Manager</div>
+                  <p class="auth-brand-sub">Organize lists, assign people, track what&rsquo;s done.</p>
                 </div>
               </div>
             </div>
@@ -1097,7 +1097,7 @@ function renderAuthForm() {
                     <div class="text-end mb-3">
                       <button type="button" class="btn btn-link btn-sm p-0 auth-forgot-link" id="btn-forgot-password">Forgot password?</button>
                     </div>
-                    <button class="btn btn-primary w-100 auth-submit" type="submit">Sign in</button>
+                    <button class="btn btn-primary w-100 auth-submit auth-admin-submit" type="submit">Sign in</button>
                   </form>
                   </div>
                 </div>
@@ -1160,7 +1160,7 @@ function renderAuthForm() {
                             Complete CAPTCHA before sending OTP.
                           </p>
                         </div>
-                        <button class="btn btn-outline-primary auth-reg-action-btn" type="button" id="btn-send-otp" disabled>
+                        <button class="btn btn-outline-primary auth-reg-action-btn auth-admin-outline" type="button" id="btn-send-otp" disabled>
                           Send OTP
                         </button>
                       </div>
@@ -1185,7 +1185,7 @@ function renderAuthForm() {
                             />
                           </div>
                         </div>
-                        <button class="btn btn-primary auth-reg-action-btn" type="button" id="btn-verify-otp" disabled>
+                        <button class="btn btn-primary auth-reg-action-btn auth-admin-submit" type="button" id="btn-verify-otp" disabled>
                           Verify
                         </button>
                       </div>
@@ -1199,7 +1199,7 @@ function renderAuthForm() {
                     </div>
 
                     <div class="auth-reg-submit-wrap">
-                      <button class="btn btn-primary auth-submit auth-reg-create-btn" type="submit" id="btn-register-submit" disabled>
+                      <button class="btn btn-primary auth-submit auth-reg-create-btn auth-admin-submit" type="submit" id="btn-register-submit" disabled>
                         Create account
                       </button>
                     </div>
