@@ -31,7 +31,22 @@ function parseMessagesAfterQuery(req) {
   return Number.isNaN(dt.getTime()) ? null : dt;
 }
 
-async function loadThreadMessages(model, whereBase, after, select) {
+function parseMessagesBeforeQuery(req) {
+  const raw = typeof req.query.before === "string" ? req.query.before.trim() : "";
+  if (!raw) return null;
+  const dt = new Date(raw);
+  return Number.isNaN(dt.getTime()) ? null : dt;
+}
+
+async function loadThreadMessages(model, whereBase, after, before, select) {
+  if (after && before) {
+    return prisma[model].findMany({
+      where: { ...whereBase, createdAt: { gte: after, lt: before } },
+      orderBy: { createdAt: "asc" },
+      take: 200,
+      select,
+    });
+  }
   if (after) {
     return prisma[model].findMany({
       where: { ...whereBase, createdAt: { gte: after } },
@@ -575,10 +590,12 @@ router.get("/conversations/:id/messages", requireAuth, async (req, res) => {
   }
 
   const after = parseMessagesAfterQuery(req);
+  const before = parseMessagesBeforeQuery(req);
   const messages = await loadThreadMessages(
     "chatMessage",
     { conversationId: conversation.id },
     after,
+    before,
     dmMessageSelect
   );
 
@@ -916,10 +933,12 @@ router.get("/groups/:id/messages", requireAuth, async (req, res) => {
   }
 
   const after = parseMessagesAfterQuery(req);
+  const before = parseMessagesBeforeQuery(req);
   const messages = await loadThreadMessages(
     "chatGroupMessage",
     { groupId: membership.groupId },
     after,
+    before,
     groupMessageSelect
   );
 

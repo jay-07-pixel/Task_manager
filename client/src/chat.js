@@ -54,7 +54,7 @@ let typingPulseActive = false;
 let typingStopTimer = null;
 /** @type {any | null} */
 let replyingTo = null;
-/** @type {{ dateKey: string, after: string, label: string } | null} */
+/** @type {{ dateKey: string, after: string, before: string, label: string } | null} */
 let chatJumpDate = null;
 /** @type {number | null} */
 let typingDebounceTimer = null;
@@ -84,7 +84,7 @@ async function refreshActiveMessages() {
     }))
   );
   const data = await d().api(`${base}/messages${chatMessagesQuerySuffix()}`);
-  const next = data.messages ?? [];
+  const next = filterMessagesToJumpDate(data.messages ?? []);
   const nextFp = JSON.stringify(
     next.map((m) => ({
       id: m.id,
@@ -302,9 +302,34 @@ function dayStartIsoInChatTz(dateKey) {
   return new Date(start).toISOString();
 }
 
+/** Exclusive end of calendar day in chat timezone (start of next local day). */
+function dayEndIsoInChatTz(dateKey) {
+  const startMs = new Date(dayStartIsoInChatTz(dateKey)).getTime();
+  if (!startMs || Number.isNaN(startMs)) return null;
+  let t = startMs + 3600000;
+  for (let i = 0; i < 48; i++) {
+    const key = dateKeyInTimeZone(new Date(t), CHAT_TIME_ZONE);
+    if (key !== dateKey) {
+      return dayStartIsoInChatTz(key);
+    }
+    t += 3600000;
+  }
+  return null;
+}
+
+function filterMessagesToJumpDate(messages) {
+  if (!chatJumpDate?.dateKey) return messages;
+  return messages.filter(
+    (m) => dateKeyInTimeZone(new Date(m.createdAt), CHAT_TIME_ZONE) === chatJumpDate.dateKey
+  );
+}
+
 function chatMessagesQuerySuffix() {
   if (!chatJumpDate?.after) return "";
-  return `?after=${encodeURIComponent(chatJumpDate.after)}`;
+  const params = new URLSearchParams();
+  params.set("after", chatJumpDate.after);
+  if (chatJumpDate.before) params.set("before", chatJumpDate.before);
+  return `?${params.toString()}`;
 }
 
 function syncChatDateFilterUi() {
@@ -334,13 +359,15 @@ function clearChatJumpDate() {
 async function applyChatJumpDate(dateKey) {
   if (!dateKey || !activeChatId || !activeThreadType) return;
   const after = dayStartIsoInChatTz(dateKey);
-  if (!after) {
+  const before = dayEndIsoInChatTz(dateKey);
+  if (!after || !before) {
     d().showToast("Invalid date.", "warning");
     return;
   }
   chatJumpDate = {
     dateKey,
     after,
+    before,
     label: formatChatDateDivider(after),
   };
   syncChatDateFilterUi();
@@ -348,14 +375,12 @@ async function applyChatJumpDate(dateKey) {
   if (!base) return;
   try {
     const data = await d().api(`${base}/messages${chatMessagesQuerySuffix()}`);
-    activeMessages = data.messages ?? [];
+    activeMessages = filterMessagesToJumpDate(data.messages ?? []);
     activeTypingUsers = data.typingUsers ?? [];
-    if (!activeMessages.length) {
-      renderMessages({ scrollToDateKey: dateKey, emptyDateLabel: chatJumpDate.label });
-      d().showToast(`No messages on ${chatJumpDate.label}.`, "warning");
-      return;
-    }
-    renderMessages({ scrollToDateKey: dateKey });
+    renderMessages({
+      scrollToDateKey: dateKey,
+      emptyDateLabel: !activeMessages.length ? chatJumpDate.label : null,
+    });
   } catch (err) {
     d().showToast(err.message || "Could not load messages for that date.", "danger");
   }
@@ -1445,9 +1470,9 @@ function renderMessages(options = {}) {
   host.classList.toggle("team-chat-messages--group", activeThreadType === "group");
   host.classList.toggle("team-chat-messages--dm", activeThreadType === "dm");
   if (!activeMessages.length) {
-    const emptyDate = options.emptyDateLabel || chatJumpDate?.label;
+    const emptyDate = options.emptyDateLabel ?? chatJumpDate?.label;
     const emptyMsg = emptyDate
-      ? `No messages on ${emptyDate}.`
+      ? `No messages were sent on ${emptyDate}.`
       : "No messages yet — say hello!";
     host.innerHTML = `<div class="team-chat-messages-empty">
       <div class="team-chat-empty-icon team-chat-empty-icon--sm" aria-hidden="true"><i class="bi bi-emoji-smile"></i></div>
