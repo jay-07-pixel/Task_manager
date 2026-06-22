@@ -4773,12 +4773,14 @@ function ownerListNavButtonHtml(list, { systemPinned = false } = {}) {
     : userPinned
       ? `<span class="list-pin-badge" title="Hold to unpin">${adminMsIcon("push_pin")}</span>`
       : `<span class="list-pin-hint" title="Hold to pin">${adminMsIcon("push_pin")}</span>`;
-  const title = systemPinned ? "Employee Assignments" : list.title;
   const holdHint = systemPinned
     ? "Tasks assigned between employees"
     : userPinned
       ? "Hold to unpin from top"
       : "Hold to pin to top · double-click to rename";
+  const titleHtml = systemPinned
+    ? `<span class="owner-emp-assign-title" title="${holdHint}"><span class="owner-emp-assign-title-line">Employee</span><span class="owner-emp-assign-title-line">Assignments</span></span>`
+    : `<span class="text-truncate list-title-edit" title="${holdHint}">${escapeHtml(list.title)}</span>`;
   const itemClass = systemPinned
     ? "admin-sidebar-nav-item owner-list-item owner-list-item--pinned"
     : `list-group-item list-group-item-action owner-list-item d-flex justify-content-between align-items-center gap-2${userPinned ? " owner-list-item--user-pinned" : ""}`;
@@ -4786,7 +4788,7 @@ function ownerListNavButtonHtml(list, { systemPinned = false } = {}) {
     <button type="button" class="${itemClass} ${active ? "active" : ""}" data-list-id="${list.id}"${systemPinned ? ' data-system-pinned="1"' : ""}${userPinned ? ' data-user-pinned="1"' : ""}>
       <span class="admin-nav-item-left min-w-0">
         ${adminMsIcon(icon)}
-        <span class="text-truncate ${systemPinned ? "" : "list-title-edit"}" title="${holdHint}">${escapeHtml(title)}</span>
+        ${titleHtml}
       </span>
       ${grip}
     </button>`;
