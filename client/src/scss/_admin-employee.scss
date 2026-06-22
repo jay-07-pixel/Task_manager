@@ -175,42 +175,20 @@
     }
   }
 
-  .emp-task-desc-box .owner-task-desc-preview,
-  .emp-task-desc-box .emp-task-desc-full {
+  .emp-task-desc-box .owner-task-desc-preview {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     text-align: left;
+    flex: 1;
+    min-width: 0;
   }
 
-  .emp-task-desc-box--expanded {
-    max-width: 100%;
-    width: 100%;
-    align-items: flex-start;
-    white-space: normal;
-
-    .emp-task-desc-full {
-      display: block !important;
-      white-space: pre-wrap;
-      word-break: break-word;
-      overflow: visible;
-      text-overflow: unset;
-      max-height: 7.5rem;
-      overflow-y: auto;
-      line-height: 1.4;
-    }
-
-    .emp-task-desc-chevron {
-      transform: rotate(180deg);
-    }
-  }
-
-  .emp-task-desc-chevron {
+  .emp-task-desc-popup-icon {
     flex-shrink: 0;
     font-size: 0.65rem;
     color: #00535b;
-    opacity: 0.75;
-    transition: transform 0.15s ease;
+    opacity: 0.7;
   }
 }
 
@@ -447,6 +425,24 @@ body:has(.admin-emp-modal.show) .modal-backdrop {
   }
 }
 
+.admin-desc-modal-dialog {
+  max-width: min(36rem, calc(100vw - 1.5rem));
+}
+
+.admin-desc-modal-body {
+  padding-top: 0.75rem;
+  padding-bottom: 1.25rem;
+}
+
+.admin-emp-desc-modal-text {
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  color: #181a2e;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
 [data-bs-theme="dark"] {
   .admin-emp-modal-card {
     background: #1e1e28;
@@ -479,5 +475,9 @@ body:has(.admin-emp-modal.show) .modal-backdrop {
   .admin-emp-modal-footer {
     background: #121218;
     border-top-color: #3a3a48;
+  }
+
+  .admin-emp-desc-modal-text {
+    color: #e8e8f0;
   }
 }

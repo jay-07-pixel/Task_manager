@@ -1583,20 +1583,8 @@ body {
     margin-bottom: 0.25rem;
   }
 
-  .emp-owner-task-table tbody tr.emp-task-row .emp-col-desc .owner-task-desc-box {
-    white-space: normal !important;
-    overflow: visible !important;
-    text-overflow: unset !important;
-    line-height: 1.4;
-    max-width: 100%;
-  }
-
-  .emp-owner-task-table tbody tr.emp-task-row .emp-col-desc .emp-task-desc-box:not(.emp-task-desc-box--expanded) {
+  .emp-owner-task-table tbody tr.emp-task-row .emp-col-desc .emp-task-desc-box:not(.emp-task-desc-box--empty) {
     max-width: min(11rem, 100%);
-  }
-
-  .emp-owner-task-table tbody tr.emp-task-row .emp-col-desc .emp-task-desc-box--expanded {
-    max-width: 100%;
   }
 
   .emp-owner-task-table tbody tr.emp-task-row .emp-col-proof {

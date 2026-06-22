@@ -1893,7 +1893,7 @@ function taskDescriptionPreviewWords(text, maxWords = 2) {
   return `${words.slice(0, maxWords).join(" ")}…`;
 }
 
-function empTaskDescriptionBoxHtml(notesRaw, taskId) {
+function empTaskDescriptionBoxHtml(notesRaw, taskId, taskTitle) {
   if (!notesRaw) {
     return `<div class="owner-task-desc-box emp-task-desc-box emp-task-desc-box--empty small text-muted fst-italic mb-0">No description</div>`;
   }
@@ -1902,23 +1902,19 @@ function empTaskDescriptionBoxHtml(notesRaw, taskId) {
   if (wordCount <= 2) {
     return `<div class="owner-task-desc-box emp-task-desc-box owner-task-desc-box--static small text-body-secondary mb-0">${escapeHtml(notesRaw)}</div>`;
   }
-  return `<button type="button" class="owner-task-desc-box emp-task-desc-box owner-task-desc-box--clickable js-emp-desc-toggle small text-body-secondary mb-0" data-task-id="${escapeHtml(taskId)}" aria-expanded="false" aria-label="Show full description">
+  return `<button type="button" class="owner-task-desc-box emp-task-desc-box owner-task-desc-box--clickable js-emp-desc-popup small text-body-secondary mb-0" data-full="${escapeHtml(notesRaw)}" data-task-title="${escapeHtml(taskTitle || "")}" data-task-id="${escapeHtml(taskId)}" aria-label="Read full description">
     <span class="owner-task-desc-preview emp-task-desc-preview">${escapeHtml(preview)}</span>
-    <span class="emp-task-desc-full d-none">${escapeHtml(notesRaw)}</span>
-    <i class="bi bi-chevron-down emp-task-desc-chevron" aria-hidden="true"></i>
+    <i class="bi bi-arrows-fullscreen emp-task-desc-popup-icon" aria-hidden="true"></i>
   </button>`;
 }
 
-function bindEmpDescriptionToggles(root) {
-  root.querySelectorAll(".js-emp-desc-toggle").forEach((btn) => {
+function bindEmpDescriptionPopups(root) {
+  root.querySelectorAll(".js-emp-desc-popup").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
-      const expanded = btn.classList.toggle("emp-task-desc-box--expanded");
-      btn.setAttribute("aria-expanded", expanded ? "true" : "false");
-      const preview = btn.querySelector(".emp-task-desc-preview");
-      const full = btn.querySelector(".emp-task-desc-full");
-      if (preview) preview.classList.toggle("d-none", expanded);
-      if (full) full.classList.toggle("d-none", !expanded);
+      const full = btn.getAttribute("data-full") || "";
+      const taskTitle = btn.getAttribute("data-task-title") || "";
+      if (full) openTaskDescriptionModal(full, taskTitle);
     });
   });
 }
@@ -1933,18 +1929,17 @@ function ownerTaskDescriptionDetailHtml(notes) {
 
 function taskDescriptionModalHtml() {
   return `
-    <div class="modal fade" id="taskDescriptionModal" tabindex="-1" aria-labelledby="taskDescriptionModalTitle" aria-hidden="true">
-      <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h2 class="modal-title h5 mb-0" id="taskDescriptionModalTitle">Description</h2>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+    <div class="modal fade admin-emp-modal" id="taskDescriptionModal" tabindex="-1" aria-labelledby="taskDescriptionModalTitle" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered modal-lg admin-emp-modal-dialog admin-desc-modal-dialog">
+        <div class="modal-content admin-emp-modal-card">
+          ${adminEmpModalHeaderHtml("taskDescriptionModalTitle", "Description")}
+          <div class="admin-emp-modal-body admin-desc-modal-body">
+            <p class="admin-emp-desc-modal-text mb-0" id="taskDescriptionModalBody"></p>
           </div>
-          <div class="modal-body">
-            <p class="mb-0 owner-task-desc-modal-text text-break" id="taskDescriptionModalBody"></p>
-          </div>
-          <div class="modal-footer border-top-0 pt-0">
-            <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Close</button>
+          <div class="admin-emp-modal-footer">
+            <div class="admin-emp-modal-footer-actions">
+              <button type="button" class="admin-task-modal-btn-save" data-bs-dismiss="modal">Close</button>
+            </div>
           </div>
         </div>
       </div>
@@ -5627,7 +5622,7 @@ function empTaskTableRows(tasks) {
         ? employeeHasArchivedSubmission(me) || employeeHasCurrentSubmission(me)
         : employeeHasCurrentSubmission(me);
       const notesRaw = (t.notes || "").trim().replace(/\s+/g, " ");
-      const descriptionBox = empTaskDescriptionBoxHtml(notesRaw, t.id);
+      const descriptionBox = empTaskDescriptionBoxHtml(notesRaw, t.id, t.title);
       const updateCount = employeeAwaitingFreshOccurrence(t, me) ? 0 : (me?.progressUpdateCount ?? 0);
       const updateBadge =
         updateCount > 0
@@ -5997,7 +5992,7 @@ function renderEmployeeMain() {
     });
   });
 
-  bindEmpDescriptionToggles(main);
+  bindEmpDescriptionPopups(main);
 
   main.querySelectorAll(".emp-view-submission").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -6033,6 +6028,7 @@ function renderEmployeeChrome() {
       ${progressUpdateModalHtml()}
       ${empDelegateModalHtml()}
       ${empCreateTaskModalHtml()}
+      ${taskDescriptionModalHtml()}
       ${teamChatOffcanvasHtml()}
     </div>`;
 
