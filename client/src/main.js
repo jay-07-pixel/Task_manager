@@ -121,6 +121,14 @@ function themeIconToggleMarkup() {
     </div>`;
 }
 
+function friendlyApiError(msg) {
+  const s = String(msg || "Request failed");
+  if (s === "Server error") {
+    return "Server error. On the VPS run: cd server && npx prisma migrate deploy && npm run db:generate && pm2 restart ss2n";
+  }
+  return s;
+}
+
 async function api(path, options = {}) {
   let res;
   try {
@@ -161,7 +169,7 @@ async function api(path, options = {}) {
         "The API is not responding (it may have crashed — check the dev terminal and restart if needed)."
       );
     }
-    throw new Error(s);
+    throw new Error(friendlyApiError(s));
   }
   return data;
 }
@@ -245,7 +253,7 @@ function submissionUploadErrorMessage(res, rawText) {
   }
   const msg = data?.error || "Submission failed";
   if (msg === "Server error") {
-    return "Server error. On the VPS run: cd server && npx prisma migrate deploy && npm run db:generate && pm2 restart taskmanager";
+    return "Server error. On the VPS run: cd server && npx prisma migrate deploy && npm run db:generate && pm2 restart ss2n";
   }
   return msg;
 }

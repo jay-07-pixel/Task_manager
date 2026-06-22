@@ -22,6 +22,7 @@ import { initFcm } from "./lib/fcm.js";
 import { startReminderScheduler } from "./lib/reminderScheduler.js";
 import { getTurnstileSiteKey } from "./lib/turnstile.js";
 import { reconcileAllLegacyRolledRecurringTasks } from "./lib/recurringLegacyBackfill.js";
+import { friendlyDbError } from "./lib/dbErrorMessage.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const sessionsDir = path.join(__dirname, "..", "sessions");
@@ -108,22 +109,7 @@ if (isProd) {
 
 app.use((err, _req, res, _next) => {
   console.error(err);
-  const errMsg =
-    err && typeof err === "object" && "message" in err && typeof err.message === "string"
-      ? err.message
-      : "";
-  const errCode = err && typeof err === "object" && "code" in err ? String(err.code) : "";
-  let detail = !isProd && errMsg ? errMsg : "Server error";
-  if (
-    isProd &&
-    (errCode === "P2022" ||
-      /Unknown column|submission_text/i.test(errMsg) ||
-      /column.*does not exist/i.test(errMsg))
-  ) {
-    detail =
-      "Database migration required. On the server run: cd server && npx prisma migrate deploy && npm run db:generate";
-  }
-  res.status(500).json({ error: detail });
+  res.status(500).json({ error: friendlyDbError(err, { isProd }) });
 });
 
 const server = app.listen(PORT, () => {
