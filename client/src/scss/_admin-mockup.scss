@@ -1219,15 +1219,16 @@
 
   .admin-deadline {
     font-size: 0.875rem;
-    color: var(--admin-on-surface-variant);
+    color: var(--admin-error);
+    font-weight: 600;
 
     &--urgent {
-      color: var(--admin-error);
       font-weight: 700;
     }
 
     &--none {
       color: var(--admin-outline);
+      font-weight: 400;
     }
   }
 
