@@ -62,6 +62,25 @@
         color: #00535b;
       }
     }
+
+    .emp-update-btn {
+      border: 1px solid rgba(0, 83, 91, 0.5);
+      color: #00535b;
+      background: rgba(169, 236, 229, 0.28);
+      font-weight: 600;
+
+      &:hover {
+        background: rgba(169, 236, 229, 0.45);
+        border-color: #00535b;
+        color: #004a52;
+      }
+
+      .badge {
+        background: #00535b !important;
+        color: #fff !important;
+        vertical-align: middle;
+      }
+    }
   }
 
   .emp-assigned-out-card {
@@ -109,5 +128,245 @@
   .admin-nav-count {
     background: #3a3a48;
     color: #b0b0c0;
+  }
+}
+
+/* Employee modals — admin MD3 theme */
+body:has(.admin-emp-modal.show) .modal-backdrop {
+  background: rgba(24, 26, 46, 0.45);
+}
+
+.admin-emp-modal-dialog {
+  max-width: min(42rem, calc(100vw - 1.5rem));
+}
+
+.admin-emp-modal-card {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 2rem);
+  border-radius: 0.75rem;
+  border: 1px solid #bec8ca;
+  background: #fbf8ff;
+  box-shadow: 0 16px 48px rgba(24, 26, 46, 0.18);
+  overflow: hidden;
+}
+
+.admin-emp-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem 0.75rem;
+  flex-shrink: 0;
+}
+
+.admin-emp-modal-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.3;
+  color: #181a2e;
+}
+
+.admin-emp-modal-close {
+  border: none;
+  background: transparent;
+  color: #3e494a;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+
+  &:hover {
+    background: rgba(169, 236, 229, 0.25);
+    color: #00535b;
+  }
+
+  .material-symbols-outlined {
+    font-size: 1.35rem;
+  }
+}
+
+.admin-emp-modal-body {
+  padding: 0.5rem 1.5rem 1.25rem;
+  overflow-y: auto;
+  flex: 1 1 auto;
+}
+
+.admin-emp-modal-field-label {
+  margin: 0 0 0.25rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #3e494a;
+}
+
+.admin-emp-modal-task-title {
+  margin: 0 0 1rem;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  color: #181a2e;
+}
+
+.admin-emp-modal-label {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #181a2e;
+}
+
+.admin-emp-modal-label-optional {
+  font-weight: 400;
+  color: #6f797a;
+}
+
+.admin-emp-modal-hint {
+  font-size: 0.8125rem;
+  color: #3e494a;
+}
+
+.admin-emp-modal-counter {
+  font-size: 0.8125rem;
+  color: #6f797a;
+}
+
+.admin-emp-modal-error {
+  margin: 0.5rem 0 0;
+  font-size: 0.8125rem;
+  color: #ba1a1a;
+}
+
+.admin-emp-modal-divider {
+  margin: 1.25rem 0;
+  border: none;
+  border-top: 1px solid rgba(190, 200, 202, 0.55);
+}
+
+.admin-emp-modal-input,
+.admin-emp-modal-textarea,
+.admin-emp-modal-select,
+.admin-emp-modal-file {
+  width: 100%;
+  border: 1px solid rgba(190, 200, 202, 0.65);
+  border-radius: 0.5rem;
+  background: #fff;
+  color: #181a2e;
+  font-size: 0.9375rem;
+  padding: 0.55rem 0.75rem;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+
+  &:focus {
+    outline: none;
+    border-color: #00535b;
+    box-shadow: 0 0 0 3px rgba(0, 83, 91, 0.12);
+  }
+
+  &::placeholder {
+    color: #6f797a;
+  }
+}
+
+.admin-emp-modal-textarea {
+  resize: vertical;
+  min-height: 6rem;
+}
+
+.admin-emp-modal-paste-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid rgba(0, 83, 91, 0.35);
+  border-radius: 0.5rem;
+  background: rgba(169, 236, 229, 0.2);
+  color: #00535b;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  padding: 0.35rem 0.75rem;
+
+  &:hover {
+    background: rgba(169, 236, 229, 0.35);
+    border-color: #00535b;
+  }
+
+  .material-symbols-outlined {
+    font-size: 1.1rem;
+  }
+}
+
+.admin-emp-modal-preview-img,
+.admin-emp-modal-preview-pdf {
+  border: 1px solid rgba(190, 200, 202, 0.55);
+  border-radius: 0.5rem;
+  background: #fff;
+}
+
+.admin-emp-modal-preview-pdf {
+  padding: 0.65rem 0.85rem;
+}
+
+.admin-emp-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 1rem;
+  flex-shrink: 0;
+  padding: 1rem 1.5rem;
+  background: #f4f2ff;
+  border-top: 1px solid #bec8ca;
+}
+
+.admin-emp-modal-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.admin-emp-modal .admin-task-modal-btn-save {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+
+  .material-symbols-outlined {
+    font-size: 1.1rem;
+  }
+}
+
+[data-bs-theme="dark"] {
+  .admin-emp-modal-card {
+    background: #1e1e28;
+    border-color: #3a3a48;
+  }
+
+  .admin-emp-modal-title,
+  .admin-emp-modal-label,
+  .admin-emp-modal-task-title {
+    color: #e8e8f0;
+  }
+
+  .admin-emp-modal-field-label,
+  .admin-emp-modal-hint,
+  .admin-emp-modal-counter {
+    color: #b0b0c0;
+  }
+
+  .admin-emp-modal-input,
+  .admin-emp-modal-textarea,
+  .admin-emp-modal-select,
+  .admin-emp-modal-file,
+  .admin-emp-modal-preview-img,
+  .admin-emp-modal-preview-pdf {
+    background: #121218;
+    border-color: #3a3a48;
+    color: #e8e8f0;
+  }
+
+  .admin-emp-modal-footer {
+    background: #121218;
+    border-top-color: #3a3a48;
   }
 }

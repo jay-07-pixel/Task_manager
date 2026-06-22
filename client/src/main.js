@@ -2705,50 +2705,64 @@ function submissionDetailModalHtml() {
     </div>`;
 }
 
+function adminEmpModalHeaderHtml(titleId, title) {
+  return `<div class="admin-emp-modal-header">
+    <h2 class="admin-emp-modal-title" id="${titleId}">${escapeHtml(title)}</h2>
+    <button type="button" class="admin-emp-modal-close" data-bs-dismiss="modal" aria-label="Close">${adminMsIcon("close")}</button>
+  </div>`;
+}
+
+function adminEmpModalTaskBlockHtml(titleId) {
+  return `<p class="admin-emp-modal-field-label">Task</p>
+    <p id="${titleId}" class="admin-emp-modal-task-title"></p>`;
+}
+
+function adminEmpModalFooterHtml(cancelLabel, submitId, submitLabel, submitIcon = "send") {
+  return `<div class="admin-emp-modal-footer">
+    <div class="admin-emp-modal-footer-actions">
+      <button type="button" class="admin-task-modal-btn-secondary" data-bs-dismiss="modal">${escapeHtml(cancelLabel)}</button>
+      <button type="button" class="admin-task-modal-btn-save" id="${submitId}">
+        ${adminMsIcon(submitIcon)} ${escapeHtml(submitLabel)}
+      </button>
+    </div>
+  </div>`;
+}
+
 function progressUpdateModalHtml() {
   return `
-    <div class="modal fade" id="progressUpdateModal" tabindex="-1" aria-labelledby="progressUpdateModalTitle" aria-hidden="true">
-      <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable modal-fullscreen-sm-down">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h2 class="modal-title h5 mb-0" id="progressUpdateModalTitle">Task update</h2>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-          </div>
-          <div class="modal-body">
+    <div class="modal fade admin-emp-modal" id="progressUpdateModal" tabindex="-1" aria-labelledby="progressUpdateModalTitle" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable modal-fullscreen-sm-down admin-emp-modal-dialog">
+        <div class="modal-content admin-emp-modal-card">
+          ${adminEmpModalHeaderHtml("progressUpdateModalTitle", "Task update")}
+          <div class="admin-emp-modal-body">
             <input type="hidden" id="progress-update-task-id" value="" />
             <input type="hidden" id="progress-update-user-id" value="" />
             <input type="hidden" id="progress-update-readonly" value="0" />
-            <p class="fw-medium text-body-secondary mb-1 small text-uppercase text-secondary">Task</p>
-            <p id="progress-update-task-title" class="fw-semibold mb-1"></p>
-            <p id="progress-update-assignee-label" class="small text-muted mb-3 d-none"></p>
+            ${adminEmpModalTaskBlockHtml("progress-update-task-title")}
+            <p id="progress-update-assignee-label" class="admin-emp-modal-hint mb-3 d-none"></p>
             <div id="progress-update-compose-wrap">
-              <p class="small text-uppercase text-secondary fw-semibold mb-2">Update type</p>
+              <p class="admin-emp-modal-field-label mb-2">Update type</p>
               <div id="progress-update-type-chips" class="d-flex flex-wrap gap-2 mb-3" role="group" aria-label="Update type"></div>
-              <label class="form-label" for="progress-update-message">Your update</label>
+              <label class="admin-emp-modal-label" for="progress-update-message">Your update</label>
               <textarea
-                class="form-control progress-update-textarea"
+                class="admin-emp-modal-textarea"
                 id="progress-update-message"
                 rows="4"
                 maxlength="${PROGRESS_UPDATE_TEXT_MAX}"
                 placeholder="Share what you are doing, any blockers, or progress on this task."
               ></textarea>
               <div class="d-flex justify-content-end mt-1">
-                <span id="progress-update-count" class="small text-muted tabular-nums">0 / ${PROGRESS_UPDATE_TEXT_MAX}</span>
+                <span id="progress-update-count" class="admin-emp-modal-counter tabular-nums">0 / ${PROGRESS_UPDATE_TEXT_MAX}</span>
               </div>
-              <p id="progress-update-error" class="text-danger small mb-0 mt-2 d-none" role="alert"></p>
+              <p id="progress-update-error" class="admin-emp-modal-error d-none" role="alert"></p>
             </div>
             <div id="progress-update-history-wrap" class="mt-3">
-              <p class="small text-uppercase text-secondary fw-semibold mb-2">Update history</p>
+              <p class="admin-emp-modal-field-label mb-2">Update history</p>
               <div id="progress-update-history" class="progress-update-timeline"></div>
-              <p id="progress-update-history-empty" class="text-muted small mb-0 d-none">No updates yet.</p>
+              <p id="progress-update-history-empty" class="admin-emp-modal-hint mb-0 d-none">No updates yet.</p>
             </div>
           </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-            <button type="button" class="btn btn-primary" id="progress-update-submit">
-              <i class="bi bi-send me-1" aria-hidden="true"></i>Post update
-            </button>
-          </div>
+          ${adminEmpModalFooterHtml("Close", "progress-update-submit", "Post update")}
         </div>
       </div>
     </div>`;
@@ -2756,33 +2770,25 @@ function progressUpdateModalHtml() {
 
 function empCreateTaskModalHtml() {
   return `
-    <div class="modal fade" id="empCreateTaskModal" tabindex="-1" aria-labelledby="empCreateTaskModalTitle" aria-hidden="true">
-      <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h2 class="modal-title h5 mb-0" id="empCreateTaskModalTitle">Create & assign task</h2>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-          </div>
-          <div class="modal-body">
-            <label class="form-label" for="emp-create-title">Task title</label>
-            <input type="text" class="form-control mb-3" id="emp-create-title" maxlength="500" placeholder="What needs to be done?" autocomplete="off" />
-            <label class="form-label" for="emp-create-notes">Description <span class="text-muted fw-normal">(optional)</span></label>
-            <textarea class="form-control mb-3" id="emp-create-notes" rows="3" placeholder="Add details for the assignee"></textarea>
-            <label class="form-label" for="emp-create-due">Deadline <span class="text-muted fw-normal">(optional)</span></label>
-            <input type="datetime-local" class="form-control mb-3" id="emp-create-due" />
-            <label class="form-label" for="emp-create-assignee">Assign to</label>
-            <select class="form-select" id="emp-create-assignee">
+    <div class="modal fade admin-emp-modal" id="empCreateTaskModal" tabindex="-1" aria-labelledby="empCreateTaskModalTitle" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable admin-emp-modal-dialog">
+        <div class="modal-content admin-emp-modal-card">
+          ${adminEmpModalHeaderHtml("empCreateTaskModalTitle", "Create & assign task")}
+          <div class="admin-emp-modal-body">
+            <label class="admin-emp-modal-label" for="emp-create-title">Task title</label>
+            <input type="text" class="admin-emp-modal-input mb-3" id="emp-create-title" maxlength="500" placeholder="What needs to be done?" autocomplete="off" />
+            <label class="admin-emp-modal-label" for="emp-create-notes">Description <span class="admin-emp-modal-label-optional">(optional)</span></label>
+            <textarea class="admin-emp-modal-textarea mb-3" id="emp-create-notes" rows="3" placeholder="Add details for the assignee"></textarea>
+            <label class="admin-emp-modal-label" for="emp-create-due">Deadline <span class="admin-emp-modal-label-optional">(optional)</span></label>
+            <input type="datetime-local" class="admin-emp-modal-input mb-3" id="emp-create-due" />
+            <label class="admin-emp-modal-label" for="emp-create-assignee">Assign to</label>
+            <select class="admin-emp-modal-select mb-3" id="emp-create-assignee">
               <option value="">Choose an employee…</option>
             </select>
-            <p class="small text-muted mt-3 mb-0">The task is added to admin's list. Only admin can see updates and submissions.</p>
-            <p id="emp-create-error" class="text-danger small mb-0 mt-2 d-none" role="alert"></p>
+            <p class="admin-emp-modal-hint mb-0">The task is added to admin's list. Only admin can see updates and submissions.</p>
+            <p id="emp-create-error" class="admin-emp-modal-error d-none" role="alert"></p>
           </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-            <button type="button" class="btn btn-primary" id="emp-create-submit">
-              <i class="bi bi-plus-lg me-1" aria-hidden="true"></i>Create task
-            </button>
-          </div>
+          ${adminEmpModalFooterHtml("Cancel", "emp-create-submit", "Create task", "add")}
         </div>
       </div>
     </div>`;
@@ -2790,30 +2796,21 @@ function empCreateTaskModalHtml() {
 
 function empDelegateModalHtml() {
   return `
-    <div class="modal fade" id="empDelegateModal" tabindex="-1" aria-labelledby="empDelegateModalTitle" aria-hidden="true">
-      <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h2 class="modal-title h5 mb-0" id="empDelegateModalTitle">Assign task to colleague</h2>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-          </div>
-          <div class="modal-body">
+    <div class="modal fade admin-emp-modal" id="empDelegateModal" tabindex="-1" aria-labelledby="empDelegateModalTitle" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered admin-emp-modal-dialog">
+        <div class="modal-content admin-emp-modal-card">
+          ${adminEmpModalHeaderHtml("empDelegateModalTitle", "Assign task to colleague")}
+          <div class="admin-emp-modal-body">
             <input type="hidden" id="emp-delegate-task-id" value="" />
-            <p class="fw-medium text-body-secondary mb-1 small text-uppercase text-secondary">Task</p>
-            <p id="emp-delegate-task-title" class="fw-semibold mb-3"></p>
-            <p class="small text-muted mb-3">The colleague will work on this task. Updates and submission are visible to admin only. You will no longer see this task on your list.</p>
-            <label class="form-label" for="emp-delegate-employee">Assign to</label>
-            <select class="form-select" id="emp-delegate-employee">
+            ${adminEmpModalTaskBlockHtml("emp-delegate-task-title")}
+            <p class="admin-emp-modal-hint mb-3">The colleague will work on this task. Updates and submission are visible to admin only. You will no longer see this task on your list.</p>
+            <label class="admin-emp-modal-label" for="emp-delegate-employee">Assign to</label>
+            <select class="admin-emp-modal-select" id="emp-delegate-employee">
               <option value="">Choose an employee…</option>
             </select>
-            <p id="emp-delegate-error" class="text-danger small mb-0 mt-2 d-none" role="alert"></p>
+            <p id="emp-delegate-error" class="admin-emp-modal-error d-none" role="alert"></p>
           </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-            <button type="button" class="btn btn-primary" id="emp-delegate-submit">
-              <i class="bi bi-person-plus me-1" aria-hidden="true"></i>Assign task
-            </button>
-          </div>
+          ${adminEmpModalFooterHtml("Cancel", "emp-delegate-submit", "Assign task", "person_add")}
         </div>
       </div>
     </div>`;
@@ -2821,54 +2818,45 @@ function empDelegateModalHtml() {
 
 function empSubmissionModalHtml() {
   return `
-    <div class="modal fade" id="empSubmissionModal" tabindex="-1" aria-labelledby="empSubmissionModalTitle" aria-hidden="true">
-      <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable modal-fullscreen-sm-down">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h2 class="modal-title h5 mb-0" id="empSubmissionModalTitle">Submit task</h2>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-          </div>
-          <div class="modal-body">
+    <div class="modal fade admin-emp-modal" id="empSubmissionModal" tabindex="-1" aria-labelledby="empSubmissionModalTitle" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable modal-fullscreen-sm-down admin-emp-modal-dialog">
+        <div class="modal-content admin-emp-modal-card">
+          ${adminEmpModalHeaderHtml("empSubmissionModalTitle", "Submit task")}
+          <div class="admin-emp-modal-body">
             <input type="hidden" id="emp-submission-task-id" value="" />
-            <p class="fw-medium text-body-secondary mb-1 small text-uppercase text-secondary">Task</p>
-            <p id="emp-submission-task-title" class="fw-semibold mb-3"></p>
-            <label class="form-label" for="emp-submission-text">Submission notes</label>
+            ${adminEmpModalTaskBlockHtml("emp-submission-task-title")}
+            <label class="admin-emp-modal-label" for="emp-submission-text">Submission notes</label>
             <textarea
-              class="form-control emp-submission-textarea"
+              class="admin-emp-modal-textarea"
               id="emp-submission-text"
               rows="5"
               maxlength="${EMP_SUBMISSION_TEXT_MAX}"
               placeholder="Describe what you completed, paste notes, or leave blank if you only upload a file."
             ></textarea>
             <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-2">
-              <button type="button" class="btn btn-sm btn-outline-secondary" id="emp-submission-paste">
-                <i class="bi bi-clipboard me-1" aria-hidden="true"></i>Paste from clipboard
+              <button type="button" class="admin-emp-modal-paste-btn" id="emp-submission-paste">
+                ${adminMsIcon("content_paste")} Paste from clipboard
               </button>
-              <span id="emp-submission-count" class="small text-muted tabular-nums">0 / ${EMP_SUBMISSION_TEXT_MAX}</span>
+              <span id="emp-submission-count" class="admin-emp-modal-counter tabular-nums">0 / ${EMP_SUBMISSION_TEXT_MAX}</span>
             </div>
-            <p id="emp-submission-error" class="text-danger small mb-0 mt-2 d-none" role="alert"></p>
-            <hr class="my-3" />
-            <label class="form-label" for="emp-submission-image">Submission file <span class="text-muted fw-normal">(image or PDF, optional)</span></label>
+            <p id="emp-submission-error" class="admin-emp-modal-error d-none" role="alert"></p>
+            <hr class="admin-emp-modal-divider" />
+            <label class="admin-emp-modal-label" for="emp-submission-image">Submission file <span class="admin-emp-modal-label-optional">(image or PDF, optional)</span></label>
             <input
               type="file"
-              class="form-control"
+              class="admin-emp-modal-file"
               id="emp-submission-image"
               accept="image/jpeg,image/png,image/gif,image/webp,application/pdf,.pdf"
             />
             <div id="emp-submission-preview-wrap" class="mt-2 d-none">
-              <img id="emp-submission-preview" src="" alt="Selected image preview" class="submission-preview-thumb rounded border d-none" />
-              <div id="emp-submission-preview-pdf" class="submission-preview-pdf rounded border px-3 py-2 d-none d-flex align-items-center gap-2">
+              <img id="emp-submission-preview" src="" alt="Selected image preview" class="submission-preview-thumb admin-emp-modal-preview-img d-none" />
+              <div id="emp-submission-preview-pdf" class="admin-emp-modal-preview-pdf d-none d-flex align-items-center gap-2">
                 <i class="bi bi-file-earmark-pdf text-danger fs-4" aria-hidden="true"></i>
                 <span id="emp-submission-preview-name" class="small text-break"></span>
               </div>
             </div>
           </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-            <button type="button" class="btn btn-primary" id="emp-submission-submit">
-              <i class="bi bi-send me-1" aria-hidden="true"></i>Submit
-            </button>
-          </div>
+          ${adminEmpModalFooterHtml("Cancel", "emp-submission-submit", "Submit")}
         </div>
       </div>
     </div>`;
@@ -5607,15 +5595,10 @@ function empTaskTableRows(tasks) {
         : "";
       const showRecurrenceOnActive = displayMode === "active" && (t.recurrence ?? "none") !== "none";
       const recurrenceLines = showRecurrenceOnActive ? empActiveRecurrenceLinesHtml(t) : "";
-      const canReassign = displayMode === "active" && !me?.assignedBy;
-      const delegateBtn = canReassign
-        ? `<button type="button" class="btn btn-sm btn-outline-info emp-open-delegate" data-task-id="${t.id}"><i class="bi bi-person-plus me-1" aria-hidden="true"></i>Assign</button>`
-        : "";
       const submissionCell = `<div class="d-flex flex-column align-items-end gap-1 emp-task-actions">
-          <button type="button" class="btn btn-sm btn-outline-secondary emp-open-progress-update" data-task-id="${t.id}">
+          <button type="button" class="btn btn-sm emp-open-progress-update emp-update-btn" data-task-id="${t.id}">
             <i class="bi bi-chat-left-dots me-1" aria-hidden="true"></i>Update${updateBadge}
           </button>
-          ${delegateBtn}
           ${submissionBtn}
         </div>`;
       const rowDone = submitted ? "owner-task-row--completed" : "";
@@ -5949,14 +5932,6 @@ function renderEmployeeMain() {
       const id = btn.getAttribute("data-task-id");
       const task = state.empTasks.find((t) => t.id === id);
       if (task) void openEmpProgressUpdateModal(task);
-    });
-  });
-
-  main.querySelectorAll(".emp-open-delegate").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const id = btn.getAttribute("data-task-id");
-      const task = state.empTasks.find((t) => t.id === id);
-      if (task) void openEmpDelegateModal(task);
     });
   });
 
