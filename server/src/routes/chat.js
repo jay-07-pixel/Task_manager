@@ -24,6 +24,31 @@ import {
 
 const router = Router();
 
+function parseMessagesAfterQuery(req) {
+  const raw = typeof req.query.after === "string" ? req.query.after.trim() : "";
+  if (!raw) return null;
+  const dt = new Date(raw);
+  return Number.isNaN(dt.getTime()) ? null : dt;
+}
+
+async function loadThreadMessages(model, whereBase, after, select) {
+  if (after) {
+    return prisma[model].findMany({
+      where: { ...whereBase, createdAt: { gte: after } },
+      orderBy: { createdAt: "asc" },
+      take: 200,
+      select,
+    });
+  }
+  const latest = await prisma[model].findMany({
+    where: whereBase,
+    orderBy: { createdAt: "desc" },
+    take: 200,
+    select,
+  });
+  return latest.reverse();
+}
+
 const createConversationSchema = z.object({
   peerUserId: z.string().uuid(),
 });
@@ -549,12 +574,13 @@ router.get("/conversations/:id/messages", requireAuth, async (req, res) => {
     return res.status(404).json({ error: "Conversation not found." });
   }
 
-  const messages = await prisma.chatMessage.findMany({
-    where: { conversationId: conversation.id },
-    orderBy: { createdAt: "asc" },
-    take: 200,
-    select: dmMessageSelect,
-  });
+  const after = parseMessagesAfterQuery(req);
+  const messages = await loadThreadMessages(
+    "chatMessage",
+    { conversationId: conversation.id },
+    after,
+    dmMessageSelect
+  );
 
   res.json({
     conversation: {
@@ -889,12 +915,13 @@ router.get("/groups/:id/messages", requireAuth, async (req, res) => {
     return res.status(404).json({ error: "Group not found." });
   }
 
-  const messages = await prisma.chatGroupMessage.findMany({
-    where: { groupId: membership.groupId },
-    orderBy: { createdAt: "asc" },
-    take: 200,
-    select: groupMessageSelect,
-  });
+  const after = parseMessagesAfterQuery(req);
+  const messages = await loadThreadMessages(
+    "chatGroupMessage",
+    { groupId: membership.groupId },
+    after,
+    groupMessageSelect
+  );
 
   const members = await prisma.chatGroupMember.findMany({
     where: { groupId: membership.groupId },

@@ -2983,6 +2983,61 @@ body {
   background: var(--bs-body-bg);
 }
 
+.team-chat-group-manage-btn {
+  flex-shrink: 0;
+}
+
+.team-chat-date-btn {
+  flex-shrink: 0;
+}
+
+.team-chat-date-btn--active {
+  background: rgba(var(--bs-primary-rgb), 0.12) !important;
+  border-color: rgba(var(--bs-primary-rgb), 0.35) !important;
+  color: var(--bs-primary) !important;
+}
+
+.team-chat-date-filter {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.4rem 0.85rem;
+  font-size: 0.78rem;
+  color: var(--bs-secondary-color);
+  background: rgba(var(--bs-primary-rgb), 0.06);
+  border-bottom: 1px solid rgba(var(--bs-primary-rgb), 0.15);
+  flex-shrink: 0;
+}
+
+.team-chat-date-filter-clear {
+  margin-left: auto;
+  font-size: 0.78rem;
+  text-decoration: none;
+}
+
+.team-chat-date-divider {
+  display: flex;
+  justify-content: center;
+  margin: 0.65rem 0 0.45rem;
+}
+
+.team-chat-date-divider span {
+  display: inline-block;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--bs-secondary-color);
+  background: var(--bs-tertiary-bg);
+  border: 1px solid var(--bs-border-color);
+}
+
+.team-chat-date-divider--focus span {
+  color: var(--bs-primary);
+  border-color: rgba(var(--bs-primary-rgb), 0.35);
+  background: rgba(var(--bs-primary-rgb), 0.1);
+}
+
 .team-chat-thread-head-main {
   color: inherit;
   min-width: 0;

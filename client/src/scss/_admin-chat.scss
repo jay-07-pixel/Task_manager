@@ -43,6 +43,7 @@
   .team-chat-notify-btn,
   .team-chat-back-btn,
   .team-chat-group-manage-btn,
+  .team-chat-date-btn,
   .team-chat-attach-btn {
     border-color: rgba(190, 200, 202, 0.65) !important;
     background: #fff !important;
@@ -372,7 +373,8 @@
   .team-chat-messages--group,
   .team-chat-messages--dm,
   .team-chat-compose,
-  .team-chat-typing-status {
+  .team-chat-typing-status,
+  .team-chat-date-filter {
     background: #121218;
     border-color: #3a3a48;
   }
@@ -386,6 +388,7 @@
   .team-chat-notify-btn,
   .team-chat-back-btn,
   .team-chat-group-manage-btn,
+  .team-chat-date-btn,
   .team-chat-attach-btn {
     background: #1e1e28 !important;
     border-color: #3a3a48 !important;

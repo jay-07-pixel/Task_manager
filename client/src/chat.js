@@ -54,6 +54,8 @@ let typingPulseActive = false;
 let typingStopTimer = null;
 /** @type {any | null} */
 let replyingTo = null;
+/** @type {{ dateKey: string, after: string, label: string } | null} */
+let chatJumpDate = null;
 /** @type {number | null} */
 let typingDebounceTimer = null;
 
@@ -81,7 +83,7 @@ async function refreshActiveMessages() {
       replyToId: m.replyTo?.id ?? null,
     }))
   );
-  const data = await d().api(`${base}/messages`);
+  const data = await d().api(`${base}/messages${chatMessagesQuerySuffix()}`);
   const next = data.messages ?? [];
   const nextFp = JSON.stringify(
     next.map((m) => ({
@@ -102,7 +104,8 @@ async function refreshActiveMessages() {
 
   activeMessages = next;
   activeTypingUsers = typingUsers;
-  renderMessages();
+  const scrollOpts = chatJumpDate ? { scrollToDateKey: chatJumpDate.dateKey } : {};
+  renderMessages(scrollOpts);
   updateTypingIndicator();
 
   await markActiveThreadRead();
@@ -261,6 +264,108 @@ function dateKeyInTimeZone(dt, timeZone) {
     month: "2-digit",
     day: "2-digit",
   }).format(dt);
+}
+
+function formatChatDateDivider(iso) {
+  const dt = new Date(iso);
+  if (Number.isNaN(dt.getTime())) return "";
+  const key = dateKeyInTimeZone(dt, CHAT_TIME_ZONE);
+  const today = dateKeyInTimeZone(new Date(), CHAT_TIME_ZONE);
+  if (key === today) return "Today";
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (key === dateKeyInTimeZone(yesterday, CHAT_TIME_ZONE)) return "Yesterday";
+  return dt.toLocaleDateString("en-IN", {
+    timeZone: CHAT_TIME_ZONE,
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function dayStartIsoInChatTz(dateKey) {
+  const [y, m, d] = dateKey.split("-").map((v) => parseInt(v, 10));
+  if (!y || !m || !d) return null;
+  const nominal = Date.UTC(y, m - 1, d);
+  let start = null;
+  for (let offset = -12; offset <= 36; offset += 1) {
+    const t = nominal + offset * 3600000;
+    if (dateKeyInTimeZone(new Date(t), CHAT_TIME_ZONE) === dateKey) {
+      if (start === null || t < start) start = t;
+    }
+  }
+  if (start === null) return null;
+  while (start > 0 && dateKeyInTimeZone(new Date(start - 60000), CHAT_TIME_ZONE) === dateKey) {
+    start -= 60000;
+  }
+  return new Date(start).toISOString();
+}
+
+function chatMessagesQuerySuffix() {
+  if (!chatJumpDate?.after) return "";
+  return `?after=${encodeURIComponent(chatJumpDate.after)}`;
+}
+
+function syncChatDateFilterUi() {
+  const bar = document.getElementById("team-chat-date-filter");
+  const label = document.getElementById("team-chat-date-filter-label");
+  const btn = document.getElementById("team-chat-date-btn");
+  if (!bar || !label || !btn) return;
+  if (chatJumpDate) {
+    bar.classList.remove("d-none");
+    label.textContent = chatJumpDate.label;
+    btn.classList.add("team-chat-date-btn--active");
+    btn.setAttribute("aria-pressed", "true");
+  } else {
+    bar.classList.add("d-none");
+    btn.classList.remove("team-chat-date-btn--active");
+    btn.setAttribute("aria-pressed", "false");
+  }
+}
+
+function clearChatJumpDate() {
+  chatJumpDate = null;
+  const input = document.getElementById("team-chat-date-input");
+  if (input) input.value = "";
+  syncChatDateFilterUi();
+}
+
+async function applyChatJumpDate(dateKey) {
+  if (!dateKey || !activeChatId || !activeThreadType) return;
+  const after = dayStartIsoInChatTz(dateKey);
+  if (!after) {
+    d().showToast("Invalid date.", "warning");
+    return;
+  }
+  chatJumpDate = {
+    dateKey,
+    after,
+    label: formatChatDateDivider(after),
+  };
+  syncChatDateFilterUi();
+  const base = activeThreadBase();
+  if (!base) return;
+  try {
+    const data = await d().api(`${base}/messages${chatMessagesQuerySuffix()}`);
+    activeMessages = data.messages ?? [];
+    activeTypingUsers = data.typingUsers ?? [];
+    if (!activeMessages.length) {
+      renderMessages({ scrollToDateKey: dateKey, emptyDateLabel: chatJumpDate.label });
+      d().showToast(`No messages on ${chatJumpDate.label}.`, "warning");
+      return;
+    }
+    renderMessages({ scrollToDateKey: dateKey });
+  } catch (err) {
+    d().showToast(err.message || "Could not load messages for that date.", "danger");
+  }
+}
+
+async function showLatestChatMessages() {
+  if (!chatJumpDate) return;
+  clearChatJumpDate();
+  await refreshActiveMessages();
+  renderMessages({ scrollToBottom: true });
 }
 
 function formatChatTime(iso) {
@@ -881,6 +986,15 @@ export function teamChatOffcanvasHtml() {
                 <button type="button" class="btn btn-sm btn-light border team-chat-group-manage-btn d-none" id="team-chat-group-manage-btn" title="Manage group" aria-label="Manage group">
                   <i class="bi bi-people-fill" aria-hidden="true"></i>
                 </button>
+                <button type="button" class="btn btn-sm btn-light border team-chat-date-btn" id="team-chat-date-btn" title="Jump to date" aria-label="Jump to date" aria-pressed="false">
+                  <i class="bi bi-calendar-event" aria-hidden="true"></i>
+                </button>
+                <input type="date" class="visually-hidden" id="team-chat-date-input" aria-hidden="true" tabindex="-1" />
+              </div>
+              <div class="team-chat-date-filter d-none" id="team-chat-date-filter">
+                <i class="bi bi-calendar3" aria-hidden="true"></i>
+                <span id="team-chat-date-filter-label"></span>
+                <button type="button" class="btn btn-sm btn-link team-chat-date-filter-clear js-chat-date-clear">Show latest</button>
               </div>
               <div class="team-chat-messages flex-grow-1" id="team-chat-messages" aria-live="polite"></div>
               <div id="team-chat-typing-status" class="team-chat-typing-status px-3 small text-muted d-none" aria-live="polite"></div>
@@ -1325,26 +1439,41 @@ function renderMessages(options = {}) {
   const host = document.getElementById("team-chat-messages");
   if (!host) return;
   const forceBottom = options.scrollToBottom === true;
+  const scrollToDateKey = options.scrollToDateKey || null;
   const distanceFromBottom = host.scrollHeight - host.scrollTop - host.clientHeight;
-  const stickToBottom = forceBottom || isChatNearBottom(host);
+  const stickToBottom = !scrollToDateKey && (forceBottom || isChatNearBottom(host));
   host.classList.toggle("team-chat-messages--group", activeThreadType === "group");
   host.classList.toggle("team-chat-messages--dm", activeThreadType === "dm");
   if (!activeMessages.length) {
+    const emptyDate = options.emptyDateLabel || chatJumpDate?.label;
+    const emptyMsg = emptyDate
+      ? `No messages on ${emptyDate}.`
+      : "No messages yet — say hello!";
     host.innerHTML = `<div class="team-chat-messages-empty">
       <div class="team-chat-empty-icon team-chat-empty-icon--sm" aria-hidden="true"><i class="bi bi-emoji-smile"></i></div>
-      <p class="small text-muted mb-0">No messages yet — say hello!</p>
+      <p class="small text-muted mb-0">${d().escapeHtml(emptyMsg)}</p>
     </div>`;
     return;
   }
-  host.innerHTML = activeMessages
-    .map((m) => {
-      const mine = m.isMine ? " team-chat-bubble-row--mine" : "";
-      const typeCls = activeThreadType === "group" ? " team-chat-bubble-row--group" : " team-chat-bubble-row--dm";
-      const senderLine =
-        activeThreadIsGroup && !m.isMine
-          ? `<div class="team-chat-bubble-sender">${d().escapeHtml(m.senderName || "Member")}</div>`
-          : "";
-      return `<div class="team-chat-bubble-row${typeCls}${mine}" data-message-id="${d().escapeHtml(m.id)}">
+
+  let lastDateKey = "";
+  const rows = [];
+  for (const m of activeMessages) {
+    const dk = dateKeyInTimeZone(new Date(m.createdAt), CHAT_TIME_ZONE);
+    if (dk !== lastDateKey) {
+      lastDateKey = dk;
+      const focusCls = scrollToDateKey === dk || chatJumpDate?.dateKey === dk ? " team-chat-date-divider--focus" : "";
+      rows.push(
+        `<div class="team-chat-date-divider${focusCls}" data-chat-date-key="${d().escapeHtml(dk)}"><span>${d().escapeHtml(formatChatDateDivider(m.createdAt))}</span></div>`
+      );
+    }
+    const mine = m.isMine ? " team-chat-bubble-row--mine" : "";
+    const typeCls = activeThreadType === "group" ? " team-chat-bubble-row--group" : " team-chat-bubble-row--dm";
+    const senderLine =
+      activeThreadIsGroup && !m.isMine
+        ? `<div class="team-chat-bubble-sender">${d().escapeHtml(m.senderName || "Member")}</div>`
+        : "";
+    rows.push(`<div class="team-chat-bubble-row${typeCls}${mine}" data-message-id="${d().escapeHtml(m.id)}">
         <div class="team-chat-bubble-wrap">
           ${senderLine}
           <div class="team-chat-bubble${m.deleted ? " team-chat-bubble--deleted" : ""}">
@@ -1356,10 +1485,18 @@ function renderMessages(options = {}) {
           </div>
           ${messageActionsHtml(m)}
         </div>
-      </div>`;
-    })
-    .join("");
-  if (stickToBottom) {
+      </div>`);
+  }
+  host.innerHTML = rows.join("");
+
+  if (scrollToDateKey) {
+    const divider = host.querySelector(`[data-chat-date-key="${scrollToDateKey}"]`);
+    if (divider) {
+      divider.scrollIntoView({ block: "start" });
+    } else {
+      host.scrollTop = 0;
+    }
+  } else if (stickToBottom) {
     host.scrollTop = host.scrollHeight;
   } else {
     host.scrollTop = Math.max(0, host.scrollHeight - host.clientHeight - distanceFromBottom);
@@ -1462,6 +1599,7 @@ async function openThread(type, id) {
   stopTypingPulse();
   clearPendingChatFile();
   clearReplyingTo();
+  clearChatJumpDate();
   activeThreadType = type === "group" ? "group" : "dm";
   activeChatId = id;
   activeThreadIsGroup = activeThreadType === "group";
@@ -1593,6 +1731,7 @@ async function sendMessage(e) {
     if (input) input.value = "";
     clearPendingChatFile();
     clearReplyingTo();
+    if (chatJumpDate) clearChatJumpDate();
     if (data.message) activeMessages.push(data.message);
     renderMessages({ scrollToBottom: true });
     await loadThreads();
@@ -1837,6 +1976,30 @@ export function initTeamChat(chatDeps) {
     void deleteActiveGroup();
   });
 
+  const dateInput = document.getElementById("team-chat-date-input");
+  if (dateInput) {
+    dateInput.max = dateKeyInTimeZone(new Date(), CHAT_TIME_ZONE);
+  }
+  document.getElementById("team-chat-date-btn")?.addEventListener("click", () => {
+    if (!activeChatId || !dateInput) return;
+    if (typeof dateInput.showPicker === "function") {
+      dateInput.showPicker();
+    } else {
+      dateInput.click();
+    }
+  });
+  dateInput?.addEventListener("change", () => {
+    const value = dateInput.value?.trim();
+    if (!value) return;
+    void applyChatJumpDate(value);
+  });
+  document.getElementById("team-chat-date-filter")?.addEventListener("click", (e) => {
+    if (e.target.closest(".js-chat-date-clear")) {
+      e.preventDefault();
+      void showLatestChatMessages();
+    }
+  });
+
   setSidebarTab("chats");
   setThreadTypeFilter("all");
   syncAdminGroupUi();
@@ -1850,6 +2013,7 @@ export function initTeamChat(chatDeps) {
   offcanvas.addEventListener("hidden.bs.offcanvas", () => {
     stopTypingPulse();
     clearReplyingTo();
+    clearChatJumpDate();
     mobileShowThread = false;
     activeThreadType = null;
     activeChatId = null;
