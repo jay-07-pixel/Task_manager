@@ -4760,9 +4760,12 @@ function ownerTaskGroupTbody(t) {
         <span class="task-grip grip-handle" title="Drag to reorder">${adminMsIcon("drag_indicator")}</span>
       </td>
       <td class="owner-task-cell owner-task-col--task align-middle">
-        <button type="button" class="btn btn-link text-start text-decoration-none p-0 owner-task-open-details" data-open-id="${
+        <div class="owner-task-title-wrap">
+          <button type="button" class="btn btn-link text-start text-decoration-none p-0 owner-task-open-details" data-open-id="${
           t.id
         }" aria-label="Open task details">${escapeHtml(t.title)}</button>
+          ${taskCreatedMetaHtml(t.createdAt)}
+        </div>
       </td>
       <td class="owner-task-cell owner-task-col--deadline align-middle text-nowrap tabular-nums">${deadlineCell}</td>
       <td class="owner-task-cell owner-task-col--recurrence align-middle">${recurrenceCell}</td>
@@ -5214,6 +5217,30 @@ function formatEmpDue(iso) {
   return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 }
 
+function formatTaskCreatedDate(iso, { short = false } = {}) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  if (short) {
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  }
+  return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
+
+function taskCreatedMetaHtml(createdAt) {
+  const full = formatTaskCreatedDate(createdAt);
+  const short = formatTaskCreatedDate(createdAt, { short: true });
+  if (!full || !short) return "";
+  const dtAttr = escapeHtml(String(createdAt).slice(0, 19));
+  return `<span class="task-created-meta">
+    <span class="task-created-meta-label">Created:</span>
+    <time class="task-created-meta-date tabular-nums" datetime="${dtAttr}">
+      <span class="task-created-meta-full d-none d-md-inline">${escapeHtml(full)}</span>
+      <span class="task-created-meta-short d-md-none">${escapeHtml(short)}</span>
+    </time>
+  </span>`;
+}
+
 function formatEmpRecurrencePattern(task) {
   const recurrence = task.recurrence ?? "none";
   if (recurrence === "none") return "";
@@ -5622,6 +5649,7 @@ function empTaskTableRows(tasks) {
         </td>
         <td class="owner-task-cell owner-task-col--task emp-col-task align-middle">
           <span class="fw-semibold emp-task-title ${submitted ? "text-muted text-decoration-line-through" : ""}">${escapeHtml(t.title)}</span>
+          ${taskCreatedMetaHtml(t.createdAt)}
           ${assignedByLine}
           ${recurrenceLines}
           ${archivedNotesLine}
@@ -5667,6 +5695,7 @@ function empAssignedByMeCardsHtml(tasks) {
       return `<article class="emp-assigned-out-card" data-task-id="${t.id}">
         <div class="emp-assigned-out-card-head">
           <h3 class="emp-assigned-out-card-title h6 mb-0">${escapeHtml(t.title)}</h3>
+          ${taskCreatedMetaHtml(t.createdAt)}
           <div class="emp-assigned-out-card-meta d-flex flex-wrap align-items-center gap-2">
             ${assignedWhen ? `<time class="emp-assigned-out-card-when small text-muted tabular-nums">Assigned ${assignedWhen}</time>` : ""}
             ${deleteBtn}
