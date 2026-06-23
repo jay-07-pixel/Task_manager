@@ -26,8 +26,12 @@ export function taskRecurrenceSortRank(task) {
     if (rule) {
       const every = Math.max(1, Number(rule.every) || 1);
       const unit = rule.unit || "day";
+      if (unit === "day" && every === 1) return 10;
+      if (unit === "week" && every === 1) return 20;
       if (unit === "day" && every === 15) return 30;
       if (unit === "week" && every === 2) return 30;
+      if (unit === "month" && every === 1) return 40;
+      if (unit === "year" && every === 1) return 50;
       if (unit === "month") return 40;
       if (unit === "year") return 50;
       if (unit === "day") return 25;
