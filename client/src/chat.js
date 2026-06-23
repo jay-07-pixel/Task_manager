@@ -842,6 +842,106 @@ function clearPendingChatFile() {
   renderAttachPreview();
 }
 
+function isPastableEditable(el) {
+  if (!(el instanceof HTMLElement)) return false;
+  if (el.isContentEditable) return true;
+  const tag = el.tagName;
+  return tag === "TEXTAREA" || tag === "INPUT" || tag === "SELECT";
+}
+
+function clipboardFiles(clipboardData) {
+  if (!clipboardData?.items) return [];
+  const files = [];
+  for (const item of clipboardData.items) {
+    if (item.kind !== "file") continue;
+    const file = item.getAsFile();
+    if (file) files.push(file);
+  }
+  return files;
+}
+
+function setPendingChatFileFromPicker(file, { multiple = false } = {}) {
+  if (!file) return false;
+  if (file.size > CHAT_MAX_FILE_BYTES) {
+    d().showToast(`File must be ${CHAT_MAX_FILE_MB} MB or smaller.`, "warning");
+    return false;
+  }
+  if (multiple) {
+    d().showToast("Only one file per message. Using the first attachment.", "warning");
+  }
+  pendingChatFile = file;
+  renderAttachPreview();
+  document.getElementById("team-chat-input")?.focus();
+  return true;
+}
+
+function insertTextIntoChatInput(text) {
+  const input = document.getElementById("team-chat-input");
+  if (!input || !text) return;
+  const start = input.selectionStart ?? input.value.length;
+  const end = input.selectionEnd ?? input.value.length;
+  const next = `${input.value.slice(0, start)}${text}${input.value.slice(end)}`;
+  input.value = next;
+  const pos = start + text.length;
+  input.setSelectionRange(pos, pos);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  input.focus();
+}
+
+function shouldHandleChatPaste(e) {
+  if (!isChatPanelOpen() || !activeChatId || !activeThreadType) return false;
+
+  const lightbox = document.getElementById("team-chat-media-lightbox");
+  if (lightbox && !lightbox.classList.contains("d-none")) return false;
+
+  if (document.querySelector(".modal.show")) return false;
+
+  const active = document.activeElement;
+  if (active instanceof HTMLElement && isPastableEditable(active) && active.id !== "team-chat-input") {
+    return false;
+  }
+
+  const target = e.target;
+  if (target instanceof HTMLElement && isPastableEditable(target) && target.id !== "team-chat-input") {
+    return false;
+  }
+
+  return true;
+}
+
+function handleChatPaste(e) {
+  if (!shouldHandleChatPaste(e)) return;
+
+  const clipboard = e.clipboardData;
+  if (!clipboard) return;
+
+  const files = clipboardFiles(clipboard);
+  if (files.length > 0) {
+    e.preventDefault();
+    setPendingChatFileFromPicker(files[0], { multiple: files.length > 1 });
+    pulseTyping();
+    return;
+  }
+
+  const onChatInput = document.activeElement?.id === "team-chat-input";
+  const text = clipboard.getData("text/plain");
+  if (!text) return;
+
+  if (onChatInput) return;
+
+  e.preventDefault();
+  insertTextIntoChatInput(text);
+  pulseTyping();
+}
+
+let chatPasteWired = false;
+
+function wireChatPasteHandlers() {
+  if (chatPasteWired) return;
+  chatPasteWired = true;
+  document.addEventListener("paste", handleChatPaste);
+}
+
 function renderAttachPreview() {
   const wrap = document.getElementById("team-chat-attach-preview");
   if (!wrap) return;
@@ -1892,6 +1992,7 @@ export function initTeamChat(chatDeps) {
   if (!offcanvas) return;
 
   wireChatMediaLightbox();
+  wireChatPasteHandlers();
 
   document.getElementById("team-chat-search")?.addEventListener("input", (e) => {
     contactFilter = e.target.value || "";
@@ -1919,13 +2020,9 @@ export function initTeamChat(chatDeps) {
   document.getElementById("team-chat-file-input")?.addEventListener("change", (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > CHAT_MAX_FILE_BYTES) {
-      d().showToast(`File must be ${CHAT_MAX_FILE_MB} MB or smaller.`, "warning");
+    if (!setPendingChatFileFromPicker(file)) {
       e.target.value = "";
-      return;
     }
-    pendingChatFile = file;
-    renderAttachPreview();
   });
   document.getElementById("team-chat-back")?.addEventListener("click", () => {
     mobileShowThread = false;
