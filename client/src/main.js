@@ -4685,8 +4685,23 @@ async function loadAssignees() {
 function bindListNavHandlers() {
   document.querySelectorAll(".js-list-host, .js-emp-assign-list-host").forEach((host) => {
     host.querySelectorAll("[data-list-id]").forEach((btn) => {
+      btn.querySelectorAll(".js-list-delete").forEach((delBtn) => {
+        delBtn.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const listId = btn.getAttribute("data-list-id");
+          if (listId) void deleteTaskList(listId);
+        });
+        delBtn.addEventListener("keydown", (e) => {
+          if (e.key !== "Enter" && e.key !== " ") return;
+          e.preventDefault();
+          e.stopPropagation();
+          const listId = btn.getAttribute("data-list-id");
+          if (listId) void deleteTaskList(listId);
+        });
+      });
       btn.addEventListener("click", async (e) => {
-        if (e.target.closest(".grip-handle")) return;
+        if (e.target.closest(".grip-handle, .js-list-delete")) return;
         const listId = btn.getAttribute("data-list-id");
         state.ownerView = "dashboard";
         clearAdminReportsCache();
@@ -4768,6 +4783,31 @@ async function toggleListPin(listId) {
   }
 }
 
+async function deleteTaskList(listId) {
+  const list = state.lists.find((x) => x.id === listId);
+  if (!list || isEmployeeAssignmentsList(list)) return;
+  const ok = window.confirm(
+    `Delete list "${list.title}"?\n\nAll tasks in this list will be permanently deleted.`
+  );
+  if (!ok) return;
+  try {
+    await api(`/api/lists/${listId}`, { method: "DELETE" });
+    const wasActive = state.activeListId === listId;
+    await loadLists();
+    if (wasActive) {
+      const userLists = state.lists.filter((l) => !isEmployeeAssignmentsList(l));
+      const empList = state.lists.find((l) => isEmployeeAssignmentsList(l));
+      state.activeListId = userLists[0]?.id ?? empList?.id ?? null;
+      if (state.activeListId) await loadTasks(state.activeListId);
+      else state.tasks = [];
+    }
+    renderOwnerChrome();
+    showToast(`"${list.title}" deleted.`, "success");
+  } catch (err) {
+    showToast(err.message, "danger");
+  }
+}
+
 function wireListPinHold(btn) {
   if (btn.dataset.systemPinned === "1" || btn.dataset.wiredListPinHold === "1") return;
   btn.dataset.wiredListPinHold = "1";
@@ -4782,7 +4822,7 @@ function wireListPinHold(btn) {
   };
 
   btn.addEventListener("pointerdown", (e) => {
-    if (e.button !== 0 || e.target.closest(".grip-handle")) return;
+    if (e.button !== 0 || e.target.closest(".grip-handle, .js-list-delete")) return;
     holdFired = false;
     clearTimer();
     timer = window.setTimeout(() => {
@@ -4819,7 +4859,10 @@ function ownerListNavButtonHtml(list, { systemPinned = false } = {}) {
     ? "Tasks assigned between employees"
     : userPinned
       ? "Hold to unpin from top"
-      : "Hold to pin to top · double-click to rename";
+      : "Hold to pin to top · double-click to rename · trash to delete";
+  const deleteBtn = systemPinned
+    ? ""
+    : `<span class="list-delete-btn js-list-delete" role="button" tabindex="0" title="Delete list" aria-label="Delete ${escapeHtml(list.title)}">${adminMsIcon("delete")}</span>`;
   const titleHtml = systemPinned
     ? `<span class="owner-emp-assign-title" title="${holdHint}"><span class="owner-emp-assign-title-line">Employee</span><span class="owner-emp-assign-title-line">Assignments</span></span>`
     : `<span class="text-truncate list-title-edit" title="${holdHint}">${escapeHtml(list.title)}</span>`;
@@ -4832,7 +4875,10 @@ function ownerListNavButtonHtml(list, { systemPinned = false } = {}) {
         ${adminMsIcon(icon)}
         ${titleHtml}
       </span>
-      ${grip}
+      <span class="owner-list-item-actions">
+        ${grip}
+        ${deleteBtn}
+      </span>
     </button>`;
 }
 
@@ -5441,7 +5487,7 @@ function wireChromeNav() {
     const actionable = e.target.closest(
       "[data-list-id], .js-owner-create-task, .admin-sidebar-nav-item, .team-chat-sidebar-nav-item, .js-owner-reports-nav"
     );
-    if (!actionable || e.target.closest(".grip-handle, .js-new-list")) return;
+    if (!actionable || e.target.closest(".grip-handle, .js-new-list, .js-list-delete")) return;
     dismissAdminMobileNav();
   });
   document.querySelectorAll(".js-new-list").forEach((b) =>

@@ -512,7 +512,9 @@ function previewText(body, hasAttachment, deleted = false) {
 }
 
 function messageCanDelete(m) {
-  if (!m?.isMine || m.deleted) return false;
+  if (m.deleted) return false;
+  if (isAdminUser()) return true;
+  if (!m?.isMine) return false;
   const age = Date.now() - new Date(m.createdAt).getTime();
   return age <= CHAT_DELETE_WINDOW_MS;
 }
@@ -564,7 +566,12 @@ function renderReplyComposerPreview() {
 async function deleteChatMessage(messageId) {
   const base = activeThreadBase();
   if (!base || !messageId) return;
-  if (!window.confirm("Delete this message? The other person will see it was removed.")) return;
+  const msg = activeMessages.find((m) => m.id === messageId);
+  const adminDelete = isAdminUser() && msg && !msg.isMine;
+  const confirmText = adminDelete
+    ? "Delete this message as admin? Everyone in the chat will see it was removed."
+    : "Delete this message? The other person will see it was removed.";
+  if (!window.confirm(confirmText)) return;
   try {
     const data = await d().api(`${base}/messages/${messageId}`, { method: "DELETE" });
     if (data.message) {
@@ -828,7 +835,7 @@ function messageActionsHtml(m) {
     <i class="bi bi-reply-fill" aria-hidden="true"></i>
   </button>`;
   const deleteBtn = canDelete
-    ? `<button type="button" class="team-chat-msg-action team-chat-msg-action--danger js-chat-delete" data-message-id="${d().escapeHtml(m.id)}" aria-label="Delete" title="Delete (30 min)">
+    ? `<button type="button" class="team-chat-msg-action team-chat-msg-action--danger js-chat-delete" data-message-id="${d().escapeHtml(m.id)}" aria-label="Delete" title="${isAdminUser() && !m.isMine ? "Delete as admin" : isAdminUser() ? "Delete message" : "Delete (30 min)"}">
         <i class="bi bi-trash" aria-hidden="true"></i>
       </button>`
     : "";

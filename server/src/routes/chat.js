@@ -178,6 +178,7 @@ async function validateGroupReply(groupId, replyToMessageId) {
 
 async function softDeleteDmMessage(req, res) {
   const meId = req.session.userId;
+  const isAdmin = req.session.role === "owner";
   const message = await prisma.chatMessage.findUnique({
     where: { id: req.params.messageId },
     include: { conversation: true },
@@ -185,7 +186,7 @@ async function softDeleteDmMessage(req, res) {
   if (!message || !userInConversation(message.conversation, meId)) {
     return res.status(404).json({ error: "Message not found." });
   }
-  if (message.senderId !== meId) {
+  if (!isAdmin && message.senderId !== meId) {
     return res.status(403).json({ error: "You can only delete your own messages." });
   }
   if (message.deletedAt) {
@@ -195,9 +196,11 @@ async function softDeleteDmMessage(req, res) {
     });
     return res.json({ message: serializeChatMessage(existing, meId, "dm") });
   }
-  const age = Date.now() - new Date(message.createdAt).getTime();
-  if (age > CHAT_MESSAGE_DELETE_MS) {
-    return res.status(400).json({ error: "Messages can only be deleted within 30 minutes of sending." });
+  if (!isAdmin) {
+    const age = Date.now() - new Date(message.createdAt).getTime();
+    if (age > CHAT_MESSAGE_DELETE_MS) {
+      return res.status(400).json({ error: "Messages can only be deleted within 30 minutes of sending." });
+    }
   }
 
   removeChatAttachmentFile(message.attachmentPath);
@@ -228,6 +231,7 @@ async function softDeleteDmMessage(req, res) {
 
 async function softDeleteGroupMessage(req, res) {
   const meId = req.session.userId;
+  const isAdmin = req.session.role === "owner";
   const membership = await prisma.chatGroupMember.findUnique({
     where: { groupId_userId: { groupId: req.params.id, userId: meId } },
   });
@@ -241,7 +245,7 @@ async function softDeleteGroupMessage(req, res) {
   if (!message) {
     return res.status(404).json({ error: "Message not found." });
   }
-  if (message.senderId !== meId) {
+  if (!isAdmin && message.senderId !== meId) {
     return res.status(403).json({ error: "You can only delete your own messages." });
   }
   if (message.deletedAt) {
@@ -251,9 +255,11 @@ async function softDeleteGroupMessage(req, res) {
     });
     return res.json({ message: serializeChatMessage(existing, meId, "group") });
   }
-  const age = Date.now() - new Date(message.createdAt).getTime();
-  if (age > CHAT_MESSAGE_DELETE_MS) {
-    return res.status(400).json({ error: "Messages can only be deleted within 30 minutes of sending." });
+  if (!isAdmin) {
+    const age = Date.now() - new Date(message.createdAt).getTime();
+    if (age > CHAT_MESSAGE_DELETE_MS) {
+      return res.status(400).json({ error: "Messages can only be deleted within 30 minutes of sending." });
+    }
   }
 
   removeChatAttachmentFile(message.attachmentPath);

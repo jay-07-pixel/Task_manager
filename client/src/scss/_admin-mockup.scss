@@ -327,6 +327,40 @@
       }
     }
 
+    .owner-list-item-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.15rem;
+      flex-shrink: 0;
+    }
+
+    .list-delete-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      border: none;
+      background: transparent;
+      padding: 0.1rem;
+      border-radius: 0.25rem;
+      color: var(--admin-outline);
+      opacity: 0;
+      cursor: pointer;
+      transition: opacity 0.15s ease, color 0.15s ease, background 0.15s ease;
+
+      .material-symbols-outlined {
+        font-size: 1rem !important;
+      }
+
+      &:hover,
+      &:focus-visible {
+        opacity: 1 !important;
+        color: var(--bs-danger);
+        background: rgba(var(--bs-danger-rgb), 0.1);
+        outline: none;
+      }
+    }
+
     .list-pin-hint {
       opacity: 0;
     }
@@ -344,6 +378,10 @@
       opacity: 0.55;
     }
 
+    &:hover .list-delete-btn {
+      opacity: 0.55;
+    }
+
     &.owner-list-item--user-pinned {
       background: rgba(0, 83, 91, 0.06);
     }
@@ -355,9 +393,16 @@
       .material-symbols-outlined,
       .grip-handle,
       .list-pin-hint,
-      .list-pin-badge {
+      .list-pin-badge,
+      .list-delete-btn {
         color: #fff !important;
         opacity: 1;
+      }
+
+      .list-delete-btn:hover,
+      .list-delete-btn:focus-visible {
+        background: rgba(255, 255, 255, 0.18);
+        color: #fff !important;
       }
     }
   }
