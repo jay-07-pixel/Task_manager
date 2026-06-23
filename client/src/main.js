@@ -19,6 +19,14 @@ import {
   openChatFromDeepLink,
 } from "./chat.js";
 import { adminNotificationsBellHtml, adminNotifOffcanvasHtml, wireAdminNotifications } from "./adminAnnouncements.js";
+import {
+  initAdminReports,
+  ownerReportsNavItemHtml,
+  openOwnerReportsView,
+  refreshAdminReports,
+  destroyAdminReportsCharts,
+  clearAdminReportsCache,
+} from "./adminReports.js";
 
 const app = document.getElementById("app");
 const toastHost = document.getElementById("toastHost");
@@ -34,6 +42,7 @@ let state = {
   empAssignedByMeTasks: [],
   empFilter: "active",
   ownerTaskFilter: "active",
+  ownerView: "dashboard",
 };
 
 /** @type {any[]} */
@@ -2075,6 +2084,7 @@ function leftNavInner() {
       <nav class="admin-sidebar-nav" aria-label="Dashboard sections">
         <div class="js-emp-assign-list-host owner-emp-assign-nav"></div>
         ${teamChatSidebarNavItemHtml()}
+        ${ownerReportsNavItemHtml(state.ownerView === "reports")}
       </nav>
       <div class="admin-your-lists-section">
         <div class="admin-your-lists-head">
@@ -4585,8 +4595,12 @@ function updateOwnerTasksFingerprint() {
 
 async function syncOwnerDashboard({ forceRender = false } = {}) {
   if (state.user?.role !== "owner") return;
-  if (!state.activeListId) return;
   if (!document.getElementById("main-column")) return;
+  if (state.ownerView === "reports") {
+    if (forceRender) void refreshAdminReports({ force: true });
+    return;
+  }
+  if (!state.activeListId) return;
   if (!forceRender && document.hidden) return;
   if (!forceRender && (isOwnerInteractiveBusy() || isOwnerSortableActive())) return;
 
@@ -4659,6 +4673,8 @@ function bindListNavHandlers() {
       btn.addEventListener("click", async (e) => {
         if (e.target.closest(".grip-handle")) return;
         const listId = btn.getAttribute("data-list-id");
+        state.ownerView = "dashboard";
+        clearAdminReportsCache();
         state.activeListId = listId;
         const list = state.lists.find((x) => x.id === listId);
         state.ownerTaskFilter = "active";
@@ -4774,7 +4790,7 @@ function wireListPinHold(btn) {
 }
 
 function ownerListNavButtonHtml(list, { systemPinned = false } = {}) {
-  const active = list.id === state.activeListId;
+  const active = state.ownerView !== "reports" && list.id === state.activeListId;
   const userPinned = !systemPinned && !!list.pinned;
   const icon = systemPinned ? "assignment_ind" : "folder";
   const grip = systemPinned
@@ -4818,7 +4834,11 @@ function renderListContentOnly() {
   document.querySelectorAll(".js-list-host").forEach((host) => {
     host.innerHTML = userHtml;
   });
+  document.querySelectorAll(".js-owner-reports-nav").forEach((btn) => {
+    btn.classList.toggle("admin-sidebar-nav-item--active", state.ownerView === "reports");
+  });
   bindListNavHandlers();
+  wireOwnerReportsNav();
 }
 
 function renderListGroup() {
@@ -5102,6 +5122,11 @@ function findTaskById(id) {
 function renderOwnerMain() {
   const main = document.getElementById("main-column");
   if (!main) return;
+  if (state.ownerView === "reports") {
+    destroyTaskSortables();
+    openOwnerReportsView();
+    return;
+  }
   const list = state.lists.find((l) => l.id === state.activeListId);
   const listId = state.activeListId;
   const adminWelcomeName = state.user?.displayName
@@ -5358,11 +5383,48 @@ function renderOwnerMain() {
   wireAdminTaskExpandPanel(main);
 }
 
+function ownerReportsChromeHeaderHtml() {
+  const adminWelcomeName = state.user?.displayName
+    ? escapeHtml(state.user.displayName)
+    : "Admin";
+  return `<header class="admin-dash-header">
+      ${adminMobileNavToggleHtml()}
+      <div class="admin-dash-heading">
+        <h1 class="admin-dash-title">Reports</h1>
+        <p class="admin-dash-subtitle">Welcome ${adminWelcomeName}</p>
+      </div>
+      <div class="admin-dash-utilities">
+        ${ownerTrialTopBannerHtml()}
+        ${adminNotificationsBellHtml(state.user?.id)}
+        ${ownerAdminHeaderProfileHtml()}
+      </div>
+    </header>`;
+}
+
+function wireOwnerReportsChromeHeader(main) {
+  wireAdminNotifications(state.user?.id, main);
+  ensureAdminHeaderProfileMenuDocListener();
+  wireAdminHeaderProfileMenu(main);
+}
+
+function wireOwnerReportsNav() {
+  document.querySelectorAll(".js-owner-reports-nav").forEach((btn) => {
+    if (btn.dataset.reportsWired === "1") return;
+    btn.dataset.reportsWired = "1";
+    btn.addEventListener("click", () => {
+      state.ownerView = "reports";
+      renderListContentOnly();
+      renderOwnerMain();
+      dismissAdminMobileNav();
+    });
+  });
+}
+
 function wireChromeNav() {
   document.querySelectorAll(".js-logout").forEach((b) => b.addEventListener("click", logout));
   document.getElementById("leftNavOffcanvas")?.addEventListener("click", (e) => {
     const actionable = e.target.closest(
-      "[data-list-id], .js-owner-create-task, .admin-sidebar-nav-item, .team-chat-sidebar-nav-item"
+      "[data-list-id], .js-owner-create-task, .admin-sidebar-nav-item, .team-chat-sidebar-nav-item, .js-owner-reports-nav"
     );
     if (!actionable || e.target.closest(".grip-handle, .js-new-list")) return;
     dismissAdminMobileNav();
@@ -5388,6 +5450,10 @@ function wireChromeNav() {
   );
   document.querySelectorAll(".js-owner-create-task").forEach((btn) => {
     btn.addEventListener("click", () => {
+      if (state.ownerView === "reports") {
+        state.ownerView = "dashboard";
+        renderListContentOnly();
+      }
       openOwnerCreateTaskModal();
     });
   });
@@ -5398,8 +5464,10 @@ function wireChromeNav() {
       document.querySelectorAll(".js-admin-theme-toggle .material-symbols-outlined").forEach((icon) => {
         icon.textContent = document.documentElement.getAttribute("data-bs-theme") === "dark" ? "light_mode" : "dark_mode";
       });
+      if (state.ownerView === "reports") void refreshAdminReports({ force: true });
     });
   });
+  wireOwnerReportsNav();
 }
 
 function renderOwnerChrome() {
@@ -5432,6 +5500,13 @@ function renderOwnerChrome() {
     </div>`;
 
   wireChromeNav();
+  initAdminReports({
+    api,
+    escapeHtml,
+    adminMsIcon,
+    reportsChromeHeader: ownerReportsChromeHeaderHtml,
+    wireReportsChromeHeader: wireOwnerReportsChromeHeader,
+  });
   renderListGroup();
   renderOwnerMain();
   wireAdminNotifications(state.user?.id);
