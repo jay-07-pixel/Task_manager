@@ -15,6 +15,50 @@ let adminMsIconFn = null;
 /** @type {any} */
 let reportData = null;
 
+/** @type {number | null} */
+let reportsResizeTimer = null;
+
+function isReportMobile() {
+  return window.matchMedia("(max-width: 767.98px)").matches;
+}
+
+function truncateLabel(label, maxLen) {
+  const s = String(label ?? "");
+  const max = maxLen ?? (isReportMobile() ? 14 : 28);
+  return s.length > max ? `${s.slice(0, max - 1)}…` : s;
+}
+
+function setChartWrapHeight(wrapEl, labelCount) {
+  if (!wrapEl) return;
+  const mobile = isReportMobile();
+  const rowPx = mobile ? 30 : 36;
+  const padPx = mobile ? 36 : 48;
+  const minPx = mobile ? 200 : 224;
+  wrapEl.style.height = `${Math.max(minPx, labelCount * rowPx + padPx)}px`;
+}
+
+function unwireReportsResize() {
+  if (reportsResizeTimer != null) {
+    window.clearTimeout(reportsResizeTimer);
+    reportsResizeTimer = null;
+  }
+  window.removeEventListener("resize", onReportsResize);
+}
+
+function onReportsResize() {
+  if (reportsResizeTimer != null) window.clearTimeout(reportsResizeTimer);
+  reportsResizeTimer = window.setTimeout(() => {
+    reportsResizeTimer = null;
+    if (!document.querySelector(".admin-reports-page") || !reportData) return;
+    renderCharts(reportData);
+  }, 220);
+}
+
+function wireReportsResize() {
+  unwireReportsResize();
+  window.addEventListener("resize", onReportsResize);
+}
+
 /** @type {(() => string) | null} */
 let chromeHeaderFn = null;
 
@@ -62,33 +106,54 @@ function destroyChart(id) {
 
 export function destroyAdminReportsCharts() {
   Object.keys(chartInstances).forEach(destroyChart);
+  unwireReportsResize();
 }
 
 function baseChartOptions() {
   const c = chartColors();
+  const mobile = isReportMobile();
+  const tickSize = mobile ? 9 : 11;
   return {
     responsive: true,
     maintainAspectRatio: false,
+    layout: { padding: mobile ? { left: 0, right: 4, top: 0, bottom: 0 } : undefined },
     plugins: {
       legend: {
-        labels: { color: c.onSurfaceVariant, boxWidth: 12, padding: 14, font: { family: "Inter, system-ui, sans-serif" } },
+        labels: {
+          color: c.onSurfaceVariant,
+          boxWidth: mobile ? 10 : 12,
+          padding: mobile ? 10 : 14,
+          font: { family: "Inter, system-ui, sans-serif", size: mobile ? 10 : 12 },
+        },
       },
       tooltip: {
         backgroundColor: c.onSurface,
-        titleFont: { family: "Inter, system-ui, sans-serif" },
-        bodyFont: { family: "Inter, system-ui, sans-serif" },
-        padding: 10,
+        titleFont: { family: "Inter, system-ui, sans-serif", size: mobile ? 11 : 13 },
+        bodyFont: { family: "Inter, system-ui, sans-serif", size: mobile ? 11 : 13 },
+        padding: mobile ? 8 : 10,
         cornerRadius: 8,
       },
     },
     scales: {
       x: {
-        ticks: { color: c.onSurfaceVariant, font: { size: 11 } },
+        ticks: {
+          color: c.onSurfaceVariant,
+          font: { size: tickSize },
+          maxRotation: mobile ? 50 : 0,
+          minRotation: mobile ? 25 : 0,
+          autoSkip: true,
+          maxTicksLimit: mobile ? 6 : 12,
+        },
         grid: { color: c.outline, drawBorder: false },
       },
       y: {
         beginAtZero: true,
-        ticks: { color: c.onSurfaceVariant, font: { size: 11 }, precision: 0 },
+        ticks: {
+          color: c.onSurfaceVariant,
+          font: { size: tickSize },
+          precision: 0,
+          autoSkip: false,
+        },
         grid: { color: c.outline, drawBorder: false },
       },
     },
@@ -153,7 +218,7 @@ function reportPageHtml(data) {
 
         <section class="admin-report-card admin-report-card--chart">
           <h2 class="admin-report-card-title">Tasks by list</h2>
-          <div class="admin-report-chart-wrap">
+          <div class="admin-report-chart-wrap admin-report-chart-wrap--lists">
             <canvas id="report-chart-lists" aria-label="Tasks per list"></canvas>
           </div>
         </section>
@@ -167,7 +232,7 @@ function reportPageHtml(data) {
 
         <section class="admin-report-card admin-report-card--chart admin-report-card--wide">
           <h2 class="admin-report-card-title">Employee workload</h2>
-          <div class="admin-report-chart-wrap admin-report-chart-wrap--tall">
+          <div class="admin-report-chart-wrap admin-report-chart-wrap--tall admin-report-chart-wrap--employees">
             <canvas id="report-chart-employees" aria-label="Assigned vs submitted per employee"></canvas>
           </div>
         </section>
@@ -180,6 +245,7 @@ function renderCharts(data) {
   destroyAdminReportsCharts();
   const c = chartColors();
   const opts = baseChartOptions();
+  const mobile = isReportMobile();
 
   const statusEl = document.getElementById("report-chart-status");
   if (statusEl) {
@@ -198,10 +264,14 @@ function renderCharts(data) {
       },
       options: {
         ...opts,
-        cutout: "62%",
+        cutout: mobile ? "58%" : "62%",
         plugins: {
           ...opts.plugins,
-          legend: { ...opts.plugins.legend, position: "bottom" },
+          legend: {
+            ...opts.plugins.legend,
+            position: "bottom",
+            align: "center",
+          },
         },
         scales: undefined,
       },
@@ -210,17 +280,21 @@ function renderCharts(data) {
 
   const listsEl = document.getElementById("report-chart-lists");
   if (listsEl && data.tasksByList.length) {
+    const listsWrap = listsEl.closest(".admin-report-chart-wrap");
+    setChartWrapHeight(listsWrap, data.tasksByList.length);
+    const listLabels = data.tasksByList.map((r) => r.name);
+
     chartInstances.lists = new Chart(listsEl, {
       type: "bar",
       data: {
-        labels: data.tasksByList.map((r) => r.name),
+        labels: listLabels,
         datasets: [
           {
             label: "Tasks",
             data: data.tasksByList.map((r) => r.count),
             backgroundColor: c.primary,
-            borderRadius: 6,
-            maxBarThickness: 36,
+            borderRadius: mobile ? 4 : 6,
+            maxBarThickness: mobile ? 22 : 36,
           },
         ],
       },
@@ -228,6 +302,21 @@ function renderCharts(data) {
         ...opts,
         indexAxis: "y",
         plugins: { ...opts.plugins, legend: { display: false } },
+        scales: {
+          x: {
+            ...opts.scales.x,
+            ticks: { ...opts.scales.x.ticks, maxTicksLimit: mobile ? 5 : 10 },
+          },
+          y: {
+            ...opts.scales.y,
+            ticks: {
+              ...opts.scales.y.ticks,
+              callback(_value, index) {
+                return truncateLabel(listLabels[index]);
+              },
+            },
+          },
+        },
       },
     });
   }
@@ -246,7 +335,7 @@ function renderCharts(data) {
             backgroundColor: `${c.primary}33`,
             fill: true,
             tension: 0.35,
-            pointRadius: 3,
+            pointRadius: mobile ? 2 : 3,
           },
           {
             label: "Submissions",
@@ -255,46 +344,116 @@ function renderCharts(data) {
             backgroundColor: `${c.secondary}22`,
             fill: true,
             tension: 0.35,
-            pointRadius: 3,
+            pointRadius: mobile ? 2 : 3,
           },
         ],
       },
-      options: opts,
+      options: {
+        ...opts,
+        plugins: {
+          ...opts.plugins,
+          legend: { ...opts.plugins.legend, position: mobile ? "bottom" : "top" },
+        },
+      },
     });
   }
 
   const empEl = document.getElementById("report-chart-employees");
   if (empEl && data.employeePerformance.length) {
-    chartInstances.employees = new Chart(empEl, {
-      type: "bar",
-      data: {
-        labels: data.employeePerformance.map((e) => e.name),
-        datasets: [
-          {
-            label: "Assigned",
-            data: data.employeePerformance.map((e) => e.assigned),
-            backgroundColor: c.surface,
-            borderColor: c.primary,
-            borderWidth: 1,
-            borderRadius: 4,
+    const empWrap = empEl.closest(".admin-report-chart-wrap");
+    const empNames = data.employeePerformance.map((e) => e.name);
+
+    if (mobile) {
+      setChartWrapHeight(empWrap, data.employeePerformance.length);
+      chartInstances.employees = new Chart(empEl, {
+        type: "bar",
+        data: {
+          labels: empNames,
+          datasets: [
+            {
+              label: "Assigned",
+              data: data.employeePerformance.map((e) => e.assigned),
+              backgroundColor: c.surface,
+              borderColor: c.primary,
+              borderWidth: 1,
+              borderRadius: 3,
+              maxBarThickness: 18,
+            },
+            {
+              label: "Submitted",
+              data: data.employeePerformance.map((e) => e.submitted),
+              backgroundColor: c.primary,
+              borderRadius: 3,
+              maxBarThickness: 18,
+            },
+            {
+              label: "Pending",
+              data: data.employeePerformance.map((e) => e.pending),
+              backgroundColor: c.error,
+              borderRadius: 3,
+              maxBarThickness: 18,
+            },
+          ],
+        },
+        options: {
+          ...opts,
+          indexAxis: "y",
+          plugins: {
+            ...opts.plugins,
+            legend: { ...opts.plugins.legend, position: "bottom" },
           },
-          {
-            label: "Submitted",
-            data: data.employeePerformance.map((e) => e.submitted),
-            backgroundColor: c.primary,
-            borderRadius: 4,
+          scales: {
+            x: {
+              ...opts.scales.x,
+              ticks: { ...opts.scales.x.ticks, maxTicksLimit: 5 },
+            },
+            y: {
+              ...opts.scales.y,
+              ticks: {
+                ...opts.scales.y.ticks,
+                callback(_value, index) {
+                  return truncateLabel(empNames[index], 12);
+                },
+              },
+            },
           },
-          {
-            label: "Pending",
-            data: data.employeePerformance.map((e) => e.pending),
-            backgroundColor: c.error,
-            borderRadius: 4,
-          },
-        ],
-      },
-      options: opts,
-    });
+        },
+      });
+    } else {
+      empWrap?.style.removeProperty("height");
+      chartInstances.employees = new Chart(empEl, {
+        type: "bar",
+        data: {
+          labels: empNames,
+          datasets: [
+            {
+              label: "Assigned",
+              data: data.employeePerformance.map((e) => e.assigned),
+              backgroundColor: c.surface,
+              borderColor: c.primary,
+              borderWidth: 1,
+              borderRadius: 4,
+            },
+            {
+              label: "Submitted",
+              data: data.employeePerformance.map((e) => e.submitted),
+              backgroundColor: c.primary,
+              borderRadius: 4,
+            },
+            {
+              label: "Pending",
+              data: data.employeePerformance.map((e) => e.pending),
+              backgroundColor: c.error,
+              borderRadius: 4,
+            },
+          ],
+        },
+        options: opts,
+      });
+    }
   }
+
+  wireReportsResize();
 }
 
 function wireReportsPage(main) {
