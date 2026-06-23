@@ -15,6 +15,10 @@ import {
 } from "../lib/recurrenceRoll.js";
 import { requireAuth, requireOwner } from "../middleware/auth.js";
 import { isVideoAttachment } from "../lib/chatUpload.js";
+import {
+  compareTasksByRecurrenceThenCreated,
+  sortTasksByRecurrenceThenCreated,
+} from "../lib/taskRecurrenceSort.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const uploadsRoot = path.join(__dirname, "..", "..", "uploads", "completion-proofs");
@@ -821,18 +825,57 @@ async function resolveOwnerEmployeeAssignmentsList(ownerId = null) {
   return { list, ownerId: owner.id };
 }
 
+/** Active tasks first; completed by recent submission; active by recurrence then created. */
+function sortEmployeeAssignedTasks(tasks, employeeUserId) {
+  const assigneeRow = (task) => task.assignments?.find((a) => a.userId === employeeUserId);
+  const submittedMs = (task) => {
+    const at = assigneeRow(task)?.lastSubmittedAt;
+    if (!at) return 0;
+    const ms = new Date(at).getTime();
+    return Number.isNaN(ms) ? 0 : ms;
+  };
+
+  return [...tasks].sort((a, b) => {
+    const aDone = !!assigneeRow(a)?.assigneeDone;
+    const bDone = !!assigneeRow(b)?.assigneeDone;
+    if (aDone !== bDone) return aDone ? 1 : -1;
+    if (aDone) {
+      const bySubmitted = submittedMs(b) - submittedMs(a);
+      if (bySubmitted !== 0) return bySubmitted;
+      return String(a.title || "").localeCompare(String(b.title || ""));
+    }
+    return compareTasksByRecurrenceThenCreated(a, b);
+  });
+}
+
+function sortOwnerListTasks(tasks) {
+  const active = tasks.filter((t) => !t.completed);
+  const completed = tasks.filter((t) => t.completed);
+  return [
+    ...sortTasksByRecurrenceThenCreated(active),
+    ...completed.sort((a, b) => {
+      const order = (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
+      if (order !== 0) return order;
+      return String(a.title || "").localeCompare(String(b.title || ""));
+    }),
+  ];
+}
+
 router.get("/assigned", requireAuth, async (req, res) => {
   if (req.session.role !== "employee") {
     return res.status(403).json({ error: "Employees only" });
   }
-  const tasks = await attachProgressUpdateMeta(
-    await prisma.task.findMany({
-      where: { assignments: { some: { userId: req.session.userId } } },
-      include: { ...taskAssigneeInclude, list: { select: { id: true, title: true } } },
-      orderBy: [{ sortOrder: "asc" }],
-    }),
-    null,
-    { employeeViewerId: req.session.userId }
+  const meId = req.session.userId;
+  const tasks = sortEmployeeAssignedTasks(
+    await attachProgressUpdateMeta(
+      await prisma.task.findMany({
+        where: { assignments: { some: { userId: meId } } },
+        include: { ...taskAssigneeInclude, list: { select: { id: true, title: true } } },
+      }),
+      null,
+      { employeeViewerId: meId }
+    ),
+    meId
   );
   res.json({ tasks: tasks.map(serializeTask) });
 });
@@ -939,17 +982,18 @@ router.get("/lists/:listId", requireOwner, async (req, res) => {
     await reconcileEmployeeAssignmentTasks(list.id);
   }
 
-  const roots = await attachDelegationsToTasks(
-    await attachProgressUpdateMeta(
-      await prisma.task.findMany({
-        where:
-          list.title === EMPLOYEE_ASSIGNMENTS_LIST_TITLE
-            ? employeeAssignmentTaskWhere()
-            : { listId: list.id },
-        include: taskListInclude,
-        orderBy: [{ completed: "asc" }, { sortOrder: "asc" }],
-      }),
-      req.session.userId
+  const roots = sortOwnerListTasks(
+    await attachDelegationsToTasks(
+      await attachProgressUpdateMeta(
+        await prisma.task.findMany({
+          where:
+            list.title === EMPLOYEE_ASSIGNMENTS_LIST_TITLE
+              ? employeeAssignmentTaskWhere()
+              : { listId: list.id },
+          include: taskListInclude,
+        }),
+        req.session.userId
+      )
     )
   );
   res.json({ tasks: roots.map(serializeTask) });

@@ -27,6 +27,10 @@ import {
   destroyAdminReportsCharts,
   clearAdminReportsCache,
 } from "./adminReports.js";
+import {
+  compareTasksByRecurrenceThenCreated,
+  sortTasksByRecurrenceThenCreated,
+} from "./taskRecurrenceSort.js";
 
 const app = document.getElementById("app");
 const toastHost = document.getElementById("toastHost");
@@ -1951,6 +1955,17 @@ function ownerFilteredTasks() {
     return tasks.filter(taskHasEmployeeAssignment);
   }
   return tasks.filter((t) => !t.completed && !taskIsInReview(t));
+}
+
+function sortOwnerTasksForDisplay(tasks) {
+  if (state.ownerTaskFilter === "completed") {
+    return [...tasks].sort((a, b) => {
+      const order = (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
+      if (order !== 0) return order;
+      return String(a.title || "").localeCompare(String(b.title || ""));
+    });
+  }
+  return sortTasksByRecurrenceThenCreated(tasks);
 }
 
 function setOwnerTaskFilter(filter) {
@@ -5134,7 +5149,7 @@ function renderOwnerMain() {
     : "Admin";
 
   const filteredTasks = ownerFilteredTasks();
-  const visibleTasks = [...filteredTasks].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+  const visibleTasks = sortOwnerTasksForDisplay(filteredTasks);
 
   const tbodyInner = visibleTasks.map((t) => ownerTaskGroupTbody(t)).join("");
 
@@ -5931,12 +5946,48 @@ function empNavFilterButtonHtml(f, active) {
   </button>`;
 }
 
-function empFilteredTasks() {
+function empTaskSubmittedTimestamp(task) {
+  const me = employeeMyAssignee(task);
+  if (!me?.lastSubmittedAt) return 0;
+  const ms = new Date(me.lastSubmittedAt).getTime();
+  return Number.isNaN(ms) ? 0 : ms;
+}
+
+function sortEmpTasksForDisplay(tasks) {
+  const list = [...tasks];
   if (state.empFilter === "submitted") {
-    return state.empTasks.filter((t) => employeeAssigneeShowsAsSubmitted(t));
+    return list.sort((a, b) => {
+      const bySubmitted = empTaskSubmittedTimestamp(b) - empTaskSubmittedTimestamp(a);
+      if (bySubmitted !== 0) return bySubmitted;
+      return String(a.title || "").localeCompare(String(b.title || ""));
+    });
   }
-  if (state.empFilter === "all") return state.empTasks;
-  return state.empTasks.filter((t) => !employeeMyAssignee(t)?.assigneeDone);
+  if (state.empFilter === "all") {
+    return list.sort((a, b) => {
+      const aDone = employeeAssigneeShowsAsSubmitted(a);
+      const bDone = employeeAssigneeShowsAsSubmitted(b);
+      if (aDone !== bDone) return aDone ? 1 : -1;
+      if (aDone) {
+        const bySubmitted = empTaskSubmittedTimestamp(b) - empTaskSubmittedTimestamp(a);
+        if (bySubmitted !== 0) return bySubmitted;
+        return String(a.title || "").localeCompare(String(b.title || ""));
+      }
+      return compareTasksByRecurrenceThenCreated(a, b);
+    });
+  }
+  return sortTasksByRecurrenceThenCreated(list);
+}
+
+function empFilteredTasks() {
+  let tasks;
+  if (state.empFilter === "submitted") {
+    tasks = state.empTasks.filter((t) => employeeAssigneeShowsAsSubmitted(t));
+  } else if (state.empFilter === "all") {
+    tasks = state.empTasks;
+  } else {
+    tasks = state.empTasks.filter((t) => !employeeMyAssignee(t)?.assigneeDone);
+  }
+  return sortEmpTasksForDisplay(tasks);
 }
 
 function empTaskTableRows(tasks) {
