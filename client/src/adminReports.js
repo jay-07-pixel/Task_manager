@@ -1,27 +1,4 @@
-import {
-  Chart,
-  ArcElement,
-  BarElement,
-  CategoryScale,
-  LinearScale,
-  LineElement,
-  PointElement,
-  Legend,
-  Tooltip,
-  Filler,
-} from "chart.js";
-
-Chart.register(
-  ArcElement,
-  BarElement,
-  CategoryScale,
-  LinearScale,
-  LineElement,
-  PointElement,
-  Legend,
-  Tooltip,
-  Filler
-);
+import { Chart } from "chart.js/auto";
 
 /** @type {Record<string, Chart>} */
 const chartInstances = {};
