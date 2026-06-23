@@ -3,9 +3,9 @@
   "private": true,
   "scripts": {
     "dev": "concurrently -n api,web -c blue,green \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
-    "build": "npm run build --prefix client",
+    "build": "npm install --prefix client && npm run build --prefix client",
     "sync-apk": "node scripts/sync-apk.mjs",
-    "deploy": "npm install --prefix server && npm run db:generate --prefix server && npm run build",
+    "deploy": "npm install --prefix server && npm install --prefix client && npm run db:generate --prefix server && npm run build",
     "start": "npm run build && cross-env NODE_ENV=production npm run start --prefix server"
   },
   "devDependencies": {
