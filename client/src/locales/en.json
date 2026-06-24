@@ -97,7 +97,10 @@
     "descriptionDash": "Description — {{title}}",
     "kalpanik": "Kalpanik",
     "remove": "Remove",
-    "removeFile": "Remove file"
+    "removeFile": "Remove file",
+    "createdLabel": "Created:",
+    "submittedLabel": "Submitted:",
+    "deadlineLabel": "Deadline:"
   },
   "auth": {
     "signIn": "Sign in",
@@ -232,7 +235,17 @@
     "delegationHistory": "Delegation history",
     "viewSubmission": "View submission",
     "viewSubmissionFor": "View submission for {{name}}",
-    "viewAllUpdatesFor": "View all updates for {{name}}"
+    "viewAllUpdatesFor": "View all updates for {{name}}",
+    "updatesCol": "Updates",
+    "noUpdates": "No updates",
+    "noSubmissionYet": "No submission yet",
+    "directAssignment": "Direct Assignment",
+    "statusPending": "Pending",
+    "statusSubmitted": "Submitted",
+    "assignmentHistory": "Assignment history",
+    "delegationAssigned": "{{from}} assigned to {{to}}",
+    "viewAllUpdates": "View all updates",
+    "lastSubmittedWhen": "Last submitted {{when}}"
   },
   "lists": {
     "holdToUnpin": "Hold to unpin",

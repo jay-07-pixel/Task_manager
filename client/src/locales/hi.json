@@ -97,7 +97,10 @@
     "descriptionDash": "विवरण — {{title}}",
     "kalpanik": "कल्पनिक",
     "remove": "हटाएँ",
-    "removeFile": "फ़ाइल हटाएँ"
+    "removeFile": "फ़ाइल हटाएँ",
+    "createdLabel": "बनाया गया:",
+    "submittedLabel": "जमा किया:",
+    "deadlineLabel": "अंतिम तिथि:"
   },
   "auth": {
     "signIn": "साइन इन",
@@ -232,7 +235,17 @@
     "delegationHistory": "प्रत्यायोजन इतिहास",
     "viewSubmission": "जमा देखें",
     "viewSubmissionFor": "{{name}} की जमा देखें",
-    "viewAllUpdatesFor": "{{name}} के सभी अपडेट देखें"
+    "viewAllUpdatesFor": "{{name}} के सभी अपडेट देखें",
+    "updatesCol": "अपडेट",
+    "noUpdates": "कोई अपडेट नहीं",
+    "noSubmissionYet": "अभी तक जमा नहीं",
+    "directAssignment": "सीधा असाइनमेंट",
+    "statusPending": "लंबित",
+    "statusSubmitted": "जमा किया",
+    "assignmentHistory": "असाइनमेंट इतिहास",
+    "delegationAssigned": "{{from}} ने {{to}} को असाइन किया",
+    "viewAllUpdates": "सभी अपडेट देखें",
+    "lastSubmittedWhen": "अंतिम जमा {{when}}"
   },
   "lists": {
     "holdToUnpin": "अनपिन करने के लिए दबाए रखें",

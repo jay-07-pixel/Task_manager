@@ -97,7 +97,10 @@
     "descriptionDash": "वर्णन — {{title}}",
     "kalpanik": "कल्पनिक",
     "remove": "काढा",
-    "removeFile": "फाइल काढा"
+    "removeFile": "फाइल काढा",
+    "createdLabel": "तयार केले:",
+    "submittedLabel": "सबमिट केले:",
+    "deadlineLabel": "अंतिम मुदत:"
   },
   "auth": {
     "signIn": "साइन इन",
@@ -232,7 +235,17 @@
     "delegationHistory": "प्रत्यायोजन इतिहास",
     "viewSubmission": "सबमिशन पहा",
     "viewSubmissionFor": "{{name}} चे सबमिशन पहा",
-    "viewAllUpdatesFor": "{{name}} चे सर्व अपडेट पहा"
+    "viewAllUpdatesFor": "{{name}} चे सर्व अपडेट पहा",
+    "updatesCol": "अपडेट",
+    "noUpdates": "अपडेट नाहीत",
+    "noSubmissionYet": "अद्याप सबमिट नाही",
+    "directAssignment": "थेट असाइनमेंट",
+    "statusPending": "प्रलंबित",
+    "statusSubmitted": "सबमिट केले",
+    "assignmentHistory": "असाइनमेंट इतिहास",
+    "delegationAssigned": "{{from}} ने {{to}} ला असाइन केले",
+    "viewAllUpdates": "सर्व अपडेट पहा",
+    "lastSubmittedWhen": "शेवटचे सबमिट {{when}}"
   },
   "lists": {
     "holdToUnpin": "अनपिन करण्यासाठी दाबून ठेवा",

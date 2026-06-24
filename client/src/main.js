@@ -31,7 +31,7 @@ import {
   compareTasksByRecurrenceThenCreated,
   sortTasksByRecurrenceThenCreated,
 } from "./taskRecurrenceSort.js";
-import { initI18n, tr, setLanguageChangeHandler } from "./i18n/index.js";
+import { initI18n, tr, dateLocale, setLanguageChangeHandler } from "./i18n/index.js";
 import { languageSelectorHtml, wireLanguageSelector } from "./i18n/languageSelector.js";
 
 const app = document.getElementById("app");
@@ -1813,8 +1813,8 @@ function formatOwnerTaskDeadlineMock(task) {
 
   const recurrence = task.recurrence ?? "none";
   if (recurrence === "weekly") {
-    const weekday = due.toLocaleDateString(undefined, { weekday: "long" });
-    return `<span class="admin-deadline">Every ${escapeHtml(weekday)}</span>`;
+    const weekday = due.toLocaleDateString(dateLocale(), { weekday: "long" });
+    return `<span class="admin-deadline">${escapeHtml(tr("owner.deadlineEvery", { weekday }))}</span>`;
   }
 
   const now = new Date();
@@ -1829,15 +1829,15 @@ function formatOwnerTaskDeadlineMock(task) {
     a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 
   if (isSameDay(due, startOfTomorrow) || (diffMs > 0 && diffMs <= 36 * 60 * 60 * 1000 && !isSameDay(due, startOfToday))) {
-    const timeStr = due.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-    return `<span class="admin-deadline admin-deadline--urgent">Tomorrow, ${escapeHtml(timeStr)}</span>`;
+    const timeStr = due.toLocaleTimeString(dateLocale(), { hour: "numeric", minute: "2-digit" });
+    return `<span class="admin-deadline admin-deadline--urgent">${escapeHtml(tr("owner.deadlineTomorrow", { time: timeStr }))}</span>`;
   }
   if (isSameDay(due, startOfToday) && diffMs >= 0) {
-    const timeStr = due.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-    return `<span class="admin-deadline admin-deadline--urgent">Today, ${escapeHtml(timeStr)}</span>`;
+    const timeStr = due.toLocaleTimeString(dateLocale(), { hour: "numeric", minute: "2-digit" });
+    return `<span class="admin-deadline admin-deadline--urgent">${escapeHtml(tr("owner.deadlineToday", { time: timeStr }))}</span>`;
   }
 
-  const dateStr = due.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  const dateStr = due.toLocaleDateString(dateLocale(), { month: "short", day: "numeric", year: "numeric" });
   const isUrgent = diffMs >= 0 && diffMs <= 48 * 60 * 60 * 1000;
   const cls = isUrgent ? " admin-deadline--urgent" : "";
   return `<span class="admin-deadline${cls}">${escapeHtml(dateStr)}</span>`;
@@ -2264,8 +2264,8 @@ function refreshModalRepeatLabels() {
   if (!sel) return;
   const current = sel.value;
   const d = dateFromModalDueInput();
-  const weekday = d.toLocaleDateString(undefined, { weekday: "long" });
-  const monthLong = d.toLocaleDateString(undefined, { month: "long" });
+  const weekday = d.toLocaleDateString(dateLocale(), { weekday: "long" });
+  const monthLong = d.toLocaleDateString(dateLocale(), { month: "long" });
   const ord = ordinalDayOfMonth(d.getDate());
   const dueIso = document.getElementById("modal-due")?.value || "";
 
@@ -3981,7 +3981,7 @@ function formatProgressUpdateTime(iso) {
   if (!iso) return "";
   try {
     const d = new Date(iso);
-    return d.toLocaleString(undefined, {
+    return d.toLocaleString(dateLocale(), {
       month: "short",
       day: "numeric",
       hour: "numeric",
@@ -4026,7 +4026,7 @@ function ownerAssigneeUpdatesHtml(taskId, assignee) {
   const latest = assignee.latestProgressUpdate;
   const total = assignee.progressUpdateCount ?? 0;
   if (!total || !latest?.message) {
-    return `<span class="owner-assignee-empty-hint text-muted small">No updates yet</span>`;
+    return `<span class="owner-assignee-empty-hint text-muted small">${tr("modals.noUpdatesYet")}</span>`;
   }
   const snippet = ownerLatestUpdateSnippet(latest.message);
   const badge = ownerProgressUpdateBadgeHtml(assignee);
@@ -4051,14 +4051,14 @@ function ownerDelegationHistoryHtml(task) {
     .map((d) => {
       const when = formatProgressUpdateTime(d.createdAt);
       return `<li class="owner-delegation-item"><i class="bi bi-arrow-right-short text-primary" aria-hidden="true"></i> ${escapeHtml(
-        d.fromUserName
-      )} assigned to ${escapeHtml(d.toUserName)} <span class="text-muted tabular-nums">· ${escapeHtml(when)}</span></li>`;
+        tr("owner.delegationAssigned", { from: d.fromUserName, to: d.toUserName })
+      )} <span class="text-muted tabular-nums">· ${escapeHtml(when)}</span></li>`;
     })
     .join("");
   return `<div class="owner-delegation-history mt-3 px-1">
       <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
-        <p class="owner-task-detail-heading small text-secondary mb-0">Assignment history</p>
-        <button type="button" class="btn btn-sm btn-link p-0 owner-view-all-activity" data-task-id="${escapeHtml(task.id)}">View all updates</button>
+        <p class="owner-task-detail-heading small text-secondary mb-0">${tr("owner.assignmentHistory")}</p>
+        <button type="button" class="btn btn-sm btn-link p-0 owner-view-all-activity" data-task-id="${escapeHtml(task.id)}">${tr("owner.viewAllUpdates")}</button>
       </div>
       <ul class="list-unstyled small mb-0">${items}</ul>
     </div>`;
@@ -4073,14 +4073,14 @@ function ownerMockAssigneeUpdatesHtml(taskId, assignee) {
       : "";
   if (!total || !latest?.message) {
     return `<div class="admin-expand-col-block">
-      <div class="admin-expand-col-head"><span class="admin-expand-col-label">Updates</span></div>
-      <p class="admin-expand-empty">No updates</p>
+      <div class="admin-expand-col-head"><span class="admin-expand-col-label">${tr("owner.updatesCol")}</span></div>
+      <p class="admin-expand-empty">${tr("owner.noUpdates")}</p>
     </div>`;
   }
   const snippet = ownerLatestUpdateSnippet(latest.message, 72);
   return `<div class="admin-expand-col-block">
     <div class="admin-expand-col-head">
-      <span class="admin-expand-col-label">Updates</span>
+      <span class="admin-expand-col-label">${tr("owner.updatesCol")}</span>
       ${badge}
     </div>
     <button type="button" class="admin-expand-snippet-btn owner-view-progress-btn" data-view-progress-task-id="${taskId}" data-view-progress-user-id="${escapeHtml(assignee.id)}" data-view-progress-user-name="${escapeHtml(assignee.displayName)}" title="${escapeHtml((latest.message || "").trim())}">
@@ -4092,14 +4092,14 @@ function ownerMockAssigneeUpdatesHtml(taskId, assignee) {
 function ownerMockAssigneeSubmissionHtml(taskId, assignee) {
   if (!assigneeHasSubmission(assignee)) {
     return `<div class="admin-expand-col-block admin-expand-col-block--submission">
-      <span class="admin-expand-col-label">Submission</span>
-      <p class="admin-expand-empty">No submission yet</p>
+      <span class="admin-expand-col-label">${tr("modals.submission")}</span>
+      <p class="admin-expand-empty">${tr("owner.noSubmissionYet")}</p>
     </div>`;
   }
   const view = resolveAssigneeSubmissionForView(assignee);
   const when = view.submittedAt ? formatProgressUpdateTime(view.submittedAt) : "";
   return `<div class="admin-expand-col-block admin-expand-col-block--submission">
-    <span class="admin-expand-col-label">Submission</span>
+    <span class="admin-expand-col-label">${tr("modals.submission")}</span>
     <button type="button" class="admin-expand-view-submission owner-view-submission-btn" data-view-submission-task-id="${taskId}" data-view-submission-user-id="${escapeHtml(assignee.id)}" aria-label="${tr("owner.viewSubmissionFor", { name: escapeHtml(assignee.displayName) })}">${tr("owner.viewSubmission")}</button>
     ${when ? `<span class="admin-expand-submission-meta tabular-nums">${escapeHtml(when)}</span>` : ""}
   </div>`;
@@ -4109,10 +4109,10 @@ function ownerMockAssigneeCardHtml(task, assignee, { isEmpAssignList = false } =
   const rolledSubmission = assigneeRolledRecurringSubmission(assignee);
   const isDone = assigneeShowsSubmittedForOwner(assignee);
   const statusLabel = assignee.assigneeDone
-    ? "Submitted"
+    ? tr("owner.statusSubmitted")
     : rolledSubmission
-      ? "Submitted"
-      : "Pending";
+      ? tr("owner.statusSubmitted")
+      : tr("owner.statusPending");
   const statusClass = isDone ? "admin-expand-status--submitted" : "admin-expand-status--pending";
   const avatarClass = isDone ? "admin-expand-card-avatar--done" : "admin-expand-card-avatar--pending";
   let chainLine = "";
@@ -4121,7 +4121,7 @@ function ownerMockAssigneeCardHtml(task, assignee, { isEmpAssignList = false } =
   } else if (!isEmpAssignList && assignee.assignedBy?.displayName) {
     chainLine = `${escapeHtml(assignee.assignedBy.displayName)} → ${escapeHtml(assignee.displayName)}`;
   } else {
-    chainLine = `<span class="admin-expand-chain-direct">Direct Assignment</span>`;
+    chainLine = `<span class="admin-expand-chain-direct">${tr("owner.directAssignment")}</span>`;
   }
   return `<article class="admin-expand-card">
     <div class="admin-expand-card-head">
@@ -4164,13 +4164,13 @@ function wireAdminTaskExpandPanel(root) {
 
 function ownerAssigneeSubmissionHtml(taskId, assignee) {
   if (!assigneeHasSubmission(assignee)) {
-    return `<span class="owner-assignee-empty-hint text-muted small">No submission yet</span>`;
+    return `<span class="owner-assignee-empty-hint text-muted small">${tr("owner.noSubmissionYet")}</span>`;
   }
   const view = resolveAssigneeSubmissionForView(assignee);
   const when = view.submittedAt ? formatProgressUpdateTime(view.submittedAt) : "";
   const meta =
     view.archived && when
-      ? `<span class="d-block small text-muted mt-1">Last submitted ${escapeHtml(when)}</span>`
+      ? `<span class="d-block small text-muted mt-1">${escapeHtml(tr("owner.lastSubmittedWhen", { when }))}</span>`
       : "";
   return `<div class="owner-assignee-submission-wrap">
       <button
@@ -4181,7 +4181,7 @@ function ownerAssigneeSubmissionHtml(taskId, assignee) {
         title="${tr("owner.viewSubmission")}"
         aria-label="${tr("owner.viewSubmissionFor", { name: escapeHtml(assignee.displayName) })}"
       >
-        <i class="bi bi-eye me-1" aria-hidden="true"></i>View submission
+        <i class="bi bi-eye me-1" aria-hidden="true"></i>${tr("owner.viewSubmission")}
       </button>
       ${meta}
     </div>`;
@@ -5642,7 +5642,7 @@ function formatEmpDue(iso) {
   if (!iso) return "—";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+  return d.toLocaleString(dateLocale(), { dateStyle: "medium", timeStyle: "short" });
 }
 
 function formatTaskCreatedDate(iso, { short = false } = {}) {
@@ -5650,9 +5650,9 @@ function formatTaskCreatedDate(iso, { short = false } = {}) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return null;
   if (short) {
-    return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+    return d.toLocaleDateString(dateLocale(), { month: "short", day: "numeric", year: "numeric" });
   }
-  return d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+  return d.toLocaleString(dateLocale(), { dateStyle: "medium", timeStyle: "short" });
 }
 
 function taskCreatedMetaHtml(createdAt) {
@@ -5661,7 +5661,7 @@ function taskCreatedMetaHtml(createdAt) {
   if (!full || !short) return "";
   const dtAttr = escapeHtml(String(createdAt).slice(0, 19));
   return `<div class="emp-task-date-row task-created-row">
-    <span class="emp-task-date-label">Created:</span>
+    <span class="emp-task-date-label">${tr("common.createdLabel")}</span>
     <time class="task-created-meta-date tabular-nums" datetime="${dtAttr}">
       <span class="task-created-meta-full d-none d-md-inline">${escapeHtml(full)}</span>
       <span class="task-created-meta-short d-md-none">${escapeHtml(short)}</span>
@@ -5675,7 +5675,7 @@ function empTaskDatesCellHtml(t, submitted, submittedWhen) {
     return `<div class="emp-task-dates-stack">
       ${created}
       <div class="emp-task-date-row">
-        <span class="emp-task-date-label">Submitted:</span>
+        <span class="emp-task-date-label">${tr("common.submittedLabel")}</span>
         <span class="text-success tabular-nums">${escapeHtml(formatEmpDue(submittedWhen))}</span>
       </div>
     </div>`;
@@ -5686,7 +5686,7 @@ function empTaskDatesCellHtml(t, submitted, submittedWhen) {
   return `<div class="emp-task-dates-stack">
     ${created}
     <div class="emp-task-date-row">
-      <span class="emp-task-date-label">Deadline:</span>
+      <span class="emp-task-date-label">${tr("common.deadlineLabel")}</span>
       ${deadlineValue}
     </div>
   </div>`;
@@ -5696,24 +5696,27 @@ function formatEmpRecurrencePattern(task) {
   const recurrence = task.recurrence ?? "none";
   if (recurrence === "none") return "";
   const due = task.dueAt ? new Date(task.dueAt) : null;
-  if (recurrence === "daily") return "Daily";
+  if (recurrence === "daily") return tr("owner.recurrenceDaily");
   if (recurrence === "weekly") {
-    const weekday = due && !Number.isNaN(due.getTime()) ? due.toLocaleDateString(undefined, { weekday: "long" }) : "";
-    return weekday ? `Weekly ${weekday}` : "Weekly";
+    const weekday = due && !Number.isNaN(due.getTime()) ? due.toLocaleDateString(dateLocale(), { weekday: "long" }) : "";
+    return weekday ? tr("owner.repeatWeeklyOn", { weekday }) : tr("owner.recurrenceWeekly");
   }
   if (recurrence === "monthly") {
-    return due && !Number.isNaN(due.getTime()) ? `Monthly ${ordinalDayOfMonth(due.getDate())}` : "Monthly";
+    return due && !Number.isNaN(due.getTime())
+      ? tr("owner.repeatMonthlyOn", { ordinal: ordinalDayOfMonth(due.getDate()) })
+      : tr("owner.recurrenceMonthly");
   }
   if (recurrence === "yearly") {
     if (due && !Number.isNaN(due.getTime())) {
-      return `Yearly ${due.toLocaleDateString(undefined, { month: "long" })} ${ordinalDayOfMonth(due.getDate())}`;
+      const monthLong = due.toLocaleDateString(dateLocale(), { month: "long" });
+      return tr("owner.repeatYearlyOn", { month: monthLong, ordinal: ordinalDayOfMonth(due.getDate()) });
     }
-    return "Yearly";
+    return tr("owner.recurrenceYearly");
   }
   if (recurrence === "custom" && task.recurrenceRule && typeof task.recurrenceRule === "object") {
     return formatCustomRecurrenceRuleLabel(task.recurrenceRule, task.dueAt);
   }
-  return recurrence.charAt(0).toUpperCase() + recurrence.slice(1);
+  return ownerRecurrenceShortLabel(task);
 }
 
 function ownerTaskRecurrenceBadgeHtml(task) {

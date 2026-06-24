@@ -65,4 +65,12 @@ export function currentLanguage() {
   return normalizeLang(i18n.language);
 }
 
+/** BCP 47 locale for `Date` formatting (month names, weekdays, AM/PM). */
+export function dateLocale() {
+  const lang = currentLanguage();
+  if (lang === "hi") return "hi-IN";
+  if (lang === "mr") return "mr-IN";
+  return "en-IN";
+}
+
 export { i18n };
