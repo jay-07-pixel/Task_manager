@@ -170,6 +170,15 @@
 
   .auth-theme-row {
     border-top-color: var(--admin-outline-variant);
+
+    .admin-lang-select {
+      max-width: 10rem;
+      margin: 0 auto;
+
+      .admin-lang-select-input {
+        font-size: 0.875rem;
+      }
+    }
   }
 
   .theme-icon-toggles .btn-primary {

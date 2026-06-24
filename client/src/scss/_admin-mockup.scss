@@ -858,6 +858,23 @@
     gap: 1rem;
     overflow: visible;
 
+    .admin-lang-select {
+      flex-shrink: 0;
+      max-width: 7.5rem;
+
+      &--compact {
+        max-width: 6.5rem;
+      }
+
+      .admin-lang-select-input {
+        font-size: 0.8125rem;
+        padding: 0.2rem 1.75rem 0.2rem 0.5rem;
+        border-color: var(--admin-outline-variant);
+        background-color: var(--admin-surface);
+        color: var(--admin-on-surface);
+      }
+    }
+
     .admin-notif-btn {
       position: relative;
       display: inline-flex;

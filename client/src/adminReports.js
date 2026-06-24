@@ -1,4 +1,5 @@
 import { Chart } from "chart.js/auto";
+import { t } from "./i18n/index.js";
 
 /** @type {Record<string, Chart>} */
 const chartInstances = {};
@@ -78,7 +79,7 @@ export function ownerReportsNavItemHtml(active = false) {
   return `<button type="button" class="admin-sidebar-nav-item js-owner-reports-nav${activeClass}" data-owner-view="reports">
     <span class="admin-nav-item-left">
       <span class="material-symbols-outlined" aria-hidden="true">assessment</span>
-      <span>Reports</span>
+      <span>${t("nav.reports")}</span>
     </span>
   </button>`;
 }
@@ -184,56 +185,56 @@ function reportPageHtml(data) {
     <div class="admin-reports-page">
       <header class="admin-reports-header">
         <div>
-          <p class="admin-reports-subtitle text-muted mb-0">Overview across all lists, employees, and activity</p>
+          <p class="admin-reports-subtitle text-muted mb-0">${escapeHtmlFn(t("reports.subtitle"))}</p>
         </div>
         <div class="admin-reports-header-actions">
-          <span class="admin-reports-updated small text-muted">Updated ${escapeHtmlFn(generated)}</span>
+          <span class="admin-reports-updated small text-muted">${escapeHtmlFn(t("reports.updated", { time: generated }))}</span>
           <button type="button" class="btn btn-sm btn-outline-secondary js-reports-refresh">
             ${adminMsIconFn("refresh")}
-            Refresh
+            ${escapeHtmlFn(t("common.refresh"))}
           </button>
         </div>
       </header>
 
       <div class="admin-report-kpi-grid">
-        ${kpiCard("Total tasks", o.totalTasks, "assignment")}
-        ${kpiCard("Active", o.active, "bolt", "active")}
-        ${kpiCard("In review", o.inReview, "rate_review", "review")}
-        ${kpiCard("Completed", o.completed, "check_circle", "done")}
-        ${kpiCard("Overdue", o.overdue, "event_busy", o.overdue > 0 ? "warn" : "")}
-        ${kpiCard("Submissions", o.totalSubmissions, "upload_file")}
-        ${kpiCard("Employees", o.employeeCount, "groups")}
-        ${kpiCard("Progress updates", o.progressUpdates, "forum")}
-        ${kpiCard("Chat (30 days)", o.chatMessages30d, "chat")}
-        ${kpiCard("Your lists", o.listCount, "folder")}
+        ${kpiCard(t("reports.totalTasks"), o.totalTasks, "assignment")}
+        ${kpiCard(t("reports.active"), o.active, "bolt", "active")}
+        ${kpiCard(t("reports.inReview"), o.inReview, "rate_review", "review")}
+        ${kpiCard(t("reports.completed"), o.completed, "check_circle", "done")}
+        ${kpiCard(t("reports.overdue"), o.overdue, "event_busy", o.overdue > 0 ? "warn" : "")}
+        ${kpiCard(t("reports.submissions"), o.totalSubmissions, "upload_file")}
+        ${kpiCard(t("reports.employees"), o.employeeCount, "groups")}
+        ${kpiCard(t("reports.progressUpdates"), o.progressUpdates, "forum")}
+        ${kpiCard(t("reports.chat30Days"), o.chatMessages30d, "chat")}
+        ${kpiCard(t("reports.yourLists"), o.listCount, "folder")}
       </div>
 
       <div class="admin-reports-charts">
         <section class="admin-report-card admin-report-card--chart">
-          <h2 class="admin-report-card-title">Task status</h2>
+          <h2 class="admin-report-card-title">${escapeHtmlFn(t("reports.taskStatus"))}</h2>
           <div class="admin-report-chart-wrap admin-report-chart-wrap--doughnut">
-            <canvas id="report-chart-status" aria-label="Task status breakdown"></canvas>
+            <canvas id="report-chart-status" aria-label="${escapeHtmlFn(t("reports.taskStatusAria"))}"></canvas>
           </div>
         </section>
 
         <section class="admin-report-card admin-report-card--chart">
-          <h2 class="admin-report-card-title">Tasks by list</h2>
+          <h2 class="admin-report-card-title">${escapeHtmlFn(t("reports.tasksByList"))}</h2>
           <div class="admin-report-chart-wrap admin-report-chart-wrap--lists">
-            <canvas id="report-chart-lists" aria-label="Tasks per list"></canvas>
+            <canvas id="report-chart-lists" aria-label="${escapeHtmlFn(t("reports.tasksByListAria"))}"></canvas>
           </div>
         </section>
 
         <section class="admin-report-card admin-report-card--chart admin-report-card--wide">
-          <h2 class="admin-report-card-title">Activity trend (last 12 weeks)</h2>
+          <h2 class="admin-report-card-title">${escapeHtmlFn(t("reports.activityTrend"))}</h2>
           <div class="admin-report-chart-wrap admin-report-chart-wrap--tall">
-            <canvas id="report-chart-trend" aria-label="Tasks created and submissions over time"></canvas>
+            <canvas id="report-chart-trend" aria-label="${escapeHtmlFn(t("reports.activityTrendAria"))}"></canvas>
           </div>
         </section>
 
         <section class="admin-report-card admin-report-card--chart admin-report-card--wide">
-          <h2 class="admin-report-card-title">Employee workload</h2>
+          <h2 class="admin-report-card-title">${escapeHtmlFn(t("reports.employeeWorkload"))}</h2>
           <div class="admin-report-chart-wrap admin-report-chart-wrap--tall admin-report-chart-wrap--employees">
-            <canvas id="report-chart-employees" aria-label="Assigned vs submitted per employee"></canvas>
+            <canvas id="report-chart-employees" aria-label="${escapeHtmlFn(t("reports.employeeWorkloadAria"))}"></canvas>
           </div>
         </section>
       </div>
@@ -290,7 +291,7 @@ function renderCharts(data) {
         labels: listLabels,
         datasets: [
           {
-            label: "Tasks",
+            label: t("reports.tasks"),
             data: data.tasksByList.map((r) => r.count),
             backgroundColor: c.primary,
             borderRadius: mobile ? 4 : 6,
@@ -329,7 +330,7 @@ function renderCharts(data) {
         labels: data.tasksCreatedWeekly.labels,
         datasets: [
           {
-            label: "Tasks created",
+            label: t("reports.tasksCreated"),
             data: data.tasksCreatedWeekly.values,
             borderColor: c.primary,
             backgroundColor: `${c.primary}33`,
@@ -338,7 +339,7 @@ function renderCharts(data) {
             pointRadius: mobile ? 2 : 3,
           },
           {
-            label: "Submissions",
+            label: t("reports.submitted"),
             data: data.submissionsWeekly.values,
             borderColor: c.secondary,
             backgroundColor: `${c.secondary}22`,
@@ -371,7 +372,7 @@ function renderCharts(data) {
           labels: empNames,
           datasets: [
             {
-              label: "Assigned",
+              label: t("reports.assigned"),
               data: data.employeePerformance.map((e) => e.assigned),
               backgroundColor: c.surface,
               borderColor: c.primary,
@@ -380,14 +381,14 @@ function renderCharts(data) {
               maxBarThickness: 18,
             },
             {
-              label: "Submitted",
+              label: t("reports.submitted"),
               data: data.employeePerformance.map((e) => e.submitted),
               backgroundColor: c.primary,
               borderRadius: 3,
               maxBarThickness: 18,
             },
             {
-              label: "Pending",
+              label: t("reports.pending"),
               data: data.employeePerformance.map((e) => e.pending),
               backgroundColor: c.error,
               borderRadius: 3,
@@ -427,7 +428,7 @@ function renderCharts(data) {
           labels: empNames,
           datasets: [
             {
-              label: "Assigned",
+              label: t("reports.assigned"),
               data: data.employeePerformance.map((e) => e.assigned),
               backgroundColor: c.surface,
               borderColor: c.primary,
@@ -435,13 +436,13 @@ function renderCharts(data) {
               borderRadius: 4,
             },
             {
-              label: "Submitted",
+              label: t("reports.submitted"),
               data: data.employeePerformance.map((e) => e.submitted),
               backgroundColor: c.primary,
               borderRadius: 4,
             },
             {
-              label: "Pending",
+              label: t("reports.pending"),
               data: data.employeePerformance.map((e) => e.pending),
               backgroundColor: c.error,
               borderRadius: 4,
@@ -476,7 +477,7 @@ export async function refreshAdminReports({ force = false } = {}) {
   if (!reportData || force) {
     main.innerHTML = `<div class="admin-reports-loading p-5 text-center text-muted">
       ${adminMsIconFn("hourglass_top")}
-      <p class="mb-0 mt-2">Loading reports…</p>
+      <p class="mb-0 mt-2">${escapeHtmlFn(t("reports.loading"))}</p>
     </div>`;
   }
 
@@ -491,9 +492,9 @@ export async function refreshAdminReports({ force = false } = {}) {
   } catch (err) {
     reportData = null;
     main.innerHTML = `<div class="admin-reports-error p-5 text-center">
-      <p class="text-danger mb-2">Could not load reports</p>
-      <p class="text-muted small mb-3">${escapeHtmlFn(err?.message || "Unknown error")}</p>
-      <button type="button" class="btn btn-primary btn-sm js-reports-refresh">Try again</button>
+      <p class="text-danger mb-2">${escapeHtmlFn(t("reports.loadError"))}</p>
+      <p class="text-muted small mb-3">${escapeHtmlFn(err?.message || t("reports.unknownError"))}</p>
+      <button type="button" class="btn btn-primary btn-sm js-reports-refresh">${escapeHtmlFn(t("reports.tryAgain"))}</button>
     </div>`;
     main.querySelector(".js-reports-refresh")?.addEventListener("click", () => {
       void refreshAdminReports({ force: true });
