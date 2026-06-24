@@ -333,13 +333,6 @@ function reportPageHtml(data) {
         </section>
 
         <section class="admin-report-card admin-report-card--chart admin-report-card--wide">
-          <h2 class="admin-report-card-title">${escapeHtmlFn(tr("reports.activityTrend"))}</h2>
-          <div class="admin-report-chart-wrap admin-report-chart-wrap--tall">
-            <canvas id="report-chart-trend" aria-label="${escapeHtmlFn(tr("reports.activityTrendAria"))}"></canvas>
-          </div>
-        </section>
-
-        <section class="admin-report-card admin-report-card--chart admin-report-card--wide">
           <h2 class="admin-report-card-title">${escapeHtmlFn(tr("reports.employeeWorkload"))}</h2>
           <div class="admin-report-chart-wrap admin-report-chart-wrap--tall admin-report-chart-wrap--employees">
             <canvas id="report-chart-employees" aria-label="${escapeHtmlFn(tr("reports.employeeWorkloadAria"))}"></canvas>
@@ -504,43 +497,6 @@ function renderCharts(data) {
               },
             },
           },
-        },
-      },
-    });
-  }
-
-  const trendEl = document.getElementById("report-chart-trend");
-  if (trendEl) {
-    chartInstances.trend = new Chart(trendEl, {
-      type: "line",
-      data: {
-        labels: data.tasksCreatedWeekly.labels,
-        datasets: [
-          {
-            label: tr("reports.tasksCreated"),
-            data: data.tasksCreatedWeekly.values,
-            borderColor: c.primary,
-            backgroundColor: `${c.primary}33`,
-            fill: true,
-            tension: 0.35,
-            pointRadius: mobile ? 2 : 3,
-          },
-          {
-            label: tr("reports.submitted"),
-            data: data.submissionsWeekly.values,
-            borderColor: c.secondary,
-            backgroundColor: `${c.secondary}22`,
-            fill: true,
-            tension: 0.35,
-            pointRadius: mobile ? 2 : 3,
-          },
-        ],
-      },
-      options: {
-        ...opts,
-        plugins: {
-          ...opts.plugins,
-          legend: { ...opts.plugins.legend, position: mobile ? "bottom" : "top" },
         },
       },
     });

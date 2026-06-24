@@ -7,7 +7,6 @@ const router = Router();
 router.use(requireOwner);
 
 const EMPLOYEE_ASSIGNMENTS_LIST_TITLE = "Employee assignments";
-const WEEKS_TREND = 12;
 const CHAT_DAYS = 30;
 
 function weekKey(d) {
@@ -160,17 +159,11 @@ router.get("/summary", async (req, res) => {
 
   const byList = new Map();
   const byEmployee = new Map();
-  const { labels: weekLabels, keys: weekKeys } = lastNWeekLabels(WEEKS_TREND);
-  const createdByWeek = Object.fromEntries(weekKeys.map((k) => [k, 0]));
-  const submittedByWeek = Object.fromEntries(weekKeys.map((k) => [k, 0]));
 
   for (const task of tasks) {
     const listTitle =
       task.list.title === EMPLOYEE_ASSIGNMENTS_LIST_TITLE ? "Employee assignments" : task.list.title;
     byList.set(listTitle, (byList.get(listTitle) || 0) + 1);
-
-    const wk = weekKey(task.createdAt);
-    if (createdByWeek[wk] !== undefined) createdByWeek[wk] += 1;
 
     if (task.completed) {
       completed += 1;
@@ -203,16 +196,6 @@ router.get("/summary", async (req, res) => {
       }
       byEmployee.set(a.userId, row);
     }
-  }
-
-  const assigneeLastSubmit = await prisma.taskAssignee.findMany({
-    where: { task: { list: { ownerId } }, assigneeDone: true, lastSubmittedAt: { not: null } },
-    select: { lastSubmittedAt: true },
-  });
-  for (const row of assigneeLastSubmit) {
-    if (!row.lastSubmittedAt) continue;
-    const wk = weekKey(row.lastSubmittedAt);
-    if (submittedByWeek[wk] !== undefined) submittedByWeek[wk] += 1;
   }
 
   const listChart = [...byList.entries()]
@@ -252,14 +235,6 @@ router.get("/summary", async (req, res) => {
     tasksByList: listChart,
     employeePerformance: employeeChart,
     employeeOptions,
-    tasksCreatedWeekly: {
-      labels: weekLabels,
-      values: weekKeys.map((k) => createdByWeek[k] || 0),
-    },
-    submissionsWeekly: {
-      labels: weekLabels,
-      values: weekKeys.map((k) => submittedByWeek[k] || 0),
-    },
   });
 });
 
