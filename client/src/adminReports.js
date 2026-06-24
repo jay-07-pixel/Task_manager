@@ -1,5 +1,5 @@
 import { Chart } from "chart.js/auto";
-import { tr } from "./i18n/index.js";
+import { tr, dateLocale } from "./i18n/index.js";
 
 /** @type {Record<string, Chart>} */
 const chartInstances = {};
@@ -182,6 +182,47 @@ function perfChartColors() {
   };
 }
 
+function formatReportDateTime(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString(dateLocale(), { dateStyle: "medium", timeStyle: "short" });
+}
+
+function lateSubmissionsTableHtml(items) {
+  if (!items) return "";
+  const rows = items.length
+    ? items
+        .map((row) => {
+          const lateLabel = tr("reports.submittedLateByDays", { count: row.lateDays });
+          return `<tr>
+            <td class="admin-report-late-task">${escapeHtmlFn(row.title)}</td>
+            <td class="tabular-nums text-nowrap">${escapeHtmlFn(formatReportDateTime(row.dueAt))}</td>
+            <td class="tabular-nums text-nowrap">${escapeHtmlFn(formatReportDateTime(row.submittedAt))}</td>
+            <td class="admin-report-late-days text-danger fw-semibold text-nowrap">${escapeHtmlFn(lateLabel)}</td>
+          </tr>`;
+        })
+        .join("")
+    : `<tr><td colspan="4" class="text-muted small py-3">${escapeHtmlFn(tr("reports.noLateSubmissions"))}</td></tr>`;
+
+  return `<div class="admin-report-late-section mt-3">
+    <h3 class="admin-report-late-title h6 mb-2">${escapeHtmlFn(tr("reports.lateSubmissions"))}</h3>
+    <div class="table-responsive admin-report-late-table-wrap">
+      <table class="table table-sm admin-report-late-table mb-0">
+        <thead>
+          <tr>
+            <th scope="col">${escapeHtmlFn(tr("reports.taskColumn"))}</th>
+            <th scope="col">${escapeHtmlFn(tr("reports.deadlineColumn"))}</th>
+            <th scope="col">${escapeHtmlFn(tr("reports.submittedColumn"))}</th>
+            <th scope="col">${escapeHtmlFn(tr("reports.daysLateColumn"))}</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
 function employeePerfSectionHtml(data) {
   const employees = data.employeeOptions ?? [];
   const selectedId = employeePerfFilters.employeeId || employees[0]?.id || "";
@@ -229,6 +270,11 @@ function employeePerfSectionHtml(data) {
         </div>`
       : "";
 
+  const lateTable =
+    employees.length > 0 && !employeePerfLoading
+      ? lateSubmissionsTableHtml(employeePerfData?.lateSubmissions ?? [])
+      : "";
+
   const loadingHint = employeePerfLoading
     ? `<p class="admin-report-emp-loading small text-muted mb-2">${escapeHtmlFn(tr("reports.loadingEmployeePerf"))}</p>`
     : "";
@@ -264,6 +310,7 @@ function employeePerfSectionHtml(data) {
       ${kpiRow}
       ${emptyEmployees}
       ${chartBlock}
+      ${lateTable}
     </section>`;
 }
 

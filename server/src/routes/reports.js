@@ -93,6 +93,14 @@ function classifyAssigneeRow(row) {
   return row.lastSubmittedAt <= row.task.dueAt ? "onTime" : "late";
 }
 
+function submissionLateDayCount(submittedAt, dueAt) {
+  const submitted = new Date(submittedAt);
+  const due = new Date(dueAt);
+  if (Number.isNaN(submitted.getTime()) || Number.isNaN(due.getTime())) return 0;
+  if (submitted.getTime() <= due.getTime()) return 0;
+  return Math.max(1, Math.ceil((submitted.getTime() - due.getTime()) / 86_400_000));
+}
+
 function bucketForDate(date, period) {
   if (period === "daily") return dayKey(date);
   if (period === "weekly") return weekKey(date);
@@ -270,7 +278,7 @@ router.get("/employee-performance", async (req, res) => {
       assigneeDone: true,
       lastSubmittedAt: true,
       delegatedAt: true,
-      task: { select: { createdAt: true, dueAt: true } },
+      task: { select: { id: true, title: true, createdAt: true, dueAt: true } },
     },
   });
 
@@ -301,12 +309,30 @@ router.get("/employee-performance", async (req, res) => {
     { allocated: 0, onTime: 0, late: 0, pending: 0 }
   );
 
+  const lateSubmissions = rows
+    .filter((row) => {
+      if (classifyAssigneeRow(row) !== "late") return false;
+      const assignedAt = assignmentDate(row);
+      const key = bucketForDate(assignedAt, period);
+      return keySet.has(key);
+    })
+    .map((row) => ({
+      taskId: row.task.id,
+      title: row.task.title,
+      dueAt: row.task.dueAt,
+      submittedAt: row.lastSubmittedAt,
+      lateDays: submissionLateDayCount(row.lastSubmittedAt, row.task.dueAt),
+      assignedAt: assignmentDate(row),
+    }))
+    .sort((a, b) => b.lateDays - a.lateDays || new Date(b.submittedAt) - new Date(a.submittedAt));
+
   res.json({
     employee: { id: employee.id, name: employee.displayName || "Employee" },
     period,
     bucketCount: keys.length,
     labels,
     totals,
+    lateSubmissions,
     series: {
       allocated: series.map((b) => b.allocated),
       onTime: series.map((b) => b.onTime),

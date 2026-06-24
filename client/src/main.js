@@ -5663,6 +5663,29 @@ function formatEmpDue(iso) {
   return d.toLocaleString(dateLocale(), { dateStyle: "medium", timeStyle: "short" });
 }
 
+function empTaskOverdueDayCount(dueAt) {
+  const due = new Date(dueAt);
+  if (Number.isNaN(due.getTime())) return 0;
+  const now = Date.now();
+  if (now <= due.getTime()) return 0;
+  return Math.max(1, Math.ceil((now - due.getTime()) / 86_400_000));
+}
+
+function formatEmpDeadlineDisplay(task, { submitted = false } = {}) {
+  if (!task?.dueAt) return `<span class="text-muted">—</span>`;
+  const due = new Date(task.dueAt);
+  if (Number.isNaN(due.getTime())) return `<span class="text-muted">—</span>`;
+
+  if (!submitted && Date.now() > due.getTime()) {
+    const days = empTaskOverdueDayCount(task.dueAt);
+    const overdueLabel = tr("employee.overdueByDays", { count: days });
+    return `<span class="emp-deadline-overdue text-danger fw-semibold tabular-nums">${escapeHtml(overdueLabel)}</span>
+      <span class="d-block small text-muted emp-deadline-was tabular-nums mt-1">${escapeHtml(formatEmpDue(task.dueAt))}</span>`;
+  }
+
+  return `<span class="tabular-nums">${escapeHtml(formatEmpDue(task.dueAt))}</span>`;
+}
+
 function formatTaskCreatedDate(iso, { short = false } = {}) {
   if (!iso) return null;
   const d = new Date(iso);
@@ -5698,9 +5721,7 @@ function empTaskDatesCellHtml(t, submitted, submittedWhen) {
       </div>
     </div>`;
   }
-  const deadlineValue = t.dueAt
-    ? `<span class="tabular-nums">${escapeHtml(formatEmpDue(t.dueAt))}</span>`
-    : `<span class="text-muted">—</span>`;
+  const deadlineValue = formatEmpDeadlineDisplay(t, { submitted });
   return `<div class="emp-task-dates-stack">
     ${created}
     <div class="emp-task-date-row">
@@ -6179,7 +6200,7 @@ function empAssignedByMeCardsHtml(tasks) {
         ? escapeHtml(formatProgressUpdateTime(assignees[0].delegatedAt))
         : "";
       const deadlineDisplay = task.dueAt
-        ? escapeHtml(formatEmpDue(task.dueAt))
+        ? formatEmpDeadlineDisplay(task, { submitted: false })
         : `<span class="text-muted">—</span>`;
       const deleteBtn = task.canDelete
         ? `<button type="button" class="btn btn-sm btn-outline-danger js-emp-delete-assigned" data-task-id="${task.id}" data-task-title="${escapeHtml(task.title)}" aria-label="${tr("common.deleteTask")}">

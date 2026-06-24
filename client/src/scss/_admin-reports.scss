@@ -170,6 +170,46 @@
     height: 20rem;
   }
 
+  .admin-report-late-section {
+    border-top: 1px solid var(--admin-outline-variant);
+    padding-top: 0.85rem;
+  }
+
+  .admin-report-late-title {
+    color: var(--admin-on-surface);
+    font-weight: 600;
+  }
+
+  .admin-report-late-table-wrap {
+    max-height: 16rem;
+    overflow: auto;
+  }
+
+  .admin-report-late-table {
+    --bs-table-bg: transparent;
+
+    th {
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      color: var(--admin-on-surface-variant);
+      white-space: nowrap;
+    }
+
+    td {
+      font-size: 0.82rem;
+      vertical-align: middle;
+    }
+  }
+
+  .admin-report-late-task {
+    max-width: 14rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .admin-reports-charts {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
