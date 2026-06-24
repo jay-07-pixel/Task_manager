@@ -646,8 +646,9 @@
       background: #fff;
 
       &.owner-task-row--high-priority {
-        background: var(--hp-card-bg, #ffcdd2);
-        border-color: var(--hp-card-border, #e53935);
+        background: var(--hp-card-bg, #ffcccc) !important;
+        background-color: var(--hp-card-bg, #ffcccc) !important;
+        border-color: var(--hp-card-border, #ef5350) !important;
       }
     }
 

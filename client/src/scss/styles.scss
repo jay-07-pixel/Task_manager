@@ -1582,6 +1582,12 @@ body {
     background: rgba(var(--bs-success-rgb), 0.04);
   }
 
+  .emp-owner-task-table tbody tr.emp-task-row.owner-task-row--high-priority {
+    background: var(--hp-card-bg, #ffcccc) !important;
+    background-color: var(--hp-card-bg, #ffcccc) !important;
+    border-color: var(--hp-card-border, #ef5350) !important;
+  }
+
   .emp-owner-task-table tbody tr.emp-task-row > td {
     display: block;
     border: none !important;

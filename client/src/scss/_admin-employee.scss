@@ -235,8 +235,9 @@
       box-shadow: 0 2px 8px rgba(24, 26, 46, 0.06);
 
       &.owner-task-row--high-priority {
-        background: var(--hp-card-bg, #ffcdd2) !important;
-        border-color: var(--hp-card-border, #e53935) !important;
+        background: var(--hp-card-bg, #ffcccc) !important;
+        background-color: var(--hp-card-bg, #ffcccc) !important;
+        border-color: var(--hp-card-border, #ef5350) !important;
       }
     }
 
