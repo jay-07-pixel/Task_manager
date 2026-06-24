@@ -50,7 +50,17 @@ export function taskCreatedMs(task) {
   return Number.isNaN(ms) ? 0 : ms;
 }
 
+/** High-priority tasks sort above all others. */
+export function compareHighPriorityFirst(a, b) {
+  const aP = !!a?.highPriority;
+  const bP = !!b?.highPriority;
+  if (aP !== bP) return aP ? -1 : 1;
+  return 0;
+}
+
 export function compareTasksByRecurrenceThenCreated(a, b) {
+  const prio = compareHighPriorityFirst(a, b);
+  if (prio !== 0) return prio;
   const rankDiff = taskRecurrenceSortRank(a) - taskRecurrenceSortRank(b);
   if (rankDiff !== 0) return rankDiff;
   const createdDiff = taskCreatedMs(b) - taskCreatedMs(a);

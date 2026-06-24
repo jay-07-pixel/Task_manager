@@ -61,6 +61,7 @@ async function createCompletedOccurrenceTask(activeTask, prevDue, assigneeRows) 
       recurrenceRule: activeTask.recurrenceRule,
       completed: true,
       starred: activeTask.starred,
+      highPriority: activeTask.highPriority,
       sortOrder,
       assignments: { create: assigneeCreates },
     },

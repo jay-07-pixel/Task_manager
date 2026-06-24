@@ -135,6 +135,7 @@ model Task {
   recurrenceRule  String?          @map("recurrence_rule") @db.Text
   completed       Boolean          @default(false)
   starred         Boolean          @default(false)
+  highPriority    Boolean          @default(false) @map("high_priority")
   sortOrder       Int              @default(0) @map("sort_order")
   createdAt       DateTime         @default(now()) @map("created_at")
   updatedAt       DateTime         @updatedAt @map("updated_at")

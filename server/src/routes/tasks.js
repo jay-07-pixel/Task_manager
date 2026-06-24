@@ -18,6 +18,7 @@ import { isVideoAttachment } from "../lib/chatUpload.js";
 import {
   compareTasksByRecurrenceThenCreated,
   sortTasksByRecurrenceThenCreated,
+  compareHighPriorityFirst,
 } from "../lib/taskRecurrenceSort.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -221,6 +222,7 @@ async function spawnNextRecurringTask(completedTask, nextRecurrenceRuleJson = nu
     sortOrder,
     completed: false,
     starred: completedTask.starred,
+    highPriority: completedTask.highPriority,
     assignments: assigneeCreates.length ? { create: assigneeCreates } : undefined,
   };
 
@@ -763,6 +765,7 @@ export function serializeTask(t) {
     recurrenceRule,
     completed: t.completed,
     starred: t.starred,
+    highPriority: !!t.highPriority,
     sortOrder: t.sortOrder,
     createdAt: t.createdAt?.toISOString?.() ?? t.createdAt ?? null,
   };
@@ -836,6 +839,8 @@ function sortEmployeeAssignedTasks(tasks, employeeUserId) {
   };
 
   return [...tasks].sort((a, b) => {
+    const prio = compareHighPriorityFirst(a, b);
+    if (prio !== 0) return prio;
     const aDone = !!assigneeRow(a)?.assigneeDone;
     const bDone = !!assigneeRow(b)?.assigneeDone;
     if (aDone !== bDone) return aDone ? 1 : -1;
@@ -854,6 +859,8 @@ function sortOwnerListTasks(tasks) {
   return [
     ...sortTasksByRecurrenceThenCreated(active),
     ...completed.sort((a, b) => {
+      const prio = compareHighPriorityFirst(a, b);
+      if (prio !== 0) return prio;
       const order = (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
       if (order !== 0) return order;
       return String(a.title || "").localeCompare(String(b.title || ""));
@@ -1495,6 +1502,7 @@ const createTaskSchema = z.object({
   title: z.string().min(1).max(500),
   notes: z.string().max(20000).optional(),
   starred: z.boolean().optional(),
+  highPriority: z.boolean().optional(),
   dueAt: z.union([z.string().min(1), z.literal(""), z.null()]).optional(),
   dueTimeZone: z.string().min(1).max(64).optional().nullable(),
   allDay: z.boolean().optional(),
@@ -1543,6 +1551,7 @@ router.post("/lists/:listId", requireOwner, async (req, res) => {
     title: parsed.data.title.trim(),
     notes: parsed.data.notes?.trim() ?? "",
     starred: parsed.data.starred ?? false,
+    highPriority: parsed.data.highPriority ?? false,
     dueAt,
     dueTimeZone,
     allDay: parsed.data.allDay ?? false,
@@ -1571,6 +1580,7 @@ const patchTaskSchema = z.object({
   notes: z.string().max(20000).optional(),
   completed: z.boolean().optional(),
   starred: z.boolean().optional(),
+  highPriority: z.boolean().optional(),
   dueAt: z.union([z.string().min(1), z.null()]).optional(),
   dueTimeZone: z.string().min(1).max(64).optional().nullable(),
   allDay: z.boolean().optional(),
@@ -1640,6 +1650,7 @@ router.patch("/:id", requireAuth, async (req, res) => {
     if (parsed.data.title != null) data.title = parsed.data.title.trim();
     if (parsed.data.notes != null) data.notes = parsed.data.notes;
     if (parsed.data.starred != null) data.starred = parsed.data.starred;
+    if (parsed.data.highPriority != null) data.highPriority = parsed.data.highPriority;
     if (parsed.data.dueAt !== undefined) {
       data.dueAt = parsed.data.dueAt ? new Date(parsed.data.dueAt) : null;
       data.dueTimeZone = parsed.data.dueAt
@@ -1713,6 +1724,7 @@ router.patch("/:id", requireAuth, async (req, res) => {
       d.title !== undefined ||
       d.notes !== undefined ||
       d.starred !== undefined ||
+      d.highPriority !== undefined ||
       d.dueAt !== undefined ||
       d.allDay !== undefined ||
       d.recurrence !== undefined ||

@@ -331,6 +331,8 @@
     "teamAdminIntro": "Promote employees to admin or revoke admin access. Email notifications are sent automatically.",
     "noTeamMembers": "No team members yet.",
     "customRepeatEdit": "Edit",
+    "highPriority": "High priority",
+    "highPriorityHint": "Pin to top and highlight in red for admin and employees",
     "everyDay": "Every day",
     "postTaskUpdate": "Post task update",
     "reviewUpdates": "Review task updates",

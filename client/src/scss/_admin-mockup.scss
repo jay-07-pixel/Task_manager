@@ -1254,6 +1254,23 @@
       &:hover {
         background: rgba(169, 236, 229, 0.05);
       }
+
+      &.owner-task-row--high-priority {
+        background: rgba(186, 26, 26, 0.09);
+        box-shadow: inset 4px 0 0 #ba1a1a;
+
+        &:hover {
+          background: rgba(186, 26, 26, 0.14);
+        }
+
+        .admin-task-type-icon {
+          color: #ba1a1a;
+        }
+      }
+    }
+
+    tbody.owner-task-group--high-priority .admin-task-expand-panel {
+      border-top-color: rgba(186, 26, 26, 0.25);
     }
 
     tbody td {
@@ -1967,6 +1984,19 @@ body:has(.admin-task-modal.show) .modal-backdrop {
     width: 1rem;
     height: 1rem;
     accent-color: #00535b;
+  }
+
+  &--priority {
+    margin-left: 0.25rem;
+
+    span {
+      font-weight: 600;
+      color: #ba1a1a;
+    }
+
+    input {
+      accent-color: #ba1a1a;
+    }
   }
 }
 

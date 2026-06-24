@@ -36,6 +36,15 @@
       background: rgba(169, 236, 229, 0.08);
     }
 
+    tbody tr.emp-task-row.owner-task-row--high-priority {
+      background: rgba(186, 26, 26, 0.09);
+      box-shadow: inset 4px 0 0 #ba1a1a;
+
+      &:hover {
+        background: rgba(186, 26, 26, 0.14);
+      }
+    }
+
     .btn-primary {
       background: linear-gradient(135deg, #00535b 0%, #006d77 100%);
       border: none;
@@ -233,6 +242,11 @@
       background: #fff;
       border-radius: 0.75rem;
       box-shadow: 0 2px 8px rgba(24, 26, 46, 0.06);
+
+      &.owner-task-row--high-priority {
+        background: rgba(186, 26, 26, 0.1);
+        box-shadow: inset 4px 0 0 #ba1a1a, 0 2px 8px rgba(186, 26, 26, 0.12);
+      }
     }
 
     .emp-owner-task-table tbody tr.emp-task-row.owner-task-row--completed {

@@ -30,6 +30,7 @@ import {
 import {
   compareTasksByRecurrenceThenCreated,
   sortTasksByRecurrenceThenCreated,
+  compareHighPriorityFirst,
 } from "./taskRecurrenceSort.js";
 import { initI18n, tr, dateLocale, setLanguageChangeHandler } from "./i18n/index.js";
 import { languageSelectorHtml, wireLanguageSelector } from "./i18n/languageSelector.js";
@@ -1968,12 +1969,18 @@ function ownerFilteredTasks() {
 function sortOwnerTasksForDisplay(tasks) {
   if (state.ownerTaskFilter === "completed") {
     return [...tasks].sort((a, b) => {
+      const prio = compareHighPriorityFirst(a, b);
+      if (prio !== 0) return prio;
       const order = (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
       if (order !== 0) return order;
       return String(a.title || "").localeCompare(String(b.title || ""));
     });
   }
   return sortTasksByRecurrenceThenCreated(tasks);
+}
+
+function ownerTaskRowPriorityClass(task) {
+  return task.highPriority ? " owner-task-row--high-priority" : "";
 }
 
 function setOwnerTaskFilter(filter) {
@@ -2748,6 +2755,10 @@ function taskModalHtml() {
                   <label class="admin-task-modal-check">
                     <input type="checkbox" id="modal-all-day" />
                     <span>${tr("common.allDay")}</span>
+                  </label>
+                  <label class="admin-task-modal-check admin-task-modal-check--priority" title="${tr("modals.highPriorityHint")}">
+                    <input type="checkbox" id="modal-high-priority" />
+                    <span>${tr("modals.highPriority")}</span>
                   </label>
                 </div>
               </div>
@@ -4478,6 +4489,7 @@ function ownerTasksFingerprintFrom(tasks) {
     (tasks ?? []).map((t) => ({
       id: t.id,
       c: t.completed,
+      p: t.highPriority ? 1 : 0,
       s: t.sortOrder,
       a: (t.assignees ?? []).map((x) => [
         x.id,
@@ -4568,6 +4580,8 @@ function openOwnerCreateTaskModal() {
   document.getElementById("modal-task-id").value = "";
   document.getElementById("modal-title").value = "";
   document.getElementById("modal-notes").value = "";
+  const highPriEl = document.getElementById("modal-high-priority");
+  if (highPriEl) highPriEl.checked = false;
   pendingCustomRecurrence = null;
   fillModalDueFields({ allDay: false, recurrence: "none", dueAt: null });
   syncModalCustomRepeatUi();
@@ -4962,6 +4976,8 @@ function openTaskModal(task) {
   document.getElementById("modal-task-id").value = task.id;
   document.getElementById("modal-title").value = task.title;
   document.getElementById("modal-notes").value = task.notes || "";
+  const highPriEl = document.getElementById("modal-high-priority");
+  if (highPriEl) highPriEl.checked = !!task.highPriority;
   pendingCustomRecurrence =
     task.recurrence === "custom" && task.recurrenceRule && typeof task.recurrenceRule === "object"
       ? { ...task.recurrenceRule }
@@ -5024,6 +5040,7 @@ function wireTaskModal() {
       recurrence: rec,
       recurrenceRule,
       assigneeIds: getSelectedAssigneeIdsFromModal(),
+      highPriority: document.getElementById("modal-high-priority")?.checked ?? false,
     };
     try {
       if (!id) {
@@ -5121,9 +5138,10 @@ function ownerTaskGroupTbody(task) {
       : `<span class="admin-expand-team-pill tabular-nums">${nDone} / ${nAssigned}</span>`;
 
   const groupDone = task.completed ? "owner-task-group--completed" : "";
+  const priorityClass = ownerTaskRowPriorityClass(task);
 
-  return `<tbody class="owner-task-group ${groupDone}" data-task-id="${task.id}">
-    <tr class="task-sort-row owner-task-row ${task.completed ? "owner-task-row--completed" : ""}" data-task-id="${task.id}">
+  return `<tbody class="owner-task-group ${groupDone}${task.highPriority ? " owner-task-group--high-priority" : ""}" data-task-id="${task.id}">
+    <tr class="task-sort-row owner-task-row${priorityClass} ${task.completed ? "owner-task-row--completed" : ""}" data-task-id="${task.id}">
       <td class="owner-task-cell owner-task-cell--icon text-center align-middle">
         ${adminMsIcon("assignment", "admin-task-type-icon")}
         <span class="task-grip grip-handle" title="${tr("common.dragToReorder")}">${adminMsIcon("drag_indicator")}</span>
@@ -6017,6 +6035,8 @@ function sortEmpTasksForDisplay(tasks) {
   const list = [...tasks];
   if (state.empFilter === "submitted") {
     return list.sort((a, b) => {
+      const prio = compareHighPriorityFirst(a, b);
+      if (prio !== 0) return prio;
       const bySubmitted = empTaskSubmittedTimestamp(b) - empTaskSubmittedTimestamp(a);
       if (bySubmitted !== 0) return bySubmitted;
       return String(a.title || "").localeCompare(String(b.title || ""));
@@ -6027,6 +6047,8 @@ function sortEmpTasksForDisplay(tasks) {
       const aDone = employeeAssigneeShowsAsSubmitted(a);
       const bDone = employeeAssigneeShowsAsSubmitted(b);
       if (aDone !== bDone) return aDone ? 1 : -1;
+      const prio = compareHighPriorityFirst(a, b);
+      if (prio !== 0) return prio;
       if (aDone) {
         const bySubmitted = empTaskSubmittedTimestamp(b) - empTaskSubmittedTimestamp(a);
         if (bySubmitted !== 0) return bySubmitted;
@@ -6112,9 +6134,10 @@ function empTaskTableRows(tasks) {
           ${submissionBtn}
         </div>`;
       const rowDone = submitted ? "owner-task-row--completed" : "";
+      const priorityClass = ownerTaskRowPriorityClass(task);
       const submittedWhen = me?.lastSubmittedAt || me?.assigneeDoneAt || null;
       const datesCell = empTaskDatesCellHtml(task, submitted, submittedWhen);
-      return `<tr class="owner-task-row emp-task-row ${rowDone}" data-task-id="${task.id}">
+      return `<tr class="owner-task-row emp-task-row${priorityClass} ${rowDone}" data-task-id="${task.id}">
         <td class="owner-task-cell emp-col-check text-center align-middle">
           <input type="checkbox" class="form-check-input emp-task-check" data-task-id="${task.id}" ${
         submitted ? "checked" : ""
