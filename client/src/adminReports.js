@@ -25,6 +25,8 @@ let employeePerfFilters = { employeeId: "", period: "daily" };
 /** @type {boolean} */
 let employeePerfLoading = false;
 
+const PERIOD_BUCKET_COUNTS = { daily: 14, weekly: 12, monthly: 6 };
+
 /** @type {number | null} */
 let reportsResizeTimer = null;
 
@@ -231,7 +233,9 @@ function employeePerfSectionHtml(data) {
     ? `<p class="admin-report-emp-loading small text-muted mb-2">${escapeHtmlFn(tr("reports.loadingEmployeePerf"))}</p>`
     : "";
 
-  const periodHint = tr(`reports.periodHint_${period}`, { count: employeePerfData?.bucketCount ?? 0 });
+  const periodHint = tr(`reports.periodHint_${period}`, {
+    count: employeePerfData?.bucketCount ?? PERIOD_BUCKET_COUNTS[period] ?? 14,
+  });
 
   return `
     <section class="admin-report-card admin-report-card--wide admin-report-card--employee-perf">

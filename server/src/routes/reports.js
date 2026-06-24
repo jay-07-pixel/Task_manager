@@ -264,7 +264,8 @@ router.get("/summary", async (req, res) => {
 });
 
 router.get("/employee-performance", async (req, res) => {
-  const ownerId = req.session.userId;
+  try {
+    const ownerId = req.session.userId;
   const employeeId = String(req.query.employeeId || "").trim();
   const period = ["daily", "weekly", "monthly"].includes(req.query.period) ? req.query.period : "daily";
 
@@ -276,7 +277,7 @@ router.get("/employee-performance", async (req, res) => {
     where: {
       id: employeeId,
       role: "employee",
-      assignedTasks: { some: { task: { list: { ownerId } } } },
+      taskAssignments: { some: { task: { list: { ownerId } } } },
     },
     select: { id: true, displayName: true },
   });
@@ -338,6 +339,10 @@ router.get("/employee-performance", async (req, res) => {
       pending: series.map((b) => b.pending),
     },
   });
+  } catch (err) {
+    console.error("employee-performance report error:", err);
+    res.status(500).json({ error: "Could not load employee performance report" });
+  }
 });
 
 export default router;
