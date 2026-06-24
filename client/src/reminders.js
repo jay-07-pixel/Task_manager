@@ -1,4 +1,4 @@
-import { t } from "./i18n/index.js";
+import { tr } from "./i18n/index.js";
 import {
   cancelBackgroundAlarms,
   getLocalPushSubscription,
@@ -123,7 +123,7 @@ function tryBrowserNotification(task, slot, bodyLine) {
   if (!("Notification" in window) || Notification.permission !== "granted") return;
   const key = reminderKey(task, slot);
   const title =
-    slot === SLOT_FOLLOWUP ? t("reminders.notSubmittedTitle") : t("reminders.dueSoonTitle");
+    slot === SLOT_FOLLOWUP ? tr("reminders.notSubmittedTitle") : tr("reminders.dueSoonTitle");
   try {
     const n = new Notification(title, {
       body: `${task.title} — ${bodyLine}`,
@@ -142,7 +142,7 @@ function tryBrowserNotification(task, slot, bodyLine) {
 async function ensureNotificationPermission(showToast) {
   const perm = await requestNotificationPermissionForAlarms();
   if (perm === "denied") {
-    showToast(t("reminders.notificationsBlockedTab"), "warning");
+    showToast(tr("reminders.notificationsBlockedTab"), "warning");
   }
   return perm === "granted";
 }
@@ -170,9 +170,9 @@ function dueReminderToFire(task, now, fired) {
     const minutesLeft = Math.max(1, Math.ceil(msUntil / 60_000));
     return {
       slot: SLOT_BEFORE,
-      eyebrow: t("reminders.dueInAbout", { count: minutesLeft }),
-      toast: t("reminders.dueToast", { title: task.title, count: minutesLeft }),
-      notify: t("reminders.dueNotify", { count: minutesLeft, when: formatDueTime(task.dueAt) }),
+      eyebrow: tr("reminders.dueInAbout", { count: minutesLeft }),
+      toast: tr("reminders.dueToast", { title: task.title, count: minutesLeft }),
+      notify: tr("reminders.dueNotify", { count: minutesLeft, when: formatDueTime(task.dueAt) }),
     };
   }
 
@@ -181,13 +181,13 @@ function dueReminderToFire(task, now, fired) {
     const overdueMin = Math.max(1, Math.ceil((now - due) / 60_000));
     const overdueLine =
       now > due
-        ? t("reminders.overdueBy", { count: overdueMin })
-        : t("reminders.deadlinePassed");
+        ? tr("reminders.overdueBy", { count: overdueMin })
+        : tr("reminders.deadlinePassed");
     return {
       slot: SLOT_FOLLOWUP,
-      eyebrow: t("reminders.followupEyebrow"),
-      toast: t("reminders.followupToast", { title: task.title, detail: overdueLine }),
-      notify: t("reminders.followupNotify", { detail: overdueLine, when: formatDueTime(task.dueAt) }),
+      eyebrow: tr("reminders.followupEyebrow"),
+      toast: tr("reminders.followupToast", { title: task.title, detail: overdueLine }),
+      notify: tr("reminders.followupNotify", { detail: overdueLine, when: formatDueTime(task.dueAt) }),
     };
   }
 
@@ -214,7 +214,7 @@ export function handlePushReminderMessage(payload, showToast) {
   if (!payload) return;
   const task = {
     id: payload.taskId || "",
-    title: payload.title || t("employee.reminders.fallbackTaskTitle"),
+    title: payload.title || tr("employee.reminders.fallbackTaskTitle"),
     dueAt: payload.dueAt || null,
   };
   const slot = payload.slot === "followup1h" ? SLOT_FOLLOWUP : SLOT_BEFORE;
@@ -259,7 +259,7 @@ function wireEmployeeInteractionOnce(apiFetch, showToast) {
     if (Notification.permission === "granted") {
       runPushRegistrationDuringGesture(apiFetch, (result) => {
         if (result.ok) {
-          showToast(t("reminders.phoneEnabled"), "primary");
+          showToast(tr("reminders.phoneEnabled"), "primary");
         }
       });
     }

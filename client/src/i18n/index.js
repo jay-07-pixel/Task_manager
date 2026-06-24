@@ -50,9 +50,12 @@ function updateDocumentTitle() {
 }
 
 /** @param {string} key @param {Record<string, unknown>} [opts] */
-export function t(key, opts) {
+export function tr(key, opts) {
   return i18n.t(key, opts);
 }
+
+/** @deprecated Use `tr` — kept as alias to avoid shadowing bugs with task variables named `t`. */
+export const t = tr;
 
 export function changeLanguage(lng) {
   return i18n.changeLanguage(normalizeLang(lng));

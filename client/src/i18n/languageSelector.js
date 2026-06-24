@@ -1,4 +1,4 @@
-import { changeLanguage, currentLanguage, t } from "./index.js";
+import { changeLanguage, currentLanguage, tr } from "./index.js";
 
 export function languageSelectorHtml({ compact = false } = {}) {
   const lang = currentLanguage();
@@ -6,11 +6,11 @@ export function languageSelectorHtml({ compact = false } = {}) {
     ? "admin-lang-select admin-lang-select--compact"
     : "admin-lang-select";
   return `<div class="${btnClass}" data-lang-selector>
-    <label class="visually-hidden" for="app-lang-select">${t("language.label")}</label>
-    <select id="app-lang-select" class="form-select form-select-sm admin-lang-select-input" aria-label="${t("language.label")}">
-      <option value="en"${lang === "en" ? " selected" : ""}>${t("language.en")}</option>
-      <option value="hi"${lang === "hi" ? " selected" : ""}>${t("language.hi")}</option>
-      <option value="mr"${lang === "mr" ? " selected" : ""}>${t("language.mr")}</option>
+    <label class="visually-hidden" for="app-lang-select">${tr("language.label")}</label>
+    <select id="app-lang-select" class="form-select form-select-sm admin-lang-select-input" aria-label="${tr("language.label")}">
+      <option value="en"${lang === "en" ? " selected" : ""}>${tr("language.en")}</option>
+      <option value="hi"${lang === "hi" ? " selected" : ""}>${tr("language.hi")}</option>
+      <option value="mr"${lang === "mr" ? " selected" : ""}>${tr("language.mr")}</option>
     </select>
   </div>`;
 }

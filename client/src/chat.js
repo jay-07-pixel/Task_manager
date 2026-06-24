@@ -1,6 +1,6 @@
 /** @typedef {{ api: Function, escapeHtml: Function, showToast: Function, bootstrap: any, getUser: () => any }} ChatDeps */
 
-import { t } from "./i18n/index.js";
+import { tr } from "./i18n/index.js";
 
 const CHAT_POLL_MS_HIDDEN = 20000;
 const CHAT_POLL_MS_CLOSED = 6000;
@@ -154,7 +154,7 @@ function onChatLivePayload(payload) {
     const meId = d().getUser()?.id;
     if (payload.userId === meId) return;
     if (payload.typing) {
-      const name = payload.displayName || t("chat.someone");
+      const name = payload.displayName || tr("chat.someone");
       const existing = activeTypingUsers.filter((u) => u.id !== payload.userId);
       activeTypingUsers = [...existing, { id: payload.userId, displayName: name }];
     } else {
@@ -273,10 +273,10 @@ function formatChatDateDivider(iso) {
   if (Number.isNaN(dt.getTime())) return "";
   const key = dateKeyInTimeZone(dt, CHAT_TIME_ZONE);
   const today = dateKeyInTimeZone(new Date(), CHAT_TIME_ZONE);
-  if (key === today) return t("chat.today");
+  if (key === today) return tr("chat.today");
   const yesterday = new Date();
   yesterday.setDate(yesterday.getDate() - 1);
-  if (key === dateKeyInTimeZone(yesterday, CHAT_TIME_ZONE)) return t("chat.yesterday");
+  if (key === dateKeyInTimeZone(yesterday, CHAT_TIME_ZONE)) return tr("chat.yesterday");
   return dt.toLocaleDateString("en-IN", {
     timeZone: CHAT_TIME_ZONE,
     weekday: "long",
@@ -363,7 +363,7 @@ async function applyChatJumpDate(dateKey) {
   const after = dayStartIsoInChatTz(dateKey);
   const before = dayEndIsoInChatTz(dateKey);
   if (!after || !before) {
-    d().showToast(t("chat.invalidDate"), "warning");
+    d().showToast(tr("chat.invalidDate"), "warning");
     return;
   }
   chatJumpDate = {
@@ -384,7 +384,7 @@ async function applyChatJumpDate(dateKey) {
       emptyDateLabel: !activeMessages.length ? chatJumpDate.label : null,
     });
   } catch (err) {
-    d().showToast(err.message || t("chat.couldNotLoadMessagesForDate"), "danger");
+    d().showToast(err.message || tr("chat.couldNotLoadMessagesForDate"), "danger");
   }
 }
 
@@ -424,10 +424,10 @@ const CHAT_MAX_FILE_MB = 5;
 
 function formatTypingLabel(users) {
   if (!users.length) return "";
-  const names = users.map((u) => u.displayName || t("chat.someone"));
-  if (names.length === 1) return t("chat.typingOne", { name: names[0] });
-  if (names.length === 2) return t("chat.typingTwo", { name1: names[0], name2: names[1] });
-  return t("chat.typingMany", { count: names.length });
+  const names = users.map((u) => u.displayName || tr("chat.someone"));
+  if (names.length === 1) return tr("chat.typingOne", { name: names[0] });
+  if (names.length === 2) return tr("chat.typingTwo", { name1: names[0], name2: names[1] });
+  return tr("chat.typingMany", { count: names.length });
 }
 
 function updateTypingIndicator() {
@@ -445,17 +445,17 @@ function messageStatusHtml(m) {
     const count = m.seenCount ?? 0;
     if (total <= 0) return "";
     if (m.seenByAll) {
-      return `<span class="team-chat-msg-status"><i class="bi bi-check2-all" aria-hidden="true"></i> ${t("chat.seenByAll")}</span>`;
+      return `<span class="team-chat-msg-status"><i class="bi bi-check2-all" aria-hidden="true"></i> ${tr("chat.seenByAll")}</span>`;
     }
     if (count > 0) {
-      return `<span class="team-chat-msg-status"><i class="bi bi-check2-all" aria-hidden="true"></i> ${t("chat.seenByCount", { count })}</span>`;
+      return `<span class="team-chat-msg-status"><i class="bi bi-check2-all" aria-hidden="true"></i> ${tr("chat.seenByCount", { count })}</span>`;
     }
-    return `<span class="team-chat-msg-status team-chat-msg-status--sent"><i class="bi bi-check2" aria-hidden="true"></i> ${t("chat.sent")}</span>`;
+    return `<span class="team-chat-msg-status team-chat-msg-status--sent"><i class="bi bi-check2" aria-hidden="true"></i> ${tr("chat.sent")}</span>`;
   }
   if (m.readAt) {
-    return `<span class="team-chat-msg-status"><i class="bi bi-check2-all" aria-hidden="true"></i> ${t("chat.seen")}</span>`;
+    return `<span class="team-chat-msg-status"><i class="bi bi-check2-all" aria-hidden="true"></i> ${tr("chat.seen")}</span>`;
   }
-  return `<span class="team-chat-msg-status team-chat-msg-status--sent"><i class="bi bi-check2" aria-hidden="true"></i> ${t("chat.sent")}</span>`;
+  return `<span class="team-chat-msg-status team-chat-msg-status--sent"><i class="bi bi-check2" aria-hidden="true"></i> ${tr("chat.sent")}</span>`;
 }
 
 async function postTyping(typing) {
@@ -506,11 +506,11 @@ function pulseTyping() {
 }
 
 function previewText(body, hasAttachment, deleted = false) {
-  if (deleted) return t("chat.messageDeleted");
+  if (deleted) return tr("chat.messageDeleted");
   const text = String(body || "").trim().replace(/\s+/g, " ");
   if (text) return text.length > 72 ? `${text.slice(0, 69)}…` : text;
-  if (hasAttachment) return t("chat.attachment");
-  return t("chat.noMessagesYet");
+  if (hasAttachment) return tr("chat.attachment");
+  return tr("chat.noMessagesYet");
 }
 
 function messageCanDelete(m) {
@@ -523,10 +523,10 @@ function messageCanDelete(m) {
 
 function replyQuotePreview(replyTo) {
   if (!replyTo) return "";
-  if (replyTo.deleted) return t("chat.messageDeleted");
+  if (replyTo.deleted) return tr("chat.messageDeleted");
   const text = String(replyTo.body || "").trim();
   if (text) return text.length > 120 ? `${text.slice(0, 117)}…` : text;
-  return t("chat.attachment");
+  return tr("chat.attachment");
 }
 
 function clearReplyingTo() {
@@ -538,7 +538,7 @@ function startReplyToMessage(m) {
   if (!m || m.deleted) return;
   replyingTo = {
     id: m.id,
-    senderName: m.isMine ? t("chat.you") : m.senderName || t("chat.member"),
+    senderName: m.isMine ? tr("chat.you") : m.senderName || tr("chat.member"),
     body: replyQuotePreview(m),
     deleted: false,
   };
@@ -558,10 +558,10 @@ function renderReplyComposerPreview() {
   wrap.innerHTML = `
     <div class="team-chat-reply-compose">
       <div class="team-chat-reply-compose-main min-w-0">
-        <span class="team-chat-reply-compose-label">${t("chat.replyingTo", { name: d().escapeHtml(replyingTo.senderName) })}</span>
+        <span class="team-chat-reply-compose-label">${tr("chat.replyingTo", { name: d().escapeHtml(replyingTo.senderName) })}</span>
         <span class="team-chat-reply-compose-text text-truncate">${d().escapeHtml(replyingTo.body)}</span>
       </div>
-      <button type="button" class="btn btn-sm btn-link text-muted p-0 js-chat-reply-cancel" aria-label="${t("chat.cancelReply")}">&times;</button>
+      <button type="button" class="btn btn-sm btn-link text-muted p-0 js-chat-reply-cancel" aria-label="${tr("chat.cancelReply")}">&times;</button>
     </div>`;
 }
 
@@ -571,8 +571,8 @@ async function deleteChatMessage(messageId) {
   const msg = activeMessages.find((m) => m.id === messageId);
   const adminDelete = isAdminUser() && msg && !msg.isMine;
   const confirmText = adminDelete
-    ? t("chat.deleteConfirmAdmin")
-    : t("chat.deleteConfirm");
+    ? tr("chat.deleteConfirmAdmin")
+    : tr("chat.deleteConfirm");
   if (!window.confirm(confirmText)) return;
   try {
     const data = await d().api(`${base}/messages/${messageId}`, { method: "DELETE" });
@@ -594,7 +594,7 @@ function chatMessageCopyText(m) {
   const text = String(m.body || "").trim();
   if (text) parts.push(text);
   if (m.attachmentUrl) {
-    const name = (m.attachmentName || t("chat.attachment")).trim();
+    const name = (m.attachmentName || tr("chat.attachment")).trim();
     const url = m.attachmentUrl.startsWith("http")
       ? m.attachmentUrl
       : `${window.location.origin}${m.attachmentUrl}`;
@@ -607,7 +607,7 @@ async function copyChatMessage(messageId) {
   const message = activeMessages.find((m) => m.id === messageId);
   const text = chatMessageCopyText(message);
   if (!text) {
-    d().showToast(t("chat.nothingToCopy"), "warning");
+    d().showToast(tr("chat.nothingToCopy"), "warning");
     return;
   }
   try {
@@ -624,9 +624,9 @@ async function copyChatMessage(messageId) {
       document.execCommand("copy");
       ta.remove();
     }
-    d().showToast(t("chat.messageCopied"), "success");
+    d().showToast(tr("chat.messageCopied"), "success");
   } catch {
-    d().showToast(t("chat.couldNotCopy"), "warning");
+    d().showToast(tr("chat.couldNotCopy"), "warning");
   }
 }
 
@@ -657,12 +657,12 @@ function openChatMediaLightbox({ url, type, name, mime }) {
   if (!box || !inner || !url) return;
   let html = "";
   if (type === "image") {
-    html = `<img src="${d().escapeHtml(url)}" alt="${d().escapeHtml(name || t("chat.image"))}" class="team-chat-media-lightbox-image" />`;
+    html = `<img src="${d().escapeHtml(url)}" alt="${d().escapeHtml(name || tr("chat.image"))}" class="team-chat-media-lightbox-image" />`;
   } else if (type === "video") {
     const videoMime = mime && mime.startsWith("video/") ? mime : "video/mp4";
     html = `<video class="team-chat-media-lightbox-video" controls autoplay playsinline src="${d().escapeHtml(url)}" type="${d().escapeHtml(videoMime)}"></video>`;
   } else if (type === "pdf") {
-    html = `<iframe class="team-chat-media-lightbox-pdf" src="${d().escapeHtml(url)}" title="${d().escapeHtml(name || t("chat.pdf"))}"></iframe>`;
+    html = `<iframe class="team-chat-media-lightbox-pdf" src="${d().escapeHtml(url)}" title="${d().escapeHtml(name || tr("chat.pdf"))}"></iframe>`;
   } else {
     return;
   }
@@ -725,7 +725,7 @@ function wireChatMediaLightbox() {
         video.classList.remove("d-none");
         if (!video.src) video.src = url;
         void video.play().catch(() => {
-          d().showToast(t("chat.couldNotPlayVideo"), "warning");
+          d().showToast(tr("chat.couldNotPlayVideo"), "warning");
         });
       }
       return;
@@ -757,13 +757,13 @@ function wireChatMediaLightbox() {
 
 function messageAttachmentHtml(m) {
   if (!m.attachmentUrl) return "";
-  const name = m.attachmentName || t("chat.file");
+  const name = m.attachmentName || tr("chat.file");
   const url = d().escapeHtml(m.attachmentUrl);
   const safeName = d().escapeHtml(name);
   const expandIcon = `<span class="team-chat-media-expand-icon" aria-hidden="true"><i class="bi bi-arrows-fullscreen"></i></span>`;
   if (isImageAttachment(m)) {
     const attrs = chatMediaDataAttrs(url, "image", safeName, m.attachmentMime || "");
-    return `<button type="button" class="team-chat-attach-media-btn js-chat-media-open" ${attrs} aria-label="${t("chat.viewImageFullScreen")}" title="${t("chat.fullScreen")}">
+    return `<button type="button" class="team-chat-attach-media-btn js-chat-media-open" ${attrs} aria-label="${tr("chat.viewImageFullScreen")}" title="${tr("chat.fullScreen")}">
       <img src="${url}" alt="${safeName}" class="team-chat-attach-image" loading="lazy" />
       ${expandIcon}
     </button>`;
@@ -772,12 +772,12 @@ function messageAttachmentHtml(m) {
     const mime = m.attachmentMime && m.attachmentMime.startsWith("video/") ? m.attachmentMime : "video/mp4";
     const attrs = chatMediaDataAttrs(url, "video", safeName, mime);
     return `<div class="team-chat-attach-video-wrap">
-      <button type="button" class="team-chat-attach-video-play js-chat-inline-video-play" data-video-url="${url}" data-video-mime="${d().escapeHtml(mime)}" aria-label="${t("chat.playVideo")}">
+      <button type="button" class="team-chat-attach-video-play js-chat-inline-video-play" data-video-url="${url}" data-video-mime="${d().escapeHtml(mime)}" aria-label="${tr("chat.playVideo")}">
         <i class="bi bi-play-circle-fill" aria-hidden="true"></i>
         <span class="text-truncate">${safeName}</span>
       </button>
       <video class="team-chat-attach-video d-none js-chat-inline-video" controls playsinline preload="none"></video>
-      <button type="button" class="team-chat-media-expand-btn js-chat-media-open" ${attrs} aria-label="${t("chat.viewVideoFullScreen")}" title="${t("chat.fullScreen")}">
+      <button type="button" class="team-chat-media-expand-btn js-chat-media-open" ${attrs} aria-label="${tr("chat.viewVideoFullScreen")}" title="${tr("chat.fullScreen")}">
         <i class="bi bi-arrows-fullscreen" aria-hidden="true"></i>
       </button>
     </div>`;
@@ -788,9 +788,9 @@ function messageAttachmentHtml(m) {
       <button type="button" class="team-chat-attach-view-btn js-chat-media-open" ${attrs}>
         <i class="bi bi-file-earmark-pdf" aria-hidden="true"></i>
         <span class="text-truncate">${safeName}</span>
-        <span class="team-chat-attach-view-label">${t("common.view")}</span>
+        <span class="team-chat-attach-view-label">${tr("common.view")}</span>
       </button>
-      <a href="${url}" class="team-chat-attach-file team-chat-attach-file--compact" download="${safeName}" title="${t("chat.download")}">
+      <a href="${url}" class="team-chat-attach-file team-chat-attach-file--compact" download="${safeName}" title="${tr("chat.download")}">
         <i class="bi bi-download" aria-hidden="true"></i>
       </a>
     </div>`;
@@ -803,16 +803,16 @@ function messageAttachmentHtml(m) {
 
 function messageReplyQuoteHtml(m) {
   if (!m.replyTo) return "";
-  const name = d().escapeHtml(m.replyTo.senderName || t("chat.member"));
+  const name = d().escapeHtml(m.replyTo.senderName || tr("chat.member"));
   const text = d().escapeHtml(replyQuotePreview(m.replyTo));
-  return `<div class="team-chat-reply-quote" aria-label="${t("chat.replyTo", { name: m.replyTo.senderName || t("chat.member") })}">
+  return `<div class="team-chat-reply-quote" aria-label="${tr("chat.replyTo", { name: m.replyTo.senderName || tr("chat.member") })}">
     <span class="team-chat-reply-quote-name">${name}</span>
     <span class="team-chat-reply-quote-text">${text}</span>
   </div>`;
 }
 
 function messageDeletedHtml() {
-  return `<div class="team-chat-bubble-deleted"><i class="bi bi-slash-circle me-1" aria-hidden="true"></i>${t("chat.thisMessageWasDeleted")}</div>`;
+  return `<div class="team-chat-bubble-deleted"><i class="bi bi-slash-circle me-1" aria-hidden="true"></i>${tr("chat.thisMessageWasDeleted")}</div>`;
 }
 
 function messageBodyHtml(m) {
@@ -830,14 +830,14 @@ function messageBodyHtml(m) {
 function messageActionsHtml(m) {
   if (m.deleted) return "";
   const canDelete = messageCanDelete(m);
-  const copyBtn = `<button type="button" class="team-chat-msg-action js-chat-copy" data-message-id="${d().escapeHtml(m.id)}" aria-label="${t("chat.copy")}" title="${t("chat.copy")}">
+  const copyBtn = `<button type="button" class="team-chat-msg-action js-chat-copy" data-message-id="${d().escapeHtml(m.id)}" aria-label="${tr("chat.copy")}" title="${tr("chat.copy")}">
     <i class="bi bi-clipboard" aria-hidden="true"></i>
   </button>`;
-  const replyBtn = `<button type="button" class="team-chat-msg-action js-chat-reply" data-message-id="${d().escapeHtml(m.id)}" aria-label="${t("chat.reply")}" title="${t("chat.reply")}">
+  const replyBtn = `<button type="button" class="team-chat-msg-action js-chat-reply" data-message-id="${d().escapeHtml(m.id)}" aria-label="${tr("chat.reply")}" title="${tr("chat.reply")}">
     <i class="bi bi-reply-fill" aria-hidden="true"></i>
   </button>`;
   const deleteBtn = canDelete
-    ? `<button type="button" class="team-chat-msg-action team-chat-msg-action--danger js-chat-delete" data-message-id="${d().escapeHtml(m.id)}" aria-label="${t("common.delete")}" title="${isAdminUser() && !m.isMine ? t("chat.deleteAsAdmin") : isAdminUser() ? t("chat.deleteMessage") : t("chat.deleteThirtyMin")}">
+    ? `<button type="button" class="team-chat-msg-action team-chat-msg-action--danger js-chat-delete" data-message-id="${d().escapeHtml(m.id)}" aria-label="${tr("common.delete")}" title="${isAdminUser() && !m.isMine ? tr("chat.deleteAsAdmin") : isAdminUser() ? tr("chat.deleteMessage") : tr("chat.deleteThirtyMin")}">
         <i class="bi bi-trash" aria-hidden="true"></i>
       </button>`
     : "";
@@ -872,11 +872,11 @@ function clipboardFiles(clipboardData) {
 function setPendingChatFileFromPicker(file, { multiple = false } = {}) {
   if (!file) return false;
   if (file.size > CHAT_MAX_FILE_BYTES) {
-    d().showToast(t("chat.fileMaxSize", { max: CHAT_MAX_FILE_MB }), "warning");
+    d().showToast(tr("chat.fileMaxSize", { max: CHAT_MAX_FILE_MB }), "warning");
     return false;
   }
   if (multiple) {
-    d().showToast(t("chat.onlyOneFile"), "warning");
+    d().showToast(tr("chat.onlyOneFile"), "warning");
   }
   pendingChatFile = file;
   renderAttachPreview();
@@ -972,7 +972,7 @@ function renderAttachPreview() {
     <div class="team-chat-attach-preview">
       ${thumb}
       <span class="team-chat-attach-preview-name text-truncate">${d().escapeHtml(name)}</span>
-      <button type="button" class="btn btn-sm btn-link text-danger p-0 ms-auto" id="team-chat-attach-remove" aria-label="${t("chat.removeAttachment")}">&times;</button>
+      <button type="button" class="btn btn-sm btn-link text-danger p-0 ms-auto" id="team-chat-attach-remove" aria-label="${tr("chat.removeAttachment")}">&times;</button>
     </div>`;
   if (isImage) {
     const img = document.getElementById("team-chat-attach-preview-thumb");
@@ -1000,7 +1000,7 @@ async function postChatMessage(base, body, file, replyToMessageId) {
       body: fd,
     });
   } catch {
-    throw new Error(t("chat.networkErrorSending"));
+    throw new Error(tr("chat.networkErrorSending"));
   }
   const text = await res.text();
   let data = null;
@@ -1012,14 +1012,14 @@ async function postChatMessage(base, body, file, replyToMessageId) {
   if (!res.ok) {
     if (res.status === 413) {
       throw new Error(
-        t("chat.fileTooLargeServer", { max: CHAT_MAX_FILE_MB })
+        tr("chat.fileTooLargeServer", { max: CHAT_MAX_FILE_MB })
       );
     }
     let msg = data?.error;
     if (!msg && text && /413|entity too large/i.test(text)) {
-      msg = t("chat.fileTooLargeNginx");
+      msg = tr("chat.fileTooLargeNginx");
     }
-    throw new Error(msg || t("chat.couldNotSendMessage"));
+    throw new Error(msg || tr("chat.couldNotSendMessage"));
   }
   return data;
 }
@@ -1046,7 +1046,7 @@ function groupAvatarHtml(name, large = false) {
 
 function rolePillHtml(roleOrLabel) {
   const isAdmin = roleOrLabel === "owner" || roleOrLabel === "Admin";
-  const label = isAdmin ? t("common.admin") : t("common.employee");
+  const label = isAdmin ? tr("common.admin") : tr("common.employee");
   const cls = isAdmin ? "team-chat-role-pill team-chat-role-pill--admin" : "team-chat-role-pill";
   return `<span class="${cls}">${label}</span>`;
 }
@@ -1058,39 +1058,39 @@ export function teamChatOffcanvasHtml() {
         <div class="team-chat-header-brand min-w-0 flex-grow-1">
           <div class="team-chat-header-icon" aria-hidden="true"><span class="material-symbols-outlined">forum</span></div>
           <div class="min-w-0">
-            <h2 class="offcanvas-title h5 mb-0" id="teamChatOffcanvasLabel">${t("nav.messages")}</h2>
-            <p class="team-chat-header-subtitle">${t("chat.subtitle")}</p>
+            <h2 class="offcanvas-title h5 mb-0" id="teamChatOffcanvasLabel">${tr("nav.messages")}</h2>
+            <p class="team-chat-header-subtitle">${tr("chat.subtitle")}</p>
           </div>
         </div>
-        <button type="button" class="btn btn-sm btn-light border team-chat-notify-btn d-none js-chat-enable-push" id="team-chat-enable-push" title="${t("chat.enablePush")}">
+        <button type="button" class="btn btn-sm btn-light border team-chat-notify-btn d-none js-chat-enable-push" id="team-chat-enable-push" title="${tr("chat.enablePush")}">
           <i class="bi bi-bell" aria-hidden="true"></i>
         </button>
-        <button type="button" class="btn-close ms-2" data-bs-dismiss="offcanvas" aria-label="${t("common.close")}"></button>
+        <button type="button" class="btn-close ms-2" data-bs-dismiss="offcanvas" aria-label="${tr("common.close")}"></button>
       </div>
       <div class="offcanvas-body p-0 d-flex flex-column team-chat-body">
         <div class="team-chat-layout flex-grow-1 min-h-0">
           <aside class="team-chat-sidebar" id="team-chat-sidebar">
             <div class="team-chat-search-wrap">
-              <label class="visually-hidden" for="team-chat-search">${t("chat.search")}</label>
+              <label class="visually-hidden" for="team-chat-search">${tr("chat.search")}</label>
               <div class="team-chat-search">
                 <i class="bi bi-search" aria-hidden="true"></i>
-                <input type="search" class="form-control form-control-sm border-0 shadow-none" id="team-chat-search" placeholder="${t("chat.searchPlaceholder")}" autocomplete="off" />
+                <input type="search" class="form-control form-control-sm border-0 shadow-none" id="team-chat-search" placeholder="${tr("chat.searchPlaceholder")}" autocomplete="off" />
               </div>
             </div>
-            <div class="team-chat-tabs" role="tablist" aria-label="${t("chat.messageViews")}">
-              <button type="button" class="team-chat-tab team-chat-tab--active" data-chat-tab="chats" role="tab" aria-selected="true">${t("chat.chats")}</button>
-              <button type="button" class="team-chat-tab" data-chat-tab="people" role="tab" aria-selected="false">${t("chat.people")}</button>
+            <div class="team-chat-tabs" role="tablist" aria-label="${tr("chat.messageViews")}">
+              <button type="button" class="team-chat-tab team-chat-tab--active" data-chat-tab="chats" role="tab" aria-selected="true">${tr("chat.chats")}</button>
+              <button type="button" class="team-chat-tab" data-chat-tab="people" role="tab" aria-selected="false">${tr("chat.people")}</button>
             </div>
             <div class="team-chat-list-scroll" id="team-chat-pane-chats" role="tabpanel">
               <div class="team-chat-create-group-wrap d-none" id="team-chat-create-group-wrap">
                 <button type="button" class="btn btn-sm btn-primary w-100 team-chat-create-group-btn" id="team-chat-create-group-btn">
-                  <i class="bi bi-people-fill me-1" aria-hidden="true"></i>${t("chat.newGroup")}
+                  <i class="bi bi-people-fill me-1" aria-hidden="true"></i>${tr("chat.newGroup")}
                 </button>
               </div>
-              <div class="team-chat-thread-type-tabs" role="tablist" aria-label="${t("chat.chatTypeFilters")}">
-                <button type="button" class="team-chat-thread-type-tab team-chat-thread-type-tab--active" data-chat-thread-type="all" aria-pressed="true">${t("chat.all")}</button>
-                <button type="button" class="team-chat-thread-type-tab" data-chat-thread-type="group" aria-pressed="false">${t("chat.groups")}</button>
-                <button type="button" class="team-chat-thread-type-tab" data-chat-thread-type="dm" aria-pressed="false">${t("chat.oneToOne")}</button>
+              <div class="team-chat-thread-type-tabs" role="tablist" aria-label="${tr("chat.chatTypeFilters")}">
+                <button type="button" class="team-chat-thread-type-tab team-chat-thread-type-tab--active" data-chat-thread-type="all" aria-pressed="true">${tr("chat.all")}</button>
+                <button type="button" class="team-chat-thread-type-tab" data-chat-thread-type="group" aria-pressed="false">${tr("chat.groups")}</button>
+                <button type="button" class="team-chat-thread-type-tab" data-chat-thread-type="dm" aria-pressed="false">${tr("chat.oneToOne")}</button>
               </div>
               <div id="team-chat-thread-list" aria-live="polite"></div>
             </div>
@@ -1102,13 +1102,13 @@ export function teamChatOffcanvasHtml() {
             <div class="team-chat-thread-empty" id="team-chat-thread-empty">
               <div class="team-chat-empty-card">
                 <div class="team-chat-empty-icon" aria-hidden="true"><i class="bi bi-chat-square-dots"></i></div>
-                <p class="fw-semibold mb-1">${t("chat.teamChat")}</p>
-                <p class="small text-muted mb-0">${t("chat.emptyThreadHint")}</p>
+                <p class="fw-semibold mb-1">${tr("chat.teamChat")}</p>
+                <p class="small text-muted mb-0">${tr("chat.emptyThreadHint")}</p>
               </div>
             </div>
             <div class="team-chat-thread-active d-none flex-column h-100" id="team-chat-thread-active">
               <div class="team-chat-thread-head">
-                <button type="button" class="btn btn-sm btn-light border team-chat-back-btn d-md-none" id="team-chat-back" aria-label="${t("chat.backToList")}">
+                <button type="button" class="btn btn-sm btn-light border team-chat-back-btn d-md-none" id="team-chat-back" aria-label="${tr("chat.backToList")}">
                   <i class="bi bi-arrow-left" aria-hidden="true"></i>
                 </button>
                 <span id="team-chat-peer-avatar"></span>
@@ -1116,10 +1116,10 @@ export function teamChatOffcanvasHtml() {
                   <div class="fw-semibold text-truncate" id="team-chat-peer-name">—</div>
                   <div id="team-chat-peer-role"></div>
                 </button>
-                <button type="button" class="btn btn-sm btn-light border team-chat-group-manage-btn d-none" id="team-chat-group-manage-btn" title="${t("chat.manageGroup")}" aria-label="${t("chat.manageGroup")}">
+                <button type="button" class="btn btn-sm btn-light border team-chat-group-manage-btn d-none" id="team-chat-group-manage-btn" title="${tr("chat.manageGroup")}" aria-label="${tr("chat.manageGroup")}">
                   <i class="bi bi-people-fill" aria-hidden="true"></i>
                 </button>
-                <button type="button" class="btn btn-sm btn-light border team-chat-date-btn" id="team-chat-date-btn" title="${t("chat.jumpToDate")}" aria-label="${t("chat.jumpToDate")}" aria-pressed="false">
+                <button type="button" class="btn btn-sm btn-light border team-chat-date-btn" id="team-chat-date-btn" title="${tr("chat.jumpToDate")}" aria-label="${tr("chat.jumpToDate")}" aria-pressed="false">
                   <i class="bi bi-calendar-event" aria-hidden="true"></i>
                 </button>
                 <input type="date" class="visually-hidden" id="team-chat-date-input" aria-hidden="true" tabindex="-1" />
@@ -1127,7 +1127,7 @@ export function teamChatOffcanvasHtml() {
               <div class="team-chat-date-filter d-none" id="team-chat-date-filter">
                 <i class="bi bi-calendar3" aria-hidden="true"></i>
                 <span id="team-chat-date-filter-label"></span>
-                <button type="button" class="btn btn-sm btn-link team-chat-date-filter-clear js-chat-date-clear">${t("chat.showLatest")}</button>
+                <button type="button" class="btn btn-sm btn-link team-chat-date-filter-clear js-chat-date-clear">${tr("chat.showLatest")}</button>
               </div>
               <div class="team-chat-messages flex-grow-1" id="team-chat-messages" aria-live="polite"></div>
               <div id="team-chat-typing-status" class="team-chat-typing-status px-3 small text-muted d-none" aria-live="polite"></div>
@@ -1136,11 +1136,11 @@ export function teamChatOffcanvasHtml() {
                 <div id="team-chat-attach-preview" class="d-none"></div>
                 <div class="team-chat-compose-inner">
                   <input type="file" class="d-none" id="team-chat-file-input" accept="*/*" />
-                  <button type="button" class="btn btn-light border team-chat-attach-btn" id="team-chat-attach-btn" aria-label="${t("chat.attachFile")}">
+                  <button type="button" class="btn btn-light border team-chat-attach-btn" id="team-chat-attach-btn" aria-label="${tr("chat.attachFile")}">
                     <i class="bi bi-paperclip" aria-hidden="true"></i>
                   </button>
-                  <textarea class="form-control team-chat-input" id="team-chat-input" rows="1" maxlength="4000" placeholder="${t("chat.messagePlaceholder")}" aria-label="${t("chat.messageLabel")}"></textarea>
-                  <button class="btn btn-primary team-chat-send-btn" type="submit" id="team-chat-send" aria-label="${t("chat.sendMessage")}">
+                  <textarea class="form-control team-chat-input" id="team-chat-input" rows="1" maxlength="4000" placeholder="${tr("chat.messagePlaceholder")}" aria-label="${tr("chat.messageLabel")}"></textarea>
+                  <button class="btn btn-primary team-chat-send-btn" type="submit" id="team-chat-send" aria-label="${tr("chat.sendMessage")}">
                     <i class="bi bi-send-fill" aria-hidden="true"></i>
                   </button>
                 </div>
@@ -1155,27 +1155,27 @@ export function teamChatOffcanvasHtml() {
         <div class="modal-content team-chat-group-modal-content">
           <form id="team-chat-create-group-form">
             <div class="modal-header border-bottom-0 pb-0">
-              <h2 class="modal-title h5" id="teamChatCreateGroupLabel">${t("chat.createGroupTitle")}</h2>
-              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="${t("common.close")}"></button>
+              <h2 class="modal-title h5" id="teamChatCreateGroupLabel">${tr("chat.createGroupTitle")}</h2>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="${tr("common.close")}"></button>
             </div>
             <div class="modal-body team-chat-group-modal-body pt-2">
-              <label class="form-label team-chat-group-label" for="team-chat-group-name">${t("chat.groupName")}</label>
-              <input type="text" class="form-control mb-3" id="team-chat-group-name" maxlength="80" required placeholder="${t("chat.groupNamePlaceholder")}" />
+              <label class="form-label team-chat-group-label" for="team-chat-group-name">${tr("chat.groupName")}</label>
+              <input type="text" class="form-control mb-3" id="team-chat-group-name" maxlength="80" required placeholder="${tr("chat.groupNamePlaceholder")}" />
               <div class="form-check mb-3">
                 <input class="form-check-input" type="checkbox" id="team-chat-group-everyone" checked />
-                <label class="form-check-label" for="team-chat-group-everyone">${t("chat.includeEveryone")}</label>
+                <label class="form-check-label" for="team-chat-group-everyone">${tr("chat.includeEveryone")}</label>
               </div>
               <div class="d-none" id="team-chat-group-members-wrap">
                 <div class="team-chat-group-members-toolbar mb-2">
-                  <label class="form-label team-chat-group-label mb-0">${t("chat.members")}</label>
-                  <span class="team-chat-member-count-text" id="team-chat-create-member-count">${t("chat.membersSelected", { count: 0 })}</span>
+                  <label class="form-label team-chat-group-label mb-0">${tr("chat.members")}</label>
+                  <span class="team-chat-member-count-text" id="team-chat-create-member-count">${tr("chat.membersSelected", { count: 0 })}</span>
                 </div>
                 <div class="team-chat-member-pick-list" id="team-chat-group-member-picks"></div>
               </div>
             </div>
             <div class="modal-footer border-top-0 pt-0">
-              <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">${t("common.cancel")}</button>
-              <button type="submit" class="btn btn-primary" id="team-chat-group-submit">${t("chat.createGroupBtn")}</button>
+              <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">${tr("common.cancel")}</button>
+              <button type="submit" class="btn btn-primary" id="team-chat-group-submit">${tr("chat.createGroupBtn")}</button>
             </div>
           </form>
         </div>
@@ -1186,38 +1186,38 @@ export function teamChatOffcanvasHtml() {
         <div class="modal-content team-chat-group-modal-content">
           <form id="team-chat-manage-group-form">
             <div class="modal-header border-bottom-0 pb-0">
-              <h2 class="modal-title h5" id="teamChatManageGroupLabel">${t("chat.manageGroupTitle")}</h2>
-              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="${t("common.close")}"></button>
+              <h2 class="modal-title h5" id="teamChatManageGroupLabel">${tr("chat.manageGroupTitle")}</h2>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="${tr("common.close")}"></button>
             </div>
             <div class="modal-body team-chat-group-modal-body pt-2">
-              <label class="form-label team-chat-group-label" for="team-chat-manage-group-name">${t("chat.groupName")}</label>
-              <input type="text" class="form-control mb-4" id="team-chat-manage-group-name" maxlength="80" required placeholder="${t("chat.groupName")}" />
+              <label class="form-label team-chat-group-label" for="team-chat-manage-group-name">${tr("chat.groupName")}</label>
+              <input type="text" class="form-control mb-4" id="team-chat-manage-group-name" maxlength="80" required placeholder="${tr("chat.groupName")}" />
               <div class="team-chat-group-members-toolbar mb-2">
-                <label class="form-label team-chat-group-label mb-0">${t("chat.members")}</label>
-                <span class="team-chat-member-count-text" id="team-chat-manage-member-count">${t("chat.membersSelected", { count: 0 })}</span>
+                <label class="form-label team-chat-group-label mb-0">${tr("chat.members")}</label>
+                <span class="team-chat-member-count-text" id="team-chat-manage-member-count">${tr("chat.membersSelected", { count: 0 })}</span>
                 <div class="team-chat-group-members-actions ms-auto">
-                  <button type="button" class="btn btn-sm btn-link text-muted text-decoration-none p-0" id="team-chat-manage-select-all">${t("chat.selectAll")}</button>
+                  <button type="button" class="btn btn-sm btn-link text-muted text-decoration-none p-0" id="team-chat-manage-select-all">${tr("chat.selectAll")}</button>
                   <span class="text-muted" aria-hidden="true">·</span>
-                  <button type="button" class="btn btn-sm btn-link text-muted text-decoration-none p-0" id="team-chat-manage-select-none">${t("chat.clear")}</button>
+                  <button type="button" class="btn btn-sm btn-link text-muted text-decoration-none p-0" id="team-chat-manage-select-none">${tr("chat.clear")}</button>
                 </div>
               </div>
-              <input type="search" class="form-control form-control-sm mb-2" id="team-chat-manage-member-search" placeholder="${t("chat.searchMembers")}" autocomplete="off" />
+              <input type="search" class="form-control form-control-sm mb-2" id="team-chat-manage-member-search" placeholder="${tr("chat.searchMembers")}" autocomplete="off" />
               <div class="team-chat-member-pick-list" id="team-chat-manage-member-picks"></div>
             </div>
             <div class="modal-footer team-chat-group-modal-footer--split border-top-0 pt-0">
-              <button type="button" class="btn btn-link text-danger text-decoration-none px-0" id="team-chat-delete-group-btn">${t("chat.deleteGroup")}</button>
+              <button type="button" class="btn btn-link text-danger text-decoration-none px-0" id="team-chat-delete-group-btn">${tr("chat.deleteGroup")}</button>
               <div class="team-chat-group-modal-actions">
-                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">${t("common.cancel")}</button>
-                <button type="submit" class="btn btn-primary" id="team-chat-manage-group-submit">${t("common.save")}</button>
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">${tr("common.cancel")}</button>
+                <button type="submit" class="btn btn-primary" id="team-chat-manage-group-submit">${tr("common.save")}</button>
               </div>
             </div>
           </form>
         </div>
       </div>
     </div>
-    <div id="team-chat-media-lightbox" class="team-chat-media-lightbox d-none" role="dialog" aria-modal="true" aria-label="${t("chat.fullScreenMedia")}">
-      <button type="button" class="team-chat-media-lightbox-backdrop js-chat-media-lightbox-close" aria-label="${t("common.close")}"></button>
-      <button type="button" class="team-chat-media-lightbox-close js-chat-media-lightbox-close" aria-label="${t("common.close")}">
+    <div id="team-chat-media-lightbox" class="team-chat-media-lightbox d-none" role="dialog" aria-modal="true" aria-label="${tr("chat.fullScreenMedia")}">
+      <button type="button" class="team-chat-media-lightbox-backdrop js-chat-media-lightbox-close" aria-label="${tr("common.close")}"></button>
+      <button type="button" class="team-chat-media-lightbox-close js-chat-media-lightbox-close" aria-label="${tr("common.close")}">
         <i class="bi bi-x-lg" aria-hidden="true"></i>
       </button>
       <div class="team-chat-media-lightbox-inner" id="team-chat-media-lightbox-inner"></div>
@@ -1266,10 +1266,10 @@ function allPeopleForPicks() {
     const me = d().getUser();
     allPeople.unshift({
       id: meId,
-      displayName: me?.displayName || t("chat.you"),
+      displayName: me?.displayName || tr("chat.you"),
       email: me?.email || "",
       role: me?.role || "owner",
-      roleLabel: me?.role === "owner" ? t("common.admin") : t("common.employee"),
+      roleLabel: me?.role === "owner" ? tr("common.admin") : tr("common.employee"),
     });
   }
   return allPeople;
@@ -1283,7 +1283,7 @@ function updateMemberPickCount(countId, listId) {
   const el = document.getElementById(countId);
   if (!el) return;
   const n = countCheckedInList(listId);
-  el.textContent = t("chat.membersSelected", { count: n });
+  el.textContent = tr("chat.membersSelected", { count: n });
 }
 
 function neutralAvatarHtml(name) {
@@ -1295,12 +1295,12 @@ function memberPickRowHtml(c, selected, inputPrefix, meId) {
   const checked = selected.has(c.id);
   const isMe = c.id === meId;
   const onCls = checked ? " team-chat-member-pick-row--on" : "";
-  const roleLabel = c.roleLabel || (c.role === "owner" ? t("common.admin") : t("common.employee"));
+  const roleLabel = c.roleLabel || (c.role === "owner" ? tr("common.admin") : tr("common.employee"));
   return `<label class="team-chat-member-pick-row${onCls}">
     <input type="checkbox" class="form-check-input team-chat-member-pick-input flex-shrink-0" value="${c.id}" id="${inputPrefix}-pick-${c.id}"${checked ? " checked" : ""}${isMe ? " disabled" : ""} />
     ${neutralAvatarHtml(c.displayName)}
     <span class="team-chat-member-pick-info min-w-0">
-      <span class="team-chat-member-pick-name text-truncate">${d().escapeHtml(c.displayName)}${isMe ? ` <span class="team-chat-member-you-tag">${t("chat.youTag")}</span>` : ""}</span>
+      <span class="team-chat-member-pick-name text-truncate">${d().escapeHtml(c.displayName)}${isMe ? ` <span class="team-chat-member-you-tag">${tr("chat.youTag")}</span>` : ""}</span>
       <span class="team-chat-member-pick-role">${d().escapeHtml(roleLabel)}</span>
     </span>
   </label>`;
@@ -1331,8 +1331,8 @@ function renderMemberPickList(hostId, selectedIds, { inputPrefix = "manage", sea
   };
   host.innerHTML =
     admins.length || employees.length
-      ? section(t("chat.admins"), admins) + section(t("chat.employees"), employees)
-      : `<p class="small text-muted text-center py-4 mb-0">${t("chat.noMembersMatchSearch")}</p>`;
+      ? section(tr("chat.admins"), admins) + section(tr("chat.employees"), employees)
+      : `<p class="small text-muted text-center py-4 mb-0">${tr("chat.noMembersMatchSearch")}</p>`;
   if (countId) updateMemberPickCount(countId, hostId);
 }
 
@@ -1369,7 +1369,7 @@ async function openManageGroupModal() {
     const modalEl = document.getElementById("teamChatManageGroupModal");
     if (modalEl) d().bootstrap.Modal.getOrCreateInstance(modalEl).show();
   } catch (err) {
-    d().showToast(err.message || t("chat.couldNotLoadGroup"), "danger");
+    d().showToast(err.message || tr("chat.couldNotLoadGroup"), "danger");
   }
 }
 
@@ -1388,7 +1388,7 @@ async function saveManageGroup(e) {
   const meId = d().getUser()?.id;
   if (meId && !memberIds.includes(meId)) memberIds.push(meId);
   if (!memberIds.length) {
-    d().showToast(t("chat.selectAtLeastOneMember"), "warning");
+    d().showToast(tr("chat.selectAtLeastOneMember"), "warning");
     return;
   }
 
@@ -1400,7 +1400,7 @@ async function saveManageGroup(e) {
     });
     const modalEl = document.getElementById("teamChatManageGroupModal");
     if (modalEl) d().bootstrap.Modal.getOrCreateInstance(modalEl).hide();
-    d().showToast(t("chat.groupUpdated"), "success");
+    d().showToast(tr("chat.groupUpdated"), "success");
     await loadThreads();
     const cached = threads.find((t) => t.type === "group" && t.id === activeChatId);
     if (cached) updateThreadHeaderFromThread(cached);
@@ -1414,8 +1414,8 @@ async function saveManageGroup(e) {
 async function deleteActiveGroup() {
   if (!isAdminUser() || !activeChatId || activeThreadType !== "group") return;
   const cached = threads.find((t) => t.type === "group" && t.id === activeChatId);
-  const groupName = cached?.group?.name || t("chat.thisGroup");
-  if (!window.confirm(t("chat.deleteGroupConfirm", { name: groupName }))) return;
+  const groupName = cached?.group?.name || tr("chat.thisGroup");
+  if (!window.confirm(tr("chat.deleteGroupConfirm", { name: groupName }))) return;
 
   const btn = document.getElementById("team-chat-delete-group-btn");
   if (btn) btn.disabled = true;
@@ -1429,7 +1429,7 @@ async function deleteActiveGroup() {
     activeMessages = [];
     setThreadVisible(false);
     syncGroupManageUi();
-    d().showToast(t("chat.groupDeleted"), "success");
+    d().showToast(tr("chat.groupDeleted"), "success");
     await loadThreads();
   } catch (err) {
     d().showToast(err.message, "danger");
@@ -1471,12 +1471,12 @@ function renderThreadList() {
   if (!list.length) {
     const emptyByType =
       threadTypeFilter === "group"
-        ? t("chat.noGroupsFound")
+        ? tr("chat.noGroupsFound")
         : threadTypeFilter === "dm"
-          ? t("chat.noDmChatsFound")
-          : t("chat.noChatsMatchSearch");
+          ? tr("chat.noDmChatsFound")
+          : tr("chat.noChatsMatchSearch");
     host.innerHTML = `<div class="team-chat-list-empty">
-      <p class="small text-muted mb-0">${contactFilter.trim() ? emptyByType : t("chat.noConversationsYet")}</p>
+      <p class="small text-muted mb-0">${contactFilter.trim() ? emptyByType : tr("chat.noConversationsYet")}</p>
     </div>`;
     return;
   }
@@ -1493,7 +1493,7 @@ function renderThreadList() {
       const avatar = isGroup
         ? groupAvatarHtml(thread.group.name)
         : contactAvatarHtml(thread.peer.displayName, thread.peer.role);
-      const prefix = thread.lastMessage?.isMine ? t("chat.youPrefix") : thread.lastMessage?.senderName && isGroup ? `${thread.lastMessage.senderName}: ` : "";
+      const prefix = thread.lastMessage?.isMine ? tr("chat.youPrefix") : thread.lastMessage?.senderName && isGroup ? `${thread.lastMessage.senderName}: ` : "";
       const typeCls = isGroup ? " team-chat-thread-item--group" : " team-chat-thread-item--dm";
       return `<button type="button" class="team-chat-thread-item${typeCls}${active}${unreadRow}" data-thread-type="${thread.type}" data-thread-id="${thread.id}">
         ${avatar}
@@ -1526,7 +1526,7 @@ function renderContactList() {
   if (!host) return;
   const list = filteredContacts();
   if (!list.length) {
-    host.innerHTML = `<div class="team-chat-list-empty"><p class="small text-muted mb-0">${t("chat.noPeopleFound")}</p></div>`;
+    host.innerHTML = `<div class="team-chat-list-empty"><p class="small text-muted mb-0">${tr("chat.noPeopleFound")}</p></div>`;
     return;
   }
   const admins = list.filter((c) => c.role === "owner");
@@ -1554,7 +1554,7 @@ function renderContactList() {
     </div>`;
   };
 
-  host.innerHTML = section(t("chat.admins"), admins) + section(t("chat.employees"), employees);
+  host.innerHTML = section(tr("chat.admins"), admins) + section(tr("chat.employees"), employees);
   host.querySelectorAll("[data-peer-id]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const peerId = btn.getAttribute("data-peer-id");
@@ -1580,8 +1580,8 @@ function renderMessages(options = {}) {
   if (!activeMessages.length) {
     const emptyDate = options.emptyDateLabel ?? chatJumpDate?.label;
     const emptyMsg = emptyDate
-      ? t("chat.noMessagesOnDate", { date: emptyDate })
-      : t("chat.sayHello");
+      ? tr("chat.noMessagesOnDate", { date: emptyDate })
+      : tr("chat.sayHello");
     host.innerHTML = `<div class="team-chat-messages-empty">
       <div class="team-chat-empty-icon team-chat-empty-icon--sm" aria-hidden="true"><i class="bi bi-emoji-smile"></i></div>
       <p class="small text-muted mb-0">${d().escapeHtml(emptyMsg)}</p>
@@ -1604,7 +1604,7 @@ function renderMessages(options = {}) {
     const typeCls = activeThreadType === "group" ? " team-chat-bubble-row--group" : " team-chat-bubble-row--dm";
     const senderLine =
       activeThreadIsGroup && !m.isMine
-        ? `<div class="team-chat-bubble-sender">${d().escapeHtml(m.senderName || t("chat.member"))}</div>`
+        ? `<div class="team-chat-bubble-sender">${d().escapeHtml(m.senderName || tr("chat.member"))}</div>`
         : "";
     rows.push(`<div class="team-chat-bubble-row${typeCls}${mine}" data-message-id="${d().escapeHtml(m.id)}">
         <div class="team-chat-bubble-wrap">
@@ -1646,16 +1646,16 @@ function updateThreadHeaderFromThread(thread) {
   const avatarEl = document.getElementById("team-chat-peer-avatar");
   if (!thread) return;
   if (thread.type === "group") {
-    if (nameEl) nameEl.textContent = thread.group?.name || t("chat.group");
+    if (nameEl) nameEl.textContent = thread.group?.name || tr("chat.group");
     if (roleEl) {
-      roleEl.innerHTML = `<span class="team-chat-role-pill team-chat-role-pill--group">${t("chat.memberCount", { count: thread.group?.memberCount ?? 0 })}</span>`;
+      roleEl.innerHTML = `<span class="team-chat-role-pill team-chat-role-pill--group">${tr("chat.memberCount", { count: thread.group?.memberCount ?? 0 })}</span>`;
     }
-    if (avatarEl) avatarEl.innerHTML = groupAvatarHtml(thread.group?.name || t("chat.group"), true);
+    if (avatarEl) avatarEl.innerHTML = groupAvatarHtml(thread.group?.name || tr("chat.group"), true);
     syncGroupManageUi();
     return;
   }
   const peer = thread.peer;
-  if (nameEl) nameEl.textContent = peer?.displayName || t("chat.chat");
+  if (nameEl) nameEl.textContent = peer?.displayName || tr("chat.chat");
   if (roleEl) roleEl.innerHTML = peer ? rolePillHtml(peer.roleLabel || peer.role) : "";
   if (avatarEl) avatarEl.innerHTML = peer ? contactAvatarHtml(peer.displayName, peer.role, true) : "";
   syncGroupManageUi();
@@ -1681,16 +1681,16 @@ function isChatPanelOpen() {
 
 function notifyIncomingMessage(thread) {
   const isGroup = thread.type === "group";
-  const name = isGroup ? thread.group?.name : thread.peer?.displayName || t("chat.someone");
+  const name = isGroup ? thread.group?.name : thread.peer?.displayName || tr("chat.someone");
   const preview = previewText(thread.lastMessage?.body, thread.lastMessage?.hasAttachment, thread.lastMessage?.deleted);
   const label = isGroup && thread.lastMessage?.senderName
-    ? t("chat.senderInGroup", { sender: thread.lastMessage.senderName, group: name })
+    ? tr("chat.senderInGroup", { sender: thread.lastMessage.senderName, group: name })
     : name;
-  d().showToast(t("chat.newMessageFrom", { label, preview }), "primary");
+  d().showToast(tr("chat.newMessageFrom", { label, preview }), "primary");
   if (typeof Notification !== "undefined" && Notification.permission === "granted" && document.hidden) {
     try {
       const openId = isGroup ? `g:${thread.id}` : thread.id;
-      const n = new Notification(isGroup ? `${name}` : t("chat.messageFrom", { name }), {
+      const n = new Notification(isGroup ? `${name}` : tr("chat.messageFrom", { name }), {
         body: preview,
         tag: `taskmgr-chat-${thread.id}`,
       });
@@ -1748,7 +1748,7 @@ async function openThread(type, id) {
   activeMessages = [];
   const host = document.getElementById("team-chat-messages");
   if (host) {
-    host.innerHTML = `<div class="team-chat-messages-empty"><div class="spinner-border spinner-border-sm text-primary" role="status"><span class="visually-hidden">${t("common.loading")}</span></div></div>`;
+    host.innerHTML = `<div class="team-chat-messages-empty"><div class="spinner-border spinner-border-sm text-primary" role="status"><span class="visually-hidden">${tr("common.loading")}</span></div></div>`;
   }
   renderThreadList();
 
@@ -1783,7 +1783,7 @@ async function openThread(type, id) {
     mobileShowThread = false;
     syncGroupManageUi();
     setThreadVisible(false);
-    d().showToast(err.message || t("chat.couldNotOpenChat"), "danger");
+    d().showToast(err.message || tr("chat.couldNotOpenChat"), "danger");
   }
 }
 
@@ -1815,7 +1815,7 @@ async function createGroup(e) {
       memberIds.push(el.value);
     });
     if (!memberIds.length) {
-      d().showToast(t("chat.selectAtLeastOneMember"), "warning");
+      d().showToast(tr("chat.selectAtLeastOneMember"), "warning");
       return;
     }
   }
@@ -1831,7 +1831,7 @@ async function createGroup(e) {
     if (nameInput) nameInput.value = "";
     if (everyone) everyone.checked = true;
     document.getElementById("team-chat-group-members-wrap")?.classList.add("d-none");
-    d().showToast(t("chat.groupCreated", { name }), "success");
+    d().showToast(tr("chat.groupCreated", { name }), "success");
     await loadThreads();
     if (data.group?.id) {
       setSidebarTab("chats");
@@ -2174,10 +2174,10 @@ export function initTeamChat(chatDeps) {
       if (!d().subscribeToPush) return;
       const result = await d().subscribeToPush();
       if (result?.ok) {
-        d().showToast(t("chat.notificationsEnabled"), "success");
+        d().showToast(tr("chat.notificationsEnabled"), "success");
         syncChatPushButton();
       } else if (result?.reason === "denied") {
-        d().showToast(t("chat.notificationsBlocked"), "warning");
+        d().showToast(tr("chat.notificationsBlocked"), "warning");
       }
     })();
   });
@@ -2192,7 +2192,7 @@ export function initTeamChat(chatDeps) {
 
 export function teamChatSidebarButtonHtml() {
   return `<button type="button" class="btn btn-outline-secondary w-100 mb-2 js-open-team-chat">
-    <i class="bi bi-chat-dots me-1" aria-hidden="true"></i>${t("nav.messages")}
+    <i class="bi bi-chat-dots me-1" aria-hidden="true"></i>${tr("nav.messages")}
     <span class="badge rounded-pill text-bg-danger ms-1 d-none js-chat-unread-badge">0</span>
   </button>`;
 }
@@ -2201,7 +2201,7 @@ export function teamChatSidebarNavItemHtml() {
   return `<button type="button" class="admin-sidebar-nav-item js-open-team-chat">
     <span class="admin-nav-item-left">
       <span class="material-symbols-outlined" aria-hidden="true">chat</span>
-      <span>${t("nav.messages")}</span>
+      <span>${tr("nav.messages")}</span>
     </span>
     <span class="admin-nav-badge d-none js-chat-unread-badge">0</span>
   </button>`;

@@ -31,7 +31,7 @@ import {
   compareTasksByRecurrenceThenCreated,
   sortTasksByRecurrenceThenCreated,
 } from "./taskRecurrenceSort.js";
-import { initI18n, t, setLanguageChangeHandler } from "./i18n/index.js";
+import { initI18n, tr, setLanguageChangeHandler } from "./i18n/index.js";
 import { languageSelectorHtml, wireLanguageSelector } from "./i18n/languageSelector.js";
 
 const app = document.getElementById("app");
@@ -145,16 +145,16 @@ function wireAuthPasswordToggles(root = document) {
         icon.classList.toggle("bi-eye", !show);
         icon.classList.toggle("bi-eye-slash", show);
       }
-      btn.setAttribute("aria-label", show ? t("common.hidePassword") : t("common.showPassword"));
+      btn.setAttribute("aria-label", show ? tr("common.hidePassword") : tr("common.showPassword"));
       btn.setAttribute("aria-pressed", String(show));
     });
   });
 }
 
 function themeIconToggleMarkup() {
-  return `<div class="theme-icon-toggles d-inline-flex gap-1 justify-content-center" role="group" aria-label="${t("common.theme")}">
-      <button type="button" class="btn btn-sm theme-icon-btn btn-outline-secondary js-theme-light" title="${t("common.lightMode")}" aria-label="${t("common.lightMode")}"><i class="bi bi-sun-fill" aria-hidden="true"></i></button>
-      <button type="button" class="btn btn-sm theme-icon-btn btn-outline-secondary js-theme-dark" title="${t("common.darkMode")}" aria-label="${t("common.darkMode")}"><i class="bi bi-moon-stars-fill" aria-hidden="true"></i></button>
+  return `<div class="theme-icon-toggles d-inline-flex gap-1 justify-content-center" role="group" aria-label="${tr("common.theme")}">
+      <button type="button" class="btn btn-sm theme-icon-btn btn-outline-secondary js-theme-light" title="${tr("common.lightMode")}" aria-label="${tr("common.lightMode")}"><i class="bi bi-sun-fill" aria-hidden="true"></i></button>
+      <button type="button" class="btn btn-sm theme-icon-btn btn-outline-secondary js-theme-dark" title="${tr("common.darkMode")}" aria-label="${tr("common.darkMode")}"><i class="bi bi-moon-stars-fill" aria-hidden="true"></i></button>
     </div>`;
 }
 
@@ -192,7 +192,7 @@ async function api(path, options = {}) {
       state.user = null;
       renderAuthForm();
       if (wasLoggedIn) {
-        showToast(t("toast.sessionExpired"), "warning");
+        showToast(tr("toast.sessionExpired"), "warning");
       }
     }
     let msg = data?.error ?? res.statusText;
@@ -240,38 +240,38 @@ const EMP_SUBMISSION_FILE_MAX_BYTES = 5 * 1024 * 1024;
 const EMP_SUBMISSION_MAX_IMAGES = 10;
 const PROGRESS_UPDATE_TEXT_MAX = 2000;
 function empSubmissionRequiredMsg() {
-  return t("validation.submissionRequired");
+  return tr("validation.submissionRequired");
 }
 function getProgressUpdateTypes() {
   return [
     {
       id: "started",
-      label: t("employee.progressType.started"),
-      badge: t("employee.progressType.startedBadge"),
+      label: tr("employee.progressType.started"),
+      badge: tr("employee.progressType.startedBadge"),
       badgeClass: "text-bg-primary",
       icon: "play-circle",
-      defaultMsg: t("employee.progressType.startedDefault"),
+      defaultMsg: tr("employee.progressType.startedDefault"),
     },
     {
       id: "in_progress",
-      label: t("employee.progressType.inProgress"),
-      badge: t("employee.progressType.inProgressBadge"),
+      label: tr("employee.progressType.inProgress"),
+      badge: tr("employee.progressType.inProgressBadge"),
       badgeClass: "text-bg-info",
       icon: "arrow-repeat",
-      defaultMsg: t("employee.progressType.inProgressDefault"),
+      defaultMsg: tr("employee.progressType.inProgressDefault"),
     },
     {
       id: "blocked",
-      label: t("employee.progressType.blocked"),
-      badge: t("employee.progressType.blockedBadge"),
+      label: tr("employee.progressType.blocked"),
+      badge: tr("employee.progressType.blockedBadge"),
       badgeClass: "text-bg-warning",
       icon: "pause-circle",
-      defaultMsg: t("employee.progressType.blockedDefault"),
+      defaultMsg: tr("employee.progressType.blockedDefault"),
     },
     {
       id: "update",
-      label: t("employee.progressType.update"),
-      badge: t("employee.progressType.updateBadge"),
+      label: tr("employee.progressType.update"),
+      badge: tr("employee.progressType.updateBadge"),
       badgeClass: "text-bg-secondary",
       icon: "chat-left-text",
       defaultMsg: "",
@@ -281,16 +281,16 @@ function getProgressUpdateTypes() {
 
 function submissionUploadErrorMessage(res, rawText) {
   if (res.status === 413) {
-    return t("validation.imageTooLarge");
+    return tr("validation.imageTooLarge");
   }
   let data = null;
   try {
     data = rawText ? JSON.parse(rawText) : null;
   } catch {
     if (rawText && /413|entity too large/i.test(rawText)) {
-      return t("validation.uploadTooLarge");
+      return tr("validation.uploadTooLarge");
     }
-    return t("validation.submissionFailed");
+    return tr("validation.submissionFailed");
   }
   const msg = data?.error || "Submission failed";
   if (msg === "Server error") {
@@ -317,10 +317,10 @@ function validateEmpSubmissionFile(file) {
   const isPdf = isEmpSubmissionPdfFile(file);
   const isVideo = isEmpSubmissionVideoFile(file);
   if (!isImage && !isPdf && !isVideo) {
-    return t("validation.fileTypesAllowed");
+    return tr("validation.fileTypesAllowed");
   }
   if (file.size > EMP_SUBMISSION_FILE_MAX_BYTES) {
-    return t("validation.fileMaxSize");
+    return tr("validation.fileMaxSize");
   }
   return null;
 }
@@ -329,11 +329,11 @@ function validateEmpSubmissionFileSet(files) {
   if (!files?.length) return null;
   const pdfs = files.filter(isEmpSubmissionPdfFile);
   if (pdfs.length > 0) {
-    if (files.length > 1) return t("validation.pdfAloneOrMedia");
+    if (files.length > 1) return tr("validation.pdfAloneOrMedia");
     return validateEmpSubmissionFile(pdfs[0]);
   }
   if (files.length > EMP_SUBMISSION_MAX_IMAGES) {
-    return t("toast.maxAttachments", { max: EMP_SUBMISSION_MAX_IMAGES });
+    return tr("toast.maxAttachments", { max: EMP_SUBMISSION_MAX_IMAGES });
   }
   for (const file of files) {
     const err = validateEmpSubmissionFile(file);
@@ -354,16 +354,16 @@ function proofResourceKind(mime, proofUrl) {
 async function fetchProofResource(proofUrl) {
   const res = await fetch(proofUrl, { credentials: "include" });
   if (!res.ok) {
-    if (res.status === 401) throw new Error(t("validation.signInForFiles"));
-    if (res.status === 403) throw new Error(t("validation.noPermissionSubmission"));
-    if (res.status === 404) throw new Error(t("validation.submissionNotFound"));
+    if (res.status === 401) throw new Error(tr("validation.signInForFiles"));
+    if (res.status === 403) throw new Error(tr("validation.noPermissionSubmission"));
+    if (res.status === 404) throw new Error(tr("validation.submissionNotFound"));
     throw new Error(`Could not load submission file (${res.status}).`);
   }
   const blob = await res.blob();
   const mime = (blob.type || "").toLowerCase();
   const kind = proofResourceKind(mime, proofUrl);
   if (!kind) {
-    throw new Error(t("validation.unsupportedSubmissionFile"));
+    throw new Error(tr("validation.unsupportedSubmissionFile"));
   }
   const blobUrl = URL.createObjectURL(blob);
   proofBlobUrls.add(blobUrl);
@@ -427,7 +427,7 @@ function loadTurnstileScript() {
     script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
     script.async = true;
     script.onload = () => resolve();
-    script.onerror = () => reject(new Error(t("errors.couldNotLoadCaptcha")));
+    script.onerror = () => reject(new Error(tr("errors.couldNotLoadCaptcha")));
     document.head.appendChild(script);
   });
   return turnstileScriptPromise;
@@ -456,7 +456,7 @@ async function wireRegisterTurnstile() {
     siteKey = data.siteKey;
   } catch {
     container.innerHTML =
-      `<p class="form-text text-danger mb-0">${t("auth.securityUnavailable")}</p>`;
+      `<p class="form-text text-danger mb-0">${tr("auth.securityUnavailable")}</p>`;
     return;
   }
 
@@ -464,7 +464,7 @@ async function wireRegisterTurnstile() {
     await loadTurnstileScript();
   } catch {
     container.innerHTML =
-      `<p class="form-text text-danger mb-0">${t("auth.captchaLoadFailed")}</p>`;
+      `<p class="form-text text-danger mb-0">${tr("auth.captchaLoadFailed")}</p>`;
     return;
   }
 
@@ -481,11 +481,11 @@ async function wireRegisterTurnstile() {
     },
     "expired-callback"() {
       clearTurnstileToken();
-      showToast(t("toast.captchaExpired"), "warning");
+      showToast(tr("toast.captchaExpired"), "warning");
     },
     "error-callback"() {
       clearTurnstileToken();
-      showToast(t("toast.captchaError"), "warning");
+      showToast(tr("toast.captchaError"), "warning");
     },
   });
   updateSendOtpButton();
@@ -524,7 +524,7 @@ function wireRegisterOtp() {
     registerGate.otpVerified = verified;
     updateRegisterSubmitButton();
     if (statusEl) {
-      statusEl.textContent = verified ? t("auth.emailVerifiedStatus") : "";
+      statusEl.textContent = verified ? tr("auth.emailVerifiedStatus") : "";
       statusEl.classList.toggle("text-success", verified);
       statusEl.classList.toggle("d-none", !verified);
     }
@@ -536,12 +536,12 @@ function wireRegisterOtp() {
     if (!countdownEl) return;
     const left = Math.max(0, Math.ceil((otpExpiresAt - Date.now()) / 1000));
     if (left <= 0) {
-      countdownEl.textContent = t("auth.codeExpired");
+      countdownEl.textContent = tr("auth.codeExpired");
       if (resendBtn) resendBtn.disabled = false;
       clearRegisterOtpTimer();
       return;
     }
-    countdownEl.textContent = t("auth.codeExpiresIn", { time: formatCountdown(left) });
+    countdownEl.textContent = tr("auth.codeExpiresIn", { time: formatCountdown(left) });
     if (resendBtn) resendBtn.disabled = left > 0 && !registerGate.otpVerified;
   };
 
@@ -565,11 +565,11 @@ function wireRegisterOtp() {
     const email = getEmail();
     if (!email || !emailEl.checkValidity()) {
       emailEl.reportValidity();
-      showToast(t("toast.enterValidEmail"), "warning");
+      showToast(tr("toast.enterValidEmail"), "warning");
       return;
     }
     if (!registerGate.turnstileToken) {
-      showToast(t("toast.captchaBeforeOtp"), "warning");
+      showToast(tr("toast.captchaBeforeOtp"), "warning");
       const hint = document.getElementById("reg-turnstile-hint");
       if (hint) hint.classList.remove("d-none");
       return;
@@ -589,7 +589,7 @@ function wireRegisterOtp() {
       }
       if (verifyBtn) verifyBtn.disabled = false;
       startCountdown(data.expiresInSeconds ?? 600);
-      showToast(isResend ? t("toast.newCodeSent") : t("toast.verificationCodeSent"), "success");
+      showToast(isResend ? tr("toast.newCodeSent") : tr("toast.verificationCodeSent"), "success");
       resetTurnstileWidget();
       void wireRegisterTurnstile();
     } catch (err) {
@@ -624,7 +624,7 @@ function wireRegisterOtp() {
           return;
         }
         if (otp.length !== 6) {
-          showToast(t("toast.enterSixDigitCode"), "warning");
+          showToast(tr("toast.enterSixDigitCode"), "warning");
           return;
         }
         verifyBtn.disabled = true;
@@ -635,8 +635,8 @@ function wireRegisterOtp() {
           });
           setVerified(true);
           clearRegisterOtpTimer();
-          if (countdownEl) countdownEl.textContent = t("auth.emailVerifiedShort");
-          showToast(t("toast.emailVerifiedCreate"), "success");
+          if (countdownEl) countdownEl.textContent = tr("auth.emailVerifiedShort");
+          showToast(tr("toast.emailVerifiedCreate"), "success");
         } catch (err) {
           showToast(err.message, "danger");
           verifyBtn.disabled = false;
@@ -666,7 +666,7 @@ function wireRegisterOtp() {
     }
     if (verifyBtn) verifyBtn.disabled = true;
     if (resendBtn) resendBtn.disabled = true;
-    if (countdownEl) countdownEl.textContent = t("auth.captchaThenOtp");
+    if (countdownEl) countdownEl.textContent = tr("auth.captchaThenOtp");
   });
 
   setVerified(false);
@@ -704,7 +704,7 @@ async function wireForgotTurnstile() {
     siteKey = data.siteKey;
   } catch {
     container.innerHTML =
-      `<p class="form-text text-danger mb-0">${t("auth.securityUnavailable")}</p>`;
+      `<p class="form-text text-danger mb-0">${tr("auth.securityUnavailable")}</p>`;
     return;
   }
 
@@ -712,7 +712,7 @@ async function wireForgotTurnstile() {
     await loadTurnstileScript();
   } catch {
     container.innerHTML =
-      `<p class="form-text text-danger mb-0">${t("auth.captchaLoadFailed")}</p>`;
+      `<p class="form-text text-danger mb-0">${tr("auth.captchaLoadFailed")}</p>`;
     return;
   }
 
@@ -732,13 +732,13 @@ async function wireForgotTurnstile() {
       forgotGate.turnstileToken = null;
       const sendBtn = document.getElementById("fp-btn-send-otp");
       if (sendBtn) sendBtn.disabled = true;
-      showToast(t("toast.captchaExpired"), "warning");
+      showToast(tr("toast.captchaExpired"), "warning");
     },
     "error-callback"() {
       forgotGate.turnstileToken = null;
       const sendBtn = document.getElementById("fp-btn-send-otp");
       if (sendBtn) sendBtn.disabled = true;
-      showToast(t("toast.captchaError"), "warning");
+      showToast(tr("toast.captchaError"), "warning");
     },
   });
 }
@@ -749,65 +749,65 @@ function forgotPasswordModalHtml() {
       <div class="modal-dialog modal-dialog-centered admin-emp-modal-dialog">
         <div class="modal-content admin-emp-modal-card">
           <div class="modal-header admin-emp-modal-header border-0 pb-0">
-            <h2 class="admin-emp-modal-title" id="forgotPasswordModalTitle">${t("auth.resetPassword")}</h2>
-            <button type="button" class="admin-emp-modal-close" data-bs-dismiss="modal" aria-label="${t("common.close")}"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+            <h2 class="admin-emp-modal-title" id="forgotPasswordModalTitle">${tr("auth.resetPassword")}</h2>
+            <button type="button" class="admin-emp-modal-close" data-bs-dismiss="modal" aria-label="${tr("common.close")}"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
           </div>
           <div class="modal-body admin-emp-modal-body pt-2">
-            <p class="text-muted small mb-3">${t("auth.resetPasswordIntro")}</p>
+            <p class="text-muted small mb-3">${tr("auth.resetPasswordIntro")}</p>
             <div id="fp-step-verify">
               <div class="mb-3">
-                <label class="auth-field-label" for="fp-email">${t("common.email")}</label>
+                <label class="auth-field-label" for="fp-email">${tr("common.email")}</label>
                 <div class="input-group auth-input-group">
                   <span class="input-group-text"><i class="bi bi-envelope" aria-hidden="true"></i></span>
-                  <input class="form-control" id="fp-email" type="email" autocomplete="username" placeholder="${t("auth.emailPlaceholder")}" required />
+                  <input class="form-control" id="fp-email" type="email" autocomplete="username" placeholder="${tr("auth.emailPlaceholder")}" required />
                 </div>
               </div>
               <div class="auth-reg-verify-card mb-3">
                 <div class="auth-reg-captcha-row">
                   <div class="reg-turnstile-wrap">
-                    <span class="auth-reg-mini-label">${t("auth.securityCheck")}</span>
+                    <span class="auth-reg-mini-label">${tr("auth.securityCheck")}</span>
                     <div class="reg-turnstile-viewport">
                       <div id="fp-turnstile" class="reg-turnstile"></div>
                     </div>
-                    <p class="form-text text-danger d-none mb-0" id="fp-turnstile-hint" role="alert">${t("auth.captchaBeforeCode")}</p>
+                    <p class="form-text text-danger d-none mb-0" id="fp-turnstile-hint" role="alert">${tr("auth.captchaBeforeCode")}</p>
                   </div>
-                  <button type="button" class="btn btn-outline-primary auth-reg-action-btn auth-admin-outline" id="fp-btn-send-otp" disabled>${t("auth.sendCode")}</button>
+                  <button type="button" class="btn btn-outline-primary auth-reg-action-btn auth-admin-outline" id="fp-btn-send-otp" disabled>${tr("auth.sendCode")}</button>
                 </div>
                 <div class="auth-reg-divider" aria-hidden="true"></div>
                 <div class="auth-reg-otp-row">
                   <div class="auth-reg-otp-field">
-                    <label class="auth-reg-mini-label" for="fp-otp">${t("auth.resetCode")}</label>
+                    <label class="auth-reg-mini-label" for="fp-otp">${tr("auth.resetCode")}</label>
                     <div class="input-group input-group-sm auth-input-group">
                       <span class="input-group-text"><i class="bi bi-shield-check" aria-hidden="true"></i></span>
                       <input class="form-control font-monospace text-center" id="fp-otp" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="000000" disabled />
                     </div>
                   </div>
-                  <button type="button" class="btn btn-primary auth-reg-action-btn auth-admin-submit" id="fp-btn-verify-otp" disabled>${t("common.verify")}</button>
+                  <button type="button" class="btn btn-primary auth-reg-action-btn auth-admin-submit" id="fp-btn-verify-otp" disabled>${tr("common.verify")}</button>
                 </div>
                 <div class="auth-reg-otp-meta">
-                  <small class="text-muted" id="fp-otp-countdown">${t("auth.captchaThenCode")}</small>
-                  <button type="button" class="btn btn-sm btn-outline-secondary auth-reg-resend" id="fp-btn-resend-otp" disabled>${t("auth.resendCode")}</button>
+                  <small class="text-muted" id="fp-otp-countdown">${tr("auth.captchaThenCode")}</small>
+                  <button type="button" class="btn btn-sm btn-outline-secondary auth-reg-resend" id="fp-btn-resend-otp" disabled>${tr("auth.resendCode")}</button>
                 </div>
                 <div class="form-text text-success d-none mb-0" id="fp-otp-status" role="status"></div>
               </div>
             </div>
             <div id="fp-step-password" class="d-none">
               <div class="mb-3">
-                <label class="auth-field-label" for="fp-new-password">${t("auth.newPassword")}</label>
+                <label class="auth-field-label" for="fp-new-password">${tr("auth.newPassword")}</label>
                 <div class="input-group auth-input-group auth-password-group">
                   <span class="input-group-text"><i class="bi bi-shield-lock" aria-hidden="true"></i></span>
-                  <input class="form-control" id="fp-new-password" type="password" minlength="6" autocomplete="new-password" placeholder="${t("auth.minPassword")}" required />
-                  <button type="button" class="input-group-text auth-password-toggle" data-password-toggle aria-label="${t("common.showPassword")}" aria-pressed="false" title="${t("common.showPassword")}">
+                  <input class="form-control" id="fp-new-password" type="password" minlength="6" autocomplete="new-password" placeholder="${tr("auth.minPassword")}" required />
+                  <button type="button" class="input-group-text auth-password-toggle" data-password-toggle aria-label="${tr("common.showPassword")}" aria-pressed="false" title="${tr("common.showPassword")}">
                     <i class="bi bi-eye" aria-hidden="true"></i>
                   </button>
                 </div>
               </div>
               <div class="mb-0">
-                <label class="auth-field-label" for="fp-confirm-password">${t("auth.confirmPassword")}</label>
+                <label class="auth-field-label" for="fp-confirm-password">${tr("auth.confirmPassword")}</label>
                 <div class="input-group auth-input-group auth-password-group">
                   <span class="input-group-text"><i class="bi bi-shield-lock" aria-hidden="true"></i></span>
-                  <input class="form-control" id="fp-confirm-password" type="password" minlength="6" autocomplete="new-password" placeholder="${t("auth.repeatPassword")}" required />
-                  <button type="button" class="input-group-text auth-password-toggle" data-password-toggle aria-label="${t("common.showPassword")}" aria-pressed="false" title="${t("common.showPassword")}">
+                  <input class="form-control" id="fp-confirm-password" type="password" minlength="6" autocomplete="new-password" placeholder="${tr("auth.repeatPassword")}" required />
+                  <button type="button" class="input-group-text auth-password-toggle" data-password-toggle aria-label="${tr("common.showPassword")}" aria-pressed="false" title="${tr("common.showPassword")}">
                     <i class="bi bi-eye" aria-hidden="true"></i>
                   </button>
                 </div>
@@ -816,8 +816,8 @@ function forgotPasswordModalHtml() {
             </div>
           </div>
           <div class="modal-footer admin-emp-modal-footer border-0">
-            <button type="button" class="btn admin-task-modal-btn-secondary" data-bs-dismiss="modal">${t("common.cancel")}</button>
-            <button type="button" class="btn admin-task-modal-btn-save d-none" id="fp-btn-reset-password">${t("auth.updatePassword")}</button>
+            <button type="button" class="btn admin-task-modal-btn-secondary" data-bs-dismiss="modal">${tr("common.cancel")}</button>
+            <button type="button" class="btn admin-task-modal-btn-save d-none" id="fp-btn-reset-password">${tr("auth.updatePassword")}</button>
           </div>
         </div>
       </div>
@@ -848,7 +848,7 @@ function resetForgotPasswordModal() {
     errEl.textContent = "";
     errEl.classList.add("d-none");
   }
-  if (countdownEl) countdownEl.textContent = t("auth.captchaThenCode");
+  if (countdownEl) countdownEl.textContent = tr("auth.captchaThenCode");
   document.getElementById("fp-step-verify")?.classList.remove("d-none");
   document.getElementById("fp-step-password")?.classList.add("d-none");
   document.getElementById("fp-btn-reset-password")?.classList.add("d-none");
@@ -885,7 +885,7 @@ function wireForgotPasswordModal() {
     document.getElementById("fp-step-password")?.classList.remove("d-none");
     resetBtn.classList.remove("d-none");
     if (statusEl) {
-      statusEl.textContent = t("toast.codeVerifiedNewPassword");
+      statusEl.textContent = tr("toast.codeVerifiedNewPassword");
       statusEl.classList.remove("d-none");
     }
     emailEl.disabled = true;
@@ -896,12 +896,12 @@ function wireForgotPasswordModal() {
     if (!countdownEl) return;
     const left = Math.max(0, Math.ceil((otpExpiresAt - Date.now()) / 1000));
     if (left <= 0) {
-      countdownEl.textContent = t("auth.codeExpired");
+      countdownEl.textContent = tr("auth.codeExpired");
       if (resendBtn) resendBtn.disabled = false;
       clearForgotOtpTimer();
       return;
     }
-    countdownEl.textContent = t("auth.codeExpiresIn", { time: formatCountdown(left) });
+    countdownEl.textContent = tr("auth.codeExpiresIn", { time: formatCountdown(left) });
     if (resendBtn) resendBtn.disabled = left > 0 && !forgotGate.otpVerified;
   };
 
@@ -922,11 +922,11 @@ function wireForgotPasswordModal() {
     const email = getEmail();
     if (!email || !emailEl.checkValidity()) {
       emailEl.reportValidity();
-      showToast(t("toast.enterValidEmail"), "warning");
+      showToast(tr("toast.enterValidEmail"), "warning");
       return;
     }
     if (!forgotGate.turnstileToken) {
-      showToast(t("toast.captchaBeforeCode"), "warning");
+      showToast(tr("toast.captchaBeforeCode"), "warning");
       document.getElementById("fp-turnstile-hint")?.classList.remove("d-none");
       return;
     }
@@ -947,7 +947,7 @@ function wireForgotPasswordModal() {
       }
       verifyBtn.disabled = false;
       startCountdown(data.expiresInSeconds ?? 600);
-      showToast(isResend ? t("toast.newCodeSent") : data.message || t("toast.resetCodeSent"), "success");
+      showToast(isResend ? tr("toast.newCodeSent") : data.message || tr("toast.resetCodeSent"), "success");
       resetForgotTurnstileWidget();
       void wireForgotTurnstile();
     } catch (err) {
@@ -971,7 +971,7 @@ function wireForgotPasswordModal() {
         return;
       }
       if (otp.length !== 6) {
-        showToast(t("toast.enterSixDigitCode"), "warning");
+        showToast(tr("toast.enterSixDigitCode"), "warning");
         return;
       }
       verifyBtn.disabled = true;
@@ -981,9 +981,9 @@ function wireForgotPasswordModal() {
           body: JSON.stringify({ email, otp }),
         });
         clearForgotOtpTimer();
-        if (countdownEl) countdownEl.textContent = t("auth.emailVerifiedShort");
+        if (countdownEl) countdownEl.textContent = tr("auth.emailVerifiedShort");
         showPasswordStep();
-        showToast(t("toast.codeVerifiedNewPassword"), "success");
+        showToast(tr("toast.codeVerifiedNewPassword"), "success");
       } catch (err) {
         showToast(err.message, "danger");
         verifyBtn.disabled = false;
@@ -998,7 +998,7 @@ function wireForgotPasswordModal() {
   resetBtn.addEventListener("click", () => {
     void (async () => {
       if (!forgotGate.otpVerified) {
-        showToast(t("toast.verifyEmailCodeFirst"), "warning");
+        showToast(tr("toast.verifyEmailCodeFirst"), "warning");
         return;
       }
       const email = getEmail();
@@ -1006,14 +1006,14 @@ function wireForgotPasswordModal() {
       const confirm = String(confirmPw?.value || "");
       if (password.length < 6) {
         if (errEl) {
-          errEl.textContent = t("validation.passwordMin");
+          errEl.textContent = tr("validation.passwordMin");
           errEl.classList.remove("d-none");
         }
         return;
       }
       if (password !== confirm) {
         if (errEl) {
-          errEl.textContent = t("validation.passwordsMismatch");
+          errEl.textContent = tr("validation.passwordsMismatch");
           errEl.classList.remove("d-none");
         }
         return;
@@ -1028,10 +1028,10 @@ function wireForgotPasswordModal() {
         bootstrap.Modal.getInstance(modalEl)?.hide();
         const loginEmail = document.getElementById("login-email");
         if (loginEmail) loginEmail.value = email;
-        showToast(t("toast.passwordUpdated"), "success");
+        showToast(tr("toast.passwordUpdated"), "success");
       } catch (err) {
         if (errEl) {
-          errEl.textContent = err.message || t("validation.resetFailed");
+          errEl.textContent = err.message || tr("validation.resetFailed");
           errEl.classList.remove("d-none");
         } else {
           showToast(err.message, "danger");
@@ -1108,20 +1108,20 @@ function renderAuthForm() {
           <div class="card auth-card">
             <div class="auth-card-head sea-blue-gradient">
               <div class="auth-brand-row">
-                <img class="auth-brand-logo" src="/icons/kalpanik-logo.png" alt="${t("common.kalpanik")}" width="112" height="112" />
+                <img class="auth-brand-logo" src="/icons/kalpanik-logo.png" alt="${tr("common.kalpanik")}" width="112" height="112" />
                 <div>
-                  <div class="auth-brand-title">${t("app.title")}</div>
-                  <p class="auth-brand-sub">${t("app.brandSubtitle")}</p>
+                  <div class="auth-brand-title">${tr("app.title")}</div>
+                  <p class="auth-brand-sub">${tr("app.brandSubtitle")}</p>
                 </div>
               </div>
             </div>
             <div class="auth-card-body">
               <ul class="nav nav-pills auth-tabs" role="tablist">
                 <li class="nav-item" role="presentation">
-                  <button class="nav-link active w-100" id="tab-login-btn" data-bs-toggle="pill" data-bs-target="#tab-login" type="button" role="tab" aria-controls="tab-login" aria-selected="true">${t("auth.signIn")}</button>
+                  <button class="nav-link active w-100" id="tab-login-btn" data-bs-toggle="pill" data-bs-target="#tab-login" type="button" role="tab" aria-controls="tab-login" aria-selected="true">${tr("auth.signIn")}</button>
                 </li>
                 <li class="nav-item" role="presentation">
-                  <button class="nav-link w-100" id="tab-register-btn" data-bs-toggle="pill" data-bs-target="#tab-register" type="button" role="tab" aria-controls="tab-register" aria-selected="false">${t("auth.register")}</button>
+                  <button class="nav-link w-100" id="tab-register-btn" data-bs-toggle="pill" data-bs-target="#tab-register" type="button" role="tab" aria-controls="tab-register" aria-selected="false">${tr("auth.register")}</button>
                 </li>
               </ul>
               <div class="tab-content">
@@ -1129,49 +1129,49 @@ function renderAuthForm() {
                   <div class="auth-form-login">
                   <form id="form-login" novalidate>
                     <div class="mb-3">
-                      <label class="auth-field-label" for="login-email">${t("common.email")}</label>
+                      <label class="auth-field-label" for="login-email">${tr("common.email")}</label>
                     <div class="input-group auth-input-group">
                       <span class="input-group-text"><i class="bi bi-envelope" aria-hidden="true"></i></span>
-                      <input class="form-control" id="login-email" name="email" type="email" autocomplete="username" placeholder="${t("auth.emailPlaceholder")}" required />
+                      <input class="form-control" id="login-email" name="email" type="email" autocomplete="username" placeholder="${tr("auth.emailPlaceholder")}" required />
                     </div>
                     </div>
                     <div class="mb-3">
-                      <label class="auth-field-label" for="login-password">${t("common.password")}</label>
+                      <label class="auth-field-label" for="login-password">${tr("common.password")}</label>
                     <div class="input-group auth-input-group auth-password-group">
                       <span class="input-group-text"><i class="bi bi-key" aria-hidden="true"></i></span>
                       <input class="form-control" id="login-password" name="password" type="password" autocomplete="current-password" placeholder="••••••••" required />
-                      <button type="button" class="input-group-text auth-password-toggle" data-password-toggle aria-label="${t("common.showPassword")}" aria-pressed="false" title="${t("common.showPassword")}">
+                      <button type="button" class="input-group-text auth-password-toggle" data-password-toggle aria-label="${tr("common.showPassword")}" aria-pressed="false" title="${tr("common.showPassword")}">
                         <i class="bi bi-eye" aria-hidden="true"></i>
                       </button>
                     </div>
                     </div>
                     <div class="text-end mb-3">
-                      <button type="button" class="btn btn-link btn-sm p-0 auth-forgot-link" id="btn-forgot-password">${t("auth.forgotPassword")}</button>
+                      <button type="button" class="btn btn-link btn-sm p-0 auth-forgot-link" id="btn-forgot-password">${tr("auth.forgotPassword")}</button>
                     </div>
-                    <button class="btn btn-primary w-100 auth-submit auth-admin-submit" type="submit">${t("auth.signIn")}</button>
+                    <button class="btn btn-primary w-100 auth-submit auth-admin-submit" type="submit">${tr("auth.signIn")}</button>
                   </form>
                   </div>
                 </div>
                 <div class="tab-pane fade" id="tab-register" role="tabpanel" aria-labelledby="tab-register-btn" tabindex="0">
                   <form id="form-register" class="auth-form-register">
-                    <p class="auth-reg-section-title">${t("auth.accountDetails")}</p>
+                    <p class="auth-reg-section-title">${tr("auth.accountDetails")}</p>
                     <div class="auth-reg-grid auth-reg-grid-fields">
                       <div class="mb-2">
-                        <label class="auth-field-label" for="reg-name">${t("auth.displayName")}</label>
+                        <label class="auth-field-label" for="reg-name">${tr("auth.displayName")}</label>
                         <div class="input-group input-group-sm auth-input-group">
                           <span class="input-group-text"><i class="bi bi-person" aria-hidden="true"></i></span>
-                          <input class="form-control" id="reg-name" name="displayName" autocomplete="name" placeholder="${t("auth.yourName")}" required />
+                          <input class="form-control" id="reg-name" name="displayName" autocomplete="name" placeholder="${tr("auth.yourName")}" required />
                         </div>
                       </div>
                       <div class="mb-2">
-                        <label class="auth-field-label" for="reg-email">${t("common.email")}</label>
+                        <label class="auth-field-label" for="reg-email">${tr("common.email")}</label>
                         <div class="input-group input-group-sm auth-input-group">
                           <span class="input-group-text"><i class="bi bi-envelope" aria-hidden="true"></i></span>
-                          <input class="form-control" id="reg-email" name="email" type="email" autocomplete="email" placeholder="${t("auth.emailPlaceholder")}" required />
+                          <input class="form-control" id="reg-email" name="email" type="email" autocomplete="email" placeholder="${tr("auth.emailPlaceholder")}" required />
                         </div>
                       </div>
                       <div class="mb-2">
-                        <label class="auth-field-label" for="reg-phone">${t("common.phone")}</label>
+                        <label class="auth-field-label" for="reg-phone">${tr("common.phone")}</label>
                         <div class="input-group input-group-sm auth-input-group">
                           <span class="input-group-text"><i class="bi bi-telephone" aria-hidden="true"></i></span>
                           <input
@@ -1184,44 +1184,44 @@ function renderAuthForm() {
                             maxlength="10"
                             minlength="10"
                             pattern="[0-9]{10}"
-                            placeholder="${t("auth.phonePlaceholder")}"
-                            title="${t("auth.phoneTitle")}"
+                            placeholder="${tr("auth.phonePlaceholder")}"
+                            title="${tr("auth.phoneTitle")}"
                             required
                           />
                         </div>
                       </div>
                       <div class="mb-2">
-                        <label class="auth-field-label" for="reg-password">${t("common.password")}</label>
+                        <label class="auth-field-label" for="reg-password">${tr("common.password")}</label>
                         <div class="input-group input-group-sm auth-input-group auth-password-group">
                           <span class="input-group-text"><i class="bi bi-shield-lock" aria-hidden="true"></i></span>
-                          <input class="form-control" id="reg-password" name="password" type="password" minlength="6" autocomplete="new-password" placeholder="${t("auth.minPassword")}" required />
-                          <button type="button" class="input-group-text auth-password-toggle" data-password-toggle aria-label="${t("common.showPassword")}" aria-pressed="false" title="${t("common.showPassword")}">
+                          <input class="form-control" id="reg-password" name="password" type="password" minlength="6" autocomplete="new-password" placeholder="${tr("auth.minPassword")}" required />
+                          <button type="button" class="input-group-text auth-password-toggle" data-password-toggle aria-label="${tr("common.showPassword")}" aria-pressed="false" title="${tr("common.showPassword")}">
                             <i class="bi bi-eye" aria-hidden="true"></i>
                           </button>
                         </div>
                       </div>
                     </div>
 
-                    <p class="auth-reg-section-title mt-3">${t("auth.emailVerification")}</p>
+                    <p class="auth-reg-section-title mt-3">${tr("auth.emailVerification")}</p>
                     <div class="auth-reg-verify-card">
                       <div class="auth-reg-captcha-row">
                         <div class="reg-turnstile-wrap" id="reg-turnstile-wrap">
-                          <span class="auth-reg-mini-label">${t("auth.securityCheck")}</span>
+                          <span class="auth-reg-mini-label">${tr("auth.securityCheck")}</span>
                           <div class="reg-turnstile-viewport">
                             <div id="reg-turnstile" class="reg-turnstile"></div>
                           </div>
                           <p class="form-text text-danger d-none mb-0" id="reg-turnstile-hint" role="alert">
-                            ${t("auth.captchaBeforeOtp")}
+                            ${tr("auth.captchaBeforeOtp")}
                           </p>
                         </div>
                         <button class="btn btn-outline-primary auth-reg-action-btn auth-admin-outline" type="button" id="btn-send-otp" disabled>
-                          ${t("auth.sendOtp")}
+                          ${tr("auth.sendOtp")}
                         </button>
                       </div>
                       <div class="auth-reg-divider" aria-hidden="true"></div>
                       <div class="auth-reg-otp-row" id="reg-otp-section">
                         <div class="auth-reg-otp-field">
-                          <label class="auth-reg-mini-label" for="reg-otp">${t("auth.verificationCode")}</label>
+                          <label class="auth-reg-mini-label" for="reg-otp">${tr("auth.verificationCode")}</label>
                           <div class="input-group input-group-sm auth-input-group">
                             <span class="input-group-text"><i class="bi bi-shield-check" aria-hidden="true"></i></span>
                             <input
@@ -1234,7 +1234,7 @@ function renderAuthForm() {
                               maxlength="6"
                               pattern="[0-9]{6}"
                               placeholder="000000"
-                              title="${t("auth.otpTitle")}"
+                              title="${tr("auth.otpTitle")}"
                               disabled
                             />
                           </div>
@@ -1244,9 +1244,9 @@ function renderAuthForm() {
                         </button>
                       </div>
                       <div class="auth-reg-otp-meta">
-                        <small class="text-muted" id="reg-otp-countdown">${t("auth.captchaThenOtp")}</small>
+                        <small class="text-muted" id="reg-otp-countdown">${tr("auth.captchaThenOtp")}</small>
                         <button class="btn btn-sm btn-outline-secondary auth-reg-resend" type="button" id="btn-resend-otp" disabled>
-                          ${t("auth.resendOtp")}
+                          ${tr("auth.resendOtp")}
                         </button>
                       </div>
                       <div class="form-text text-success d-none mb-0" id="reg-otp-status" role="status"></div>
@@ -1254,7 +1254,7 @@ function renderAuthForm() {
 
                     <div class="auth-reg-submit-wrap">
                       <button class="btn btn-primary auth-submit auth-reg-create-btn auth-admin-submit" type="submit" id="btn-register-submit" disabled>
-                        ${t("auth.createAccount")}
+                        ${tr("auth.createAccount")}
                       </button>
                     </div>
                   </form>
@@ -1296,7 +1296,7 @@ function renderAuthForm() {
     const submitBtn = document.getElementById("btn-register-submit");
 
     if (!registerGate.otpVerified) {
-      showToast(t("toast.verifyOtpFirst"), "warning");
+      showToast(tr("toast.verifyOtpFirst"), "warning");
       return;
     }
     if (submitBtn?.disabled) return;
@@ -1425,8 +1425,8 @@ async function focusEmployeeTaskFromNotify(notify) {
   renderEmployeeMain();
 
   const slotLabel = notify.slot?.startsWith("followup")
-    ? t("employee.reminderOverdue")
-    : t("employee.reminderDueSoon");
+    ? tr("employee.reminderOverdue")
+    : tr("employee.reminderDueSoon");
   const title = notify.title || task?.title || "Your task";
 
   requestAnimationFrame(() => {
@@ -1485,14 +1485,14 @@ function startEmployeeReminderSystem() {
 }
 
 function empPushButtonLabel() {
-  return t("employee.enableChromeReminders");
+  return tr("employee.enableChromeReminders");
 }
 
 function empRemindersButtonHtml() {
   if (!isPushSupported()) return "";
   const perm = Notification.permission;
   if (perm === "denied") {
-    return `<p class="small text-warning mb-2 px-1">${t("employee.notificationsBlocked")}</p>`;
+    return `<p class="small text-warning mb-2 px-1">${tr("employee.notificationsBlocked")}</p>`;
   }
   return `<button type="button" class="btn btn-outline-warning w-100 mb-2 js-emp-enable-push">
     <i class="bi bi-bell me-1" aria-hidden="true"></i><span class="js-emp-push-btn-label">${empPushButtonLabel()}</span>
@@ -1517,7 +1517,7 @@ async function prepareEmployeePushOnLogin() {
       if (Notification.permission === "granted") {
         const link = await linkPushSubscriptionToServer(api);
         if (link.ok) {
-          showToast(t("toast.chromeRemindersConnected"), "success");
+          showToast(tr("toast.chromeRemindersConnected"), "success");
           document.dispatchEvent(new CustomEvent("taskmgr-push-subscribed"));
         }
       }
@@ -1535,11 +1535,11 @@ function wireEmpEnablePush(root = document) {
     btn.dataset.wired = "1";
     btn.addEventListener("click", () => {
       if (!isPushSupported()) {
-        showToast(t("toast.browserNoReminders"), "warning");
+        showToast(tr("toast.browserNoReminders"), "warning");
         return;
       }
       if (Notification.permission === "denied") {
-        showToast(t("toast.notificationsBlockedChrome"), "warning");
+        showToast(tr("toast.notificationsBlockedChrome"), "warning");
         return;
       }
 
@@ -1548,15 +1548,15 @@ function wireEmpEnablePush(root = document) {
         refreshEmpPushButtonLabels();
         if (result.ok) {
           sessionStorage.removeItem(EMP_PUSH_PRIMED_KEY);
-          showToast(t("toast.chromeRemindersActive"), "success");
+          showToast(tr("toast.chromeRemindersActive"), "success");
         } else if (result.reason === "not-ready") {
-          showToast(result.message || t("toast.pullRefreshEnable"), "warning");
+          showToast(result.message || tr("toast.pullRefreshEnable"), "warning");
         } else if (result.reason === "no-vapid") {
-          showToast(t("toast.pushNotConfigured"), "danger");
+          showToast(tr("toast.pushNotConfigured"), "danger");
         } else if (result.reason === "denied") {
-          showToast(t("toast.allowNotifications"), "warning");
+          showToast(tr("toast.allowNotifications"), "warning");
         } else {
-          showToast(result.message || t("toast.tapEnableAgain"), "warning");
+          showToast(result.message || tr("toast.tapEnableAgain"), "warning");
         }
       };
 
@@ -1574,7 +1574,7 @@ function wireEmpEnablePush(root = document) {
       }
 
       btn.disabled = true;
-      if (label) label.textContent = t("common.settingUp");
+      if (label) label.textContent = tr("common.settingUp");
 
       const runSetup = async () => {
         try {
@@ -1591,7 +1591,7 @@ function wireEmpEnablePush(root = document) {
             finish({
               ok: false,
               reason: "not-ready",
-              message: t("toast.pushSetupFailed"),
+              message: tr("toast.pushSetupFailed"),
             });
             return;
           }
@@ -1603,7 +1603,7 @@ function wireEmpEnablePush(root = document) {
           }
 
           sessionStorage.setItem(EMP_PUSH_PRIMED_KEY, "1");
-          showToast(t("toast.almostDoneEnable"), "primary");
+          showToast(tr("toast.almostDoneEnable"), "primary");
         } finally {
           btn.disabled = false;
           refreshEmpPushButtonLabels();
@@ -1659,7 +1659,7 @@ function adminMobileNavToggleHtml() {
     data-bs-toggle="offcanvas"
     data-bs-target="#leftNavOffcanvas"
     aria-controls="leftNavOffcanvas"
-    aria-label="${t("common.openNavMenu")}"
+    aria-label="${tr("common.openNavMenu")}"
   >
     ${adminMsIcon("menu")}
   </button>`;
@@ -1672,7 +1672,7 @@ function dismissAdminMobileNav() {
 }
 
 function ownerSidebarLogoHtml() {
-  return `<img class="admin-sidebar-logo" src="/icons/kalpanik-logo.png" alt="${t("common.kalpanik")}" width="128" height="128" />`;
+  return `<img class="admin-sidebar-logo" src="/icons/kalpanik-logo.png" alt="${tr("common.kalpanik")}" width="128" height="128" />`;
 }
 
 function ownerUserAvatarHtml(sizeClass = "") {
@@ -1685,19 +1685,19 @@ const KALPANIK_WEBSITE_URL = "https://kalpanik.in/";
 function adminHeaderVisitUsItemHtml() {
   return `<a class="admin-header-profile-item" role="menuitem" href="${KALPANIK_WEBSITE_URL}" target="_blank" rel="noopener noreferrer">
       ${adminMsIcon("language")}
-      <span>${t("common.visitUs")}</span>
+      <span>${tr("common.visitUs")}</span>
     </a>`;
 }
 
 function ownerAdminHeaderProfileHtml() {
-  const name = state.user?.displayName ? escapeHtml(state.user.displayName) : t("common.admin");
+  const name = state.user?.displayName ? escapeHtml(state.user.displayName) : tr("common.admin");
   const isDark = document.documentElement.getAttribute("data-bs-theme") === "dark";
   return `<div class="admin-header-profile-dropdown">
     <button
       type="button"
       class="admin-header-profile-trigger"
       title="${name}"
-      aria-label="${t("common.accountMenuFor", { name })}"
+      aria-label="${tr("common.accountMenuFor", { name })}"
       aria-haspopup="menu"
       aria-expanded="false"
     >
@@ -1706,17 +1706,17 @@ function ownerAdminHeaderProfileHtml() {
     <div class="admin-header-profile-menu" role="menu">
       <button type="button" class="admin-header-profile-item js-admin-theme-toggle" role="menuitem">
         ${adminMsIcon(isDark ? "light_mode" : "dark_mode")}
-        <span>${t("owner.themeToggle")}</span>
+        <span>${tr("owner.themeToggle")}</span>
       </button>
       <button type="button" class="admin-header-profile-item js-admin-manage-admin" role="menuitem" data-bs-toggle="modal" data-bs-target="#teamAdminModal">
         ${adminMsIcon("admin_panel_settings")}
-        <span>${t("owner.manageAdmin")}</span>
+        <span>${tr("owner.manageAdmin")}</span>
       </button>
       ${adminHeaderVisitUsItemHtml()}
       <div class="admin-header-profile-divider" role="separator"></div>
       <button type="button" class="admin-header-profile-item admin-header-profile-item--danger js-logout" role="menuitem">
         ${adminMsIcon("logout")}
-        <span>${t("common.signOut")}</span>
+        <span>${tr("common.signOut")}</span>
       </button>
     </div>
   </div>`;
@@ -1780,22 +1780,22 @@ function ensureAdminHeaderProfileMenuDocListener() {
 
 function ownerRecurrenceShortLabel(task) {
   const recurrence = task.recurrence ?? "none";
-  if (recurrence === "none") return t("owner.recurrenceNoRepeat");
-  if (recurrence === "daily") return t("owner.recurrenceDaily");
-  if (recurrence === "weekly") return t("owner.recurrenceWeekly");
-  if (recurrence === "monthly") return t("owner.recurrenceMonthly");
-  if (recurrence === "yearly") return t("owner.recurrenceYearly");
+  if (recurrence === "none") return tr("owner.recurrenceNoRepeat");
+  if (recurrence === "daily") return tr("owner.recurrenceDaily");
+  if (recurrence === "weekly") return tr("owner.recurrenceWeekly");
+  if (recurrence === "monthly") return tr("owner.recurrenceMonthly");
+  if (recurrence === "yearly") return tr("owner.recurrenceYearly");
   if (recurrence === "custom" && task.recurrenceRule && typeof task.recurrenceRule === "object") {
     const rule = task.recurrenceRule;
     const every = Math.max(1, Number(rule.every) || 1);
     const unit = rule.unit || "day";
-    if (unit === "month" && every === 3) return t("owner.recurrenceQuarterly");
-    if (unit === "week" && every === 1) return t("owner.recurrenceWeekly");
-    if (unit === "day" && every === 1) return t("owner.recurrenceDaily");
+    if (unit === "month" && every === 3) return tr("owner.recurrenceQuarterly");
+    if (unit === "week" && every === 1) return tr("owner.recurrenceWeekly");
+    if (unit === "day" && every === 1) return tr("owner.recurrenceDaily");
     return formatCustomRecurrenceFrequency(rule);
   }
   const pattern = formatEmpRecurrencePattern(task);
-  return pattern || t("owner.recurrenceCustom");
+  return pattern || tr("owner.recurrenceCustom");
 }
 
 function ownerRecurrenceCellHtml(task) {
@@ -1847,11 +1847,11 @@ function ownerTrialTopBannerHtml() {
   const info = ownerTrialStatusInfo();
   if (info.isExpired) {
     const endStr = info.end.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-    return `<div class="admin-trial-banner admin-trial-banner--expired">${t("owner.trialEnded", { date: endStr })}</div>`;
+    return `<div class="admin-trial-banner admin-trial-banner--expired">${tr("owner.trialEnded", { date: endStr })}</div>`;
   }
   if (!info.hasStarted) return "";
   const endStr = info.end.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-  return `<div class="admin-trial-banner">${t("owner.trialEnds", { days: info.daysRemaining, dayLabel: info.daysRemaining === 1 ? t("owner.day") : t("owner.days"), date: endStr })}</div>`;
+  return `<div class="admin-trial-banner">${tr("owner.trialEnds", { days: info.daysRemaining, dayLabel: info.daysRemaining === 1 ? tr("owner.day") : tr("owner.days"), date: endStr })}</div>`;
 }
 
 function empMobileNavToggleHtml() {
@@ -1861,7 +1861,7 @@ function empMobileNavToggleHtml() {
     data-bs-toggle="offcanvas"
     data-bs-target="#empNavOffcanvas"
     aria-controls="empNavOffcanvas"
-    aria-label="${t("common.openNavMenu")}"
+    aria-label="${tr("common.openNavMenu")}"
   >
     ${adminMsIcon("menu")}
   </button>`;
@@ -1874,7 +1874,7 @@ function dismissEmpMobileNav() {
 }
 
 function employeeAdminHeaderProfileHtml() {
-  const name = state.user?.displayName ? escapeHtml(state.user.displayName) : t("common.employee");
+  const name = state.user?.displayName ? escapeHtml(state.user.displayName) : tr("common.employee");
   const isDark = document.documentElement.getAttribute("data-bs-theme") === "dark";
   const pushItem = isPushSupported()
     ? `<button type="button" class="admin-header-profile-item js-emp-enable-push" role="menuitem">
@@ -1886,12 +1886,12 @@ function employeeAdminHeaderProfileHtml() {
   const playStore = kalpanikPlayStoreUrl();
   const apkItem = `<a class="admin-header-profile-item" role="menuitem" href="${escapeHtml(apkUrl)}" download="kalpanik-reminder.apk">
       ${adminMsIcon("android")}
-      <span>${t("employee.downloadApk")}</span>
+      <span>${tr("employee.downloadApk")}</span>
     </a>`;
   const playItem = playStore
     ? `<a class="admin-header-profile-item" role="menuitem" href="${escapeHtml(playStore)}" target="_blank" rel="noopener noreferrer">
         ${adminMsIcon("shop")}
-        <span>${t("employee.getPlayStore")}</span>
+        <span>${tr("employee.getPlayStore")}</span>
       </a>`
     : "";
   return `<div class="admin-header-profile-dropdown">
@@ -1899,7 +1899,7 @@ function employeeAdminHeaderProfileHtml() {
       type="button"
       class="admin-header-profile-trigger"
       title="${name}"
-      aria-label="${t("common.accountMenuFor", { name })}"
+      aria-label="${tr("common.accountMenuFor", { name })}"
       aria-haspopup="menu"
       aria-expanded="false"
     >
@@ -1908,7 +1908,7 @@ function employeeAdminHeaderProfileHtml() {
     <div class="admin-header-profile-menu" role="menu">
       <button type="button" class="admin-header-profile-item js-admin-theme-toggle" role="menuitem">
         ${adminMsIcon(isDark ? "light_mode" : "dark_mode")}
-        <span>${t("owner.themeToggle")}</span>
+        <span>${tr("owner.themeToggle")}</span>
       </button>
       ${pushItem}
       ${apkItem}
@@ -1917,7 +1917,7 @@ function employeeAdminHeaderProfileHtml() {
       <div class="admin-header-profile-divider" role="separator"></div>
       <button type="button" class="admin-header-profile-item admin-header-profile-item--danger js-logout" role="menuitem">
         ${adminMsIcon("logout")}
-        <span>${t("common.signOut")}</span>
+        <span>${tr("common.signOut")}</span>
       </button>
     </div>
   </div>`;
@@ -2005,7 +2005,7 @@ function ownerEmployeesCellHtml(task) {
   const nAssigned = assignees.length;
   const nDone = assignees.filter((a) => assigneeShowsSubmittedForOwner(a)).length;
   if (nAssigned === 0) {
-    return `<span class="owner-task-unassigned fw-bold text-danger">${t("common.unassigned")}</span>`;
+    return `<span class="owner-task-unassigned fw-bold text-danger">${tr("common.unassigned")}</span>`;
   }
   return `<span class="text-muted me-1"><i class="bi bi-people" aria-hidden="true"></i></span><span class="tabular-nums">${nDone}\u00a0/\u00a0${nAssigned}</span>`;
 }
@@ -2019,14 +2019,14 @@ function taskDescriptionPreviewWords(text, maxWords = 2) {
 
 function empTaskDescriptionBoxHtml(notesRaw, taskId, taskTitle) {
   if (!notesRaw) {
-    return `<div class="owner-task-desc-box emp-task-desc-box emp-task-desc-box--empty small text-muted fst-italic mb-0">${t("common.noDescription")}</div>`;
+    return `<div class="owner-task-desc-box emp-task-desc-box emp-task-desc-box--empty small text-muted fst-italic mb-0">${tr("common.noDescription")}</div>`;
   }
   const wordCount = notesRaw.split(/\s+/).filter(Boolean).length;
   const preview = taskDescriptionPreviewWords(notesRaw, 2);
   if (wordCount <= 2) {
     return `<div class="owner-task-desc-box emp-task-desc-box owner-task-desc-box--static small text-body-secondary mb-0">${escapeHtml(notesRaw)}</div>`;
   }
-  return `<button type="button" class="owner-task-desc-box emp-task-desc-box owner-task-desc-box--clickable js-emp-desc-popup small text-body-secondary mb-0" data-full="${escapeHtml(notesRaw)}" data-task-title="${escapeHtml(taskTitle || "")}" data-task-id="${escapeHtml(taskId)}" aria-label="${t("common.readFullDescription")}">
+  return `<button type="button" class="owner-task-desc-box emp-task-desc-box owner-task-desc-box--clickable js-emp-desc-popup small text-body-secondary mb-0" data-full="${escapeHtml(notesRaw)}" data-task-title="${escapeHtml(taskTitle || "")}" data-task-id="${escapeHtml(taskId)}" aria-label="${tr("common.readFullDescription")}">
     <span class="owner-task-desc-preview emp-task-desc-preview">${escapeHtml(preview)}</span>
     <i class="bi bi-arrows-fullscreen emp-task-desc-popup-icon" aria-hidden="true"></i>
   </button>`;
@@ -2046,7 +2046,7 @@ function bindEmpDescriptionPopups(root) {
 function ownerTaskDescriptionDetailHtml(notes) {
   const full = (notes || "").trim().replace(/\s+/g, " ");
   if (!full) {
-    return `<p class="owner-task-desc-detail small text-muted fst-italic mb-0">${t("common.noDescriptionDot")}</p>`;
+    return `<p class="owner-task-desc-detail small text-muted fst-italic mb-0">${tr("common.noDescriptionDot")}</p>`;
   }
   return `<p class="owner-task-desc-detail small text-body-secondary mb-0 text-break">${escapeHtml(full)}</p>`;
 }
@@ -2056,13 +2056,13 @@ function taskDescriptionModalHtml() {
     <div class="modal fade admin-emp-modal" id="taskDescriptionModal" tabindex="-1" aria-labelledby="taskDescriptionModalTitle" aria-hidden="true">
       <div class="modal-dialog modal-dialog-centered modal-lg admin-emp-modal-dialog admin-desc-modal-dialog">
         <div class="modal-content admin-emp-modal-card">
-          ${adminEmpModalHeaderHtml("taskDescriptionModalTitle", t("common.description"))}
+          ${adminEmpModalHeaderHtml("taskDescriptionModalTitle", tr("common.description"))}
           <div class="admin-emp-modal-body admin-desc-modal-body">
             <p class="admin-emp-desc-modal-text mb-0" id="taskDescriptionModalBody"></p>
           </div>
           <div class="admin-emp-modal-footer">
             <div class="admin-emp-modal-footer-actions">
-              <button type="button" class="admin-task-modal-btn-save" data-bs-dismiss="modal">${t("common.close")}</button>
+              <button type="button" class="admin-task-modal-btn-save" data-bs-dismiss="modal">${tr("common.close")}</button>
             </div>
           </div>
         </div>
@@ -2077,7 +2077,7 @@ function openTaskDescriptionModal(fullText, taskTitle = "") {
   if (!modalEl || !bodyEl) return;
   bodyEl.textContent = fullText;
   if (titleEl) {
-    titleEl.textContent = taskTitle ? t("common.descriptionDash", { title: taskTitle }) : t("common.description");
+    titleEl.textContent = taskTitle ? tr("common.descriptionDash", { title: taskTitle }) : tr("common.description");
   }
   bootstrap.Modal.getOrCreateInstance(modalEl).show();
 }
@@ -2098,21 +2098,21 @@ function leftNavInner() {
     <div class="owner-sidebar admin-sidebar d-flex flex-column h-100">
       <div class="admin-sidebar-profile">
         ${ownerSidebarLogoHtml()}
-        <div class="admin-sidebar-brand-title">${t("app.title")}</div>
+        <div class="admin-sidebar-brand-title">${tr("app.title")}</div>
       </div>
       <button type="button" class="admin-create-task-btn js-owner-create-task">
         ${adminMsIcon("add")}
-        ${t("nav.createTask")}
+        ${tr("nav.createTask")}
       </button>
-      <nav class="admin-sidebar-nav" aria-label="${t("nav.dashboardSections")}">
+      <nav class="admin-sidebar-nav" aria-label="${tr("nav.dashboardSections")}">
         <div class="js-emp-assign-list-host owner-emp-assign-nav"></div>
         ${teamChatSidebarNavItemHtml()}
         ${ownerReportsNavItemHtml(state.ownerView === "reports")}
       </nav>
       <div class="admin-your-lists-section">
         <div class="admin-your-lists-head">
-          <span>${t("nav.yourLists")}</span>
-          <button type="button" class="admin-your-lists-add js-new-list" aria-label="${t("nav.newList")}" title="${t("nav.newList")}">
+          <span>${tr("nav.yourLists")}</span>
+          <button type="button" class="admin-your-lists-add js-new-list" aria-label="${tr("nav.newList")}" title="${tr("nav.newList")}">
             ${adminMsIcon("add")}
           </button>
         </div>
@@ -2161,15 +2161,15 @@ function formatIsoDateShort(isoStr) {
 }
 
 function formatCustomRecurrenceFrequency(rule) {
-  if (!rule) return t("owner.recurrenceCustom");
+  if (!rule) return tr("owner.recurrenceCustom");
   const every = Math.max(1, Number(rule.every) || 1);
   const unit = rule.unit || "day";
-  const unitWord = { day: t("common.day"), week: t("common.week"), month: t("common.month"), year: t("common.year") }[unit] || unit;
-  return every === 1 ? t("owner.everyUnit", { unit: unitWord }) : t("owner.everyNUnits", { count: every, unit: unitWord });
+  const unitWord = { day: tr("common.day"), week: tr("common.week"), month: tr("common.month"), year: tr("common.year") }[unit] || unit;
+  return every === 1 ? tr("owner.everyUnit", { unit: unitWord }) : tr("owner.everyNUnits", { count: every, unit: unitWord });
 }
 
 function formatCustomRecurrenceRuleLabel(rule, dueAtIso) {
-  if (!rule) return t("owner.recurrenceCustom");
+  if (!rule) return tr("owner.recurrenceCustom");
   const startIso = rule.startDate || (dueAtIso ? String(dueAtIso).slice(0, 10) : "");
   let label = formatCustomRecurrenceFrequency(rule);
   if (rule.endType === "on" && rule.endOn) {
@@ -2197,7 +2197,7 @@ function syncModalCustomRepeatUi() {
   const isCustom = repeatEl.value === "custom" && pendingCustomRecurrence;
   if (!isCustom) {
     card.classList.add("d-none");
-    if (dueLabel) dueLabel.textContent = t("common.date");
+    if (dueLabel) dueLabel.textContent = tr("common.date");
     if (dueWrap) {
       dueWrap.classList.remove("col-12");
       dueWrap.classList.add("col-sm-6");
@@ -2217,10 +2217,10 @@ function syncModalCustomRepeatUi() {
   if (freqEl) freqEl.textContent = formatCustomRecurrenceFrequency(rule);
   if (fromEl) fromEl.textContent = formatIsoDateShort(dueIso) || "—";
 
-  let toText = t("common.noEnd");
+  let toText = tr("common.noEnd");
   if (rule.endType === "on" && rule.endOn) {
     toText = formatIsoDateShort(rule.endOn);
-    if (dueLabel) dueLabel.textContent = t("common.from");
+    if (dueLabel) dueLabel.textContent = tr("common.from");
     if (dueWrap) {
       dueWrap.classList.remove("col-12");
       dueWrap.classList.add("col-sm-6");
@@ -2228,14 +2228,14 @@ function syncModalCustomRepeatUi() {
     if (endWrap) endWrap.classList.remove("d-none");
     if (endDisplay) endDisplay.value = String(rule.endOn).slice(0, 10);
   } else {
-    if (dueLabel) dueLabel.textContent = t("common.starts");
+    if (dueLabel) dueLabel.textContent = tr("common.starts");
     if (dueWrap) {
       dueWrap.classList.remove("col-sm-6");
       dueWrap.classList.add("col-12");
     }
     if (endWrap) endWrap.classList.add("d-none");
     if (rule.endType === "after" && rule.endAfterOccurrences) {
-      toText = t("owner.afterNTimes", { count: rule.endAfterOccurrences });
+      toText = tr("owner.afterNTimes", { count: rule.endAfterOccurrences });
     }
   }
 
@@ -2250,7 +2250,7 @@ function syncModalCustomRepeatUi() {
   const time = document.getElementById("modal-due-time")?.value || rule.startTime || "";
   const allDay = document.getElementById("modal-all-day")?.checked;
   const metaParts = [];
-  if (!allDay && time) metaParts.push(t("owner.atTime", { time }));
+  if (!allDay && time) metaParts.push(tr("owner.atTime", { time }));
   if (metaEl) {
     metaEl.textContent = metaParts.join(" · ");
     metaEl.classList.toggle("d-none", metaParts.length === 0);
@@ -2270,15 +2270,15 @@ function refreshModalRepeatLabels() {
   const dueIso = document.getElementById("modal-due")?.value || "";
 
   const labels = {
-    none: t("owner.repeatDoesNot"),
-    daily: t("owner.recurrenceDaily"),
-    weekly: t("owner.repeatWeeklyOn", { weekday }),
-    monthly: t("owner.repeatMonthlyOn", { ordinal: ord }),
-    yearly: t("owner.repeatYearlyOn", { month: monthLong, ordinal: ord }),
+    none: tr("owner.repeatDoesNot"),
+    daily: tr("owner.recurrenceDaily"),
+    weekly: tr("owner.repeatWeeklyOn", { weekday }),
+    monthly: tr("owner.repeatMonthlyOn", { ordinal: ord }),
+    yearly: tr("owner.repeatYearlyOn", { month: monthLong, ordinal: ord }),
     custom:
       current === "custom" && pendingCustomRecurrence
         ? formatCustomRecurrenceFrequency(pendingCustomRecurrence)
-        : t("owner.repeatCustomEllipsis"),
+        : tr("owner.repeatCustomEllipsis"),
   };
 
   for (const opt of sel.options) {
@@ -2296,7 +2296,7 @@ function formatOwnerTaskDeadline(task) {
     const endIso = String(rule.endOn).slice(0, 10);
     const from = formatIsoDateShort(rule.startDate || startIso);
     const to = formatIsoDateShort(endIso);
-    return `<span class="text-body tabular-nums" title="${t("owner.customRepeatTitle", { from, to })}">${escapeHtml(from)} → ${escapeHtml(to)}</span>`;
+    return `<span class="text-body tabular-nums" title="${tr("owner.customRepeatTitle", { from, to })}">${escapeHtml(from)} → ${escapeHtml(to)}</span>`;
   }
   return `<span class="text-body tabular-nums">${escapeHtml(startIso)}</span>`;
 }
@@ -2327,7 +2327,7 @@ function fillModalAssigneeCheckboxes(selectedIds) {
   if (!host) return;
   const set = new Set(selectedIds);
   if (!state.assignees.length) {
-    host.innerHTML = `<p class="small text-muted mb-0 py-2 px-1">${t("owner.noEmployeesYet")}</p>`;
+    host.innerHTML = `<p class="small text-muted mb-0 py-2 px-1">${tr("owner.noEmployeesYet")}</p>`;
     refreshModalAssigneeChipsAndLabel();
     return;
   }
@@ -2372,7 +2372,7 @@ function refreshModalAssigneeChipsAndLabel() {
     const safeName = escapeHtml(u.displayName);
     chip.innerHTML = `<span class="modal-assignee-chip-text">${safeName}</span><button type="button" class="admin-task-modal-chip-remove modal-assignee-chip-remove" data-user-id="${escapeHtml(
       u.id
-    )}" aria-label="${t("common.removeAssignee", { name: safeName })}">${adminMsIcon("close", "admin-task-modal-chip-close")}</button>`;
+    )}" aria-label="${tr("common.removeAssignee", { name: safeName })}">${adminMsIcon("close", "admin-task-modal-chip-close")}</button>`;
     chip.querySelector(".modal-assignee-chip-remove")?.addEventListener("click", (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
@@ -2386,12 +2386,12 @@ function refreshModalAssigneeChipsAndLabel() {
   }
 
   if (selected.length === 0) {
-    labelEl.textContent = t("common.assignTo");
+    labelEl.textContent = tr("common.assignTo");
   } else if (selected.length === 1) {
     const u = usersById.get(selected[0].value);
-    labelEl.textContent = u?.displayName ?? t("common.oneSelected");
+    labelEl.textContent = u?.displayName ?? tr("common.oneSelected");
   } else {
-    labelEl.textContent = t("common.employeesSelected", { count: selected.length });
+    labelEl.textContent = tr("common.employeesSelected", { count: selected.length });
   }
 }
 
@@ -2535,17 +2535,17 @@ function customRecurrenceModalHtml() {
       <div class="modal-dialog modal-dialog-centered modal-sm">
         <div class="modal-content custom-recurrence-sheet border-0 shadow">
           <div class="modal-header border-0 pb-0 pt-3 px-3">
-            <button type="button" class="btn-close ms-auto" data-bs-dismiss="modal" aria-label="${t("common.close")}"></button>
+            <button type="button" class="btn-close ms-auto" data-bs-dismiss="modal" aria-label="${tr("common.close")}"></button>
           </div>
           <div class="modal-body pt-2 px-3 pb-3">
-            <label class="form-label small mb-1 cr-label" for="cr-every">${t("modals.repeatsEvery")}</label>
+            <label class="form-label small mb-1 cr-label" for="cr-every">${tr("modals.repeatsEvery")}</label>
             <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
               <input type="number" class="form-control form-control-sm cr-field" id="cr-every" min="1" max="999" value="1" style="width:4.5rem" />
               <select class="form-select form-select-sm flex-grow-1 cr-field" id="cr-unit" style="min-width:8rem">
-                <option value="day">${t("common.day")}</option>
-                <option value="week">${t("common.week")}</option>
-                <option value="month">${t("common.month")}</option>
-                <option value="year">${t("common.year")}</option>
+                <option value="day">${tr("common.day")}</option>
+                <option value="week">${tr("common.week")}</option>
+                <option value="month">${tr("common.month")}</option>
+                <option value="year">${tr("common.year")}</option>
               </select>
             </div>
             <div class="mb-3">
@@ -2553,29 +2553,29 @@ function customRecurrenceModalHtml() {
               <input type="time" class="form-control cr-field" id="cr-time" value="12:00" />
             </div>
             <div class="mb-3">
-              <label class="form-label small mb-1 cr-label" for="cr-start">${t("common.starts")}</label>
+              <label class="form-label small mb-1 cr-label" for="cr-start">${tr("common.starts")}</label>
               <input type="date" class="form-control cr-field" id="cr-start" />
             </div>
-            <label class="form-label small mb-1 cr-label">${t("common.ends")}</label>
+            <label class="form-label small mb-1 cr-label">${tr("common.ends")}</label>
             <div class="form-check">
               <input class="form-check-input cr-check" type="radio" name="cr-end" id="cr-end-never" value="never" checked />
-              <label class="form-check-label" for="cr-end-never">${t("common.never")}</label>
+              <label class="form-check-label" for="cr-end-never">${tr("common.never")}</label>
             </div>
             <div class="form-check d-flex flex-wrap align-items-center gap-2 mt-2">
               <input class="form-check-input cr-check" type="radio" name="cr-end" id="cr-end-on-radio" value="on" />
-              <label class="form-check-label mb-0" for="cr-end-on-radio">${t("common.on")}</label>
+              <label class="form-check-label mb-0" for="cr-end-on-radio">${tr("common.on")}</label>
               <input type="date" class="form-control form-control-sm cr-field" id="cr-end-on" disabled style="max-width:11rem" />
             </div>
             <div class="form-check d-flex flex-wrap align-items-center gap-2 mt-2">
               <input class="form-check-input cr-check" type="radio" name="cr-end" id="cr-end-after-radio" value="after" />
-              <label class="form-check-label mb-0" for="cr-end-after-radio">${t("common.after")}</label>
+              <label class="form-check-label mb-0" for="cr-end-after-radio">${tr("common.after")}</label>
               <input type="number" class="form-control form-control-sm cr-field" id="cr-after" min="1" max="9999" value="30" disabled style="width:4.5rem" />
-              <span class="small cr-muted">${t("common.occurrences")}</span>
+              <span class="small cr-muted">${tr("common.occurrences")}</span>
             </div>
           </div>
           <div class="modal-footer border-0 pt-0 pb-3 px-3 gap-2">
-            <button type="button" class="btn btn-link text-decoration-none cr-cancel-link" data-bs-dismiss="modal" id="cr-cancel">${t("common.cancel")}</button>
-            <button type="button" class="btn cr-done-pill ms-auto" id="cr-done">${t("common.done")}</button>
+            <button type="button" class="btn btn-link text-decoration-none cr-cancel-link" data-bs-dismiss="modal" id="cr-cancel">${tr("common.cancel")}</button>
+            <button type="button" class="btn cr-done-pill ms-auto" id="cr-done">${tr("common.done")}</button>
           </div>
         </div>
       </div>
@@ -2589,12 +2589,12 @@ function wireCustomRecurrenceModal() {
   document.getElementById("cr-done").addEventListener("click", () => {
     const draft = readCustomRecurrenceForm();
     if (draft.endType === "on" && !draft.endOn) {
-      showToast(t("toast.chooseEndDate"), "warning");
+      showToast(tr("toast.chooseEndDate"), "warning");
       return;
     }
     const startIso = draft.startDate || document.getElementById("cr-start").value || "";
     if (draft.endType === "on" && draft.endOn && startIso && draft.endOn < startIso) {
-      showToast(t("toast.endDateAfterStart"), "warning");
+      showToast(tr("toast.endDateAfterStart"), "warning");
       return;
     }
     pendingCustomRecurrence = draft;
@@ -2622,16 +2622,16 @@ function listNameModalHtml() {
       <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
           <div class="modal-header">
-            <h2 class="modal-title h5 mb-0" id="listNameModalTitle">${t("modals.listName")}</h2>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="${t("common.close")}"></button>
+            <h2 class="modal-title h5 mb-0" id="listNameModalTitle">${tr("modals.listName")}</h2>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="${tr("common.close")}"></button>
           </div>
           <div class="modal-body">
-            <label class="form-label mb-1" for="listNameInput" id="listNameModalLabel">${t("common.name")}</label>
+            <label class="form-label mb-1" for="listNameInput" id="listNameModalLabel">${tr("common.name")}</label>
             <input type="text" class="form-control" id="listNameInput" maxlength="200" autocomplete="off" />
           </div>
           <div class="modal-footer border-top-0 pt-0">
-            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">${t("common.cancel")}</button>
-            <button type="button" class="btn btn-primary" id="listNameModalSave">${t("common.save")}</button>
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">${tr("common.cancel")}</button>
+            <button type="button" class="btn btn-primary" id="listNameModalSave">${tr("common.save")}</button>
           </div>
         </div>
       </div>
@@ -2681,7 +2681,7 @@ function wireListNameModal() {
  * @returns {Promise<string | null>} trimmed name, or null if cancelled
  */
 function openListNameModal(opts) {
-  const { heading, fieldLabel = t("modals.listName"), initialValue = "" } = opts;
+  const { heading, fieldLabel = tr("modals.listName"), initialValue = "" } = opts;
   return new Promise((resolve) => {
     listNameResolve = resolve;
     const titleEl = document.getElementById("listNameModalTitle");
@@ -2720,8 +2720,8 @@ function taskModalHtml() {
       <div class="modal-dialog modal-dialog-centered admin-task-modal-dialog">
         <div class="modal-content admin-task-modal-card border-0">
           <div class="admin-task-modal-header">
-            <label class="visually-hidden" for="modal-title" id="taskModalLabel">${t("modals.taskTitle")}</label>
-            <input type="text" class="admin-task-modal-title-input" id="modal-title" placeholder="${t("modals.taskTitlePlaceholder")}" autocomplete="off" />
+            <label class="visually-hidden" for="modal-title" id="taskModalLabel">${tr("modals.taskTitle")}</label>
+            <input type="text" class="admin-task-modal-title-input" id="modal-title" placeholder="${tr("modals.taskTitlePlaceholder")}" autocomplete="off" />
             <button type="button" class="admin-task-modal-close" data-bs-dismiss="modal" aria-label="Close">
               ${adminMsIcon("close", "admin-task-modal-close-icon")}
             </button>
@@ -2735,41 +2735,41 @@ function taskModalHtml() {
                   <div class="admin-task-modal-datetime-row">
                     <div class="row g-2 flex-grow-1" id="modal-schedule-dates-row">
                       <div class="col-sm-6" id="modal-due-wrap">
-                        <input class="admin-task-modal-input" type="date" id="modal-due" aria-label="${t("common.dueDate")}" />
+                        <input class="admin-task-modal-input" type="date" id="modal-due" aria-label="${tr("common.dueDate")}" />
                       </div>
                       <div class="col-sm-6 d-none" id="modal-custom-end-wrap">
-                        <input class="admin-task-modal-input" type="date" id="modal-custom-end-display" disabled tabindex="-1" aria-readonly="true" aria-label="${t("common.repeatEndDate")}" />
+                        <input class="admin-task-modal-input" type="date" id="modal-custom-end-display" disabled tabindex="-1" aria-readonly="true" aria-label="${tr("common.repeatEndDate")}" />
                       </div>
                     </div>
                     <div class="admin-task-modal-datetime-row mt-2" id="modal-time-wrap">
-                      <input class="admin-task-modal-input" type="time" id="modal-due-time" value="12:00" aria-label="${t("common.dueTime")}" />
+                      <input class="admin-task-modal-input" type="time" id="modal-due-time" value="12:00" aria-label="${tr("common.dueTime")}" />
                     </div>
                   </div>
                   <label class="admin-task-modal-check">
                     <input type="checkbox" id="modal-all-day" />
-                    <span>${t("common.allDay")}</span>
+                    <span>${tr("common.allDay")}</span>
                   </label>
                 </div>
               </div>
               <div class="admin-task-modal-row admin-task-modal-row--recurrence">
                 <span class="admin-task-modal-row-icon">${adminMsIcon("repeat")}</span>
                 <div class="admin-task-modal-select-wrap flex-grow-1">
-                  <select class="admin-task-modal-select" id="modal-repeat" aria-label="${t("common.repeat")}">
-                    <option value="none">${t("owner.repeatDoesNot")}</option>
-                    <option value="daily">${t("owner.recurrenceDaily")}</option>
-                    <option value="weekly">${t("owner.recurrenceWeekly")}</option>
-                    <option value="monthly">${t("owner.recurrenceMonthly")}</option>
-                    <option value="yearly">${t("owner.recurrenceYearly")}</option>
-                    <option value="custom">${t("owner.repeatCustomEllipsis")}</option>
+                  <select class="admin-task-modal-select" id="modal-repeat" aria-label="${tr("common.repeat")}">
+                    <option value="none">${tr("owner.repeatDoesNot")}</option>
+                    <option value="daily">${tr("owner.recurrenceDaily")}</option>
+                    <option value="weekly">${tr("owner.recurrenceWeekly")}</option>
+                    <option value="monthly">${tr("owner.recurrenceMonthly")}</option>
+                    <option value="yearly">${tr("owner.recurrenceYearly")}</option>
+                    <option value="custom">${tr("owner.repeatCustomEllipsis")}</option>
                   </select>
                   <span class="admin-task-modal-select-chevron">${adminMsIcon("expand_more")}</span>
                 </div>
               </div>
               <div id="modal-custom-repeat-card" class="admin-task-modal-custom-repeat d-none" aria-live="polite">
                 <div class="admin-task-modal-custom-repeat-head">
-                  <span class="admin-task-modal-custom-repeat-badge" id="modal-custom-repeat-freq">${t("modals.everyDay")}</span>
+                  <span class="admin-task-modal-custom-repeat-badge" id="modal-custom-repeat-freq">${tr("modals.everyDay")}</span>
                   <button type="button" class="admin-task-modal-custom-repeat-edit" id="modal-custom-repeat-edit">
-                    ${adminMsIcon("edit")} ${t("modals.customRepeatEdit")}
+                    ${adminMsIcon("edit")} ${tr("modals.customRepeatEdit")}
                   </button>
                 </div>
                 <div class="admin-task-modal-custom-repeat-range" id="modal-custom-repeat-range">
@@ -2782,12 +2782,12 @@ function taskModalHtml() {
             </div>
             <div class="admin-task-modal-row admin-task-modal-row--top">
               <span class="admin-task-modal-row-icon">${adminMsIcon("notes")}</span>
-              <textarea class="admin-task-modal-textarea" id="modal-notes" rows="3" placeholder="${t("modals.addDescription")}" aria-label="${t("common.description")}"></textarea>
+              <textarea class="admin-task-modal-textarea" id="modal-notes" rows="3" placeholder="${tr("modals.addDescription")}" aria-label="${tr("common.description")}"></textarea>
             </div>
             <div class="admin-task-modal-row" id="modal-list-wrap">
               <span class="admin-task-modal-row-icon">${adminMsIcon("assignment")}</span>
               <div class="admin-task-modal-select-wrap flex-grow-1">
-                <select class="admin-task-modal-select" id="modal-move-list" aria-label="${t("common.list")}"></select>
+                <select class="admin-task-modal-select" id="modal-move-list" aria-label="${tr("common.list")}"></select>
                 <span class="admin-task-modal-select-chevron">${adminMsIcon("expand_more")}</span>
               </div>
             </div>
@@ -2803,27 +2803,27 @@ function taskModalHtml() {
                   aria-controls="modal-assignee-panel"
                   id="modal-assignee-toggle"
                 >
-                  <span id="modal-assignee-toggle-label" class="text-truncate">${t("common.assignTo")}</span>
+                  <span id="modal-assignee-toggle-label" class="text-truncate">${tr("common.assignTo")}</span>
                   <span class="admin-task-modal-assign-chevron modal-assignee-chevron">${adminMsIcon("expand_more")}</span>
                 </button>
               </div>
               <div class="collapse admin-task-modal-assign-panel" id="modal-assignee-panel">
                 <div class="admin-task-modal-assign-search-wrap">
                   ${adminMsIcon("search", "admin-task-modal-search-icon")}
-                  <input type="search" class="admin-task-modal-assign-search" id="modal-assignee-search" placeholder="${t("common.searchEmployees")}..." autocomplete="off" aria-label="${t("common.searchEmployees")}" />
+                  <input type="search" class="admin-task-modal-assign-search" id="modal-assignee-search" placeholder="${tr("common.searchEmployees")}..." autocomplete="off" aria-label="${tr("common.searchEmployees")}" />
                 </div>
-                <div id="modal-assignee-chips" class="admin-task-modal-chips" role="list" aria-label="${t("common.selectedAssignees")}"></div>
+                <div id="modal-assignee-chips" class="admin-task-modal-chips" role="list" aria-label="${tr("common.selectedAssignees")}"></div>
                 <div id="modal-assignee-options" class="admin-task-modal-employee-list"></div>
               </div>
             </div>
           </div>
           <div class="admin-task-modal-footer">
             <button type="button" class="admin-task-modal-delete" id="modal-delete">
-              ${adminMsIcon("delete")} ${t("modals.deleteTask")}
+              ${adminMsIcon("delete")} ${tr("modals.deleteTask")}
             </button>
             <div class="admin-task-modal-footer-actions">
-              <button type="button" class="admin-task-modal-btn-secondary" data-bs-dismiss="modal">${t("common.close")}</button>
-              <button type="button" class="admin-task-modal-btn-save" id="modal-save">${t("common.save")}</button>
+              <button type="button" class="admin-task-modal-btn-secondary" data-bs-dismiss="modal">${tr("common.close")}</button>
+              <button type="button" class="admin-task-modal-btn-save" id="modal-save">${tr("common.save")}</button>
             </div>
           </div>
         </div>
@@ -2837,27 +2837,27 @@ function submissionDetailModalHtml() {
       <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable modal-fullscreen-sm-down">
         <div class="modal-content">
           <div class="modal-header">
-            <h2 class="modal-title h5 mb-0" id="submissionDetailTitle">${t("modals.submission")}</h2>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="${t("common.close")}"></button>
+            <h2 class="modal-title h5 mb-0" id="submissionDetailTitle">${tr("modals.submission")}</h2>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="${tr("common.close")}"></button>
           </div>
           <div class="modal-body">
             <div id="submission-detail-text-wrap" class="submission-detail-text-wrap mb-3 d-none">
-              <p class="small text-uppercase text-secondary fw-semibold mb-2">${t("common.submissionNotes")}</p>
+              <p class="small text-uppercase text-secondary fw-semibold mb-2">${tr("common.submissionNotes")}</p>
               <div id="submission-detail-text" class="submission-detail-text border rounded p-3 bg-body-secondary small mb-0"></div>
             </div>
             <div id="submission-detail-file-wrap" class="submission-detail-file-wrap d-none">
-              <p id="submission-detail-file-label" class="small text-uppercase text-secondary fw-semibold mb-2">${t("common.attachments")}</p>
+              <p id="submission-detail-file-label" class="small text-uppercase text-secondary fw-semibold mb-2">${tr("common.attachments")}</p>
               <div id="submission-detail-gallery" class="submission-detail-gallery d-none"></div>
               <div id="submission-detail-image-frame" class="submission-detail-image-frame rounded border bg-black d-flex align-items-center justify-content-center d-none">
-                <img id="submission-detail-img" src="" class="w-100" style="max-height: min(70vh, 720px); object-fit: contain;" alt="${t("common.submissionImage")}" />
+                <img id="submission-detail-img" src="" class="w-100" style="max-height: min(70vh, 720px); object-fit: contain;" alt="${tr("common.submissionImage")}" />
               </div>
               <video id="submission-detail-video" class="submission-detail-video w-100 rounded border bg-black d-none" style="max-height: min(70vh, 720px);" controls playsinline preload="metadata"></video>
-              <iframe id="submission-detail-pdf" class="w-100 rounded border d-none" style="height: min(70vh, 720px);" title="${t("common.submissionPdf")}"></iframe>
+              <iframe id="submission-detail-pdf" class="w-100 rounded border d-none" style="height: min(70vh, 720px);" title="${tr("common.submissionPdf")}"></iframe>
             </div>
-            <p id="submission-detail-empty" class="text-muted small mb-0 d-none">${t("modals.noSubmissionContent")}</p>
+            <p id="submission-detail-empty" class="text-muted small mb-0 d-none">${tr("modals.noSubmissionContent")}</p>
           </div>
           <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">${t("common.close")}</button>
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">${tr("common.close")}</button>
           </div>
         </div>
       </div>
@@ -2867,12 +2867,12 @@ function submissionDetailModalHtml() {
 function adminEmpModalHeaderHtml(titleId, title) {
   return `<div class="admin-emp-modal-header">
     <h2 class="admin-emp-modal-title" id="${titleId}">${escapeHtml(title)}</h2>
-    <button type="button" class="admin-emp-modal-close" data-bs-dismiss="modal" aria-label="${t("common.close")}">${adminMsIcon("close")}</button>
+    <button type="button" class="admin-emp-modal-close" data-bs-dismiss="modal" aria-label="${tr("common.close")}">${adminMsIcon("close")}</button>
   </div>`;
 }
 
 function adminEmpModalTaskBlockHtml(titleId) {
-  return `<p class="admin-emp-modal-field-label">${t("common.task")}</p>
+  return `<p class="admin-emp-modal-field-label">${tr("common.task")}</p>
     <p id="${titleId}" class="admin-emp-modal-task-title"></p>`;
 }
 
@@ -2892,7 +2892,7 @@ function progressUpdateModalHtml() {
     <div class="modal fade admin-emp-modal" id="progressUpdateModal" tabindex="-1" aria-labelledby="progressUpdateModalTitle" aria-hidden="true">
       <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable modal-fullscreen-sm-down admin-emp-modal-dialog">
         <div class="modal-content admin-emp-modal-card">
-          ${adminEmpModalHeaderHtml("progressUpdateModalTitle", t("modals.taskUpdate"))}
+          ${adminEmpModalHeaderHtml("progressUpdateModalTitle", tr("modals.taskUpdate"))}
           <div class="admin-emp-modal-body">
             <input type="hidden" id="progress-update-task-id" value="" />
             <input type="hidden" id="progress-update-user-id" value="" />
@@ -2900,15 +2900,15 @@ function progressUpdateModalHtml() {
             ${adminEmpModalTaskBlockHtml("progress-update-task-title")}
             <p id="progress-update-assignee-label" class="admin-emp-modal-hint mb-3 d-none"></p>
             <div id="progress-update-compose-wrap">
-              <p class="admin-emp-modal-field-label mb-2">${t("modals.updateType")}</p>
-              <div id="progress-update-type-chips" class="d-flex flex-wrap gap-2 mb-3" role="group" aria-label="${t("modals.updateType")}"></div>
-              <label class="admin-emp-modal-label" for="progress-update-message">${t("modals.yourUpdate")}</label>
+              <p class="admin-emp-modal-field-label mb-2">${tr("modals.updateType")}</p>
+              <div id="progress-update-type-chips" class="d-flex flex-wrap gap-2 mb-3" role="group" aria-label="${tr("modals.updateType")}"></div>
+              <label class="admin-emp-modal-label" for="progress-update-message">${tr("modals.yourUpdate")}</label>
               <textarea
                 class="admin-emp-modal-textarea"
                 id="progress-update-message"
                 rows="4"
                 maxlength="${PROGRESS_UPDATE_TEXT_MAX}"
-                placeholder="${t("modals.updatePlaceholder")}"
+                placeholder="${tr("modals.updatePlaceholder")}"
               ></textarea>
               <div class="d-flex justify-content-end mt-1">
                 <span id="progress-update-count" class="admin-emp-modal-counter tabular-nums">0 / ${PROGRESS_UPDATE_TEXT_MAX}</span>
@@ -2916,12 +2916,12 @@ function progressUpdateModalHtml() {
               <p id="progress-update-error" class="admin-emp-modal-error d-none" role="alert"></p>
             </div>
             <div id="progress-update-history-wrap" class="mt-3">
-              <p class="admin-emp-modal-field-label mb-2">${t("modals.updateHistory")}</p>
+              <p class="admin-emp-modal-field-label mb-2">${tr("modals.updateHistory")}</p>
               <div id="progress-update-history" class="progress-update-timeline"></div>
-              <p id="progress-update-history-empty" class="admin-emp-modal-hint mb-0 d-none">${t("modals.noUpdatesYet")}</p>
+              <p id="progress-update-history-empty" class="admin-emp-modal-hint mb-0 d-none">${tr("modals.noUpdatesYet")}</p>
             </div>
           </div>
-          ${adminEmpModalFooterHtml(t("common.close"), "progress-update-submit", t("modals.postUpdate"))}
+          ${adminEmpModalFooterHtml(tr("common.close"), "progress-update-submit", tr("modals.postUpdate"))}
         </div>
       </div>
     </div>`;
@@ -2932,22 +2932,22 @@ function empCreateTaskModalHtml() {
     <div class="modal fade admin-emp-modal" id="empCreateTaskModal" tabindex="-1" aria-labelledby="empCreateTaskModalTitle" aria-hidden="true">
       <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable admin-emp-modal-dialog">
         <div class="modal-content admin-emp-modal-card">
-          ${adminEmpModalHeaderHtml("empCreateTaskModalTitle", t("modals.createAssignTask"))}
+          ${adminEmpModalHeaderHtml("empCreateTaskModalTitle", tr("modals.createAssignTask"))}
           <div class="admin-emp-modal-body">
-            <label class="admin-emp-modal-label" for="emp-create-title">${t("modals.taskTitle")}</label>
-            <input type="text" class="admin-emp-modal-input mb-3" id="emp-create-title" maxlength="500" placeholder="${t("modals.whatNeedsDone")}" autocomplete="off" />
-            <label class="admin-emp-modal-label" for="emp-create-notes">${t("common.description")} <span class="admin-emp-modal-label-optional">${t("common.optional")}</span></label>
-            <textarea class="admin-emp-modal-textarea mb-3" id="emp-create-notes" rows="3" placeholder="${t("modals.addDetails")}"></textarea>
-            <label class="admin-emp-modal-label" for="emp-create-due">${t("common.deadline")} <span class="admin-emp-modal-label-optional">${t("common.optional")}</span></label>
+            <label class="admin-emp-modal-label" for="emp-create-title">${tr("modals.taskTitle")}</label>
+            <input type="text" class="admin-emp-modal-input mb-3" id="emp-create-title" maxlength="500" placeholder="${tr("modals.whatNeedsDone")}" autocomplete="off" />
+            <label class="admin-emp-modal-label" for="emp-create-notes">${tr("common.description")} <span class="admin-emp-modal-label-optional">${tr("common.optional")}</span></label>
+            <textarea class="admin-emp-modal-textarea mb-3" id="emp-create-notes" rows="3" placeholder="${tr("modals.addDetails")}"></textarea>
+            <label class="admin-emp-modal-label" for="emp-create-due">${tr("common.deadline")} <span class="admin-emp-modal-label-optional">${tr("common.optional")}</span></label>
             <input type="datetime-local" class="admin-emp-modal-input mb-3" id="emp-create-due" />
-            <label class="admin-emp-modal-label" for="emp-create-assignee">${t("common.assignedTo")}</label>
+            <label class="admin-emp-modal-label" for="emp-create-assignee">${tr("common.assignedTo")}</label>
             <select class="admin-emp-modal-select mb-3" id="emp-create-assignee">
-              <option value="">${t("employee.chooseEmployee")}</option>
+              <option value="">${tr("employee.chooseEmployee")}</option>
             </select>
-            <p class="admin-emp-modal-hint mb-0">${t("employee.createAssignHint")}</p>
+            <p class="admin-emp-modal-hint mb-0">${tr("employee.createAssignHint")}</p>
             <p id="emp-create-error" class="admin-emp-modal-error d-none" role="alert"></p>
           </div>
-          ${adminEmpModalFooterHtml(t("common.cancel"), "emp-create-submit", t("modals.createTask"), "add")}
+          ${adminEmpModalFooterHtml(tr("common.cancel"), "emp-create-submit", tr("modals.createTask"), "add")}
         </div>
       </div>
     </div>`;
@@ -2958,18 +2958,18 @@ function empDelegateModalHtml() {
     <div class="modal fade admin-emp-modal" id="empDelegateModal" tabindex="-1" aria-labelledby="empDelegateModalTitle" aria-hidden="true">
       <div class="modal-dialog modal-dialog-centered admin-emp-modal-dialog">
         <div class="modal-content admin-emp-modal-card">
-          ${adminEmpModalHeaderHtml("empDelegateModalTitle", t("modals.assignToColleague"))}
+          ${adminEmpModalHeaderHtml("empDelegateModalTitle", tr("modals.assignToColleague"))}
           <div class="admin-emp-modal-body">
             <input type="hidden" id="emp-delegate-task-id" value="" />
             ${adminEmpModalTaskBlockHtml("emp-delegate-task-title")}
-            <p class="admin-emp-modal-hint mb-3">${t("employee.delegateHint")}</p>
-            <label class="admin-emp-modal-label" for="emp-delegate-employee">${t("common.assignedTo")}</label>
+            <p class="admin-emp-modal-hint mb-3">${tr("employee.delegateHint")}</p>
+            <label class="admin-emp-modal-label" for="emp-delegate-employee">${tr("common.assignedTo")}</label>
             <select class="admin-emp-modal-select" id="emp-delegate-employee">
-              <option value="">${t("employee.chooseEmployee")}</option>
+              <option value="">${tr("employee.chooseEmployee")}</option>
             </select>
             <p id="emp-delegate-error" class="admin-emp-modal-error d-none" role="alert"></p>
           </div>
-          ${adminEmpModalFooterHtml(t("common.cancel"), "emp-delegate-submit", t("modals.assignTask"), "person_add")}
+          ${adminEmpModalFooterHtml(tr("common.cancel"), "emp-delegate-submit", tr("modals.assignTask"), "person_add")}
         </div>
       </div>
     </div>`;
@@ -2980,27 +2980,27 @@ function empSubmissionModalHtml() {
     <div class="modal fade admin-emp-modal" id="empSubmissionModal" tabindex="-1" aria-labelledby="empSubmissionModalTitle" aria-hidden="true">
       <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable modal-fullscreen-sm-down admin-emp-modal-dialog">
         <div class="modal-content admin-emp-modal-card">
-          ${adminEmpModalHeaderHtml("empSubmissionModalTitle", t("modals.submitTask"))}
+          ${adminEmpModalHeaderHtml("empSubmissionModalTitle", tr("modals.submitTask"))}
           <div class="admin-emp-modal-body">
             <input type="hidden" id="emp-submission-task-id" value="" />
             ${adminEmpModalTaskBlockHtml("emp-submission-task-title")}
-            <label class="admin-emp-modal-label" for="emp-submission-text">${t("common.submissionNotes")}</label>
+            <label class="admin-emp-modal-label" for="emp-submission-text">${tr("common.submissionNotes")}</label>
             <textarea
               class="admin-emp-modal-textarea"
               id="emp-submission-text"
               rows="5"
               maxlength="${EMP_SUBMISSION_TEXT_MAX}"
-              placeholder="${t("modals.submissionNotesPlaceholder")}"
+              placeholder="${tr("modals.submissionNotesPlaceholder")}"
             ></textarea>
             <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-2">
               <button type="button" class="admin-emp-modal-paste-btn" id="emp-submission-paste">
-                ${adminMsIcon("content_paste")} ${t("employee.pasteFromClipboard")}
+                ${adminMsIcon("content_paste")} ${tr("employee.pasteFromClipboard")}
               </button>
               <span id="emp-submission-count" class="admin-emp-modal-counter tabular-nums">0 / ${EMP_SUBMISSION_TEXT_MAX}</span>
             </div>
             <p id="emp-submission-error" class="admin-emp-modal-error d-none" role="alert"></p>
             <hr class="admin-emp-modal-divider" />
-            <label class="admin-emp-modal-label" for="emp-submission-image">${t("modals.submissionFiles")} <span class="admin-emp-modal-label-optional">${t("employee.submissionFilesOptional", { max: EMP_SUBMISSION_MAX_IMAGES })}</span></label>
+            <label class="admin-emp-modal-label" for="emp-submission-image">${tr("modals.submissionFiles")} <span class="admin-emp-modal-label-optional">${tr("employee.submissionFilesOptional", { max: EMP_SUBMISSION_MAX_IMAGES })}</span></label>
             <input
               type="file"
               class="admin-emp-modal-file"
@@ -3010,7 +3010,7 @@ function empSubmissionModalHtml() {
             />
             <div id="emp-submission-preview-wrap" class="emp-submission-preview-grid mt-2 d-none"></div>
           </div>
-          ${adminEmpModalFooterHtml(t("common.cancel"), "emp-submission-submit", t("common.submit"))}
+          ${adminEmpModalFooterHtml(tr("common.cancel"), "emp-submission-submit", tr("common.submit"))}
         </div>
       </div>
     </div>`;
@@ -3022,32 +3022,32 @@ function ownerMarkDoneModalHtml() {
       <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
           <div class="modal-header">
-            <h2 class="modal-title h5 mb-0" id="ownerMarkDoneModalTitle">${t("owner.markDoneTitle")}</h2>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="${t("common.close")}"></button>
+            <h2 class="modal-title h5 mb-0" id="ownerMarkDoneModalTitle">${tr("owner.markDoneTitle")}</h2>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="${tr("common.close")}"></button>
           </div>
           <div class="modal-body">
             <input type="hidden" id="owner-mark-done-task-id" value="" />
-            <p class="fw-medium text-body-secondary mb-1 small text-uppercase text-secondary">${t("common.task")}</p>
+            <p class="fw-medium text-body-secondary mb-1 small text-uppercase text-secondary">${tr("common.task")}</p>
             <p class="mb-3" id="owner-mark-done-task-title"></p>
-            <label class="form-label small text-muted mb-1" for="owner-mark-done-search">${t("owner.searchEmployees")}</label>
+            <label class="form-label small text-muted mb-1" for="owner-mark-done-search">${tr("owner.searchEmployees")}</label>
             <div class="input-group input-group-sm mb-3">
               <span class="input-group-text bg-body border-end-0"><i class="bi bi-search" aria-hidden="true"></i></span>
               <input
                 type="search"
                 class="form-control border-start-0"
                 id="owner-mark-done-search"
-                placeholder="${t("owner.typeAName")}"
+                placeholder="${tr("owner.typeAName")}"
                 autocomplete="off"
               />
             </div>
-            <p class="small text-muted mb-2" id="owner-mark-done-hint">${t("owner.markDoneHint")}</p>
+            <p class="small text-muted mb-2" id="owner-mark-done-hint">${tr("owner.markDoneHint")}</p>
             <div id="owner-mark-done-list" class="border rounded px-3 py-2 bg-body-secondary bg-opacity-25" style="max-height: 280px; overflow-y: auto"></div>
             <p class="small text-muted mb-0 mt-3 d-none" id="owner-mark-done-empty">
               No one is assigned yet. Use <strong>Edit</strong> on the task to add employees.
             </p>
           </div>
           <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">${t("common.close")}</button>
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">${tr("common.close")}</button>
           </div>
         </div>
       </div>
@@ -3060,8 +3060,8 @@ function ownerTrialMessageModalHtml() {
       <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content border-0 shadow">
           <div class="modal-header border-0 pb-0">
-            <h2 class="modal-title h5 mb-0" id="ownerTrialMessageModalTitle">${t("owner.trialNoticeTitle")}</h2>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="${t("common.close")}"></button>
+            <h2 class="modal-title h5 mb-0" id="ownerTrialMessageModalTitle">${tr("owner.trialNoticeTitle")}</h2>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="${tr("common.close")}"></button>
           </div>
           <div class="modal-body pt-2">
             <p class="mb-2">
@@ -3073,7 +3073,7 @@ function ownerTrialMessageModalHtml() {
             </p>
           </div>
           <div class="modal-footer border-0 pt-2">
-            <button type="button" class="btn btn-primary" data-bs-dismiss="modal">${t("common.gotIt")}</button>
+            <button type="button" class="btn btn-primary" data-bs-dismiss="modal">${tr("common.gotIt")}</button>
           </div>
         </div>
       </div>
@@ -3108,18 +3108,18 @@ function ownerTrialStatusChipHtml() {
   if (!info.hasStarted) {
     return `<div class="owner-trial-chip owner-trial-chip--pending small">
       <i class="bi bi-hourglass-split" aria-hidden="true"></i>
-      <span>${t("owner.trialStartsOn", { start: startStr, end: endStr })}</span>
+      <span>${tr("owner.trialStartsOn", { start: startStr, end: endStr })}</span>
     </div>`;
   }
   if (info.isExpired) {
     return `<div class="owner-trial-chip owner-trial-chip--expired small">
       <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
-      <span>${t("owner.trialEndedOn", { end: endStr })}</span>
+      <span>${tr("owner.trialEndedOn", { end: endStr })}</span>
     </div>`;
   }
   return `<div class="owner-trial-chip owner-trial-chip--active small">
     <i class="bi bi-clock-history" aria-hidden="true"></i>
-    <span>${t("owner.trialDaysRemaining", { days: info.daysRemaining, dayLabel: info.daysRemaining === 1 ? t("owner.day") : t("owner.days"), end: endStr })}</span>
+    <span>${tr("owner.trialDaysRemaining", { days: info.daysRemaining, dayLabel: info.daysRemaining === 1 ? tr("owner.day") : tr("owner.days"), end: endStr })}</span>
   </div>`;
 }
 
@@ -3129,15 +3129,15 @@ function teamAdminModalHtml() {
       <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
           <div class="modal-header">
-            <h2 class="modal-title h5 mb-0" id="teamAdminModalTitle">${t("modals.teamAdminTitle")}</h2>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="${t("common.close")}"></button>
+            <h2 class="modal-title h5 mb-0" id="teamAdminModalTitle">${tr("modals.teamAdminTitle")}</h2>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="${tr("common.close")}"></button>
           </div>
           <div class="modal-body">
-            <p class="small text-muted mb-3">${t("modals.teamAdminIntro")}</p>
+            <p class="small text-muted mb-3">${tr("modals.teamAdminIntro")}</p>
             <div id="team-admin-list"></div>
           </div>
           <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">${t("common.close")}</button>
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">${tr("common.close")}</button>
           </div>
         </div>
       </div>
@@ -3147,11 +3147,11 @@ function teamAdminModalHtml() {
 async function refreshTeamAdminList() {
   const host = document.getElementById("team-admin-list");
   if (!host) return;
-  host.innerHTML = `<p class="small text-muted mb-0">${t("common.loading")}</p>`;
+  host.innerHTML = `<p class="small text-muted mb-0">${tr("common.loading")}</p>`;
   try {
     const { users } = await api("/api/users/team");
     if (!users.length) {
-      host.innerHTML = `<p class="small text-muted mb-0">${t("modals.noTeamMembers")}</p>`;
+      host.innerHTML = `<p class="small text-muted mb-0">${tr("modals.noTeamMembers")}</p>`;
       return;
     }
     const selfId = state.user?.id || "";
@@ -3163,16 +3163,16 @@ async function refreshTeamAdminList() {
           let action;
           if (isAdmin) {
             if (isSelf) {
-              action = `<span class="badge rounded-pill owner-role-badge flex-shrink-0">${t("owner.adminYou")}</span>`;
+              action = `<span class="badge rounded-pill owner-role-badge flex-shrink-0">${tr("owner.adminYou")}</span>`;
             } else {
               action = `<button type="button" class="btn btn-sm btn-outline-danger flex-shrink-0 team-revoke-btn" data-user-id="${u.id}" data-user-name="${escapeHtml(
                 u.displayName
-              )}">${t("owner.revokeAdmin")}</button>`;
+              )}">${tr("owner.revokeAdmin")}</button>`;
             }
           } else {
             action = `<button type="button" class="btn btn-sm btn-primary flex-shrink-0 team-promote-btn" data-user-id="${u.id}" data-user-name="${escapeHtml(
               u.displayName
-            )}">${t("owner.makeAdmin")}</button>`;
+            )}">${tr("owner.makeAdmin")}</button>`;
           }
           return `<div class="list-group-item d-flex justify-content-between align-items-center gap-2">
             <div class="min-w-0">
@@ -3191,9 +3191,9 @@ async function refreshTeamAdminList() {
         body: JSON.stringify({ role }),
       });
       if (result.emailSent) {
-        showToast(`${successMsg}${t("owner.emailSentSuffix")}`, "success");
+        showToast(`${successMsg}${tr("owner.emailSentSuffix")}`, "success");
       } else {
-        showToast(`${warnMsg}${t("owner.emailNotSentSuffix")}`, "warning");
+        showToast(`${warnMsg}${tr("owner.emailNotSentSuffix")}`, "warning");
       }
       await refreshTeamAdminList();
       await loadAssignees();
@@ -3203,10 +3203,10 @@ async function refreshTeamAdminList() {
       btn.addEventListener("click", async () => {
         const id = btn.getAttribute("data-user-id");
         const name = btn.getAttribute("data-user-name");
-        if (!id || !window.confirm(t("owner.promoteConfirm", { name }))) return;
+        if (!id || !window.confirm(tr("owner.promoteConfirm", { name }))) return;
         btn.disabled = true;
         try {
-          await patchTeamRole(id, "owner", name, t("owner.promotedSuccess", { name }), t("owner.promotedWarn", { name }));
+          await patchTeamRole(id, "owner", name, tr("owner.promotedSuccess", { name }), tr("owner.promotedWarn", { name }));
         } catch (err) {
           showToast(err.message, "danger");
           btn.disabled = false;
@@ -3221,7 +3221,7 @@ async function refreshTeamAdminList() {
         if (
           !id ||
           !window.confirm(
-            t("owner.revokeConfirm", { name })
+            tr("owner.revokeConfirm", { name })
           )
         ) {
           return;
@@ -3232,8 +3232,8 @@ async function refreshTeamAdminList() {
             id,
             "employee",
             name,
-            t("owner.revokedSuccess", { name }),
-            t("owner.revokedWarn", { name })
+            tr("owner.revokedSuccess", { name }),
+            tr("owner.revokedWarn", { name })
           );
         } catch (err) {
           showToast(err.message, "danger");
@@ -3519,7 +3519,7 @@ function appendSubmissionDetailGalleryItem(gallery, resource) {
   }
   const node = document.createElement("img");
   node.src = resource.url;
-  node.alt = t("common.submissionImage");
+  node.alt = tr("common.submissionImage");
   node.className = "submission-detail-gallery-img";
   gallery.appendChild(node);
 }
@@ -3544,7 +3544,7 @@ async function openSubmissionDetailModal({ title, submissionText, proofUrl, proo
   const urls = (proofUrls?.length ? proofUrls : proofUrl ? [proofUrl] : []).filter(Boolean);
   const hasFile = urls.length > 0;
 
-  titleEl.textContent = title || t("modals.submission");
+  titleEl.textContent = title || tr("modals.submission");
   clearSubmissionDetailMedia();
 
   if (hasText) {
@@ -3601,7 +3601,7 @@ async function openSubmissionDetailModal({ title, submissionText, proofUrl, proo
     }
   } catch (err) {
     modal.hide();
-    showToast(err.message || t("toast.couldNotLoadSubmissionFile"), "danger");
+    showToast(err.message || tr("toast.couldNotLoadSubmissionFile"), "danger");
   }
 }
 
@@ -3705,14 +3705,14 @@ async function submitEmployeeSubmission(taskId, submissionText, files) {
       body: fd,
     });
   } catch {
-    throw new Error(t("errors.networkSubmit"));
+    throw new Error(tr("errors.networkSubmit"));
   }
   const text = await res.text();
   if (!res.ok) {
     if (res.status === 401) {
       state.user = null;
       renderAuthForm();
-      throw new Error(t("toast.sessionExpired"));
+      throw new Error(tr("toast.sessionExpired"));
     }
     throw new Error(submissionUploadErrorMessage(res, text));
   }
@@ -3771,7 +3771,7 @@ function wireEmpSubmissionModal() {
       previewWrap.innerHTML = `<div class="admin-emp-modal-preview-pdf d-flex align-items-center gap-2 w-100">
         <i class="bi bi-file-earmark-pdf text-danger fs-4" aria-hidden="true"></i>
         <span class="small text-break">${escapeHtml(file.name || "document.pdf")}</span>
-        <button type="button" class="btn btn-sm btn-outline-danger ms-auto" data-remove-proof-index="0" aria-label="${t("common.remove")}">${t("common.remove")}</button>
+        <button type="button" class="btn btn-sm btn-outline-danger ms-auto" data-remove-proof-index="0" aria-label="${tr("common.remove")}">${tr("common.remove")}</button>
       </div>`;
     } else {
       selectedProofFiles.forEach((file, index) => {
@@ -3783,7 +3783,7 @@ function wireEmpSubmissionModal() {
           ? `<video src="${url}" class="emp-submission-preview-thumb" muted playsinline preload="metadata"></video>`
           : `<img src="${url}" alt="" class="emp-submission-preview-thumb" />`;
         tile.innerHTML = `${media}
-          <button type="button" class="emp-submission-preview-remove" data-remove-proof-index="${index}" aria-label="${t("common.removeFile")}">&times;</button>`;
+          <button type="button" class="emp-submission-preview-remove" data-remove-proof-index="${index}" aria-label="${tr("common.removeFile")}">&times;</button>`;
         previewWrap.appendChild(tile);
       });
     }
@@ -3816,7 +3816,7 @@ function wireEmpSubmissionModal() {
       }
       if (next.some(isEmpSubmissionPdfFile)) continue;
       if (next.length >= EMP_SUBMISSION_MAX_IMAGES) {
-        showToast(t("toast.maxAttachments", { max: EMP_SUBMISSION_MAX_IMAGES }), "warning");
+        showToast(tr("toast.maxAttachments", { max: EMP_SUBMISSION_MAX_IMAGES }), "warning");
         break;
       }
       next.push(file);
@@ -3868,31 +3868,31 @@ function wireEmpSubmissionModal() {
     addEmpSubmissionFiles(pastedFiles);
     if (clipText) insertTextAtCaret(clipText);
     syncEmpSubmissionCharCount();
-    if (pastedFiles.length) showToast(t("toast.pastedFile"), "success");
+    if (pastedFiles.length) showToast(tr("toast.pastedFile"), "success");
   });
 
   pasteBtn?.addEventListener("click", async () => {
     if (!ta) return;
     if (!navigator.clipboard?.readText) {
-      showToast(t("toast.clipboardNotSupported"), "warning");
+      showToast(tr("toast.clipboardNotSupported"), "warning");
       return;
     }
     try {
       const clip = (await navigator.clipboard.readText()).trim();
       if (!clip) {
-        showToast(t("toast.clipboardEmpty"), "warning");
+        showToast(tr("toast.clipboardEmpty"), "warning");
         return;
       }
       const room = EMP_SUBMISSION_TEXT_MAX - ta.value.length;
       if (room <= 0) {
-        showToast(t("toast.notesLimit", { max: EMP_SUBMISSION_TEXT_MAX }), "warning");
+        showToast(tr("toast.notesLimit", { max: EMP_SUBMISSION_TEXT_MAX }), "warning");
         return;
       }
       ta.value = (ta.value + clip).slice(0, EMP_SUBMISSION_TEXT_MAX);
       syncEmpSubmissionCharCount();
-      showToast(t("toast.pastedClipboard"), "success");
+      showToast(tr("toast.pastedClipboard"), "success");
     } catch {
-      showToast(t("toast.clipboardReadFailed"), "warning");
+      showToast(tr("toast.clipboardReadFailed"), "warning");
     }
   });
 
@@ -3942,7 +3942,7 @@ function wireEmpSubmissionModal() {
         if (idx >= 0) state.empTasks[idx] = result.task;
         else state.empTasks.push(result.task);
       }
-      showToast(t("toast.taskSubmitted"), "success");
+      showToast(tr("toast.taskSubmitted"), "success");
       state.empFilter = "submitted";
       await loadEmployeeTasks();
       renderEmpListContentOnly();
@@ -4037,7 +4037,7 @@ function ownerAssigneeUpdatesHtml(taskId, assignee) {
       data-view-progress-user-id="${escapeHtml(assignee.id)}"
       data-view-progress-user-name="${escapeHtml(assignee.displayName)}"
       title="${escapeHtml((latest.message || "").trim())}"
-      aria-label="${t("owner.viewAllUpdatesFor", { name: escapeHtml(assignee.displayName) })}"
+      aria-label="${tr("owner.viewAllUpdatesFor", { name: escapeHtml(assignee.displayName) })}"
     >
       ${badge}
       <span class="owner-assignee-update-text">${escapeHtml(snippet)}</span>
@@ -4100,7 +4100,7 @@ function ownerMockAssigneeSubmissionHtml(taskId, assignee) {
   const when = view.submittedAt ? formatProgressUpdateTime(view.submittedAt) : "";
   return `<div class="admin-expand-col-block admin-expand-col-block--submission">
     <span class="admin-expand-col-label">Submission</span>
-    <button type="button" class="admin-expand-view-submission owner-view-submission-btn" data-view-submission-task-id="${taskId}" data-view-submission-user-id="${escapeHtml(assignee.id)}" aria-label="${t("owner.viewSubmissionFor", { name: escapeHtml(assignee.displayName) })}">${t("owner.viewSubmission")}</button>
+    <button type="button" class="admin-expand-view-submission owner-view-submission-btn" data-view-submission-task-id="${taskId}" data-view-submission-user-id="${escapeHtml(assignee.id)}" aria-label="${tr("owner.viewSubmissionFor", { name: escapeHtml(assignee.displayName) })}">${tr("owner.viewSubmission")}</button>
     ${when ? `<span class="admin-expand-submission-meta tabular-nums">${escapeHtml(when)}</span>` : ""}
   </div>`;
 }
@@ -4178,8 +4178,8 @@ function ownerAssigneeSubmissionHtml(taskId, assignee) {
         class="btn btn-sm btn-outline-primary owner-view-submission-btn owner-assignee-submission-btn"
         data-view-submission-task-id="${taskId}"
         data-view-submission-user-id="${escapeHtml(assignee.id)}"
-        title="${t("owner.viewSubmission")}"
-        aria-label="${t("owner.viewSubmissionFor", { name: escapeHtml(assignee.displayName) })}"
+        title="${tr("owner.viewSubmission")}"
+        aria-label="${tr("owner.viewSubmissionFor", { name: escapeHtml(assignee.displayName) })}"
       >
         <i class="bi bi-eye me-1" aria-hidden="true"></i>View submission
       </button>
@@ -4308,7 +4308,7 @@ async function openEmpProgressUpdateModal(task) {
   userInput.value = state.user.id;
   titleEl.textContent = task.title;
   assigneeLabel?.classList.add("d-none");
-  if (modalTitle) modalTitle.textContent = t("modals.postTaskUpdate");
+  if (modalTitle) modalTitle.textContent = tr("modals.postTaskUpdate");
   ta.value = "";
   errEl.textContent = "";
   errEl.classList.add("d-none");
@@ -4321,7 +4321,7 @@ async function openEmpProgressUpdateModal(task) {
   try {
     await loadProgressUpdateHistory(task.id, state.user.id);
   } catch (err) {
-    showToast(err.message || t("toast.couldNotLoadHistory"), "danger");
+    showToast(err.message || tr("toast.couldNotLoadHistory"), "danger");
   }
   window.setTimeout(() => ta.focus(), 300);
 }
@@ -4344,13 +4344,13 @@ async function openProgressUpdatesForAssignee(taskId, userId, assigneeName) {
     assigneeLabel.textContent = `Employee: ${assigneeName || "Assignee"}`;
     assigneeLabel.classList.remove("d-none");
   }
-  if (modalTitle) modalTitle.textContent = t("modals.reviewUpdates");
+  if (modalTitle) modalTitle.textContent = tr("modals.reviewUpdates");
   setProgressUpdateModalReadOnly(true);
   bootstrap.Modal.getOrCreateInstance(modalEl).show();
   try {
     await loadProgressUpdateHistory(taskId, userId);
   } catch (err) {
-    showToast(err.message || t("toast.couldNotLoadUpdates"), "danger");
+    showToast(err.message || tr("toast.couldNotLoadUpdates"), "danger");
   }
 }
 
@@ -4369,16 +4369,16 @@ async function openProgressUpdatesAll(taskId) {
   userInput.value = "";
   titleEl.textContent = task?.title ?? "Task";
   if (assigneeLabel) {
-    assigneeLabel.textContent = t("modals.allEmployeesActivity");
+    assigneeLabel.textContent = tr("modals.allEmployeesActivity");
     assigneeLabel.classList.remove("d-none");
   }
-  if (modalTitle) modalTitle.textContent = t("modals.fullActivity");
+  if (modalTitle) modalTitle.textContent = tr("modals.fullActivity");
   setProgressUpdateModalReadOnly(true);
   bootstrap.Modal.getOrCreateInstance(modalEl).show();
   try {
     await loadProgressUpdateHistory(taskId, null, { all: true });
   } catch (err) {
-    showToast(err.message || t("toast.couldNotLoadActivity"), "danger");
+    showToast(err.message || tr("toast.couldNotLoadActivity"), "danger");
   }
 }
 
@@ -4420,7 +4420,7 @@ function wireProgressUpdateModal() {
     errEl.textContent = "";
 
     if (!message) {
-      errEl.textContent = t("validation.enterUpdateMessage");
+      errEl.textContent = tr("validation.enterUpdateMessage");
       errEl.classList.remove("d-none");
       return;
     }
@@ -4436,7 +4436,7 @@ function wireProgressUpdateModal() {
         method: "POST",
         body: JSON.stringify({ updateType, message }),
       });
-      showToast(t("toast.updatePosted"), "success");
+      showToast(tr("toast.updatePosted"), "success");
       ta.value = "";
       syncProgressUpdateCharCount();
       const userId = state.user?.id;
@@ -4445,7 +4445,7 @@ function wireProgressUpdateModal() {
       renderEmpListContentOnly();
       renderEmployeeMain();
     } catch (err) {
-      errEl.textContent = err.message || t("validation.postUpdateFailed");
+      errEl.textContent = err.message || tr("validation.postUpdateFailed");
       errEl.classList.remove("d-none");
     } finally {
       submitBtn.disabled = false;
@@ -4553,7 +4553,7 @@ function populateTaskModalListOptions(selectedListId) {
 function openOwnerCreateTaskModal() {
   const lists = ownerTaskModalLists();
   if (!lists.length) {
-    showToast(t("toast.createListFirst"), "warning");
+    showToast(tr("toast.createListFirst"), "warning");
     return;
   }
   let listId = state.activeListId;
@@ -4727,8 +4727,8 @@ function bindListNavHandlers() {
         const list = state.lists.find((x) => x.id === id);
         if (isEmployeeAssignmentsList(list)) return;
         const name = await openListNameModal({
-          heading: t("owner.renameList"),
-          fieldLabel: t("modals.listName"),
+          heading: tr("owner.renameList"),
+          fieldLabel: tr("modals.listName"),
           initialValue: list?.title || "",
         });
         if (name == null || !name.trim()) return;
@@ -4748,7 +4748,7 @@ function bindListNavHandlers() {
 }
 
 function isEmployeeAssignmentsList(list) {
-  return list?.kind === "employee_assignments" || list?.title === t("nav.employeeAssignments");
+  return list?.kind === "employee_assignments" || list?.title === tr("nav.employeeAssignments");
 }
 
 const LIST_PIN_HOLD_MS = 550;
@@ -4794,7 +4794,7 @@ async function deleteTaskList(listId) {
   const list = state.lists.find((x) => x.id === listId);
   if (!list || isEmployeeAssignmentsList(list)) return;
   const ok = window.confirm(
-    t("owner.deleteListConfirm", { title: list.title })
+    tr("owner.deleteListConfirm", { title: list.title })
   );
   if (!ok) return;
   try {
@@ -4809,7 +4809,7 @@ async function deleteTaskList(listId) {
       else state.tasks = [];
     }
     renderOwnerChrome();
-    showToast(t("owner.listDeleted", { title: list.title }), "success");
+    showToast(tr("owner.listDeleted", { title: list.title }), "success");
   } catch (err) {
     showToast(err.message, "danger");
   }
@@ -4860,18 +4860,18 @@ function ownerListNavButtonHtml(list, { systemPinned = false } = {}) {
       ? adminMsIcon("chevron_right", "admin-nav-chevron")
       : ""
     : userPinned
-      ? `<span class="list-pin-badge" title="${t("lists.holdToUnpin")}">${adminMsIcon("push_pin")}</span>`
-      : `<span class="list-pin-hint" title="${t("lists.holdToPin")}">${adminMsIcon("push_pin")}</span>`;
+      ? `<span class="list-pin-badge" title="${tr("lists.holdToUnpin")}">${adminMsIcon("push_pin")}</span>`
+      : `<span class="list-pin-hint" title="${tr("lists.holdToPin")}">${adminMsIcon("push_pin")}</span>`;
   const holdHint = systemPinned
-    ? t("lists.empAssignmentsHint")
+    ? tr("lists.empAssignmentsHint")
     : userPinned
-      ? t("lists.holdToUnpinTop")
-      : t("lists.listItemHint");
+      ? tr("lists.holdToUnpinTop")
+      : tr("lists.listItemHint");
   const deleteBtn = systemPinned
     ? ""
-    : `<span class="list-delete-btn js-list-delete" role="button" tabindex="0" title="${t("lists.deleteList")}" aria-label="${t("lists.deleteListNamed", { title: escapeHtml(list.title) })}">${adminMsIcon("delete")}</span>`;
+    : `<span class="list-delete-btn js-list-delete" role="button" tabindex="0" title="${tr("lists.deleteList")}" aria-label="${tr("lists.deleteListNamed", { title: escapeHtml(list.title) })}">${adminMsIcon("delete")}</span>`;
   const titleHtml = systemPinned
-    ? `<span class="owner-emp-assign-title" title="${holdHint}">${escapeHtml(t("nav.employeeAssignments"))}</span>`
+    ? `<span class="owner-emp-assign-title" title="${holdHint}">${escapeHtml(tr("nav.employeeAssignments"))}</span>`
     : `<span class="text-truncate list-title-edit" title="${holdHint}">${escapeHtml(list.title)}</span>`;
   const itemClass = systemPinned
     ? "admin-sidebar-nav-item owner-list-item owner-list-item--pinned"
@@ -4989,22 +4989,22 @@ function wireTaskModal() {
     const listId = document.getElementById("modal-move-list").value;
     const title = document.getElementById("modal-title").value?.trim();
     if (!title) {
-      showToast(t("toast.enterTaskTitle"), "warning");
+      showToast(tr("toast.enterTaskTitle"), "warning");
       return;
     }
     if (!listId) {
-      showToast(t("toast.selectList"), "warning");
+      showToast(tr("toast.selectList"), "warning");
       return;
     }
     const rec = document.getElementById("modal-repeat").value;
     let recurrenceRule = null;
     if (rec === "custom") {
       if (!pendingCustomRecurrence) {
-        showToast(t("toast.openCustomRecurrence"));
+        showToast(tr("toast.openCustomRecurrence"));
         return;
       }
       if (pendingCustomRecurrence.endType === "on" && !pendingCustomRecurrence.endOn) {
-        showToast(t("toast.customRepeatEndDate"), "warning");
+        showToast(tr("toast.customRepeatEndDate"), "warning");
         return;
       }
       const dueDate = document.getElementById("modal-due")?.value || "";
@@ -5041,7 +5041,7 @@ function wireTaskModal() {
       await loadTasks(state.activeListId);
       bootstrap.Modal.getInstance(modalEl).hide();
       renderOwnerChrome();
-      showToast(id ? t("toast.taskSaved") : t("toast.taskCreated"), "success");
+      showToast(id ? tr("toast.taskSaved") : tr("toast.taskCreated"), "success");
     } catch (err) {
       showToast(err.message, "danger");
     }
@@ -5053,7 +5053,7 @@ function wireTaskModal() {
   document.getElementById("modal-delete").replaceWith(document.getElementById("modal-delete").cloneNode(true));
   document.getElementById("modal-delete").addEventListener("click", async () => {
     const id = document.getElementById("modal-task-id").value;
-    if (!window.confirm(t("owner.deleteTaskConfirm", { title: "" }).replace("\n\n", ""))) return;
+    if (!window.confirm(tr("owner.deleteTaskConfirm", { title: "" }).replace("\n\n", ""))) return;
     try {
       await api(`/api/tasks/${id}`, { method: "DELETE" });
       bootstrap.Modal.getInstance(modalEl).hide();
@@ -5089,51 +5089,51 @@ function wireTaskModal() {
   updateModalSaveEnabled();
 }
 
-function ownerTaskGroupTbody(t) {
+function ownerTaskGroupTbody(task) {
   const activeList = state.lists.find((l) => l.id === state.activeListId);
   const isEmpAssignList = isEmployeeAssignmentsList(activeList);
-  const assignees = t.assignees ?? [];
+  const assignees = task.assignees ?? [];
   const nAssigned = assignees.length;
   const nDone = assignees.filter((a) => assigneeShowsSubmittedForOwner(a)).length;
-  const detailId = `owner-task-detail-${t.id}`;
+  const detailId = `owner-task-detail-${task.id}`;
 
-  const deadlineCell = formatOwnerTaskDeadlineMock(t);
-  const recurrenceCell = ownerRecurrenceCellHtml(t);
+  const deadlineCell = formatOwnerTaskDeadlineMock(task);
+  const recurrenceCell = ownerRecurrenceCellHtml(task);
 
-  const descriptionFull = (t.notes || "").trim();
+  const descriptionFull = (task.notes || "").trim();
   const descriptionPanel = descriptionFull
     ? `<p class="admin-expand-desc-text">${escapeHtml(descriptionFull)}</p>`
-    : `<p class="admin-expand-desc-text admin-expand-desc-text--empty">${t("common.noDescriptionDot")}</p>`;
+    : `<p class="admin-expand-desc-text admin-expand-desc-text--empty">${tr("common.noDescriptionDot")}</p>`;
 
   const assigneeCards =
     assignees.length === 0
-      ? `<p class="admin-expand-empty admin-expand-empty--warn">${t("owner.noAssigneesYet")}</p>`
-      : assignees.map((a) => ownerMockAssigneeCardHtml(t, a, { isEmpAssignList })).join("");
+      ? `<p class="admin-expand-empty admin-expand-empty--warn">${tr("owner.noAssigneesYet")}</p>`
+      : assignees.map((a) => ownerMockAssigneeCardHtml(task, a, { isEmpAssignList })).join("");
 
   const hasUnreadUpdates = assignees.some((a) => (a.unreadProgressUpdateCount ?? 0) > 0);
   const expandUnreadClass = hasUnreadUpdates ? " owner-task-expand-btn--unread" : "";
 
-  const assigneeMarkDoneControl = `<button type="button" class="admin-expand-mark-done owner-mark-done-open" data-task-id="${t.id}" aria-haspopup="dialog" aria-controls="ownerMarkDoneModal">${t("owner.markAssigneesDone")}</button>`;
+  const assigneeMarkDoneControl = `<button type="button" class="admin-expand-mark-done owner-mark-done-open" data-task-id="${task.id}" aria-haspopup="dialog" aria-controls="ownerMarkDoneModal">${tr("owner.markAssigneesDone")}</button>`;
 
   const progressBadge =
     nAssigned === 0
-      ? `<span class="admin-expand-team-pill admin-expand-team-pill--unassigned">${t("common.unassigned")}</span>`
+      ? `<span class="admin-expand-team-pill admin-expand-team-pill--unassigned">${tr("common.unassigned")}</span>`
       : `<span class="admin-expand-team-pill tabular-nums">${nDone} / ${nAssigned}</span>`;
 
-  const groupDone = t.completed ? "owner-task-group--completed" : "";
+  const groupDone = task.completed ? "owner-task-group--completed" : "";
 
-  return `<tbody class="owner-task-group ${groupDone}" data-task-id="${t.id}">
-    <tr class="task-sort-row owner-task-row ${t.completed ? "owner-task-row--completed" : ""}" data-task-id="${t.id}">
+  return `<tbody class="owner-task-group ${groupDone}" data-task-id="${task.id}">
+    <tr class="task-sort-row owner-task-row ${task.completed ? "owner-task-row--completed" : ""}" data-task-id="${task.id}">
       <td class="owner-task-cell owner-task-cell--icon text-center align-middle">
         ${adminMsIcon("assignment", "admin-task-type-icon")}
-        <span class="task-grip grip-handle" title="${t("common.dragToReorder")}">${adminMsIcon("drag_indicator")}</span>
+        <span class="task-grip grip-handle" title="${tr("common.dragToReorder")}">${adminMsIcon("drag_indicator")}</span>
       </td>
       <td class="owner-task-cell owner-task-col--task align-middle">
         <div class="owner-task-title-wrap">
           <button type="button" class="btn btn-link text-start text-decoration-none p-0 owner-task-open-details" data-open-id="${
-          t.id
-        }" aria-label="${t("common.openTaskDetails")}">${escapeHtml(t.title)}</button>
-          ${taskCreatedMetaHtml(t.createdAt)}
+          task.id
+        }" aria-label="${tr("common.openTaskDetails")}">${escapeHtml(task.title)}</button>
+          ${taskCreatedMetaHtml(task.createdAt)}
         </div>
       </td>
       <td class="owner-task-cell owner-task-col--deadline align-middle text-nowrap tabular-nums">${deadlineCell}</td>
@@ -5146,7 +5146,7 @@ function ownerTaskGroupTbody(t) {
           data-bs-target="#${detailId}"
           aria-expanded="false"
           aria-controls="${detailId}"
-          aria-label="${hasUnreadUpdates ? t("common.taskDetailsUnread") : t("common.taskDetails")}"
+          aria-label="${hasUnreadUpdates ? tr("common.taskDetailsUnread") : tr("common.taskDetails")}"
         >
           ${hasUnreadUpdates ? `<span class="owner-task-expand-unread-dot" aria-hidden="true"></span>` : ""}
           <span class="admin-task-expand-icon">${adminMsIcon("expand_more")}</span>
@@ -5158,22 +5158,22 @@ function ownerTaskGroupTbody(t) {
         <div class="collapse owner-task-detail-collapse admin-task-detail-collapse" id="${detailId}">
           <div class="admin-task-expand-panel">
             <div class="admin-expand-section admin-expand-section--desc">
-              <h4 class="admin-expand-section-label">${t("common.description")}</h4>
+              <h4 class="admin-expand-section-label">${tr("common.description")}</h4>
               ${descriptionPanel}
             </div>
             <div class="admin-expand-section">
               <div class="admin-expand-section-head">
-                <h4 class="admin-expand-section-label mb-0">${t("owner.teamProgress")}</h4>
+                <h4 class="admin-expand-section-label mb-0">${tr("owner.teamProgress")}</h4>
                 ${progressBadge}
               </div>
               <div class="admin-expand-cards">${assigneeCards}</div>
-              ${isEmpAssignList ? "" : ownerDelegationHistoryHtml(t)}
+              ${isEmpAssignList ? "" : ownerDelegationHistoryHtml(task)}
             </div>
             <div class="admin-expand-actions">
               ${assigneeMarkDoneControl}
               <div class="admin-expand-icon-actions">
-                <button type="button" class="admin-expand-icon-btn" data-open-id="${t.id}" title="${t("common.editTask")}" aria-label="${t("common.editTask")}">${adminMsIcon("edit")}</button>
-                <button type="button" class="admin-expand-icon-btn admin-expand-icon-btn--danger" data-delete-id="${t.id}" title="${t("common.deleteTask")}" aria-label="${t("common.deleteTask")}">${adminMsIcon("delete")}</button>
+                <button type="button" class="admin-expand-icon-btn" data-open-id="${task.id}" title="${tr("common.editTask")}" aria-label="${tr("common.editTask")}">${adminMsIcon("edit")}</button>
+                <button type="button" class="admin-expand-icon-btn admin-expand-icon-btn--danger" data-delete-id="${task.id}" title="${tr("common.deleteTask")}" aria-label="${tr("common.deleteTask")}">${adminMsIcon("delete")}</button>
               </div>
             </div>
           </div>
@@ -5199,12 +5199,12 @@ function renderOwnerMain() {
   const listId = state.activeListId;
   const adminWelcomeName = state.user?.displayName
     ? escapeHtml(state.user.displayName)
-    : t("common.admin");
+    : tr("common.admin");
 
   const filteredTasks = ownerFilteredTasks();
   const visibleTasks = sortOwnerTasksForDisplay(filteredTasks);
 
-  const tbodyInner = visibleTasks.map((t) => ownerTaskGroupTbody(t)).join("");
+  const tbodyInner = visibleTasks.map((task) => ownerTaskGroupTbody(task)).join("");
 
   const isEmpAssignList = isEmployeeAssignmentsList(list);
   const useEmpAssignColumns = isEmpAssignList || state.ownerTaskFilter === "employee_assigned";
@@ -5218,15 +5218,15 @@ function renderOwnerMain() {
   const kpiTotal = Math.max(metrics.total, 1);
   const kpiRow = list
     ? `<div class="admin-kpi-grid">
-          ${ownerKpiCardHtml("active", t("owner.kpiActive"), "bolt", metrics.active, kpiTotal, activeKpiClass)}
-          ${ownerKpiCardHtml("in_review", t("owner.kpiInReview"), "rate_review", metrics.inReview, kpiTotal, inReviewKpiClass)}
-          ${ownerKpiCardHtml("completed", t("owner.kpiCompleted"), "check_circle", metrics.done, kpiTotal, completedKpiClass)}
+          ${ownerKpiCardHtml("active", tr("owner.kpiActive"), "bolt", metrics.active, kpiTotal, activeKpiClass)}
+          ${ownerKpiCardHtml("in_review", tr("owner.kpiInReview"), "rate_review", metrics.inReview, kpiTotal, inReviewKpiClass)}
+          ${ownerKpiCardHtml("completed", tr("owner.kpiCompleted"), "check_circle", metrics.done, kpiTotal, completedKpiClass)}
           ${
             isEmpAssignList
               ? ""
               : ownerKpiCardHtml(
                   "employee_assigned",
-                  t("owner.kpiEmployeeAssigned"),
+                  tr("owner.kpiEmployeeAssigned"),
                   "group",
                   metrics.employeeAssigned,
                   kpiTotal,
@@ -5239,42 +5239,42 @@ function renderOwnerMain() {
   const emptyMessage = !list
     ? `<div class="owner-empty-state py-5 px-3">
         <i class="bi bi-folder2-open owner-empty-icon text-primary" aria-hidden="true"></i>
-        <p class="owner-empty-title mb-1">${t("empty.selectList")}</p>
-        <p class="owner-empty-desc text-muted small mb-0">${t("empty.selectListDesc")}</p>
+        <p class="owner-empty-title mb-1">${tr("empty.selectList")}</p>
+        <p class="owner-empty-desc text-muted small mb-0">${tr("empty.selectListDesc")}</p>
       </div>`
     : metrics.total === 0
       ? isEmployeeAssignmentsList(list)
         ? `<div class="owner-empty-state py-5 px-3">
             <i class="bi bi-person-lines-fill owner-empty-icon text-info" aria-hidden="true"></i>
-            <p class="owner-empty-title mb-1">${t("empty.noEmployeeAssignments")}</p>
+            <p class="owner-empty-title mb-1">${tr("empty.noEmployeeAssignments")}</p>
             <p class="owner-empty-desc text-muted small mb-0">When employees use <strong>Create & assign task</strong> or assign a task to a colleague, it appears here. Click <strong>Refresh</strong> or re-open this list if you expect tasks to show.</p>
           </div>`
         : `<div class="owner-empty-state py-5 px-3">
         <i class="bi bi-clipboard2-plus owner-empty-icon text-primary" aria-hidden="true"></i>
-        <p class="owner-empty-title mb-1">${t("empty.noTasks")}</p>
+        <p class="owner-empty-title mb-1">${tr("empty.noTasks")}</p>
         <p class="owner-empty-desc text-muted small mb-0">Click <strong>Create Task</strong> in the sidebar to add the first task.</p>
           </div>`
       : state.ownerTaskFilter === "completed"
         ? `<div class="owner-empty-state py-5 px-3">
             <i class="bi bi-check-circle owner-empty-icon text-success" aria-hidden="true"></i>
-            <p class="owner-empty-title mb-1">${t("empty.noCompleted")}</p>
+            <p class="owner-empty-title mb-1">${tr("empty.noCompleted")}</p>
             <p class="owner-empty-desc text-muted small mb-0">Tasks appear here after every assigned employee has submitted.</p>
           </div>`
         : state.ownerTaskFilter === "in_review"
           ? `<div class="owner-empty-state py-5 px-3">
               <i class="bi bi-chat-left-dots owner-empty-icon text-danger" aria-hidden="true"></i>
-              <p class="owner-empty-title mb-1">${t("empty.nothingInReview")}</p>
+              <p class="owner-empty-title mb-1">${tr("empty.nothingInReview")}</p>
               <p class="owner-empty-desc text-muted small mb-0">Tasks appear here when an employee posts a progress update and has not submitted yet.</p>
             </div>`
           : state.ownerTaskFilter === "employee_assigned"
             ? `<div class="owner-empty-state py-5 px-3">
                 <i class="bi bi-person-lines-fill owner-empty-icon text-info" aria-hidden="true"></i>
-                <p class="owner-empty-title mb-1">${t("empty.noEmpAssignmentsFilter")}</p>
+                <p class="owner-empty-title mb-1">${tr("empty.noEmpAssignmentsFilter")}</p>
                 <p class="owner-empty-desc text-muted small mb-0">Tasks appear here when an employee creates or assigns work to a colleague. Check the <strong>Employee assignments</strong> list.</p>
       </div>`
     : `<div class="owner-empty-state py-5 px-3">
               <i class="bi bi-check2-all owner-empty-icon text-success" aria-hidden="true"></i>
-              <p class="owner-empty-title mb-1">${t("empty.noActiveTasks")}</p>
+              <p class="owner-empty-title mb-1">${tr("empty.noActiveTasks")}</p>
               <p class="owner-empty-desc text-muted small mb-0">All caught up. Click <strong>Completed</strong> above to review finished tasks.</p>
       </div>`;
 
@@ -5285,11 +5285,11 @@ function renderOwnerMain() {
           <table class="table table-hover align-middle mb-0 owner-task-table admin-task-table${useEmpAssignColumns ? " owner-task-table--emp-assign" : ""}" id="owner-task-table-sort">
             <thead>
               <tr>
-                <th scope="col" class="owner-task-cell owner-task-cell--icon"><span class="visually-hidden">${t("common.type")}</span></th>
-                <th scope="col" class="owner-task-head owner-task-col--task">${t("owner.tableTaskTitle")}</th>
-                <th scope="col" class="owner-task-head owner-task-col--deadline text-nowrap">${t("owner.tableDeadline")}</th>
-                <th scope="col" class="owner-task-head owner-task-col--recurrence text-nowrap">${t("owner.tableRecurrence")}</th>
-                <th scope="col" class="owner-task-head owner-task-col--trail text-end">${t("owner.tableActions")}</th>
+                <th scope="col" class="owner-task-cell owner-task-cell--icon"><span class="visually-hidden">${tr("common.type")}</span></th>
+                <th scope="col" class="owner-task-head owner-task-col--task">${tr("owner.tableTaskTitle")}</th>
+                <th scope="col" class="owner-task-head owner-task-col--deadline text-nowrap">${tr("owner.tableDeadline")}</th>
+                <th scope="col" class="owner-task-head owner-task-col--recurrence text-nowrap">${tr("owner.tableRecurrence")}</th>
+                <th scope="col" class="owner-task-head owner-task-col--trail text-end">${tr("owner.tableActions")}</th>
               </tr>
             </thead>
             ${tbodyInner}
@@ -5301,21 +5301,21 @@ function renderOwnerMain() {
     <header class="admin-dash-header">
       ${adminMobileNavToggleHtml()}
       <div class="admin-dash-heading">
-        <h1 class="admin-dash-title">${t("owner.dashboardTitle")}</h1>
-        <p class="admin-dash-subtitle">${t("common.welcome", { name: adminWelcomeName })}</p>
+        <h1 class="admin-dash-title">${tr("owner.dashboardTitle")}</h1>
+        <p class="admin-dash-subtitle">${tr("common.welcome", { name: adminWelcomeName })}</p>
       </div>
       <div class="admin-dash-utilities">
         ${languageSelectorHtml({ compact: true })}
         ${ownerTrialTopBannerHtml()}
         ${adminNotificationsBellHtml(state.user?.id)}
-        <button type="button" class="admin-icon-btn js-owner-refresh-tasks" aria-label="${t("owner.refreshTasks")}" ${!list ? "disabled" : ""}>
+        <button type="button" class="admin-icon-btn js-owner-refresh-tasks" aria-label="${tr("owner.refreshTasks")}" ${!list ? "disabled" : ""}>
           ${adminMsIcon("refresh")}
         </button>
         ${ownerAdminHeaderProfileHtml()}
       </div>
     </header>
     ${kpiRow}
-    <section class="owner-task-panel" aria-label="${t("owner.tasksPanel")}">
+    <section class="owner-task-panel" aria-label="${tr("owner.tasksPanel")}">
       ${tableBlock}
     </section>
     </div>
@@ -5332,7 +5332,7 @@ function renderOwnerMain() {
       try {
         await loadTasks(listId);
         renderOwnerMain();
-        showToast(t("toast.tasksRefreshed"), "success");
+        showToast(tr("toast.tasksRefreshed"), "success");
       } catch (err) {
         showToast(err.message, "danger");
       } finally {
@@ -5372,7 +5372,7 @@ function renderOwnerMain() {
       const userId = btn.getAttribute("data-view-submission-user-id");
       if (!taskId || !userId) return;
       void openSubmissionDetailForAssignee(taskId, userId).catch((err) => {
-        showToast(err.message || t("toast.couldNotLoadSubmission"), "danger");
+        showToast(err.message || tr("toast.couldNotLoadSubmission"), "danger");
       });
     });
   });
@@ -5385,7 +5385,7 @@ function renderOwnerMain() {
       const userName = btn.getAttribute("data-view-progress-user-name") || "";
       if (!taskId || !userId) return;
       void openProgressUpdatesForAssignee(taskId, userId, userName).catch((err) => {
-        showToast(err.message || t("toast.couldNotLoadUpdates"), "danger");
+        showToast(err.message || tr("toast.couldNotLoadUpdates"), "danger");
       });
     });
   });
@@ -5396,7 +5396,7 @@ function renderOwnerMain() {
       const taskId = btn.getAttribute("data-task-id");
       if (!taskId) return;
       void openProgressUpdatesAll(taskId).catch((err) => {
-        showToast(err.message || t("toast.couldNotLoadActivity"), "danger");
+        showToast(err.message || tr("toast.couldNotLoadActivity"), "danger");
       });
     });
   });
@@ -5432,7 +5432,7 @@ function renderOwnerMain() {
       const id = btn.getAttribute("data-delete-id");
       const t = findTaskById(id);
       if (!t || !listId) return;
-      if (!window.confirm(t("owner.deleteTaskConfirm", { title: t.title }))) return;
+      if (!window.confirm(tr("owner.deleteTaskConfirm", { title: t.title }))) return;
       try {
         await api(`/api/tasks/${id}`, { method: "DELETE" });
         await loadTasks(listId);
@@ -5456,12 +5456,12 @@ function renderOwnerMain() {
 function ownerReportsChromeHeaderHtml() {
   const adminWelcomeName = state.user?.displayName
     ? escapeHtml(state.user.displayName)
-    : t("common.admin");
+    : tr("common.admin");
   return `<header class="admin-dash-header">
       ${adminMobileNavToggleHtml()}
       <div class="admin-dash-heading">
-        <h1 class="admin-dash-title">${t("owner.reportsTitle")}</h1>
-        <p class="admin-dash-subtitle">${t("common.welcome", { name: adminWelcomeName })}</p>
+        <h1 class="admin-dash-title">${tr("owner.reportsTitle")}</h1>
+        <p class="admin-dash-subtitle">${tr("common.welcome", { name: adminWelcomeName })}</p>
       </div>
       <div class="admin-dash-utilities">
         ${languageSelectorHtml({ compact: true })}
@@ -5504,8 +5504,8 @@ function wireChromeNav() {
   document.querySelectorAll(".js-new-list").forEach((b) =>
     b.addEventListener("click", async () => {
       const title = await openListNameModal({
-        heading: t("modals.newList"),
-        fieldLabel: t("modals.listName"),
+        heading: tr("modals.newList"),
+        fieldLabel: tr("modals.listName"),
         initialValue: "",
       });
       if (title == null || !title.trim()) return;
@@ -5550,8 +5550,8 @@ function renderOwnerChrome() {
         </aside>
         <div class="offcanvas offcanvas-start admin-mobile-nav" tabindex="-1" id="leftNavOffcanvas" aria-labelledby="leftNavLabel">
           <div class="offcanvas-header admin-mobile-nav-header border-0">
-            <h2 class="offcanvas-title h6 mb-0" id="leftNavLabel">${t("common.menu")}</h2>
-            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="${t("common.close")}"></button>
+            <h2 class="offcanvas-title h6 mb-0" id="leftNavLabel">${tr("common.menu")}</h2>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="${tr("common.close")}"></button>
           </div>
           <div class="offcanvas-body admin-mobile-nav-body pt-0">${leftNavInner()}</div>
         </div>
@@ -5749,7 +5749,7 @@ async function empRefreshDashboard(btn) {
     renderEmpListContentOnly();
     renderEmployeeMain();
     syncEmpTopbarTitle();
-    showToast(t("toast.tasksRefreshed"), "success");
+    showToast(tr("toast.tasksRefreshed"), "success");
   } catch (err) {
     showToast(err.message, "danger");
   } finally {
@@ -5769,7 +5769,7 @@ async function deleteEmpAssignedTask(btn) {
     renderEmpListContentOnly();
     renderEmployeeMain();
     syncEmpTopbarTitle();
-    showToast(t("toast.taskDeleted"), "success");
+    showToast(tr("toast.taskDeleted"), "success");
   } catch (err) {
     showToast(err.message, "danger");
     btn.disabled = false;
@@ -5797,7 +5797,7 @@ async function openEmpCreateTaskModal() {
   dueInput.value = "";
   errEl.classList.add("d-none");
   errEl.textContent = "";
-  select.innerHTML = `<option value="">${t("employee.chooseEmployee")}</option>`;
+  select.innerHTML = `<option value="">${tr("employee.chooseEmployee")}</option>`;
 
   try {
     const peers = state.empPeers?.length ? state.empPeers : await loadEmpPeers();
@@ -5808,7 +5808,7 @@ async function openEmpCreateTaskModal() {
       select.appendChild(opt);
     });
   } catch (err) {
-    showToast(err.message || t("toast.couldNotLoadEmployees"), "danger");
+    showToast(err.message || tr("toast.couldNotLoadEmployees"), "danger");
     return;
   }
 
@@ -5838,12 +5838,12 @@ function wireEmpCreateTaskModal() {
     errEl.classList.add("d-none");
     errEl.textContent = "";
     if (!title) {
-      errEl.textContent = t("validation.enterTaskTitle");
+      errEl.textContent = tr("validation.enterTaskTitle");
       errEl.classList.remove("d-none");
       return;
     }
     if (!assigneeId) {
-      errEl.textContent = t("validation.chooseEmployeeAssign");
+      errEl.textContent = tr("validation.chooseEmployeeAssign");
       errEl.classList.remove("d-none");
       return;
     }
@@ -5861,14 +5861,14 @@ function wireEmpCreateTaskModal() {
         body: JSON.stringify(body),
       });
       bootstrap.Modal.getInstance(modalEl)?.hide();
-      showToast(t("toast.taskCreatedAssigned"), "success");
+      showToast(tr("toast.taskCreatedAssigned"), "success");
       await loadEmployeeAssignedByMeTasks();
       state.empFilter = "assigned-by-me";
       renderEmpListContentOnly();
       renderEmployeeMain();
       syncEmpTopbarTitle();
     } catch (err) {
-      errEl.textContent = err.message || t("validation.createTaskFailed");
+      errEl.textContent = err.message || tr("validation.createTaskFailed");
       errEl.classList.remove("d-none");
     } finally {
       submitBtn.disabled = false;
@@ -5889,7 +5889,7 @@ async function openEmpDelegateModal(task) {
   titleEl.textContent = task.title;
   errEl.classList.add("d-none");
   errEl.textContent = "";
-  select.innerHTML = `<option value="">${t("employee.chooseEmployee")}</option>`;
+  select.innerHTML = `<option value="">${tr("employee.chooseEmployee")}</option>`;
 
   try {
     const peers = state.empPeers?.length ? state.empPeers : await loadEmpPeers();
@@ -5900,7 +5900,7 @@ async function openEmpDelegateModal(task) {
       select.appendChild(opt);
     });
   } catch (err) {
-    showToast(err.message || t("toast.couldNotLoadEmployees"), "danger");
+    showToast(err.message || tr("toast.couldNotLoadEmployees"), "danger");
     return;
   }
 
@@ -5924,7 +5924,7 @@ function wireEmpDelegateModal() {
     errEl.classList.add("d-none");
     errEl.textContent = "";
     if (!employeeId) {
-      errEl.textContent = t("validation.chooseEmployee");
+      errEl.textContent = tr("validation.chooseEmployee");
       errEl.classList.remove("d-none");
       return;
     }
@@ -5936,14 +5936,14 @@ function wireEmpDelegateModal() {
         body: JSON.stringify({ employeeId }),
       });
       bootstrap.Modal.getInstance(modalEl)?.hide();
-      showToast(t("toast.taskAssignedColleague"), "success");
+      showToast(tr("toast.taskAssignedColleague"), "success");
       await loadEmployeeDashboard();
       state.empFilter = "assigned-by-me";
       renderEmpListContentOnly();
       renderEmployeeMain();
       syncEmpTopbarTitle();
     } catch (err) {
-      errEl.textContent = err.message || t("validation.assignTaskFailed");
+      errEl.textContent = err.message || tr("validation.assignTaskFailed");
       errEl.classList.remove("d-none");
     } finally {
       submitBtn.disabled = false;
@@ -5972,17 +5972,17 @@ function employeeAssignedByMeMetrics() {
 }
 
 function empFilterLabel(filter) {
-  if (filter === "assigned-by-me") return t("nav.assignedByMe");
-  if (filter === "submitted") return t("employee.submittedTasks");
-  if (filter === "all") return t("employee.allAssignedTasks");
-  return t("nav.activeTasks");
+  if (filter === "assigned-by-me") return tr("nav.assignedByMe");
+  if (filter === "submitted") return tr("employee.submittedTasks");
+  if (filter === "all") return tr("employee.allAssignedTasks");
+  return tr("nav.activeTasks");
 }
 
 function empFilterSubtitle(filter) {
   if (filter === "assigned-by-me") {
-    return t("employee.assignedByMeHint");
+    return tr("employee.assignedByMeHint");
   }
-  return t("employee.activeTasksHint");
+  return tr("employee.activeTasksHint");
 }
 
 function empNavFilterButtonHtml(f, active) {
@@ -6050,10 +6050,10 @@ function empFilteredTasks() {
 function empTaskTableRows(tasks) {
   const emptyCopy =
     state.empFilter === "submitted"
-      ? { icon: "check-circle", title: t("empty.nothingSubmitted"), desc: t("empty.nothingSubmittedDesc") }
+      ? { icon: "check-circle", title: tr("empty.nothingSubmitted"), desc: tr("empty.nothingSubmittedDesc") }
       : state.empFilter === "all"
-        ? { icon: "folder2-open", title: t("empty.noAssignedTasks"), desc: t("empty.noAssignedTasksDesc") }
-        : { icon: "clipboard2-plus", title: t("empty.empNoActive"), desc: t("empty.empNoActiveDesc") };
+        ? { icon: "folder2-open", title: tr("empty.noAssignedTasks"), desc: tr("empty.noAssignedTasksDesc") }
+        : { icon: "clipboard2-plus", title: tr("empty.empNoActive"), desc: tr("empty.empNoActiveDesc") };
 
   if (!tasks.length) {
     return `<tbody class="owner-task-empty"><tr><td colspan="5">
@@ -6092,11 +6092,11 @@ function empTaskTableRows(tasks) {
         : "";
       const submissionBtn = submitted
         ? hasViewableSubmission
-          ? `<button type="button" class="btn btn-sm btn-outline-primary emp-view-submission emp-action-btn" data-task-id="${task.id}" data-user-id="${escapeHtml(state.user?.id || "")}"><i class="bi bi-eye me-1" aria-hidden="true"></i>${t("common.view")}</button>`
+          ? `<button type="button" class="btn btn-sm btn-outline-primary emp-view-submission emp-action-btn" data-task-id="${task.id}" data-user-id="${escapeHtml(state.user?.id || "")}"><i class="bi bi-eye me-1" aria-hidden="true"></i>${tr("common.view")}</button>`
           : me?.lastSubmittedAt
             ? `<span class="small text-success text-nowrap"><i class="bi bi-check-circle me-1" aria-hidden="true"></i>${escapeHtml(formatProgressUpdateTime(me.lastSubmittedAt))}</span>`
-            : `<span class="small text-success"><i class="bi bi-check-circle me-1" aria-hidden="true"></i>${t("employee.submittedLabel")}</span>`
-        : `<button type="button" class="btn btn-sm btn-primary emp-open-submit emp-action-btn" data-task-id="${task.id}"><i class="bi bi-send me-1" aria-hidden="true"></i>${t("common.submit")}</button>`;
+            : `<span class="small text-success"><i class="bi bi-check-circle me-1" aria-hidden="true"></i>${tr("employee.submittedLabel")}</span>`
+        : `<button type="button" class="btn btn-sm btn-primary emp-open-submit emp-action-btn" data-task-id="${task.id}"><i class="bi bi-send me-1" aria-hidden="true"></i>${tr("common.submit")}</button>`;
       const assignedByLine = me?.assignedBy?.displayName
         ? `<div class="small text-muted emp-assigned-by-line mt-1">From ${escapeHtml(me.assignedBy.displayName)}</div>`
         : "";
@@ -6104,7 +6104,7 @@ function empTaskTableRows(tasks) {
       const recurrenceLines = showRecurrenceOnActive ? empActiveRecurrenceLinesHtml(task) : "";
       const submissionCell = `<div class="d-flex flex-column align-items-end gap-1 emp-task-actions">
           <button type="button" class="btn btn-sm emp-open-progress-update emp-update-btn emp-action-btn" data-task-id="${task.id}">
-            <i class="bi bi-chat-left-dots" aria-hidden="true"></i><span>${t("common.update")}</span>${updateBadge}
+            <i class="bi bi-chat-left-dots" aria-hidden="true"></i><span>${tr("common.update")}</span>${updateBadge}
           </button>
           ${submissionBtn}
         </div>`;
@@ -6115,7 +6115,7 @@ function empTaskTableRows(tasks) {
         <td class="owner-task-cell emp-col-check text-center align-middle">
           <input type="checkbox" class="form-check-input emp-task-check" data-task-id="${task.id}" ${
         submitted ? "checked" : ""
-      } aria-label="${t("common.markSubmitted", { title: escapeHtml(task.title) })}" />
+      } aria-label="${tr("common.markSubmitted", { title: escapeHtml(task.title) })}" />
         </td>
         <td class="owner-task-cell owner-task-col--task emp-col-task align-middle">
           <span class="fw-semibold emp-task-title ${submitted ? "text-muted text-decoration-line-through" : ""}">${escapeHtml(task.title)}</span>
@@ -6135,7 +6135,7 @@ function empAssignedByMeCardsHtml(tasks) {
   if (!tasks.length) {
     return `<div class="owner-empty-state py-5 px-3">
       <i class="bi bi-person-plus owner-empty-icon text-primary" aria-hidden="true"></i>
-      <p class="owner-empty-title mb-1">${t("empty.nothingAssignedYet")}</p>
+      <p class="owner-empty-title mb-1">${tr("empty.nothingAssignedYet")}</p>
       <p class="owner-empty-desc text-muted small mb-0">Use <strong>Create & assign task</strong> to assign work to a colleague.</p>
       </div>`;
   }
@@ -6148,7 +6148,7 @@ function empAssignedByMeCardsHtml(tasks) {
       const descriptionText =
         notesRaw.length > 0
           ? escapeHtml(notesRaw.length > 200 ? `${notesRaw.slice(0, 197)}…` : notesRaw)
-          : `<span class="text-muted fst-italic">${t("common.noDescription")}</span>`;
+          : `<span class="text-muted fst-italic">${tr("common.noDescription")}</span>`;
       const assignedWhen = assignees[0]?.delegatedAt
         ? escapeHtml(formatProgressUpdateTime(assignees[0].delegatedAt))
         : "";
@@ -6156,9 +6156,9 @@ function empAssignedByMeCardsHtml(tasks) {
         ? escapeHtml(formatEmpDue(task.dueAt))
         : `<span class="text-muted">—</span>`;
       const deleteBtn = task.canDelete
-        ? `<button type="button" class="btn btn-sm btn-outline-danger js-emp-delete-assigned" data-task-id="${task.id}" data-task-title="${escapeHtml(task.title)}" aria-label="${t("common.deleteTask")}">
+        ? `<button type="button" class="btn btn-sm btn-outline-danger js-emp-delete-assigned" data-task-id="${task.id}" data-task-title="${escapeHtml(task.title)}" aria-label="${tr("common.deleteTask")}">
             <i class="bi bi-trash" aria-hidden="true"></i>
-            <span class="d-none d-sm-inline ms-1">${t("common.delete")}</span>
+            <span class="d-none d-sm-inline ms-1">${tr("common.delete")}</span>
           </button>`
         : "";
       return `<article class="emp-assigned-out-card" data-task-id="${task.id}">
@@ -6172,15 +6172,15 @@ function empAssignedByMeCardsHtml(tasks) {
               </div>
         <div class="emp-assigned-out-card-grid">
           <div class="emp-assigned-out-card-field">
-            <span class="emp-assigned-out-card-label">${t("common.assignedTo")}</span>
+            <span class="emp-assigned-out-card-label">${tr("common.assignedTo")}</span>
             <span class="emp-assigned-out-card-value fw-semibold">${assigneeNames}</span>
             </div>
           <div class="emp-assigned-out-card-field">
-            <span class="emp-assigned-out-card-label">${t("common.deadline")}</span>
+            <span class="emp-assigned-out-card-label">${tr("common.deadline")}</span>
             <span class="emp-assigned-out-card-value tabular-nums">${deadlineDisplay}</span>
                 </div>
           <div class="emp-assigned-out-card-field emp-assigned-out-card-field--full">
-            <span class="emp-assigned-out-card-label">${t("common.description")}</span>
+            <span class="emp-assigned-out-card-label">${tr("common.description")}</span>
             <span class="emp-assigned-out-card-value small">${descriptionText}</span>
               </div>
         </div>
@@ -6194,13 +6194,13 @@ function empLeftNavInner() {
     <div class="owner-sidebar admin-sidebar d-flex flex-column h-100">
       <div class="admin-sidebar-profile">
         ${ownerSidebarLogoHtml()}
-        <div class="admin-sidebar-brand-title">${t("app.title")}</div>
+        <div class="admin-sidebar-brand-title">${tr("app.title")}</div>
       </div>
       <button type="button" class="admin-create-task-btn js-emp-create-task">
         ${adminMsIcon("add")}
-        ${t("nav.createAndAssign")}
+        ${tr("nav.createAndAssign")}
       </button>
-      <nav class="admin-sidebar-nav" aria-label="${t("nav.myWork")}">
+      <nav class="admin-sidebar-nav" aria-label="${tr("nav.myWork")}">
         <div class="js-emp-nav-host"></div>
         ${teamChatSidebarNavItemHtml()}
       </nav>
@@ -6219,15 +6219,15 @@ function renderEmpListContentOnly() {
   const metrics = employeeDashboardMetrics();
   const assignedMetrics = employeeAssignedByMeMetrics();
   const myWorkFilters = [
-    { id: "active", label: t("nav.activeTasks"), icon: "list-task", count: metrics.active },
-    { id: "submitted", label: t("nav.submitted"), icon: "check-circle", count: metrics.done },
-    { id: "all", label: t("nav.allAssigned"), icon: "collection", count: metrics.total },
+    { id: "active", label: tr("nav.activeTasks"), icon: "list-task", count: metrics.active },
+    { id: "submitted", label: tr("nav.submitted"), icon: "check-circle", count: metrics.done },
+    { id: "all", label: tr("nav.allAssigned"), icon: "collection", count: metrics.total },
   ];
   const myWorkHtml = myWorkFilters
     .map((f) => empNavFilterButtonHtml(f, state.empFilter === f.id))
     .join("");
   const assignedHtml = empNavFilterButtonHtml(
-    { id: "assigned-by-me", label: t("nav.assignedByMe"), icon: "person-plus", count: assignedMetrics.total },
+    { id: "assigned-by-me", label: tr("nav.assignedByMe"), icon: "person-plus", count: assignedMetrics.total },
     state.empFilter === "assigned-by-me"
   );
   const html = myWorkHtml + assignedHtml;
@@ -6268,23 +6268,23 @@ function renderEmployeeMain() {
   if (!main) return;
 
   const isAssignedByMe = state.empFilter === "assigned-by-me";
-  const welcomeName = state.user?.displayName ? escapeHtml(state.user.displayName) : t("common.employee");
+  const welcomeName = state.user?.displayName ? escapeHtml(state.user.displayName) : tr("common.employee");
 
   let kpiRow = "";
   let tableSection = "";
 
   if (isAssignedByMe) {
     const assignedList = state.empAssignedByMeTasks;
-    tableSection = `<section class="owner-task-panel emp-assigned-by-me-panel" aria-label="${t("employee.tasksAssignedByMe")}">
+    tableSection = `<section class="owner-task-panel emp-assigned-by-me-panel" aria-label="${tr("employee.tasksAssignedByMe")}">
       ${empAssignedByMeCardsHtml(assignedList)}
     </section>`;
     const assignedMetrics = employeeAssignedByMeMetrics();
     const assignedTotal = Math.max(assignedMetrics.total, 1);
     kpiRow = `<div class="admin-kpi-grid">
-      ${employeeKpiCardHtml("active", t("employee.kpiActive"), "task_alt", employeeDashboardMetrics().active, Math.max(employeeDashboardMetrics().total, 1), state.empFilter === "active" ? " admin-kpi-card--active" : "")}
-      ${employeeKpiCardHtml("submitted", t("employee.kpiSubmitted"), "check_circle", employeeDashboardMetrics().done, Math.max(employeeDashboardMetrics().total, 1), state.empFilter === "submitted" ? " admin-kpi-card--active" : "")}
-      ${employeeKpiCardHtml("all", t("employee.kpiAllAssigned"), "inventory_2", employeeDashboardMetrics().total, Math.max(employeeDashboardMetrics().total, 1), state.empFilter === "all" ? " admin-kpi-card--active" : "")}
-      ${employeeKpiCardHtml("assigned-by-me", t("employee.kpiIAssigned"), "group_add", assignedMetrics.total, assignedTotal, " admin-kpi-card--active")}
+      ${employeeKpiCardHtml("active", tr("employee.kpiActive"), "task_alt", employeeDashboardMetrics().active, Math.max(employeeDashboardMetrics().total, 1), state.empFilter === "active" ? " admin-kpi-card--active" : "")}
+      ${employeeKpiCardHtml("submitted", tr("employee.kpiSubmitted"), "check_circle", employeeDashboardMetrics().done, Math.max(employeeDashboardMetrics().total, 1), state.empFilter === "submitted" ? " admin-kpi-card--active" : "")}
+      ${employeeKpiCardHtml("all", tr("employee.kpiAllAssigned"), "inventory_2", employeeDashboardMetrics().total, Math.max(employeeDashboardMetrics().total, 1), state.empFilter === "all" ? " admin-kpi-card--active" : "")}
+      ${employeeKpiCardHtml("assigned-by-me", tr("employee.kpiIAssigned"), "group_add", assignedMetrics.total, assignedTotal, " admin-kpi-card--active")}
     </div>`;
   } else {
     const metrics = employeeDashboardMetrics();
@@ -6298,21 +6298,21 @@ function renderEmployeeMain() {
     const allKpiClass = state.empFilter === "all" ? " admin-kpi-card--active" : "";
     const assignedKpiClass = state.empFilter === "assigned-by-me" ? " admin-kpi-card--active" : "";
     kpiRow = `<div class="admin-kpi-grid">
-      ${employeeKpiCardHtml("active", t("employee.kpiActive"), "task_alt", metrics.active, kpiTotal, activeKpiClass)}
-      ${employeeKpiCardHtml("submitted", t("employee.kpiSubmitted"), "check_circle", metrics.done, kpiTotal, submittedKpiClass)}
-      ${employeeKpiCardHtml("all", t("employee.kpiAllAssigned"), "inventory_2", metrics.total, kpiTotal, allKpiClass)}
-      ${employeeKpiCardHtml("assigned-by-me", t("employee.kpiIAssigned"), "group_add", assignedMetrics.total, assignedTotal, assignedKpiClass)}
+      ${employeeKpiCardHtml("active", tr("employee.kpiActive"), "task_alt", metrics.active, kpiTotal, activeKpiClass)}
+      ${employeeKpiCardHtml("submitted", tr("employee.kpiSubmitted"), "check_circle", metrics.done, kpiTotal, submittedKpiClass)}
+      ${employeeKpiCardHtml("all", tr("employee.kpiAllAssigned"), "inventory_2", metrics.total, kpiTotal, allKpiClass)}
+      ${employeeKpiCardHtml("assigned-by-me", tr("employee.kpiIAssigned"), "group_add", assignedMetrics.total, assignedTotal, assignedKpiClass)}
     </div>`;
-    tableSection = `<section class="owner-task-panel" aria-label="${t("employee.assignedTasks")}">
+    tableSection = `<section class="owner-task-panel" aria-label="${tr("employee.assignedTasks")}">
       <div class="table-responsive owner-task-table-wrap">
         <table class="table table-hover align-middle mb-0 owner-task-table admin-task-table emp-owner-task-table">
           <thead>
             <tr>
-              <th scope="col" class="owner-task-head text-center" style="width:3rem;"><span class="visually-hidden">${t("common.doneCol")}</span></th>
-              <th scope="col" class="owner-task-head owner-task-col--task">${t("common.task")}</th>
-              <th scope="col" class="owner-task-head owner-task-col--deadline text-nowrap text-center">${t("common.dates")}</th>
-              <th scope="col" class="owner-task-head">${t("common.description")}</th>
-              <th scope="col" class="owner-task-head text-end" style="width:9rem;">${t("common.actions")}</th>
+              <th scope="col" class="owner-task-head text-center" style="width:3rem;"><span class="visually-hidden">${tr("common.doneCol")}</span></th>
+              <th scope="col" class="owner-task-head owner-task-col--task">${tr("common.task")}</th>
+              <th scope="col" class="owner-task-head owner-task-col--deadline text-nowrap text-center">${tr("common.dates")}</th>
+              <th scope="col" class="owner-task-head">${tr("common.description")}</th>
+              <th scope="col" class="owner-task-head text-end" style="width:9rem;">${tr("common.actions")}</th>
             </tr>
           </thead>
           ${tableBody}
@@ -6326,12 +6326,12 @@ function renderEmployeeMain() {
       <header class="admin-dash-header">
         ${empMobileNavToggleHtml()}
         <div class="admin-dash-heading">
-          <h1 class="admin-dash-title">${t("employee.dashboardTitle")}</h1>
-          <p class="admin-dash-subtitle">${t("common.welcome", { name: welcomeName })}</p>
+          <h1 class="admin-dash-title">${tr("employee.dashboardTitle")}</h1>
+          <p class="admin-dash-subtitle">${tr("common.welcome", { name: welcomeName })}</p>
         </div>
         <div class="admin-dash-utilities">
           ${languageSelectorHtml({ compact: true })}
-          <button type="button" class="admin-icon-btn js-emp-refresh" aria-label="${t("owner.refreshTasks")}">
+          <button type="button" class="admin-icon-btn js-emp-refresh" aria-label="${tr("owner.refreshTasks")}">
             ${adminMsIcon("refresh")}
           </button>
           ${employeeAdminHeaderProfileHtml()}
@@ -6385,7 +6385,7 @@ function renderEmployeeMain() {
       }
 
       if (!completed) {
-        const ok = window.confirm(t("employee.removeSubmissionConfirm"));
+        const ok = window.confirm(tr("employee.removeSubmissionConfirm"));
         if (!ok) {
           cb.checked = true;
           return;
@@ -6448,7 +6448,7 @@ function renderEmployeeMain() {
       const archived =
         employeeHasArchivedSubmission(me) && !employeeHasCurrentSubmission(me);
       void openSubmissionDetailForAssignee(taskId, userId, { archived }).catch((err) => {
-        showToast(err.message || t("toast.couldNotLoadSubmission"), "danger");
+        showToast(err.message || tr("toast.couldNotLoadSubmission"), "danger");
       });
     });
   });
@@ -6463,7 +6463,7 @@ function renderEmployeeChrome() {
       <div class="offcanvas offcanvas-start admin-mobile-nav" tabindex="-1" id="empNavOffcanvas" aria-labelledby="empNavLabel">
         <div class="offcanvas-header admin-mobile-nav-header border-0">
           <h2 class="offcanvas-title h6 mb-0" id="empNavLabel">Menu</h2>
-          <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="${t("common.close")}"></button>
+          <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="${tr("common.close")}"></button>
         </div>
         <div class="offcanvas-body admin-mobile-nav-body pt-0">${empLeftNavInner()}</div>
       </div>
@@ -6507,7 +6507,7 @@ async function render() {
     const welcome = sessionStorage.getItem("taskmgr-app-welcome");
     if (welcome) {
       sessionStorage.removeItem("taskmgr-app-welcome");
-      showToast(t("toast.welcomeTasksBelow"), "success");
+      showToast(tr("toast.welcomeTasksBelow"), "success");
     }
     await loadEmployeeDashboard();
     renderEmployeeChrome();

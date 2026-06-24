@@ -1,6 +1,6 @@
 import * as bootstrap from "bootstrap";
 import { openTeamChat } from "./chat.js";
-import { t } from "./i18n/index.js";
+import { tr } from "./i18n/index.js";
 
 const STORAGE_KEY = "taskmgr-owner-announcements-read";
 const OFFCANVAS_ID = "adminNotifOffcanvas";
@@ -131,10 +131,10 @@ function announcementItemHtml(item, userId) {
   const action = item.action;
   let actionHtml = "";
   if (action?.type === "open-chat") {
-    actionHtml = `<button type="button" class="btn btn-sm btn-outline-primary js-admin-notif-action" data-action="open-chat" data-announcement-id="${escapeHtml(item.id)}">${escapeHtml(t(action.labelKey || "notifications.openMessages"))}</button>`;
+    actionHtml = `<button type="button" class="btn btn-sm btn-outline-primary js-admin-notif-action" data-action="open-chat" data-announcement-id="${escapeHtml(item.id)}">${escapeHtml(tr(action.labelKey || "notifications.openMessages"))}</button>`;
   } else if (action?.href) {
     const dl = action.download ? ` download="${APK_FILENAME}"` : "";
-    actionHtml = `<a class="btn btn-sm btn-outline-primary js-admin-notif-action" href="${escapeHtml(action.href)}"${dl} data-announcement-id="${escapeHtml(item.id)}">${escapeHtml(t(action.labelKey || "notifications.downloadApk"))}</a>`;
+    actionHtml = `<a class="btn btn-sm btn-outline-primary js-admin-notif-action" href="${escapeHtml(action.href)}"${dl} data-announcement-id="${escapeHtml(item.id)}">${escapeHtml(tr(action.labelKey || "notifications.downloadApk"))}</a>`;
   }
 
   return `
@@ -153,7 +153,7 @@ function announcementItemHtml(item, userId) {
 
 function notificationsListInnerHtml(userId) {
   if (!ADMIN_ANNOUNCEMENTS.length) {
-    return `<p class="admin-notif-empty small text-muted mb-0">${escapeHtml(t("notifications.empty"))}</p>`;
+    return `<p class="admin-notif-empty small text-muted mb-0">${escapeHtml(tr("notifications.empty"))}</p>`;
   }
   return `<ul class="list-unstyled mb-0 admin-notif-list">${ADMIN_ANNOUNCEMENTS.map((a) => announcementItemHtml(a, userId)).join("")}</ul>`;
 }
@@ -168,7 +168,7 @@ export function adminNotificationsBellHtml(userId) {
       data-bs-toggle="offcanvas"
       data-bs-target="#${OFFCANVAS_ID}"
       aria-controls="${OFFCANVAS_ID}"
-      aria-label="${escapeHtml(unread ? t("notifications.unread", { count: unread }) : t("notifications.title"))}"
+      aria-label="${escapeHtml(unread ? tr("notifications.unread", { count: unread }) : tr("notifications.title"))}"
     >
       <i class="bi bi-bell" aria-hidden="true"></i>
       ${badgeHtml(unread)}
@@ -182,12 +182,12 @@ export function adminNotifOffcanvasHtml(userId) {
     <div class="offcanvas offcanvas-end admin-notif-offcanvas" tabindex="-1" id="${OFFCANVAS_ID}" aria-labelledby="${OFFCANVAS_ID}Label">
       <div class="offcanvas-header admin-notif-offcanvas-head border-bottom">
         <div>
-          <h2 class="offcanvas-title h5 mb-0" id="${OFFCANVAS_ID}Label">${escapeHtml(t("notifications.title"))}</h2>
-          <p class="small text-muted mb-0 mt-1">${escapeHtml(t("notifications.subtitle"))}</p>
+          <h2 class="offcanvas-title h5 mb-0" id="${OFFCANVAS_ID}Label">${escapeHtml(tr("notifications.title"))}</h2>
+          <p class="small text-muted mb-0 mt-1">${escapeHtml(tr("notifications.subtitle"))}</p>
         </div>
         <div class="d-flex align-items-center gap-2">
           ${unread ? `<span class="badge text-bg-primary rounded-pill js-admin-notif-menu-count">${unread}</span>` : ""}
-          <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="${escapeHtml(t("common.close"))}"></button>
+          <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="${escapeHtml(tr("common.close"))}"></button>
         </div>
       </div>
       <div class="offcanvas-body admin-notif-offcanvas-body p-0">
@@ -207,7 +207,7 @@ function refreshBadges(userId) {
     }
   });
   document.querySelectorAll(".js-admin-notif-toggle").forEach((btn) => {
-    btn.setAttribute("aria-label", unread ? t("notifications.unread", { count: unread }) : t("notifications.title"));
+    btn.setAttribute("aria-label", unread ? tr("notifications.unread", { count: unread }) : tr("notifications.title"));
   });
   document.querySelectorAll(".js-admin-notif-menu-count").forEach((el) => {
     if (unread) el.textContent = String(unread);
