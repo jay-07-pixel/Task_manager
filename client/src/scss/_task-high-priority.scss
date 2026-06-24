@@ -1,0 +1,107 @@
+// Full red card styling for high-priority tasks (admin + employee).
+.owner-shell.admin-mockup-ui,
+.owner-shell.emp-shell.admin-mockup-ui {
+  --hp-card-bg: #ffcdd2;
+  --hp-card-bg-hover: #ef9a9a;
+  --hp-card-border: #e53935;
+  --hp-card-accent: #c62828;
+  --hp-card-text: #4a0a0a;
+  --hp-card-muted: #7f1d1d;
+}
+
+.owner-task-row--high-priority {
+  background: var(--hp-card-bg) !important;
+  background-color: var(--hp-card-bg) !important;
+  border-color: var(--hp-card-border) !important;
+
+  &:hover {
+    background: var(--hp-card-bg-hover) !important;
+    background-color: var(--hp-card-bg-hover) !important;
+  }
+
+  .emp-task-title,
+  .owner-task-open-details,
+  .owner-task-open-details.btn-link {
+    color: var(--hp-card-text) !important;
+  }
+
+  .emp-task-date-label,
+  .task-created-meta-date,
+  .emp-assigned-by-line,
+  .emp-recurrence-lines {
+    color: var(--hp-card-muted) !important;
+  }
+
+  .emp-task-desc-box,
+  .owner-task-desc-box {
+    background: rgba(255, 255, 255, 0.5) !important;
+    border-color: rgba(198, 40, 40, 0.4) !important;
+    color: var(--hp-card-text) !important;
+  }
+
+  .emp-task-desc-box--empty,
+  .owner-task-desc-box--empty {
+    background: rgba(255, 255, 255, 0.35) !important;
+    color: var(--hp-card-muted) !important;
+  }
+
+  .admin-task-type-icon {
+    color: var(--hp-card-accent) !important;
+  }
+
+  .admin-deadline--urgent {
+    color: var(--hp-card-accent) !important;
+  }
+}
+
+.owner-shell.admin-mockup-ui .admin-task-table tbody.owner-task-group--high-priority {
+  border: 1px solid var(--hp-card-border);
+  border-radius: 0.75rem;
+  overflow: hidden;
+  margin-bottom: 0.75rem;
+
+  tr.task-sort-row.owner-task-row--high-priority {
+    box-shadow: none !important;
+  }
+
+  tr.owner-task-detail-row > td,
+  .admin-task-expand-panel {
+    background: var(--hp-card-bg) !important;
+    border-top: 1px solid rgba(229, 57, 53, 0.35);
+  }
+}
+
+.owner-shell.admin-mockup-ui.emp-shell .emp-owner-task-table tbody tr.emp-task-row.owner-task-row--high-priority,
+.owner-shell.admin-mockup-ui .emp-task-table tbody tr.emp-task-row.owner-task-row--high-priority {
+  box-shadow: 0 2px 10px rgba(229, 57, 53, 0.22) !important;
+}
+
+[data-bs-theme="dark"] {
+  .owner-shell.admin-mockup-ui,
+  .owner-shell.emp-shell.admin-mockup-ui {
+    --hp-card-bg: #5c1a1a;
+    --hp-card-bg-hover: #6d2222;
+    --hp-card-border: #ef5350;
+    --hp-card-accent: #ff8a80;
+    --hp-card-text: #ffebee;
+    --hp-card-muted: #ffcdd2;
+  }
+
+  .owner-task-row--high-priority {
+    .emp-task-desc-box,
+    .owner-task-desc-box {
+      background: rgba(0, 0, 0, 0.22) !important;
+      border-color: rgba(239, 83, 80, 0.45) !important;
+    }
+
+    .emp-task-desc-box--empty,
+    .owner-task-desc-box--empty {
+      background: rgba(0, 0, 0, 0.15) !important;
+    }
+  }
+
+  .owner-shell.admin-mockup-ui.emp-shell .emp-owner-task-table tbody tr.emp-task-row.owner-task-row--high-priority {
+    background: var(--hp-card-bg) !important;
+    border-color: var(--hp-card-border) !important;
+  }
+}

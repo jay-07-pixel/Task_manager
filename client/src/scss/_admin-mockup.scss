@@ -644,6 +644,11 @@
       border: 1px solid rgba(190, 200, 202, 0.55);
       border-radius: 0.75rem;
       background: #fff;
+
+      &.owner-task-row--high-priority {
+        background: var(--hp-card-bg, #ffcdd2);
+        border-color: var(--hp-card-border, #e53935);
+      }
     }
 
     .admin-task-table tbody.owner-task-group tr.task-sort-row > td {
@@ -1254,23 +1259,6 @@
       &:hover {
         background: rgba(169, 236, 229, 0.05);
       }
-
-      &.owner-task-row--high-priority {
-        background: rgba(186, 26, 26, 0.09);
-        box-shadow: inset 4px 0 0 #ba1a1a;
-
-        &:hover {
-          background: rgba(186, 26, 26, 0.14);
-        }
-
-        .admin-task-type-icon {
-          color: #ba1a1a;
-        }
-      }
-    }
-
-    tbody.owner-task-group--high-priority .admin-task-expand-panel {
-      border-top-color: rgba(186, 26, 26, 0.25);
     }
 
     tbody td {

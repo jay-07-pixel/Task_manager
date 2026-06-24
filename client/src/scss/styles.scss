@@ -6,6 +6,7 @@
 @import "admin-chat";
 @import "admin-reports";
 @import "admin-employee";
+@import "task-high-priority";
 
 [data-bs-theme="light"] {
   color-scheme: light;
@@ -1579,12 +1580,6 @@ body {
 
   .emp-owner-task-table tbody tr.emp-task-row.owner-task-row--completed {
     background: rgba(var(--bs-success-rgb), 0.04);
-  }
-
-  .emp-owner-task-table tbody tr.emp-task-row.owner-task-row--high-priority {
-    background: rgba(186, 26, 26, 0.09);
-    border-color: rgba(186, 26, 26, 0.35) !important;
-    box-shadow: inset 4px 0 0 #ba1a1a, 0 0.06rem 0.35rem rgba(186, 26, 26, 0.1);
   }
 
   .emp-owner-task-table tbody tr.emp-task-row > td {
