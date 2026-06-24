@@ -4236,15 +4236,15 @@ function syncProgressUpdateCharCount() {
 function renderProgressUpdateTypeChips(selectedType = "started") {
   const host = document.getElementById("progress-update-type-chips");
   if (!host) return;
-  host.innerHTML = getProgressUpdateTypes().map((t) => {
-    const active = t.id === selectedType;
+  host.innerHTML = getProgressUpdateTypes().map((typeItem) => {
+    const active = typeItem.id === selectedType;
     return `<button
       type="button"
       class="btn btn-sm ${active ? "btn-primary" : "btn-outline-primary"} progress-update-type-chip"
-      data-progress-type="${t.id}"
+      data-progress-type="${typeItem.id}"
       aria-pressed="${active}"
     >
-      <i class="bi bi-${t.icon} me-1" aria-hidden="true"></i>${t.label}
+      <i class="bi bi-${typeItem.icon} me-1" aria-hidden="true"></i>${typeItem.label}
     </button>`;
   }).join("");
 }
@@ -6066,16 +6066,16 @@ function empTaskTableRows(tasks) {
   }
 
   return `<tbody>${tasks
-    .map((t) => {
-      const me = employeeMyAssignee(t);
-      const displayMode = empTaskRowDisplayMode(t, me);
+    .map((task) => {
+      const me = employeeMyAssignee(task);
+      const displayMode = empTaskRowDisplayMode(task, me);
       const submitted = displayMode === "submitted";
       const hasViewableSubmission = submitted
         ? employeeHasArchivedSubmission(me) || employeeHasCurrentSubmission(me)
         : employeeHasCurrentSubmission(me);
-      const notesRaw = (t.notes || "").trim().replace(/\s+/g, " ");
-      const descriptionBox = empTaskDescriptionBoxHtml(notesRaw, t.id, t.title);
-      const updateCount = employeeAwaitingFreshOccurrence(t, me) ? 0 : (me?.progressUpdateCount ?? 0);
+      const notesRaw = (task.notes || "").trim().replace(/\s+/g, " ");
+      const descriptionBox = empTaskDescriptionBoxHtml(notesRaw, task.id, task.title);
+      const updateCount = employeeAwaitingFreshOccurrence(task, me) ? 0 : (me?.progressUpdateCount ?? 0);
       const updateBadge =
         updateCount > 0
           ? `<span class="emp-update-count tabular-nums">${updateCount}</span>`
@@ -6092,33 +6092,33 @@ function empTaskTableRows(tasks) {
         : "";
       const submissionBtn = submitted
         ? hasViewableSubmission
-          ? `<button type="button" class="btn btn-sm btn-outline-primary emp-view-submission emp-action-btn" data-task-id="${t.id}" data-user-id="${escapeHtml(state.user?.id || "")}"><i class="bi bi-eye me-1" aria-hidden="true"></i>${t("common.view")}</button>`
+          ? `<button type="button" class="btn btn-sm btn-outline-primary emp-view-submission emp-action-btn" data-task-id="${task.id}" data-user-id="${escapeHtml(state.user?.id || "")}"><i class="bi bi-eye me-1" aria-hidden="true"></i>${t("common.view")}</button>`
           : me?.lastSubmittedAt
             ? `<span class="small text-success text-nowrap"><i class="bi bi-check-circle me-1" aria-hidden="true"></i>${escapeHtml(formatProgressUpdateTime(me.lastSubmittedAt))}</span>`
             : `<span class="small text-success"><i class="bi bi-check-circle me-1" aria-hidden="true"></i>${t("employee.submittedLabel")}</span>`
-        : `<button type="button" class="btn btn-sm btn-primary emp-open-submit emp-action-btn" data-task-id="${t.id}"><i class="bi bi-send me-1" aria-hidden="true"></i>${t("common.submit")}</button>`;
+        : `<button type="button" class="btn btn-sm btn-primary emp-open-submit emp-action-btn" data-task-id="${task.id}"><i class="bi bi-send me-1" aria-hidden="true"></i>${t("common.submit")}</button>`;
       const assignedByLine = me?.assignedBy?.displayName
         ? `<div class="small text-muted emp-assigned-by-line mt-1">From ${escapeHtml(me.assignedBy.displayName)}</div>`
         : "";
-      const showRecurrenceOnActive = displayMode === "active" && (t.recurrence ?? "none") !== "none";
-      const recurrenceLines = showRecurrenceOnActive ? empActiveRecurrenceLinesHtml(t) : "";
+      const showRecurrenceOnActive = displayMode === "active" && (task.recurrence ?? "none") !== "none";
+      const recurrenceLines = showRecurrenceOnActive ? empActiveRecurrenceLinesHtml(task) : "";
       const submissionCell = `<div class="d-flex flex-column align-items-end gap-1 emp-task-actions">
-          <button type="button" class="btn btn-sm emp-open-progress-update emp-update-btn emp-action-btn" data-task-id="${t.id}">
+          <button type="button" class="btn btn-sm emp-open-progress-update emp-update-btn emp-action-btn" data-task-id="${task.id}">
             <i class="bi bi-chat-left-dots" aria-hidden="true"></i><span>${t("common.update")}</span>${updateBadge}
           </button>
           ${submissionBtn}
         </div>`;
       const rowDone = submitted ? "owner-task-row--completed" : "";
       const submittedWhen = me?.lastSubmittedAt || me?.assigneeDoneAt || null;
-      const datesCell = empTaskDatesCellHtml(t, submitted, submittedWhen);
-      return `<tr class="owner-task-row emp-task-row ${rowDone}" data-task-id="${t.id}">
+      const datesCell = empTaskDatesCellHtml(task, submitted, submittedWhen);
+      return `<tr class="owner-task-row emp-task-row ${rowDone}" data-task-id="${task.id}">
         <td class="owner-task-cell emp-col-check text-center align-middle">
-          <input type="checkbox" class="form-check-input emp-task-check" data-task-id="${t.id}" ${
+          <input type="checkbox" class="form-check-input emp-task-check" data-task-id="${task.id}" ${
         submitted ? "checked" : ""
-      } aria-label="${t("common.markSubmitted", { title: escapeHtml(t.title) })}" />
+      } aria-label="${t("common.markSubmitted", { title: escapeHtml(task.title) })}" />
         </td>
         <td class="owner-task-cell owner-task-col--task emp-col-task align-middle">
-          <span class="fw-semibold emp-task-title ${submitted ? "text-muted text-decoration-line-through" : ""}">${escapeHtml(t.title)}</span>
+          <span class="fw-semibold emp-task-title ${submitted ? "text-muted text-decoration-line-through" : ""}">${escapeHtml(task.title)}</span>
           ${assignedByLine}
           ${recurrenceLines}
           ${archivedNotesLine}
@@ -6141,10 +6141,10 @@ function empAssignedByMeCardsHtml(tasks) {
   }
 
   return `<div class="emp-assigned-by-me-cards d-flex flex-column gap-3">${tasks
-    .map((t) => {
-      const assignees = t.assignedTo ?? [];
+    .map((task) => {
+      const assignees = task.assignedTo ?? [];
       const assigneeNames = assignees.map((a) => escapeHtml(a.displayName)).join(", ") || "—";
-      const notesRaw = (t.notes || "").trim().replace(/\s+/g, " ");
+      const notesRaw = (task.notes || "").trim().replace(/\s+/g, " ");
       const descriptionText =
         notesRaw.length > 0
           ? escapeHtml(notesRaw.length > 200 ? `${notesRaw.slice(0, 197)}…` : notesRaw)
@@ -6152,19 +6152,19 @@ function empAssignedByMeCardsHtml(tasks) {
       const assignedWhen = assignees[0]?.delegatedAt
         ? escapeHtml(formatProgressUpdateTime(assignees[0].delegatedAt))
         : "";
-      const deadlineDisplay = t.dueAt
-        ? escapeHtml(formatEmpDue(t.dueAt))
+      const deadlineDisplay = task.dueAt
+        ? escapeHtml(formatEmpDue(task.dueAt))
         : `<span class="text-muted">—</span>`;
-      const deleteBtn = t.canDelete
-        ? `<button type="button" class="btn btn-sm btn-outline-danger js-emp-delete-assigned" data-task-id="${t.id}" data-task-title="${escapeHtml(t.title)}" aria-label="${t("common.deleteTask")}">
+      const deleteBtn = task.canDelete
+        ? `<button type="button" class="btn btn-sm btn-outline-danger js-emp-delete-assigned" data-task-id="${task.id}" data-task-title="${escapeHtml(task.title)}" aria-label="${t("common.deleteTask")}">
             <i class="bi bi-trash" aria-hidden="true"></i>
             <span class="d-none d-sm-inline ms-1">${t("common.delete")}</span>
           </button>`
         : "";
-      return `<article class="emp-assigned-out-card" data-task-id="${t.id}">
+      return `<article class="emp-assigned-out-card" data-task-id="${task.id}">
         <div class="emp-assigned-out-card-head">
-          <h3 class="emp-assigned-out-card-title h6 mb-0">${escapeHtml(t.title)}</h3>
-          ${taskCreatedMetaHtml(t.createdAt)}
+          <h3 class="emp-assigned-out-card-title h6 mb-0">${escapeHtml(task.title)}</h3>
+          ${taskCreatedMetaHtml(task.createdAt)}
           <div class="emp-assigned-out-card-meta d-flex flex-wrap align-items-center gap-2">
             ${assignedWhen ? `<time class="emp-assigned-out-card-when small text-muted tabular-nums">Assigned ${assignedWhen}</time>` : ""}
             ${deleteBtn}

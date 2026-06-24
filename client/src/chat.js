@@ -1463,9 +1463,9 @@ function setThreadTypeFilter(nextFilter) {
 function renderThreadList() {
   const host = document.getElementById("team-chat-thread-list");
   if (!host) return;
-  const list = filteredThreads().filter((t) => {
-    if (threadTypeFilter === "group") return t.type === "group";
-    if (threadTypeFilter === "dm") return t.type === "dm";
+  const list = filteredThreads().filter((thread) => {
+    if (threadTypeFilter === "group") return thread.type === "group";
+    if (threadTypeFilter === "dm") return thread.type === "dm";
     return true;
   });
   if (!list.length) {
