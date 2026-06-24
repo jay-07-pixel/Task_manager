@@ -38,6 +38,68 @@ function lastNWeekLabels(n) {
   return { labels, keys };
 }
 
+function dayKey(d) {
+  const dt = new Date(d);
+  dt.setHours(12, 0, 0, 0);
+  return dt.toISOString().slice(0, 10);
+}
+
+function monthKey(d) {
+  const dt = new Date(d);
+  return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`;
+}
+
+const PERIOD_BUCKETS = { daily: 14, weekly: 12, monthly: 6 };
+
+function lastPeriodBuckets(period) {
+  const n = PERIOD_BUCKETS[period] ?? PERIOD_BUCKETS.daily;
+  const labels = [];
+  const keys = [];
+  const now = new Date();
+
+  if (period === "daily") {
+    for (let i = n - 1; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const key = dayKey(d);
+      keys.push(key);
+      labels.push(
+        new Date(`${key}T12:00:00`).toLocaleDateString("en-IN", { month: "short", day: "numeric" })
+      );
+    }
+    return { labels, keys };
+  }
+
+  if (period === "weekly") {
+    return lastNWeekLabels(n);
+  }
+
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = monthKey(d);
+    keys.push(key);
+    labels.push(d.toLocaleDateString("en-IN", { month: "short", year: "numeric" }));
+  }
+  return { labels, keys };
+}
+
+function assignmentDate(row) {
+  return row.delegatedAt ?? row.task.createdAt;
+}
+
+function classifyAssigneeRow(row) {
+  if (!row.assigneeDone) return "pending";
+  if (!row.lastSubmittedAt) return "onTime";
+  if (!row.task.dueAt) return "onTime";
+  return row.lastSubmittedAt <= row.task.dueAt ? "onTime" : "late";
+}
+
+function bucketForDate(date, period) {
+  if (period === "daily") return dayKey(date);
+  if (period === "weekly") return weekKey(date);
+  return monthKey(date);
+}
+
 router.get("/summary", async (req, res) => {
   const ownerId = req.session.userId;
   const now = new Date();
@@ -158,9 +220,14 @@ router.get("/summary", async (req, res) => {
     .slice(0, 12)
     .map(([name, count]) => ({ name, count }));
 
-  const employeeChart = [...byEmployee.values()]
-    .sort((a, b) => b.assigned - a.assigned)
-    .slice(0, 12);
+  const employeeChart = [...byEmployee.entries()]
+    .sort((a, b) => b[1].assigned - a[1].assigned)
+    .slice(0, 12)
+    .map(([id, row]) => ({ id, ...row }));
+
+  const employeeOptions = [...byEmployee.entries()]
+    .sort((a, b) => a[1].name.localeCompare(b[1].name))
+    .map(([id, row]) => ({ id, name: row.name }));
 
   res.json({
     generatedAt: now.toISOString(),
@@ -184,6 +251,7 @@ router.get("/summary", async (req, res) => {
     ],
     tasksByList: listChart,
     employeePerformance: employeeChart,
+    employeeOptions,
     tasksCreatedWeekly: {
       labels: weekLabels,
       values: weekKeys.map((k) => createdByWeek[k] || 0),
@@ -191,6 +259,83 @@ router.get("/summary", async (req, res) => {
     submissionsWeekly: {
       labels: weekLabels,
       values: weekKeys.map((k) => submittedByWeek[k] || 0),
+    },
+  });
+});
+
+router.get("/employee-performance", async (req, res) => {
+  const ownerId = req.session.userId;
+  const employeeId = String(req.query.employeeId || "").trim();
+  const period = ["daily", "weekly", "monthly"].includes(req.query.period) ? req.query.period : "daily";
+
+  if (!employeeId) {
+    return res.status(400).json({ error: "employeeId is required" });
+  }
+
+  const employee = await prisma.user.findFirst({
+    where: {
+      id: employeeId,
+      role: "employee",
+      assignedTasks: { some: { task: { list: { ownerId } } } },
+    },
+    select: { id: true, displayName: true },
+  });
+
+  if (!employee) {
+    return res.status(404).json({ error: "Employee not found or has no tasks under your account" });
+  }
+
+  const rows = await prisma.taskAssignee.findMany({
+    where: {
+      userId: employeeId,
+      task: { list: { ownerId } },
+    },
+    select: {
+      assigneeDone: true,
+      lastSubmittedAt: true,
+      delegatedAt: true,
+      task: { select: { createdAt: true, dueAt: true } },
+    },
+  });
+
+  const { labels, keys } = lastPeriodBuckets(period);
+  const keySet = new Set(keys);
+  const buckets = Object.fromEntries(
+    keys.map((k) => [k, { allocated: 0, onTime: 0, late: 0, pending: 0 }])
+  );
+
+  for (const row of rows) {
+    const assignedAt = assignmentDate(row);
+    const key = bucketForDate(assignedAt, period);
+    if (!keySet.has(key)) continue;
+    const bucket = buckets[key];
+    const status = classifyAssigneeRow(row);
+    bucket.allocated += 1;
+    bucket[status] += 1;
+  }
+
+  const series = keys.map((k) => buckets[k]);
+  const totals = series.reduce(
+    (acc, b) => ({
+      allocated: acc.allocated + b.allocated,
+      onTime: acc.onTime + b.onTime,
+      late: acc.late + b.late,
+      pending: acc.pending + b.pending,
+    }),
+    { allocated: 0, onTime: 0, late: 0, pending: 0 }
+  );
+
+  res.json({
+    employee: { id: employee.id, name: employee.displayName || "Employee" },
+    period,
+    bucketCount: keys.length,
+    labels,
+    totals,
+    series: {
+      allocated: series.map((b) => b.allocated),
+      onTime: series.map((b) => b.onTime),
+      late: series.map((b) => b.late),
+      pending: series.map((b) => b.pending),
     },
   });
 });

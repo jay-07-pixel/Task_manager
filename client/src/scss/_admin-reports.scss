@@ -113,6 +113,63 @@
     white-space: nowrap;
   }
 
+  .admin-report-card--employee-perf {
+    .admin-report-emp-head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .admin-report-emp-subtitle {
+      line-height: 1.35;
+    }
+
+    .admin-report-emp-filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: flex-end;
+    }
+
+    .admin-report-filter {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      min-width: 9rem;
+    }
+
+    .admin-report-filter-label {
+      font-size: 0.68rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--admin-on-surface-variant);
+    }
+
+    .admin-report-filter .form-select {
+      min-width: 10rem;
+      font-size: 0.85rem;
+      border-color: var(--admin-outline-variant);
+      background-color: var(--admin-surface-container-high);
+      color: var(--admin-on-surface);
+    }
+  }
+
+  .admin-report-emp-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.65rem;
+    margin-bottom: 1rem;
+    min-width: 0;
+  }
+
+  .admin-report-chart-wrap--emp-perf {
+    height: 20rem;
+  }
+
   .admin-reports-charts {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -269,6 +326,29 @@
 
     .admin-report-chart-wrap--tall:not(.admin-report-chart-wrap--employees) {
       height: 15rem;
+    }
+
+    .admin-report-emp-kpi-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 0.5rem;
+    }
+
+    .admin-report-emp-filters {
+      width: 100%;
+    }
+
+    .admin-report-filter {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .admin-report-filter .form-select {
+      min-width: 0;
+      width: 100%;
+    }
+
+    .admin-report-chart-wrap--emp-perf {
+      height: 16rem;
     }
 
     .admin-reports-charts {

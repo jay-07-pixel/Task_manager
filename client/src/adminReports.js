@@ -16,6 +16,15 @@ let adminMsIconFn = null;
 /** @type {any} */
 let reportData = null;
 
+/** @type {any} */
+let employeePerfData = null;
+
+/** @type {{ employeeId: string, period: string }} */
+let employeePerfFilters = { employeeId: "", period: "daily" };
+
+/** @type {boolean} */
+let employeePerfLoading = false;
+
 /** @type {number | null} */
 let reportsResizeTimer = null;
 
@@ -52,6 +61,7 @@ function onReportsResize() {
     reportsResizeTimer = null;
     if (!document.querySelector(".admin-reports-page") || !reportData) return;
     renderCharts(reportData);
+    renderEmployeePerfChart();
   }, 220);
 }
 
@@ -161,6 +171,98 @@ function baseChartOptions() {
   };
 }
 
+function perfChartColors() {
+  return {
+    onTime: "#2e7d32",
+    late: "#e65100",
+    pending: "#78909c",
+    allocated: "#006d77",
+  };
+}
+
+function employeePerfSectionHtml(data) {
+  const employees = data.employeeOptions ?? [];
+  const selectedId = employeePerfFilters.employeeId || employees[0]?.id || "";
+  if (!employeePerfFilters.employeeId && selectedId) {
+    employeePerfFilters.employeeId = selectedId;
+  }
+
+  const period = employeePerfFilters.period || "daily";
+  const employeeOptions = employees
+    .map(
+      (e) =>
+        `<option value="${escapeHtmlFn(e.id)}"${e.id === selectedId ? " selected" : ""}>${escapeHtmlFn(e.name)}</option>`
+    )
+    .join("");
+
+  const periodOptions = ["daily", "weekly", "monthly"]
+    .map(
+      (p) =>
+        `<option value="${p}"${p === period ? " selected" : ""}>${escapeHtmlFn(tr(`reports.period_${p}`))}</option>`
+    )
+    .join("");
+
+  const totals = employeePerfData?.totals;
+  const empName = employeePerfData?.employee?.name ?? employees.find((e) => e.id === selectedId)?.name ?? "";
+
+  const kpiRow =
+    totals && !employeePerfLoading
+      ? `<div class="admin-report-emp-kpi-grid">
+          ${kpiCard(tr("reports.allocated"), totals.allocated, "assignment", "active")}
+          ${kpiCard(tr("reports.onTime"), totals.onTime, "schedule", "done")}
+          ${kpiCard(tr("reports.late"), totals.late, "running_with_errors", "review")}
+          ${kpiCard(tr("reports.pending"), totals.pending, "pending", totals.pending > 0 ? "warn" : "")}
+        </div>`
+      : "";
+
+  const emptyEmployees =
+    employees.length === 0
+      ? `<p class="admin-report-emp-empty text-muted small mb-0">${escapeHtmlFn(tr("reports.noEmployeesWithTasks"))}</p>`
+      : "";
+
+  const chartBlock =
+    employees.length > 0
+      ? `<div class="admin-report-chart-wrap admin-report-chart-wrap--tall admin-report-chart-wrap--emp-perf">
+          <canvas id="report-chart-employee-perf" aria-label="${escapeHtmlFn(tr("reports.employeePerfAria"))}"></canvas>
+        </div>`
+      : "";
+
+  const loadingHint = employeePerfLoading
+    ? `<p class="admin-report-emp-loading small text-muted mb-2">${escapeHtmlFn(tr("reports.loadingEmployeePerf"))}</p>`
+    : "";
+
+  const periodHint = tr(`reports.periodHint_${period}`, { count: employeePerfData?.bucketCount ?? 0 });
+
+  return `
+    <section class="admin-report-card admin-report-card--wide admin-report-card--employee-perf">
+      <div class="admin-report-emp-head">
+        <div>
+          <h2 class="admin-report-card-title mb-1">${escapeHtmlFn(tr("reports.employeePerformance"))}</h2>
+          <p class="admin-report-emp-subtitle text-muted small mb-0">${escapeHtmlFn(periodHint)}</p>
+        </div>
+        <div class="admin-report-emp-filters">
+          <label class="admin-report-filter">
+            <span class="admin-report-filter-label">${escapeHtmlFn(tr("reports.selectEmployee"))}</span>
+            <select class="form-select form-select-sm js-report-employee" ${employees.length === 0 ? "disabled" : ""}>
+              ${employees.length ? employeeOptions : `<option value="">${escapeHtmlFn(tr("reports.noEmployees"))}</option>`}
+            </select>
+          </label>
+          <label class="admin-report-filter">
+            <span class="admin-report-filter-label">${escapeHtmlFn(tr("reports.selectPeriod"))}</span>
+            <select class="form-select form-select-sm js-report-period" ${employees.length === 0 ? "disabled" : ""}>
+              ${periodOptions}
+            </select>
+          </label>
+        </div>
+      </div>
+      ${empName ? `<p class="admin-report-emp-name small mb-2"><strong>${escapeHtmlFn(empName)}</strong></p>` : ""}
+      ${loadingHint}
+      ${kpiRow}
+      ${emptyEmployees}
+      ${chartBlock}
+    </section>`;
+}
+
 function kpiCard(label, value, icon, accent = "") {
   const accentClass = accent ? ` admin-report-kpi--${accent}` : "";
   return `<div class="admin-report-kpi${accentClass}">
@@ -210,6 +312,8 @@ function reportPageHtml(data) {
       </div>
 
       <div class="admin-reports-charts">
+        ${employeePerfSectionHtml(data)}
+
         <section class="admin-report-card admin-report-card--chart">
           <h2 class="admin-report-card-title">${escapeHtmlFn(tr("reports.taskStatus"))}</h2>
           <div class="admin-report-chart-wrap admin-report-chart-wrap--doughnut">
@@ -240,6 +344,85 @@ function reportPageHtml(data) {
       </div>
     </div>
     </div>`;
+}
+
+function renderEmployeePerfChart() {
+  destroyChart("employeePerf");
+  if (!employeePerfData?.series) return;
+
+  const el = document.getElementById("report-chart-employee-perf");
+  if (!el) return;
+
+  const colors = perfChartColors();
+  const opts = baseChartOptions();
+  const mobile = isReportMobile();
+
+  chartInstances.employeePerf = new Chart(el, {
+    type: "bar",
+    data: {
+      labels: employeePerfData.labels,
+      datasets: [
+        {
+          label: tr("reports.onTime"),
+          data: employeePerfData.series.onTime,
+          backgroundColor: colors.onTime,
+          borderRadius: mobile ? 3 : 4,
+          stack: "tasks",
+        },
+        {
+          label: tr("reports.late"),
+          data: employeePerfData.series.late,
+          backgroundColor: colors.late,
+          borderRadius: mobile ? 3 : 4,
+          stack: "tasks",
+        },
+        {
+          label: tr("reports.pending"),
+          data: employeePerfData.series.pending,
+          backgroundColor: colors.pending,
+          borderRadius: mobile ? 3 : 4,
+          stack: "tasks",
+        },
+      ],
+    },
+    options: {
+      ...opts,
+      plugins: {
+        ...opts.plugins,
+        legend: {
+          ...opts.plugins.legend,
+          position: mobile ? "bottom" : "top",
+        },
+        tooltip: {
+          ...opts.plugins.tooltip,
+          callbacks: {
+            footer(items) {
+              const total = items.reduce((sum, item) => sum + (Number(item.raw) || 0), 0);
+              return `${tr("reports.allocated")}: ${total}`;
+            },
+          },
+        },
+      },
+      scales: {
+        x: {
+          ...opts.scales.x,
+          stacked: true,
+          ticks: {
+            ...opts.scales.x.ticks,
+            maxTicksLimit: mobile ? 7 : 14,
+          },
+        },
+        y: {
+          ...opts.scales.y,
+          stacked: true,
+          ticks: {
+            ...opts.scales.y.ticks,
+            maxTicksLimit: mobile ? 5 : 8,
+          },
+        },
+      },
+    },
+  });
 }
 
 function renderCharts(data) {
@@ -454,13 +637,75 @@ function renderCharts(data) {
     }
   }
 
+  renderEmployeePerfChart();
   wireReportsResize();
 }
 
 function wireReportsPage(main) {
-  main.querySelector(".js-reports-refresh")?.addEventListener("click", () => {
-    void refreshAdminReports({ force: true });
+  const refreshBtn = main.querySelector(".js-reports-refresh");
+  if (refreshBtn && refreshBtn.dataset.wiredReports !== "1") {
+    refreshBtn.dataset.wiredReports = "1";
+    refreshBtn.addEventListener("click", () => {
+      void refreshAdminReports({ force: true });
+    });
+  }
+  wireEmployeePerfFilters(main);
+}
+
+function wireEmployeePerfFilters(main) {
+  main.querySelector(".js-report-employee")?.addEventListener("change", (e) => {
+    const target = /** @type {HTMLSelectElement} */ (e.target);
+    employeePerfFilters.employeeId = target.value;
+    void loadEmployeePerformance(main);
   });
+
+  main.querySelector(".js-report-period")?.addEventListener("change", (e) => {
+    const target = /** @type {HTMLSelectElement} */ (e.target);
+    employeePerfFilters.period = target.value;
+    void loadEmployeePerformance(main);
+  });
+}
+
+async function loadEmployeePerformance(main) {
+  if (!apiFn || !employeePerfFilters.employeeId) return;
+
+  employeePerfLoading = true;
+  const section = main?.querySelector(".admin-report-card--employee-perf");
+  if (section && reportData) {
+    const replacement = document.createElement("div");
+    replacement.innerHTML = employeePerfSectionHtml(reportData);
+    const newSection = replacement.querySelector(".admin-report-card--employee-perf");
+    if (newSection) {
+      section.replaceWith(newSection);
+      wireEmployeePerfFilters(main);
+    }
+  }
+
+  try {
+    const q = new URLSearchParams({
+      employeeId: employeePerfFilters.employeeId,
+      period: employeePerfFilters.period || "daily",
+    });
+    employeePerfData = await apiFn(`/api/reports/employee-performance?${q}`);
+  } catch {
+    employeePerfData = null;
+  } finally {
+    employeePerfLoading = false;
+  }
+
+  if (main && reportData) {
+    const sectionEl = main.querySelector(".admin-report-card--employee-perf");
+    if (sectionEl) {
+      const replacement = document.createElement("div");
+      replacement.innerHTML = employeePerfSectionHtml(reportData);
+      const newSection = replacement.querySelector(".admin-report-card--employee-perf");
+      if (newSection) {
+        sectionEl.replaceWith(newSection);
+        wireEmployeePerfFilters(main);
+      }
+    }
+    requestAnimationFrame(() => renderEmployeePerfChart());
+  }
 }
 
 export async function refreshAdminReports({ force = false } = {}) {
@@ -470,7 +715,10 @@ export async function refreshAdminReports({ force = false } = {}) {
   const hasLayout = !!main.querySelector(".admin-reports-page");
 
   if (!force && reportData && hasLayout) {
-    requestAnimationFrame(() => renderCharts(reportData));
+    requestAnimationFrame(() => {
+      renderCharts(reportData);
+      renderEmployeePerfChart();
+    });
     return;
   }
 
@@ -484,11 +732,18 @@ export async function refreshAdminReports({ force = false } = {}) {
   try {
     if (!reportData || force) {
       reportData = await apiFn("/api/reports/summary");
+      if (force) {
+        employeePerfData = null;
+        employeePerfFilters = { employeeId: "", period: employeePerfFilters.period || "daily" };
+      }
     }
     main.innerHTML = reportPageHtml(reportData);
     wireReportsPage(main);
     if (wireChromeHeaderFn) wireChromeHeaderFn(main);
-    requestAnimationFrame(() => renderCharts(reportData));
+    requestAnimationFrame(() => {
+      renderCharts(reportData);
+      void loadEmployeePerformance(main);
+    });
   } catch (err) {
     reportData = null;
     main.innerHTML = `<div class="admin-reports-error p-5 text-center">
@@ -508,5 +763,7 @@ export function openOwnerReportsView() {
 
 export function clearAdminReportsCache() {
   reportData = null;
+  employeePerfData = null;
+  employeePerfFilters = { employeeId: "", period: "daily" };
   destroyAdminReportsCharts();
 }
