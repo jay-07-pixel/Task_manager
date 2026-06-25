@@ -9,6 +9,15 @@ const APK_FILENAME = "kalpanik-reminder.apk";
 /** @type {{ id: string; date: string; title: string; icon: string; body: string; action?: { label: string; type?: string; href?: string; download?: boolean } }[]} */
 export const ADMIN_ANNOUNCEMENTS = [
   {
+    id: "feature-translation-voice-owner-dash-20260620",
+    date: "20-06-26",
+    title: "Translation, voice chat & Owner dashboard",
+    icon: "bi-translate",
+    body:
+      "Language — Switch English / Hindi / Marathi from the language selector. Task names, descriptions, and chat messages translate automatically (e.g. Hindi or Marathi messages show in English when English is selected, and vice versa). Chat voice — Open Messages, pick a chat, choose speak language (EN/HI/MR), tap the mic, speak, then send (best on Chrome or Edge; allow microphone). Owner dashboard — Profile photo (top right) → Owner dashboard: employee performance, chart, late submissions, and how many tasks each admin allotted per employee.",
+    action: { labelKey: "notifications.openOwnerDashboard", type: "open-owner-dashboard" },
+  },
+  {
     id: "feature-chat-reply-delete-20260619",
     date: "19-06-26",
     title: "Reply & delete in chat",
@@ -132,6 +141,8 @@ function announcementItemHtml(item, userId) {
   let actionHtml = "";
   if (action?.type === "open-chat") {
     actionHtml = `<button type="button" class="btn btn-sm btn-outline-primary js-admin-notif-action" data-action="open-chat" data-announcement-id="${escapeHtml(item.id)}">${escapeHtml(tr(action.labelKey || "notifications.openMessages"))}</button>`;
+  } else if (action?.type === "open-owner-dashboard") {
+    actionHtml = `<button type="button" class="btn btn-sm btn-outline-primary js-admin-notif-action" data-action="open-owner-dashboard" data-announcement-id="${escapeHtml(item.id)}">${escapeHtml(tr(action.labelKey || "notifications.openOwnerDashboard"))}</button>`;
   } else if (action?.href) {
     const dl = action.download ? ` download="${APK_FILENAME}"` : "";
     actionHtml = `<a class="btn btn-sm btn-outline-primary js-admin-notif-action" href="${escapeHtml(action.href)}"${dl} data-announcement-id="${escapeHtml(item.id)}">${escapeHtml(tr(action.labelKey || "notifications.downloadApk"))}</a>`;
@@ -237,6 +248,9 @@ export function wireAdminNotifications(userId, root = document) {
         if (actionEl.getAttribute("data-action") === "open-chat") {
           bootstrap.Offcanvas.getInstance(offcanvasEl)?.hide();
           openTeamChat();
+        } else if (actionEl.getAttribute("data-action") === "open-owner-dashboard") {
+          bootstrap.Offcanvas.getInstance(offcanvasEl)?.hide();
+          window.dispatchEvent(new CustomEvent("taskmgr:open-owner-dashboard"));
         }
       });
     });

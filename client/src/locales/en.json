@@ -642,6 +642,7 @@
     "empty": "No announcements yet.",
     "unread": "Notifications, {{count}} unread",
     "openMessages": "Open Messages",
+    "openOwnerDashboard": "Open Owner dashboard",
     "downloadApk": "Download APK"
   },
   "errors": {

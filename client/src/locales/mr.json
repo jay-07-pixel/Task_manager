@@ -642,6 +642,7 @@
     "empty": "अद्याप कोणतीही घोषणा नाही.",
     "unread": "सूचना, {{count}} न वाचले",
     "openMessages": "संदेश उघडा",
+    "openOwnerDashboard": "ओनर डॅशबोर्ड उघडा",
     "downloadApk": "APK डाउनलोड करा"
   },
   "errors": {

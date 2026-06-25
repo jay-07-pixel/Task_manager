@@ -5626,6 +5626,18 @@ function wireChromeNav() {
   wireOwnerReportsNav();
 }
 
+function wireOwnerDashboardAnnouncementListener() {
+  if (window.__ownerDashAnnWired) return;
+  window.__ownerDashAnnWired = true;
+  window.addEventListener("taskmgr:open-owner-dashboard", () => {
+    if (state.user?.role !== "owner") return;
+    state.ownerView = "owner-dashboard";
+    renderListContentOnly();
+    renderOwnerMain();
+    dismissAdminMobileNav();
+  });
+}
+
 function renderOwnerChrome() {
   app.innerHTML = `
     <div class="owner-shell admin-mockup-ui min-h-main">
@@ -6609,6 +6621,7 @@ initTheme();
 
 async function startup() {
   await initI18n();
+  wireOwnerDashboardAnnouncementListener();
   initContentTranslate(api);
   onContentTranslationsUpdated(() => {
     rerenderChatTranslatedContent();
