@@ -1,4 +1,4 @@
-const SUPPORTED = new Set(["hi", "mr"]);
+const UI_LANGS = new Set(["en", "hi", "mr"]);
 const MAX_TEXT_LEN = 500;
 const MAX_BATCH = 40;
 const cache = new Map();
@@ -8,11 +8,32 @@ function cacheKey(text, toLang) {
   return `${toLang}\0${text}`;
 }
 
-async function translateOne(text, toLang) {
-  const key = cacheKey(text, toLang);
-  if (cache.has(key)) return cache.get(key);
+/** @returns {"en" | "inc"} */
+function detectSourceLang(text) {
+  const s = String(text).trim();
+  if (!s) return "en";
+  const devanagari = (s.match(/[\u0900-\u097F]/g) || []).length;
+  const latin = (s.match(/[a-zA-Z]/g) || []).length;
+  if (devanagari > 0 && devanagari >= latin) return "inc";
+  return "en";
+}
 
-  const langpair = `en|${toLang}`;
+/**
+ * Langpairs to try when translating `text` into the UI language.
+ * Empty array = no translation needed.
+ */
+function langPairsFor(text, toLang) {
+  const src = detectSourceLang(text);
+  if (src === "en" && toLang === "en") return [];
+  if (src === "inc" && toLang === "hi") return [];
+  if (src === "inc" && toLang === "mr") return [];
+  if (src === "en" && toLang === "hi") return ["en|hi"];
+  if (src === "en" && toLang === "mr") return ["en|mr"];
+  if (src === "inc" && toLang === "en") return ["Autodetect|en", "mr|en", "hi|en"];
+  return [];
+}
+
+async function fetchTranslation(text, langpair) {
   const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${langpair}`;
   const res = await fetch(url, { signal: AbortSignal.timeout(12_000) });
   if (!res.ok) return text;
@@ -21,9 +42,28 @@ async function translateOne(text, toLang) {
   const status = data?.responseStatus;
   if (status && Number(status) !== 200) return text;
 
-  let translated = String(data?.responseData?.translatedText || text).trim();
-  if (!translated || translated.toUpperCase() === text.toUpperCase()) {
-    translated = text;
+  const translated = String(data?.responseData?.translatedText || text).trim();
+  if (!translated || translated.toUpperCase() === text.toUpperCase()) return text;
+  return translated;
+}
+
+async function translateWithPair(text, toLang) {
+  const key = cacheKey(text, toLang);
+  if (cache.has(key)) return cache.get(key);
+
+  const pairs = langPairsFor(text, toLang);
+  if (!pairs.length) {
+    cache.set(key, text);
+    return text;
+  }
+
+  let translated = text;
+  for (const pair of pairs) {
+    const attempt = await fetchTranslation(text, pair);
+    if (attempt !== text) {
+      translated = attempt;
+      break;
+    }
   }
 
   if (cache.size >= MAX_CACHE) {
@@ -35,7 +75,7 @@ async function translateOne(text, toLang) {
 }
 
 export async function translateTexts(texts, toLang) {
-  if (!SUPPORTED.has(toLang)) {
+  if (!UI_LANGS.has(toLang)) {
     return Object.fromEntries(texts.map((t) => [t, t]));
   }
 
@@ -48,12 +88,14 @@ export async function translateTexts(texts, toLang) {
       translations[text] = text;
       continue;
     }
+
     const key = cacheKey(trimmed, toLang);
     if (cache.has(key)) {
       translations[text] = cache.get(key);
       continue;
     }
-    translations[text] = await translateOne(trimmed, toLang);
+
+    translations[text] = await translateWithPair(trimmed, toLang);
   }
 
   return translations;

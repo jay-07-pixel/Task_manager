@@ -52,13 +52,12 @@ export function collectTranslatableTexts(state) {
 export function dt(text) {
   if (text == null || text === "") return text ?? "";
   const lang = currentLanguage();
-  if (lang === "en") return text;
   return cache.get(cacheKey(lang, text)) ?? text;
 }
 
 export async function ensureContentTranslations(texts) {
   const lang = currentLanguage();
-  if (lang === "en" || !apiFn || !texts?.length) return;
+  if (!apiFn || !texts?.length) return;
 
   const missing = [...new Set(texts.filter((t) => t && !cache.has(cacheKey(lang, t))))];
   if (!missing.length) return;
