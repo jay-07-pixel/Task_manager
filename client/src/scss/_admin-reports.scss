@@ -210,6 +210,42 @@
     white-space: nowrap;
   }
 
+  .admin-report-by-admin-section {
+    margin-bottom: 1rem;
+  }
+
+  .admin-report-by-admin-title {
+    font-weight: 600;
+  }
+
+  .admin-report-by-admin-table {
+    th {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      color: var(--admin-on-surface-variant);
+      white-space: nowrap;
+    }
+
+    td {
+      font-size: 0.82rem;
+      vertical-align: middle;
+    }
+  }
+
+  .admin-report-by-admin-total td {
+    border-top-width: 2px;
+    background: var(--admin-surface-container);
+  }
+
+  .admin-reports-charts--owner-dashboard {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-owner-dashboard-page .admin-report-card--employee-perf {
+    grid-column: 1 / -1;
+  }
+
   .admin-reports-charts {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));

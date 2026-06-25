@@ -25,7 +25,9 @@ import {
   initAdminReports,
   ownerReportsNavItemHtml,
   openOwnerReportsView,
+  openOwnerDashboardView,
   refreshAdminReports,
+  refreshOwnerDashboard,
   destroyAdminReportsCharts,
   clearAdminReportsCache,
   onReportsThemeChange,
@@ -1725,6 +1727,10 @@ function ownerAdminHeaderProfileHtml() {
       <button type="button" class="admin-header-profile-item js-admin-manage-admin" role="menuitem" data-bs-toggle="modal" data-bs-target="#teamAdminModal">
         ${adminMsIcon("admin_panel_settings")}
         <span>${tr("owner.manageAdmin")}</span>
+      </button>
+      <button type="button" class="admin-header-profile-item js-owner-dashboard-open" role="menuitem">
+        ${adminMsIcon("dashboard")}
+        <span>${tr("owner.ownerDashboard")}</span>
       </button>
       ${adminHeaderVisitUsItemHtml()}
       <div class="admin-header-profile-divider" role="separator"></div>
@@ -4645,8 +4651,11 @@ function updateOwnerTasksFingerprint() {
 async function syncOwnerDashboard({ forceRender = false } = {}) {
   if (state.user?.role !== "owner") return;
   if (!document.getElementById("main-column")) return;
-  if (state.ownerView === "reports") {
-    if (forceRender) void refreshAdminReports({ force: true });
+  if (state.ownerView === "reports" || state.ownerView === "owner-dashboard") {
+    if (forceRender) {
+      if (state.ownerView === "owner-dashboard") void refreshOwnerDashboard({ force: true });
+      else void refreshAdminReports({ force: true });
+    }
     return;
   }
   if (!state.activeListId) return;
@@ -4880,7 +4889,7 @@ function wireListPinHold(btn) {
 }
 
 function ownerListNavButtonHtml(list, { systemPinned = false } = {}) {
-  const active = state.ownerView !== "reports" && list.id === state.activeListId;
+  const active = state.ownerView === "dashboard" && list.id === state.activeListId;
   const userPinned = !systemPinned && !!list.pinned;
   const icon = systemPinned ? "assignment_ind" : "folder";
   const grip = systemPinned
@@ -5222,6 +5231,11 @@ function findTaskById(id) {
 function renderOwnerMain() {
   const main = document.getElementById("main-column");
   if (!main) return;
+  if (state.ownerView === "owner-dashboard") {
+    destroyTaskSortables();
+    openOwnerDashboardView();
+    return;
+  }
   if (state.ownerView === "reports") {
     destroyTaskSortables();
     openOwnerReportsView();
@@ -5356,6 +5370,7 @@ function renderOwnerMain() {
   wireAdminNotifications(state.user?.id, main);
   ensureAdminHeaderProfileMenuDocListener();
   wireAdminHeaderProfileMenu(main);
+  wireOwnerDashboardOpen(main);
 
   main.querySelectorAll(".js-owner-refresh-tasks").forEach((btn) => {
     btn.addEventListener("click", async () => {
@@ -5504,11 +5519,49 @@ function ownerReportsChromeHeaderHtml() {
     </header>`;
 }
 
+function ownerDashboardChromeHeaderHtml() {
+  const adminWelcomeName = state.user?.displayName
+    ? escapeHtml(dt(state.user.displayName))
+    : tr("common.admin");
+  return `<header class="admin-dash-header">
+      ${adminMobileNavToggleHtml()}
+      <div class="admin-dash-heading">
+        <h1 class="admin-dash-title">${tr("owner.ownerDashboardTitle")}</h1>
+        <p class="admin-dash-subtitle">${tr("common.welcome", { name: adminWelcomeName })}</p>
+      </div>
+      <div class="admin-dash-utilities">
+        ${languageSelectorHtml({ compact: true })}
+        ${ownerTrialTopBannerHtml()}
+        ${adminNotificationsBellHtml(state.user?.id)}
+        ${ownerAdminHeaderProfileHtml()}
+      </div>
+    </header>`;
+}
+
+function ownerReportsChromeHeaderDynamic() {
+  if (state.ownerView === "owner-dashboard") return ownerDashboardChromeHeaderHtml();
+  return ownerReportsChromeHeaderHtml();
+}
+
 function wireOwnerReportsChromeHeader(main) {
   wireAdminNotifications(state.user?.id, main);
   ensureAdminHeaderProfileMenuDocListener();
   wireAdminHeaderProfileMenu(main);
   wireLanguageSelector(main);
+  wireOwnerDashboardOpen(main);
+}
+
+function wireOwnerDashboardOpen(root = document) {
+  root.querySelectorAll(".js-owner-dashboard-open").forEach((btn) => {
+    if (btn.dataset.ownerDashWired === "1") return;
+    btn.dataset.ownerDashWired = "1";
+    btn.addEventListener("click", () => {
+      state.ownerView = "owner-dashboard";
+      renderListContentOnly();
+      renderOwnerMain();
+      dismissAdminMobileNav();
+    });
+  });
 }
 
 function wireOwnerReportsNav() {
@@ -5554,7 +5607,7 @@ function wireChromeNav() {
   );
   document.querySelectorAll(".js-owner-create-task").forEach((btn) => {
     btn.addEventListener("click", () => {
-      if (state.ownerView === "reports") {
+      if (state.ownerView === "reports" || state.ownerView === "owner-dashboard") {
         state.ownerView = "dashboard";
         renderListContentOnly();
       }
@@ -5567,6 +5620,7 @@ function wireChromeNav() {
       setThemePreference(cur === "dark" ? "light" : "dark");
       syncAdminThemeToggleIcons();
       if (state.ownerView === "reports") void refreshAdminReports({ force: true });
+      else if (state.ownerView === "owner-dashboard") void refreshOwnerDashboard({ force: true });
     });
   });
   wireOwnerReportsNav();
@@ -5606,7 +5660,7 @@ function renderOwnerChrome() {
     api,
     escapeHtml,
     adminMsIcon,
-    reportsChromeHeader: ownerReportsChromeHeaderHtml,
+    reportsChromeHeader: ownerReportsChromeHeaderDynamic,
     wireReportsChromeHeader: wireOwnerReportsChromeHeader,
   });
   renderListGroup();

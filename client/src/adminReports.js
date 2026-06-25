@@ -26,6 +26,9 @@ let employeePerfFilters = { employeeId: "", period: "daily" };
 /** @type {boolean} */
 let employeePerfLoading = false;
 
+/** @type {"full" | "owner-dashboard"} */
+let reportViewMode = "full";
+
 const PERIOD_BUCKET_COUNTS = { daily: 14, weekly: 12, monthly: 6 };
 
 /** @type {number | null} */
@@ -201,21 +204,29 @@ function formatReportDateTime(iso) {
   return d.toLocaleString(dateLocale(), { dateStyle: "medium", timeStyle: "short" });
 }
 
-function lateSubmissionsTableHtml(items) {
+function lateSubmissionsTableHtml(items, showAdmin = false) {
   if (!items) return "";
   const rows = items.length
     ? items
         .map((row) => {
           const lateLabel = tr("reports.submittedLateByDays", { count: row.lateDays });
+          const adminCell = showAdmin
+            ? `<td class="text-nowrap">${escapeHtmlFn(dt(row.assignedBy?.name || "—"))}</td>`
+            : "";
           return `<tr>
             <td class="admin-report-late-task">${escapeHtmlFn(dt(row.title))}</td>
+            ${adminCell}
             <td class="tabular-nums text-nowrap">${escapeHtmlFn(formatReportDateTime(row.dueAt))}</td>
             <td class="tabular-nums text-nowrap">${escapeHtmlFn(formatReportDateTime(row.submittedAt))}</td>
             <td class="admin-report-late-days text-danger fw-semibold text-nowrap">${escapeHtmlFn(lateLabel)}</td>
           </tr>`;
         })
         .join("")
-    : `<tr><td colspan="4" class="text-muted small py-3">${escapeHtmlFn(tr("reports.noLateSubmissions"))}</td></tr>`;
+    : `<tr><td colspan="${showAdmin ? 5 : 4}" class="text-muted small py-3">${escapeHtmlFn(tr("reports.noLateSubmissions"))}</td></tr>`;
+
+  const adminHeader = showAdmin
+    ? `<th scope="col">${escapeHtmlFn(tr("reports.assignedByAdmin"))}</th>`
+    : "";
 
   return `<div class="admin-report-late-section mt-3">
     <h3 class="admin-report-late-title h6 mb-2">${escapeHtmlFn(tr("reports.lateSubmissions"))}</h3>
@@ -224,12 +235,60 @@ function lateSubmissionsTableHtml(items) {
         <thead>
           <tr>
             <th scope="col">${escapeHtmlFn(tr("reports.taskColumn"))}</th>
+            ${adminHeader}
             <th scope="col">${escapeHtmlFn(tr("reports.deadlineColumn"))}</th>
             <th scope="col">${escapeHtmlFn(tr("reports.submittedColumn"))}</th>
             <th scope="col">${escapeHtmlFn(tr("reports.daysLateColumn"))}</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+function byAdminSectionHtml(byAdmin, totals) {
+  if (!byAdmin?.length) {
+    return `<p class="admin-report-by-admin-empty text-muted small mb-0">${escapeHtmlFn(tr("reports.noAdminAllocations"))}</p>`;
+  }
+
+  const bodyRows = byAdmin
+    .map(
+      (row) => `<tr>
+        <td class="fw-medium">${escapeHtmlFn(dt(row.name))}</td>
+        <td class="tabular-nums">${escapeHtmlFn(String(row.allocated))}</td>
+        <td class="tabular-nums text-success">${escapeHtmlFn(String(row.onTime))}</td>
+        <td class="tabular-nums text-warning">${escapeHtmlFn(String(row.late))}</td>
+        <td class="tabular-nums text-muted">${escapeHtmlFn(String(row.pending))}</td>
+      </tr>`
+    )
+    .join("");
+
+  const totalRow = totals
+    ? `<tr class="admin-report-by-admin-total">
+        <td class="fw-bold">${escapeHtmlFn(tr("reports.total"))}</td>
+        <td class="tabular-nums fw-bold">${escapeHtmlFn(String(totals.allocated))}</td>
+        <td class="tabular-nums fw-bold text-success">${escapeHtmlFn(String(totals.onTime))}</td>
+        <td class="tabular-nums fw-bold text-warning">${escapeHtmlFn(String(totals.late))}</td>
+        <td class="tabular-nums fw-bold text-muted">${escapeHtmlFn(String(totals.pending))}</td>
+      </tr>`
+    : "";
+
+  return `<div class="admin-report-by-admin-section mt-3">
+    <h3 class="admin-report-by-admin-title h6 mb-2">${escapeHtmlFn(tr("reports.tasksByAdmin"))}</h3>
+    <p class="text-muted small mb-2">${escapeHtmlFn(tr("reports.tasksByAdminHint"))}</p>
+    <div class="table-responsive admin-report-by-admin-table-wrap">
+      <table class="table table-sm admin-report-by-admin-table mb-0">
+        <thead>
+          <tr>
+            <th scope="col">${escapeHtmlFn(tr("reports.adminColumn"))}</th>
+            <th scope="col">${escapeHtmlFn(tr("reports.allocated"))}</th>
+            <th scope="col">${escapeHtmlFn(tr("reports.onTime"))}</th>
+            <th scope="col">${escapeHtmlFn(tr("reports.late"))}</th>
+            <th scope="col">${escapeHtmlFn(tr("reports.pending"))}</th>
+          </tr>
+        </thead>
+        <tbody>${bodyRows}${totalRow}</tbody>
       </table>
     </div>
   </div>`;
@@ -284,7 +343,15 @@ function employeePerfSectionHtml(data) {
 
   const lateTable =
     employees.length > 0 && !employeePerfLoading
-      ? lateSubmissionsTableHtml(employeePerfData?.lateSubmissions ?? [])
+      ? lateSubmissionsTableHtml(
+          employeePerfData?.lateSubmissions ?? [],
+          reportViewMode === "owner-dashboard"
+        )
+      : "";
+
+  const byAdminBlock =
+    reportViewMode === "owner-dashboard" && employees.length > 0 && !employeePerfLoading
+      ? byAdminSectionHtml(employeePerfData?.byAdmin ?? [], employeePerfData?.totals)
       : "";
 
   const loadingHint = employeePerfLoading
@@ -320,6 +387,7 @@ function employeePerfSectionHtml(data) {
       ${empName ? `<p class="admin-report-emp-name small mb-2"><strong>${escapeHtmlFn(empName)}</strong></p>` : ""}
       ${loadingHint}
       ${kpiRow}
+      ${byAdminBlock}
       ${emptyEmployees}
       ${chartBlock}
       ${lateTable}
@@ -334,7 +402,38 @@ function kpiCard(label, value, icon, accent = "") {
       <div class="admin-report-kpi-value">${escapeHtmlFn(String(value))}</div>
       <div class="admin-report-kpi-label">${escapeHtmlFn(label)}</div>
     </div>
-  </div>`;
+    </div>`;
+}
+
+function ownerDashboardPageHtml(data) {
+  const generated = new Date(data.generatedAt).toLocaleString(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+
+  return `
+    <div class="admin-main-scroll d-flex flex-column">
+      ${chromeHeaderFn ? chromeHeaderFn() : ""}
+    <div class="admin-reports-page admin-owner-dashboard-page">
+      <header class="admin-reports-header">
+        <div>
+          <h2 class="admin-reports-title mb-1">${escapeHtmlFn(tr("owner.ownerDashboardTitle"))}</h2>
+          <p class="admin-reports-subtitle text-muted mb-0">${escapeHtmlFn(tr("owner.ownerDashboardSubtitle"))}</p>
+        </div>
+        <div class="admin-reports-header-actions">
+          <span class="admin-reports-updated small text-muted">${escapeHtmlFn(tr("reports.updated", { time: generated }))}</span>
+          <button type="button" class="btn btn-sm btn-outline-secondary js-reports-refresh">
+            ${adminMsIconFn("refresh")}
+            ${escapeHtmlFn(tr("common.refresh"))}
+          </button>
+        </div>
+      </header>
+
+      <div class="admin-reports-charts admin-reports-charts--owner-dashboard">
+        ${employeePerfSectionHtml(data)}
+      </div>
+    </div>
+    </div>`;
 }
 
 function reportPageHtml(data) {
@@ -665,7 +764,8 @@ function wireReportsPage(main) {
   if (refreshBtn && refreshBtn.dataset.wiredReports !== "1") {
     refreshBtn.dataset.wiredReports = "1";
     refreshBtn.addEventListener("click", () => {
-      void refreshAdminReports({ force: true });
+      if (reportViewMode === "owner-dashboard") void refreshOwnerDashboard({ force: true });
+      else void refreshAdminReports({ force: true });
     });
   }
   wireEmployeePerfFilters(main);
@@ -705,8 +805,13 @@ async function loadEmployeePerformance(main) {
       employeeId: employeePerfFilters.employeeId,
       period: employeePerfFilters.period || "daily",
     });
+    if (reportViewMode === "owner-dashboard") q.set("scope", "org");
     employeePerfData = await apiFn(`/api/reports/employee-performance?${q}`);
-    await ensureContentTranslations((employeePerfData?.lateSubmissions ?? []).map((r) => r.title));
+    const names = [
+      ...(employeePerfData?.lateSubmissions ?? []).map((r) => r.title),
+      ...(employeePerfData?.byAdmin ?? []).map((r) => r.name),
+    ];
+    await ensureContentTranslations(names);
   } catch {
     employeePerfData = null;
   } finally {
@@ -731,12 +836,13 @@ async function loadEmployeePerformance(main) {
 export function onReportsThemeChange() {
   if (!reportData || !document.querySelector(".admin-reports-page")) return;
   requestAnimationFrame(() => {
-    renderCharts(reportData);
+    if (reportViewMode === "full") renderCharts(reportData);
     renderEmployeePerfChart();
   });
 }
 
 export async function refreshAdminReports({ force = false } = {}) {
+  reportViewMode = "full";
   const main = document.getElementById("main-column");
   if (!main || !apiFn) return;
 
@@ -785,7 +891,59 @@ export async function refreshAdminReports({ force = false } = {}) {
   }
 }
 
+export async function refreshOwnerDashboard({ force = false } = {}) {
+  reportViewMode = "owner-dashboard";
+  const main = document.getElementById("main-column");
+  if (!main || !apiFn) return;
+
+  const hasLayout = !!main.querySelector(".admin-owner-dashboard-page");
+
+  if (!force && reportData && hasLayout) {
+    requestAnimationFrame(() => renderEmployeePerfChart());
+    return;
+  }
+
+  if (!reportData || force) {
+    main.innerHTML = `<div class="admin-reports-loading p-5 text-center text-muted">
+      ${adminMsIconFn("hourglass_top")}
+      <p class="mb-0 mt-2">${escapeHtmlFn(tr("reports.loading"))}</p>
+    </div>`;
+  }
+
+  try {
+    if (!reportData || force) {
+      reportData = await apiFn("/api/reports/owner-dashboard/summary");
+      if (force) {
+        employeePerfData = null;
+        employeePerfFilters = { employeeId: "", period: employeePerfFilters.period || "daily" };
+      }
+    }
+    main.innerHTML = ownerDashboardPageHtml(reportData);
+    wireReportsPage(main);
+    if (wireChromeHeaderFn) wireChromeHeaderFn(main);
+    requestAnimationFrame(() => {
+      void loadEmployeePerformance(main);
+    });
+  } catch (err) {
+    reportData = null;
+    main.innerHTML = `<div class="admin-reports-error p-5 text-center">
+      <p class="text-danger mb-2">${escapeHtmlFn(tr("reports.loadError"))}</p>
+      <p class="text-muted small mb-3">${escapeHtmlFn(err?.message || tr("reports.unknownError"))}</p>
+      <button type="button" class="btn btn-primary btn-sm js-reports-refresh">${escapeHtmlFn(tr("reports.tryAgain"))}</button>
+    </div>`;
+    main.querySelector(".js-reports-refresh")?.addEventListener("click", () => {
+      void refreshOwnerDashboard({ force: true });
+    });
+  }
+}
+
+export function openOwnerDashboardView() {
+  reportViewMode = "owner-dashboard";
+  void refreshOwnerDashboard();
+}
+
 export function openOwnerReportsView() {
+  reportViewMode = "full";
   void refreshAdminReports();
 }
 
@@ -793,5 +951,6 @@ export function clearAdminReportsCache() {
   reportData = null;
   employeePerfData = null;
   employeePerfFilters = { employeeId: "", period: "daily" };
+  reportViewMode = "full";
   destroyAdminReportsCharts();
 }

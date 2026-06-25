@@ -107,6 +107,72 @@ function bucketForDate(date, period) {
   return monthKey(date);
 }
 
+async function orgOwnerIds() {
+  const owners = await prisma.user.findMany({
+    where: { role: "owner" },
+    select: { id: true },
+    orderBy: { createdAt: "asc" },
+  });
+  return owners.map((o) => o.id);
+}
+
+function adminAllocator(row) {
+  if (row.assignedBy) {
+    return { id: row.assignedBy.id, name: row.assignedBy.displayName || "Admin" };
+  }
+  if (row.task?.createdBy) {
+    return { id: row.task.createdBy.id, name: row.task.createdBy.displayName || "Admin" };
+  }
+  return { id: "unknown", name: "Unknown" };
+}
+
+function rowInPeriod(row, period, keySet) {
+  const assignedAt = assignmentDate(row);
+  const key = bucketForDate(assignedAt, period);
+  return keySet.has(key);
+}
+
+router.get("/owner-dashboard/summary", async (req, res) => {
+  try {
+    const ownerIds = await orgOwnerIds();
+    if (!ownerIds.length) {
+      return res.json({ generatedAt: new Date().toISOString(), employeeOptions: [] });
+    }
+
+    const tasks = await prisma.task.findMany({
+      where: { list: { ownerId: { in: ownerIds } } },
+      select: {
+        assignments: {
+          select: {
+            userId: true,
+            user: { select: { id: true, displayName: true } },
+          },
+        },
+      },
+    });
+
+    const byEmployee = new Map();
+    for (const task of tasks) {
+      for (const a of task.assignments) {
+        const name = a.user.displayName || "Employee";
+        if (!byEmployee.has(a.userId)) {
+          byEmployee.set(a.userId, { id: a.userId, name });
+        }
+      }
+    }
+
+    const employeeOptions = [...byEmployee.values()].sort((a, b) => a.name.localeCompare(b.name));
+
+    res.json({
+      generatedAt: new Date().toISOString(),
+      employeeOptions,
+    });
+  } catch (err) {
+    console.error("owner-dashboard summary error:", err);
+    res.status(500).json({ error: "Could not load owner dashboard" });
+  }
+});
+
 router.get("/summary", async (req, res) => {
   const ownerId = req.session.userId;
   const now = new Date();
@@ -249,6 +315,11 @@ router.get("/summary", async (req, res) => {
 router.get("/employee-performance", async (req, res) => {
   try {
     const ownerId = req.session.userId;
+    const scope = req.query.scope === "org" ? "org" : "session";
+    const ownerIds =
+      scope === "org" ? await orgOwnerIds() : [ownerId];
+    const listOwnerWhere = ownerIds.length ? { in: ownerIds } : ownerId;
+
   const employeeId = String(req.query.employeeId || "").trim();
   const period = ["daily", "weekly", "monthly"].includes(req.query.period) ? req.query.period : "daily";
 
@@ -260,7 +331,7 @@ router.get("/employee-performance", async (req, res) => {
     where: {
       id: employeeId,
       role: "employee",
-      taskAssignments: { some: { task: { list: { ownerId } } } },
+      taskAssignments: { some: { task: { list: { ownerId: listOwnerWhere } } } },
     },
     select: { id: true, displayName: true },
   });
@@ -272,13 +343,24 @@ router.get("/employee-performance", async (req, res) => {
   const rows = await prisma.taskAssignee.findMany({
     where: {
       userId: employeeId,
-      task: { list: { ownerId } },
+      task: { list: { ownerId: listOwnerWhere } },
     },
     select: {
+      assignedByUserId: true,
       assigneeDone: true,
       lastSubmittedAt: true,
       delegatedAt: true,
-      task: { select: { id: true, title: true, createdAt: true, dueAt: true } },
+      assignedBy: { select: { id: true, displayName: true } },
+      task: {
+        select: {
+          id: true,
+          title: true,
+          createdAt: true,
+          dueAt: true,
+          createdById: true,
+          createdBy: { select: { id: true, displayName: true } },
+        },
+      },
     },
   });
 
@@ -288,14 +370,33 @@ router.get("/employee-performance", async (req, res) => {
     keys.map((k) => [k, { allocated: 0, onTime: 0, late: 0, pending: 0 }])
   );
 
+  const byAdminMap = new Map();
+
   for (const row of rows) {
     const assignedAt = assignmentDate(row);
     const key = bucketForDate(assignedAt, period);
-    if (!keySet.has(key)) continue;
-    const bucket = buckets[key];
     const status = classifyAssigneeRow(row);
-    bucket.allocated += 1;
-    bucket[status] += 1;
+    const admin = adminAllocator(row);
+
+    if (keySet.has(key)) {
+      const bucket = buckets[key];
+      bucket.allocated += 1;
+      bucket[status] += 1;
+    }
+
+    if (!rowInPeriod(row, period, keySet)) continue;
+
+    const adminRow = byAdminMap.get(admin.id) || {
+      id: admin.id,
+      name: admin.name,
+      allocated: 0,
+      onTime: 0,
+      late: 0,
+      pending: 0,
+    };
+    adminRow.allocated += 1;
+    adminRow[status] += 1;
+    byAdminMap.set(admin.id, adminRow);
   }
 
   const series = keys.map((k) => buckets[k]);
@@ -309,12 +410,12 @@ router.get("/employee-performance", async (req, res) => {
     { allocated: 0, onTime: 0, late: 0, pending: 0 }
   );
 
+  const byAdmin = [...byAdminMap.values()].sort((a, b) => b.allocated - a.allocated || a.name.localeCompare(b.name));
+
   const lateSubmissions = rows
     .filter((row) => {
       if (classifyAssigneeRow(row) !== "late") return false;
-      const assignedAt = assignmentDate(row);
-      const key = bucketForDate(assignedAt, period);
-      return keySet.has(key);
+      return rowInPeriod(row, period, keySet);
     })
     .map((row) => ({
       taskId: row.task.id,
@@ -323,15 +424,18 @@ router.get("/employee-performance", async (req, res) => {
       submittedAt: row.lastSubmittedAt,
       lateDays: submissionLateDayCount(row.lastSubmittedAt, row.task.dueAt),
       assignedAt: assignmentDate(row),
+      assignedBy: adminAllocator(row),
     }))
     .sort((a, b) => b.lateDays - a.lateDays || new Date(b.submittedAt) - new Date(a.submittedAt));
 
   res.json({
     employee: { id: employee.id, name: employee.displayName || "Employee" },
     period,
+    scope,
     bucketCount: keys.length,
     labels,
     totals,
+    byAdmin,
     lateSubmissions,
     series: {
       allocated: series.map((b) => b.allocated),
