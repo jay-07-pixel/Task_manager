@@ -10,6 +10,26 @@ function cacheKey(lang, text) {
   return `${lang}\0${text}`;
 }
 
+function hasDevanagari(text) {
+  return /[\u0900-\u097F]/.test(text);
+}
+
+function hasLatin(text) {
+  return /[a-zA-Z]/.test(text);
+}
+
+/** Whether `text` likely needs translation for the active UI language. */
+function needsTranslation(text, lang) {
+  if (!text) return false;
+  if (lang === "en") return hasDevanagari(text);
+  if (lang === "hi" || lang === "mr") return hasLatin(text);
+  return false;
+}
+
+export function clearContentTranslationCache() {
+  cache.clear();
+}
+
 export function initContentTranslate(api) {
   apiFn = api;
 }
@@ -59,7 +79,16 @@ export async function ensureContentTranslations(texts) {
   const lang = currentLanguage();
   if (!apiFn || !texts?.length) return;
 
-  const missing = [...new Set(texts.filter((t) => t && !cache.has(cacheKey(lang, t))))];
+  const missing = [
+    ...new Set(
+      texts.filter((t) => {
+        if (!t) return false;
+        const cached = cache.get(cacheKey(lang, t));
+        if (!cached) return true;
+        return needsTranslation(t, lang) && cached === t;
+      })
+    ),
+  ];
   if (!missing.length) return;
 
   const chunkSize = 40;
@@ -71,7 +100,9 @@ export async function ensureContentTranslations(texts) {
         body: JSON.stringify({ texts: batch, to: lang }),
       });
       for (const [original, translated] of Object.entries(data.translations ?? {})) {
-        if (translated) cache.set(cacheKey(lang, original), translated);
+        if (translated != null && String(translated).trim()) {
+          cache.set(cacheKey(lang, original), translated);
+        }
       }
     } catch {
       break;

@@ -35,7 +35,7 @@ import {
   compareHighPriorityFirst,
 } from "./taskRecurrenceSort.js";
 import { initI18n, tr, dateLocale, setLanguageChangeHandler } from "./i18n/index.js";
-import { dt, ensureStateContentTranslations, initContentTranslate } from "./i18n/contentTranslate.js";
+import { dt, ensureStateContentTranslations, initContentTranslate, clearContentTranslationCache } from "./i18n/contentTranslate.js";
 import { languageSelectorHtml, wireLanguageSelector } from "./i18n/languageSelector.js";
 
 const app = document.getElementById("app");
@@ -6556,6 +6556,7 @@ async function startup() {
   await initI18n();
   initContentTranslate(api);
   setLanguageChangeHandler(async () => {
+    clearContentTranslationCache();
     await ensureStateContentTranslations(state);
     await refreshChatForLanguageChange();
     await render();

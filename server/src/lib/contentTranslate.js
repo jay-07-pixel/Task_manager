@@ -8,42 +8,61 @@ function cacheKey(text, toLang) {
   return `${toLang}\0${text}`;
 }
 
-/** @returns {"en" | "inc"} */
+function hasDevanagari(text) {
+  return /[\u0900-\u097F]/.test(text);
+}
+
+function hasLatin(text) {
+  return /[a-zA-Z]/.test(text);
+}
+
+/** @returns {"en" | "inc" | "mixed"} */
 function detectSourceLang(text) {
   const s = String(text).trim();
   if (!s) return "en";
   const devanagari = (s.match(/[\u0900-\u097F]/g) || []).length;
   const latin = (s.match(/[a-zA-Z]/g) || []).length;
-  if (devanagari > 0 && devanagari >= latin) return "inc";
+  if (devanagari > 0 && latin > 0) return "mixed";
+  if (devanagari > 0) return "inc";
   return "en";
+}
+
+function translationLooksValid(text, translated, toLang) {
+  if (!translated || translated === text) return false;
+  if (/MYMEMORY\s+WARNING/i.test(translated)) return false;
+  if (toLang === "hi" || toLang === "mr") return hasDevanagari(translated) || !hasLatin(translated);
+  if (toLang === "en") return hasLatin(translated) && !hasDevanagari(translated);
+  return translated.trim() !== text.trim();
 }
 
 /**
  * Langpairs to try when translating `text` into the UI language.
- * Empty array = no translation needed.
  */
 function langPairsFor(text, toLang) {
   const src = detectSourceLang(text);
   if (src === "en" && toLang === "en") return [];
-  if (src === "inc" && toLang === "hi") return [];
-  if (src === "inc" && toLang === "mr") return [];
-  if (src === "en" && toLang === "hi") return ["en|hi"];
-  if (src === "en" && toLang === "mr") return ["en|mr"];
-  if (src === "inc" && toLang === "en") return ["Autodetect|en", "mr|en", "hi|en"];
+  if (src === "inc" && toLang === "en") return ["hi|en", "mr|en", "Autodetect|en"];
+  if (src === "en" && toLang === "hi") return ["en|hi", "Autodetect|hi"];
+  if (src === "en" && toLang === "mr") return ["en|mr", "Autodetect|mr"];
+  if (src === "inc" && toLang === "hi") return ["Autodetect|hi", "mr|hi"];
+  if (src === "inc" && toLang === "mr") return ["Autodetect|mr", "hi|mr"];
+  if (src === "mixed" && toLang === "en") return ["Autodetect|en", "hi|en", "mr|en"];
+  if (src === "mixed" && toLang === "hi") return ["Autodetect|hi", "en|hi", "mr|hi"];
+  if (src === "mixed" && toLang === "mr") return ["Autodetect|mr", "en|mr", "hi|mr"];
   return [];
 }
 
 async function fetchTranslation(text, langpair) {
   const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${langpair}`;
-  const res = await fetch(url, { signal: AbortSignal.timeout(12_000) });
-  if (!res.ok) return text;
+  const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
+  if (!res.ok) return null;
 
   const data = await res.json();
   const status = data?.responseStatus;
-  if (status && Number(status) !== 200) return text;
+  if (status && Number(status) !== 200) return null;
 
-  const translated = String(data?.responseData?.translatedText || text).trim();
-  if (!translated || translated.toUpperCase() === text.toUpperCase()) return text;
+  const translated = String(data?.responseData?.translatedText || "").trim();
+  if (!translated) return null;
   return translated;
 }
 
@@ -60,7 +79,7 @@ async function translateWithPair(text, toLang) {
   let translated = text;
   for (const pair of pairs) {
     const attempt = await fetchTranslation(text, pair);
-    if (attempt !== text) {
+    if (attempt && translationLooksValid(text, attempt, toLang)) {
       translated = attempt;
       break;
     }
