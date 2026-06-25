@@ -208,7 +208,7 @@ function lateSubmissionsTableHtml(items) {
         .map((row) => {
           const lateLabel = tr("reports.submittedLateByDays", { count: row.lateDays });
           return `<tr>
-            <td class="admin-report-late-task">${escapeHtml(dt(row.title))}</td>
+            <td class="admin-report-late-task">${escapeHtmlFn(dt(row.title))}</td>
             <td class="tabular-nums text-nowrap">${escapeHtmlFn(formatReportDateTime(row.dueAt))}</td>
             <td class="tabular-nums text-nowrap">${escapeHtmlFn(formatReportDateTime(row.submittedAt))}</td>
             <td class="admin-report-late-days text-danger fw-semibold text-nowrap">${escapeHtmlFn(lateLabel)}</td>
