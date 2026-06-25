@@ -41,7 +41,13 @@ export async function initI18n() {
     localStorage.setItem(LANG_STORAGE_KEY, code);
     document.documentElement.lang = code;
     updateDocumentTitle();
-    onLanguageChange?.();
+    void (async () => {
+      try {
+        await onLanguageChange?.();
+      } catch (err) {
+        console.error("language change handler failed:", err);
+      }
+    })();
   });
 }
 

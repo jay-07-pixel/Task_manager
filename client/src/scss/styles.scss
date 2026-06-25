@@ -3372,6 +3372,49 @@ body {
   margin-bottom: 0.1rem;
 }
 
+.team-chat-voice-btn {
+  width: 2.15rem;
+  height: 2.15rem;
+  border-radius: 999px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  align-self: flex-end;
+  margin-bottom: 0.1rem;
+
+  &.is-listening {
+    color: #fff;
+    background: var(--bs-danger);
+    border-color: var(--bs-danger);
+    animation: team-chat-voice-pulse 1.15s ease-in-out infinite;
+  }
+}
+
+@keyframes team-chat-voice-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(var(--bs-danger-rgb), 0.45);
+  }
+  50% {
+    box-shadow: 0 0 0 0.35rem rgba(var(--bs-danger-rgb), 0);
+  }
+}
+
+.team-chat-speech-lang {
+  width: auto;
+  max-width: 5.5rem;
+  min-width: 4.5rem;
+  font-size: 0.72rem;
+  padding: 0.2rem 1.4rem 0.2rem 0.4rem;
+  border-radius: 0.65rem;
+  flex-shrink: 0;
+  align-self: flex-end;
+  margin-bottom: 0.12rem;
+  line-height: 1.2;
+}
+
 .team-chat-attach-preview {
   display: flex;
   align-items: center;

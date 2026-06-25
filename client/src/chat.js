@@ -1,7 +1,12 @@
 /** @typedef {{ api: Function, escapeHtml: Function, showToast: Function, bootstrap: any, getUser: () => any }} ChatDeps */
 
-import { tr } from "./i18n/index.js";
+import { tr, currentLanguage } from "./i18n/index.js";
 import { dt, ensureContentTranslations } from "./i18n/contentTranslate.js";
+import {
+  createChatSpeechInput,
+  isSpeechRecognitionSupported,
+  speechRecognitionLangCode,
+} from "./chatSpeechToText.js";
 
 const CHAT_POLL_MS_HIDDEN = 20000;
 const CHAT_POLL_MS_CLOSED = 6000;
@@ -61,21 +66,28 @@ let replyingTo = null;
 let chatJumpDate = null;
 /** @type {number | null} */
 let typingDebounceTimer = null;
+/** @type {ReturnType<typeof createChatSpeechInput> | null} */
+let chatSpeechInput = null;
 
 async function syncChatTranslations() {
   const texts = [];
-  for (const c of contacts) texts.push(c.displayName);
+  const add = (value) => {
+    if (value) texts.push(value);
+  };
+  for (const c of contacts) add(c.displayName);
   for (const t of threads) {
-    if (t.peer?.displayName) texts.push(t.peer.displayName);
-    if (t.group?.name) texts.push(t.group.name);
-    if (t.lastMessage?.body) texts.push(t.lastMessage.body);
-    if (t.lastMessage?.senderName) texts.push(t.lastMessage.senderName);
+    add(t.peer?.displayName);
+    add(t.group?.name);
+    add(t.lastMessage?.body);
+    add(t.lastMessage?.senderName);
   }
   for (const m of activeMessages) {
-    if (m.body) texts.push(m.body);
-    if (m.senderName) texts.push(m.senderName);
+    add(m.body);
+    add(m.senderName);
+    add(m.replyTo?.body);
+    add(m.replyTo?.senderName);
   }
-  await ensureContentTranslations(texts.filter(Boolean));
+  return ensureContentTranslations(texts);
 }
 
 function getChatPollMs() {
@@ -915,6 +927,77 @@ function insertTextIntoChatInput(text) {
   input.focus();
 }
 
+function getChatSpeechLang() {
+  const sel = document.getElementById("team-chat-speech-lang");
+  const value = sel?.value;
+  if (value === "en" || value === "hi" || value === "mr") return value;
+  return currentLanguage();
+}
+
+function syncChatSpeechLangSelect() {
+  const sel = document.getElementById("team-chat-speech-lang");
+  if (!sel) return;
+  const lang = currentLanguage();
+  if (lang === "en" || lang === "hi" || lang === "mr") sel.value = lang;
+}
+
+function updateChatVoiceButton(listening) {
+  const btn = document.getElementById("team-chat-voice-btn");
+  if (!btn) return;
+  btn.classList.toggle("is-listening", listening);
+  btn.setAttribute("aria-pressed", listening ? "true" : "false");
+  btn.setAttribute("aria-label", listening ? tr("chat.voiceInputStop") : tr("chat.voiceInput"));
+  btn.title = listening ? tr("chat.voiceListening") : tr("chat.voiceInput");
+  const icon = btn.querySelector("i");
+  if (icon) icon.className = listening ? "bi bi-mic-mute-fill" : "bi bi-mic-fill";
+}
+
+function stopChatSpeechInput() {
+  chatSpeechInput?.stop();
+  updateChatVoiceButton(false);
+}
+
+function handleChatSpeechError(code) {
+  if (code === "not-allowed" || code === "service-not-allowed") {
+    d().showToast(tr("chat.voicePermissionDenied"), "warning");
+  } else if (code !== "aborted" && code !== "no-speech") {
+    d().showToast(tr("chat.voiceError"), "warning");
+  }
+  updateChatVoiceButton(false);
+}
+
+function wireChatSpeechInput() {
+  const btn = document.getElementById("team-chat-voice-btn");
+  const langSel = document.getElementById("team-chat-speech-lang");
+  if (!btn || !isSpeechRecognitionSupported()) return;
+
+  btn.classList.remove("d-none");
+  langSel?.classList.remove("d-none");
+  syncChatSpeechLangSelect();
+
+  if (chatSpeechInput) return;
+
+  chatSpeechInput = createChatSpeechInput({
+    getLang: () => speechRecognitionLangCode(getChatSpeechLang()),
+    onListeningChange: updateChatVoiceButton,
+    onError: handleChatSpeechError,
+  });
+
+  btn.addEventListener("click", () => {
+    if (!activeChatId || !activeThreadType) {
+      d().showToast(tr("chat.voiceSelectChat"), "info");
+      return;
+    }
+    chatSpeechInput?.toggle();
+  });
+
+  langSel?.addEventListener("change", () => {
+    if (!chatSpeechInput?.isListening()) return;
+    stopChatSpeechInput();
+    chatSpeechInput?.toggle();
+  });
+}
+
 function shouldHandleChatPaste(e) {
   if (!isChatPanelOpen() || !activeChatId || !activeThreadType) return false;
 
@@ -1156,6 +1239,14 @@ export function teamChatOffcanvasHtml() {
                   <input type="file" class="d-none" id="team-chat-file-input" accept="*/*" />
                   <button type="button" class="btn btn-light border team-chat-attach-btn" id="team-chat-attach-btn" aria-label="${tr("chat.attachFile")}">
                     <i class="bi bi-paperclip" aria-hidden="true"></i>
+                  </button>
+                  <select class="form-select form-select-sm team-chat-speech-lang d-none" id="team-chat-speech-lang" aria-label="${tr("chat.speechLangLabel")}" title="${tr("chat.speechLangLabel")}">
+                    <option value="en">${tr("chat.speechLangEn")}</option>
+                    <option value="hi">${tr("chat.speechLangHi")}</option>
+                    <option value="mr">${tr("chat.speechLangMr")}</option>
+                  </select>
+                  <button type="button" class="btn btn-light border team-chat-voice-btn d-none" id="team-chat-voice-btn" aria-label="${tr("chat.voiceInput")}" title="${tr("chat.voiceInput")}" aria-pressed="false">
+                    <i class="bi bi-mic-fill" aria-hidden="true"></i>
                   </button>
                   <textarea class="form-control team-chat-input" id="team-chat-input" rows="1" maxlength="4000" placeholder="${tr("chat.messagePlaceholder")}" aria-label="${tr("chat.messageLabel")}"></textarea>
                   <button class="btn btn-primary team-chat-send-btn" type="submit" id="team-chat-send" aria-label="${tr("chat.sendMessage")}">
@@ -1752,6 +1843,7 @@ async function loadThreads() {
 
 async function openThread(type, id) {
   stopTypingPulse();
+  stopChatSpeechInput();
   clearPendingChatFile();
   clearReplyingTo();
   clearChatJumpDate();
@@ -1871,6 +1963,7 @@ async function sendMessage(e) {
   e.preventDefault();
   if (!activeChatId || !activeThreadType) return;
   stopTypingPulse();
+  stopChatSpeechInput();
   const input = document.getElementById("team-chat-input");
   const body = input?.value?.trim() || "";
   const file = pendingChatFile;
@@ -1970,6 +2063,7 @@ function startPolling() {
 }
 
 export function stopPolling() {
+  stopChatSpeechInput();
   if (pollTimer != null) {
     window.clearTimeout(pollTimer);
     pollTimer = null;
@@ -2016,9 +2110,8 @@ export function wireTeamChatButtons() {
   });
 }
 
-export async function refreshChatForLanguageChange() {
+export function rerenderChatTranslatedContent() {
   if (!deps) return;
-  await syncChatTranslations();
   renderThreadList();
   renderContactList();
   renderGroupMemberPicks();
@@ -2029,6 +2122,13 @@ export async function refreshChatForLanguageChange() {
   }
 }
 
+export async function refreshChatForLanguageChange() {
+  if (!deps) return;
+  syncChatSpeechLangSelect();
+  await syncChatTranslations();
+  rerenderChatTranslatedContent();
+}
+
 export function initTeamChat(chatDeps) {
   deps = chatDeps;
   stopPolling();
@@ -2037,6 +2137,11 @@ export function initTeamChat(chatDeps) {
 
   wireChatMediaLightbox();
   wireChatPasteHandlers();
+  wireChatSpeechInput();
+
+  offcanvas.addEventListener("hidden.bs.offcanvas", () => {
+    stopChatSpeechInput();
+  });
 
   document.getElementById("team-chat-search")?.addEventListener("input", (e) => {
     contactFilter = e.target.value || "";

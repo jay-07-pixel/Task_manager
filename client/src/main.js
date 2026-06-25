@@ -18,6 +18,7 @@ import {
   refreshUnreadBadges,
   openChatFromDeepLink,
   refreshChatForLanguageChange,
+  rerenderChatTranslatedContent,
 } from "./chat.js";
 import { adminNotificationsBellHtml, adminNotifOffcanvasHtml, wireAdminNotifications } from "./adminAnnouncements.js";
 import {
@@ -35,7 +36,7 @@ import {
   compareHighPriorityFirst,
 } from "./taskRecurrenceSort.js";
 import { initI18n, tr, dateLocale, setLanguageChangeHandler } from "./i18n/index.js";
-import { dt, ensureStateContentTranslations, initContentTranslate } from "./i18n/contentTranslate.js";
+import { dt, ensureStateContentTranslations, initContentTranslate, onContentTranslationsUpdated } from "./i18n/contentTranslate.js";
 import { languageSelectorHtml, wireLanguageSelector } from "./i18n/languageSelector.js";
 
 const app = document.getElementById("app");
@@ -6555,6 +6556,10 @@ initTheme();
 async function startup() {
   await initI18n();
   initContentTranslate(api);
+  onContentTranslationsUpdated(() => {
+    rerenderChatTranslatedContent();
+    void render();
+  });
   setLanguageChangeHandler(async () => {
     await ensureStateContentTranslations(state);
     await refreshChatForLanguageChange();
@@ -6567,6 +6572,7 @@ async function startup() {
     }
   });
   await render();
+  await ensureStateContentTranslations(state);
 }
 
 startup().catch((e) => {

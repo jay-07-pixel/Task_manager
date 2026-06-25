@@ -6,12 +6,25 @@ const cache = new Map();
 /** @type {((path: string, opts?: RequestInit) => Promise<any>) | null} */
 let apiFn = null;
 
+/** @type {Set<() => void>} */
+const updateListeners = new Set();
+
+const pendingTexts = new Set();
+/** @type {number | null} */
+let flushTimer = null;
+
 function cacheKey(lang, text) {
   return `${lang}\0${text}`;
 }
 
+function normalizeContentText(text) {
+  if (text == null) return "";
+  return String(text).trim().replace(/\s+/g, " ");
+}
+
 function shouldCacheTranslation(original, translated, lang) {
   if (!translated || normalizeComparable(translated) === normalizeComparable(original)) return false;
+  if (lang === "en") return hasLatin(translated);
   if (lang === "hi" || lang === "mr") {
     return hasDevanagari(translated) || normalizeComparable(translated) !== normalizeComparable(original);
   }
@@ -38,8 +51,40 @@ function needsTranslation(text, lang) {
   return false;
 }
 
+function notifyTranslationUpdate() {
+  for (const fn of updateListeners) {
+    try {
+      fn();
+    } catch {
+      /* ignore listener errors */
+    }
+  }
+}
+
+function scheduleContentTranslation(text) {
+  const lang = currentLanguage();
+  const key = normalizeContentText(text);
+  if (!key || !apiFn || !needsTranslation(key, lang)) return;
+  if (cache.has(cacheKey(lang, key))) return;
+  pendingTexts.add(key);
+  if (flushTimer != null) return;
+  flushTimer = window.setTimeout(() => {
+    flushTimer = null;
+    const batch = [...pendingTexts];
+    pendingTexts.clear();
+    void ensureContentTranslations(batch).then((updated) => {
+      if (updated) notifyTranslationUpdate();
+    });
+  }, 40);
+}
+
 export function clearContentTranslationCache() {
   cache.clear();
+}
+
+export function onContentTranslationsUpdated(fn) {
+  updateListeners.add(fn);
+  return () => updateListeners.delete(fn);
 }
 
 export function initContentTranslate(api) {
@@ -49,9 +94,8 @@ export function initContentTranslate(api) {
 export function collectTranslatableTexts(state) {
   const texts = new Set();
   const add = (value) => {
-    if (typeof value !== "string") return;
-    const trimmed = value.trim();
-    if (trimmed && trimmed.length <= 500) texts.add(trimmed);
+    const key = normalizeContentText(value);
+    if (key && key.length <= 500) texts.add(key);
   };
 
   const addTask = (task) => {
@@ -84,25 +128,34 @@ export function collectTranslatableTexts(state) {
 export function dt(text) {
   if (text == null || text === "") return text ?? "";
   const lang = currentLanguage();
-  return cache.get(cacheKey(lang, text)) ?? text;
+  const key = normalizeContentText(text);
+  if (!key) return text ?? "";
+  const cached = cache.get(cacheKey(lang, key));
+  if (cached) return cached;
+  scheduleContentTranslation(key);
+  return text;
 }
 
+/** @returns {Promise<boolean>} whether any new translations were cached */
 export async function ensureContentTranslations(texts) {
   const lang = currentLanguage();
-  if (!apiFn || !texts?.length) return;
+  if (!apiFn || !texts?.length) return false;
 
   const missing = [
     ...new Set(
-      texts.filter((t) => {
-        if (!t) return false;
-        const cached = cache.get(cacheKey(lang, t));
-        if (!cached) return true;
-        return needsTranslation(t, lang) && normalizeComparable(cached) === normalizeComparable(t);
-      })
+      texts
+        .map((t) => normalizeContentText(t))
+        .filter((t) => {
+          if (!t) return false;
+          const cached = cache.get(cacheKey(lang, t));
+          if (!cached) return true;
+          return needsTranslation(t, lang) && normalizeComparable(cached) === normalizeComparable(t);
+        })
     ),
   ];
-  if (!missing.length) return;
+  if (!missing.length) return false;
 
+  let updated = false;
   const chunkSize = 40;
   for (let i = 0; i < missing.length; i += chunkSize) {
     const batch = missing.slice(i, i + chunkSize);
@@ -112,16 +165,21 @@ export async function ensureContentTranslations(texts) {
         body: JSON.stringify({ texts: batch, to: lang }),
       });
       for (const [original, translated] of Object.entries(data.translations ?? {})) {
-        if (shouldCacheTranslation(original, translated, lang)) {
-          cache.set(cacheKey(lang, original), translated);
+        const key = normalizeContentText(original);
+        if (shouldCacheTranslation(key, translated, lang)) {
+          cache.set(cacheKey(lang, key), translated);
+          updated = true;
         }
       }
     } catch {
       break;
     }
   }
+  return updated;
 }
 
 export async function ensureStateContentTranslations(state) {
-  await ensureContentTranslations(collectTranslatableTexts(state));
+  const updated = await ensureContentTranslations(collectTranslatableTexts(state));
+  if (updated) notifyTranslationUpdate();
+  return updated;
 }
