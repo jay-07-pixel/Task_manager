@@ -204,6 +204,58 @@ function formatReportDateTime(iso) {
   return d.toLocaleString(dateLocale(), { dateStyle: "medium", timeStyle: "short" });
 }
 
+function personInitials(name) {
+  const parts = String(name || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (!parts.length) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function rolePillHtml(role) {
+  const isAdmin = role === "admin";
+  const cls = isAdmin ? "owner-dash-role-pill--admin" : "owner-dash-role-pill--employee";
+  const label = isAdmin ? tr("common.admin") : tr("common.employee");
+  const icon = isAdmin ? "admin_panel_settings" : "badge";
+  return `<span class="owner-dash-role-pill ${cls}">${adminMsIconFn(icon, "owner-dash-role-pill-icon")}<span>${escapeHtmlFn(label)}</span></span>`;
+}
+
+function personAvatarHtml(name, role) {
+  const cls = role === "admin" ? "owner-dash-person-avatar--admin" : "owner-dash-person-avatar--employee";
+  return `<div class="owner-dash-person-avatar ${cls}" aria-hidden="true">${escapeHtmlFn(personInitials(name))}</div>`;
+}
+
+function adminPersonChipHtml(name) {
+  if (!name) return `<span class="text-muted">—</span>`;
+  const safe = escapeHtmlFn(dt(name));
+  return `<span class="owner-dash-inline-person owner-dash-inline-person--admin" title="${safe}">
+    <span class="owner-dash-inline-person-avatar">${escapeHtmlFn(personInitials(name))}</span>
+    <span class="owner-dash-inline-person-name">${safe}</span>
+  </span>`;
+}
+
+function employeeFocusBannerHtml(empName, periodHint) {
+  if (!empName) return "";
+  return `<div class="owner-dash-employee-banner">
+    ${personAvatarHtml(empName, "employee")}
+    <div class="owner-dash-employee-banner-body">
+      ${rolePillHtml("employee")}
+      <h3 class="owner-dash-employee-banner-name">${escapeHtmlFn(dt(empName))}</h3>
+      <p class="owner-dash-employee-banner-hint mb-0">${escapeHtmlFn(periodHint)}</p>
+    </div>
+  </div>`;
+}
+
+function adminStatCell(value, label, modifier = "") {
+  const mod = modifier ? ` owner-dash-admin-stat--${modifier}` : "";
+  return `<div class="owner-dash-admin-stat${mod}">
+    <span class="owner-dash-admin-stat-value tabular-nums">${escapeHtmlFn(String(value))}</span>
+    <span class="owner-dash-admin-stat-label">${escapeHtmlFn(label)}</span>
+  </div>`;
+}
+
 function lateSubmissionsTableHtml(items, showAdmin = false) {
   if (!items) return "";
   const rows = items.length
@@ -211,7 +263,7 @@ function lateSubmissionsTableHtml(items, showAdmin = false) {
         .map((row) => {
           const lateLabel = tr("reports.submittedLateByDays", { count: row.lateDays });
           const adminCell = showAdmin
-            ? `<td class="text-nowrap">${escapeHtmlFn(dt(row.assignedBy?.name || "—"))}</td>`
+            ? `<td class="text-nowrap">${adminPersonChipHtml(row.assignedBy?.name)}</td>`
             : "";
           return `<tr>
             <td class="admin-report-late-task">${escapeHtmlFn(dt(row.title))}</td>
@@ -252,45 +304,53 @@ function byAdminSectionHtml(byAdmin, totals) {
     return `<p class="admin-report-by-admin-empty text-muted small mb-0">${escapeHtmlFn(tr("reports.noAdminAllocations"))}</p>`;
   }
 
-  const bodyRows = byAdmin
+  const cards = byAdmin
     .map(
-      (row) => `<tr>
-        <td class="fw-medium">${escapeHtmlFn(dt(row.name))}</td>
-        <td class="tabular-nums">${escapeHtmlFn(String(row.allocated))}</td>
-        <td class="tabular-nums text-success">${escapeHtmlFn(String(row.onTime))}</td>
-        <td class="tabular-nums text-warning">${escapeHtmlFn(String(row.late))}</td>
-        <td class="tabular-nums text-muted">${escapeHtmlFn(String(row.pending))}</td>
-      </tr>`
+      (row) => `<article class="owner-dash-admin-card">
+      <div class="owner-dash-admin-card-head">
+        ${personAvatarHtml(row.name, "admin")}
+        <div class="owner-dash-admin-card-identity">
+          ${rolePillHtml("admin")}
+          <h4 class="owner-dash-admin-card-name">${escapeHtmlFn(dt(row.name))}</h4>
+        </div>
+      </div>
+      <div class="owner-dash-admin-stats">
+        ${adminStatCell(row.allocated, tr("reports.allocated"), "allocated")}
+        ${adminStatCell(row.onTime, tr("reports.onTime"), "ontime")}
+        ${adminStatCell(row.late, tr("reports.late"), "late")}
+        ${adminStatCell(row.pending, tr("reports.pending"), "pending")}
+      </div>
+    </article>`
     )
     .join("");
 
-  const totalRow = totals
-    ? `<tr class="admin-report-by-admin-total">
-        <td class="fw-bold">${escapeHtmlFn(tr("reports.total"))}</td>
-        <td class="tabular-nums fw-bold">${escapeHtmlFn(String(totals.allocated))}</td>
-        <td class="tabular-nums fw-bold text-success">${escapeHtmlFn(String(totals.onTime))}</td>
-        <td class="tabular-nums fw-bold text-warning">${escapeHtmlFn(String(totals.late))}</td>
-        <td class="tabular-nums fw-bold text-muted">${escapeHtmlFn(String(totals.pending))}</td>
-      </tr>`
+  const totalCard = totals
+    ? `<article class="owner-dash-admin-card owner-dash-admin-card--total" aria-label="${escapeHtmlFn(tr("reports.total"))}">
+      <div class="owner-dash-admin-card-head">
+        <div class="owner-dash-person-avatar owner-dash-person-avatar--total">${adminMsIconFn("summarize")}</div>
+        <div class="owner-dash-admin-card-identity">
+          <span class="owner-dash-role-pill owner-dash-role-pill--total">${escapeHtmlFn(tr("reports.total"))}</span>
+          <h4 class="owner-dash-admin-card-name">${escapeHtmlFn(tr("reports.allAdminsCombined"))}</h4>
+        </div>
+      </div>
+      <div class="owner-dash-admin-stats">
+        ${adminStatCell(totals.allocated, tr("reports.allocated"), "allocated")}
+        ${adminStatCell(totals.onTime, tr("reports.onTime"), "ontime")}
+        ${adminStatCell(totals.late, tr("reports.late"), "late")}
+        ${adminStatCell(totals.pending, tr("reports.pending"), "pending")}
+      </div>
+    </article>`
     : "";
 
-  return `<div class="admin-report-by-admin-section mt-3">
-    <h3 class="admin-report-by-admin-title h6 mb-2">${escapeHtmlFn(tr("reports.tasksByAdmin"))}</h3>
-    <p class="text-muted small mb-2">${escapeHtmlFn(tr("reports.tasksByAdminHint"))}</p>
-    <div class="table-responsive admin-report-by-admin-table-wrap">
-      <table class="table table-sm admin-report-by-admin-table mb-0">
-        <thead>
-          <tr>
-            <th scope="col">${escapeHtmlFn(tr("reports.adminColumn"))}</th>
-            <th scope="col">${escapeHtmlFn(tr("reports.allocated"))}</th>
-            <th scope="col">${escapeHtmlFn(tr("reports.onTime"))}</th>
-            <th scope="col">${escapeHtmlFn(tr("reports.late"))}</th>
-            <th scope="col">${escapeHtmlFn(tr("reports.pending"))}</th>
-          </tr>
-        </thead>
-        <tbody>${bodyRows}${totalRow}</tbody>
-      </table>
-    </div>
+  return `<div class="owner-dash-admin-section">
+    <header class="owner-dash-section-head">
+      <div class="owner-dash-section-head-icon owner-dash-section-head-icon--admin">${adminMsIconFn("admin_panel_settings")}</div>
+      <div>
+        <h3 class="owner-dash-section-title">${escapeHtmlFn(tr("reports.tasksByAdmin"))}</h3>
+        <p class="owner-dash-section-subtitle mb-0">${escapeHtmlFn(tr("reports.tasksByAdminHint"))}</p>
+      </div>
+    </header>
+    <div class="owner-dash-admin-grid">${cards}${totalCard}</div>
   </div>`;
 }
 
@@ -362,35 +422,76 @@ function employeePerfSectionHtml(data) {
     count: employeePerfData?.bucketCount ?? PERIOD_BUCKET_COUNTS[period] ?? 14,
   });
 
+  const isOwnerDash = reportViewMode === "owner-dashboard";
+  const sectionClass = isOwnerDash
+    ? "admin-report-card admin-report-card--wide admin-report-card--employee-perf owner-dash-perf-card"
+    : "admin-report-card admin-report-card--wide admin-report-card--employee-perf";
+
+  const employeeFilterLabel = isOwnerDash
+    ? `<span class="admin-report-filter-label owner-dash-filter-label owner-dash-filter-label--employee">${adminMsIconFn("badge", "owner-dash-filter-icon")}<span>${escapeHtmlFn(tr("reports.selectEmployee"))}</span></span>`
+    : `<span class="admin-report-filter-label">${escapeHtmlFn(tr("reports.selectEmployee"))}</span>`;
+
+  const periodFilterLabel = `<span class="admin-report-filter-label">${adminMsIconFn("calendar_month", "owner-dash-filter-icon")}<span>${escapeHtmlFn(tr("reports.selectPeriod"))}</span></span>`;
+
+  const employeeBanner =
+    isOwnerDash && empName && !employeePerfLoading
+      ? employeeFocusBannerHtml(empName, periodHint)
+      : !isOwnerDash && empName
+        ? `<p class="admin-report-emp-name small mb-2"><strong>${escapeHtmlFn(empName)}</strong></p>`
+        : "";
+
+  const headSubtitle = isOwnerDash
+    ? `<p class="admin-report-emp-subtitle text-muted small mb-0">${escapeHtmlFn(tr("owner.ownerDashboardPerfHint"))}</p>`
+    : `<p class="admin-report-emp-subtitle text-muted small mb-0">${escapeHtmlFn(periodHint)}</p>`;
+
+  const chartSection =
+    employees.length > 0
+      ? `<div class="owner-dash-chart-section">
+          <header class="owner-dash-section-head owner-dash-section-head--compact">
+            <div class="owner-dash-section-head-icon owner-dash-section-head-icon--chart">${adminMsIconFn("bar_chart")}</div>
+            <div>
+              <h3 class="owner-dash-section-title">${escapeHtmlFn(tr("reports.performanceTrend"))}</h3>
+              <p class="owner-dash-section-subtitle mb-0">${escapeHtmlFn(periodHint)}</p>
+            </div>
+          </header>
+          ${chartBlock}
+        </div>`
+      : chartBlock;
+
+  const lateSection =
+    employees.length > 0 && !employeePerfLoading && isOwnerDash
+      ? `<div class="owner-dash-late-section">${lateTable}</div>`
+      : lateTable;
+
   return `
-    <section class="admin-report-card admin-report-card--wide admin-report-card--employee-perf">
+    <section class="${sectionClass}">
       <div class="admin-report-emp-head">
         <div>
-          <h2 class="admin-report-card-title mb-1">${escapeHtmlFn(tr("reports.employeePerformance"))}</h2>
-          <p class="admin-report-emp-subtitle text-muted small mb-0">${escapeHtmlFn(periodHint)}</p>
+          <h2 class="admin-report-card-title mb-1">${escapeHtmlFn(isOwnerDash ? tr("owner.ownerDashboardPerfTitle") : tr("reports.employeePerformance"))}</h2>
+          ${headSubtitle}
         </div>
-        <div class="admin-report-emp-filters">
-          <label class="admin-report-filter">
-            <span class="admin-report-filter-label">${escapeHtmlFn(tr("reports.selectEmployee"))}</span>
-            <select class="form-select form-select-sm js-report-employee" ${employees.length === 0 ? "disabled" : ""}>
+        <div class="admin-report-emp-filters${isOwnerDash ? " owner-dash-emp-filters" : ""}">
+          <label class="admin-report-filter${isOwnerDash ? " owner-dash-filter owner-dash-filter--employee" : ""}">
+            ${employeeFilterLabel}
+            <select class="form-select form-select-sm js-report-employee${isOwnerDash ? " owner-dash-select owner-dash-select--employee" : ""}" ${employees.length === 0 ? "disabled" : ""}>
               ${employees.length ? employeeOptions : `<option value="">${escapeHtmlFn(tr("reports.noEmployees"))}</option>`}
             </select>
           </label>
-          <label class="admin-report-filter">
-            <span class="admin-report-filter-label">${escapeHtmlFn(tr("reports.selectPeriod"))}</span>
-            <select class="form-select form-select-sm js-report-period" ${employees.length === 0 ? "disabled" : ""}>
+          <label class="admin-report-filter${isOwnerDash ? " owner-dash-filter" : ""}">
+            ${isOwnerDash ? periodFilterLabel : `<span class="admin-report-filter-label">${escapeHtmlFn(tr("reports.selectPeriod"))}</span>`}
+            <select class="form-select form-select-sm js-report-period${isOwnerDash ? " owner-dash-select" : ""}" ${employees.length === 0 ? "disabled" : ""}>
               ${periodOptions}
             </select>
           </label>
         </div>
       </div>
-      ${empName ? `<p class="admin-report-emp-name small mb-2"><strong>${escapeHtmlFn(empName)}</strong></p>` : ""}
+      ${employeeBanner}
       ${loadingHint}
       ${kpiRow}
       ${byAdminBlock}
       ${emptyEmployees}
-      ${chartBlock}
-      ${lateTable}
+      ${isOwnerDash ? chartSection : chartBlock}
+      ${isOwnerDash ? lateSection : lateTable}
     </section>`;
 }
 

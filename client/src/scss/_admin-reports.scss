@@ -214,6 +214,365 @@
     margin-bottom: 1rem;
   }
 
+  .admin-owner-dashboard-page {
+    .admin-reports-header {
+      padding: 1rem 1.15rem;
+      margin-bottom: 1.25rem;
+      border-radius: 0.85rem;
+      background: linear-gradient(
+        135deg,
+        var(--admin-primary-container) 0%,
+        color-mix(in srgb, var(--admin-primary-container) 55%, var(--admin-surface-container-low)) 100%
+      );
+      border: 1px solid color-mix(in srgb, var(--admin-primary-container) 40%, var(--admin-outline-variant));
+    }
+
+    .admin-reports-title {
+      color: var(--admin-on-primary-container, var(--admin-on-surface));
+    }
+
+    .admin-reports-subtitle {
+      color: color-mix(in srgb, var(--admin-on-surface) 72%, transparent);
+    }
+  }
+
+  .owner-dash-perf-card {
+    padding: 1.15rem 1.2rem 1.25rem;
+    background: var(--admin-surface-container-low);
+    box-shadow: 0 1px 3px rgba(24, 26, 46, 0.04);
+  }
+
+  .owner-dash-employee-banner {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem 1.1rem;
+    margin-bottom: 1rem;
+    border-radius: 0.85rem;
+    background: linear-gradient(
+      120deg,
+      color-mix(in srgb, #7c4dff 12%, var(--admin-surface-container-high)) 0%,
+      var(--admin-surface-container-high) 100%
+    );
+    border: 1px solid color-mix(in srgb, #7c4dff 28%, var(--admin-outline-variant));
+  }
+
+  .owner-dash-employee-banner-name {
+    font-size: 1.15rem;
+    font-weight: 700;
+    margin: 0.2rem 0 0.15rem;
+    letter-spacing: -0.02em;
+    color: var(--admin-on-surface);
+  }
+
+  .owner-dash-employee-banner-hint {
+    font-size: 0.82rem;
+    color: var(--admin-on-surface-variant);
+  }
+
+  .owner-dash-person-avatar {
+    flex-shrink: 0;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+  }
+
+  .owner-dash-person-avatar--employee {
+    background: linear-gradient(145deg, #7c4dff, #5e35d8);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(94, 53, 216, 0.35);
+  }
+
+  .owner-dash-person-avatar--admin {
+    background: linear-gradient(145deg, #006d77, #004f58);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(0, 109, 119, 0.3);
+  }
+
+  .owner-dash-person-avatar--total {
+    background: var(--admin-surface-container);
+    color: var(--admin-primary-container);
+    border: 2px dashed var(--admin-outline-variant);
+
+    .material-symbols-outlined {
+      font-size: 1.35rem;
+    }
+  }
+
+  .owner-dash-role-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.12rem 0.45rem;
+    border-radius: 999px;
+    font-size: 0.62rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    line-height: 1.2;
+  }
+
+  .owner-dash-role-pill-icon {
+    font-size: 0.85rem !important;
+  }
+
+  .owner-dash-role-pill--employee {
+    background: color-mix(in srgb, #7c4dff 18%, transparent);
+    color: #5e35d8;
+    border: 1px solid color-mix(in srgb, #7c4dff 35%, transparent);
+  }
+
+  .owner-dash-role-pill--admin {
+    background: color-mix(in srgb, #006d77 16%, transparent);
+    color: #006d77;
+    border: 1px solid color-mix(in srgb, #006d77 32%, transparent);
+  }
+
+  .owner-dash-role-pill--total {
+    background: var(--admin-surface-container-high);
+    color: var(--admin-on-surface-variant);
+    border: 1px solid var(--admin-outline-variant);
+  }
+
+  .owner-dash-filter-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+  }
+
+  .owner-dash-filter-label--employee {
+    color: #5e35d8;
+  }
+
+  .owner-dash-filter-icon {
+    font-size: 0.95rem !important;
+    opacity: 0.85;
+  }
+
+  .owner-dash-select--employee {
+    border-color: color-mix(in srgb, #7c4dff 35%, var(--admin-outline-variant));
+    background-color: color-mix(in srgb, #7c4dff 6%, var(--admin-surface-container-high));
+  }
+
+  .owner-dash-emp-filters {
+    padding: 0.65rem 0.75rem;
+    border-radius: 0.75rem;
+    background: var(--admin-surface-container);
+    border: 1px solid var(--admin-outline-variant);
+  }
+
+  .owner-dash-section-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    margin-bottom: 0.85rem;
+  }
+
+  .owner-dash-section-head--compact {
+    margin-bottom: 0.65rem;
+  }
+
+  .owner-dash-section-head-icon {
+    flex-shrink: 0;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 0.55rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    .material-symbols-outlined {
+      font-size: 1.2rem;
+    }
+  }
+
+  .owner-dash-section-head-icon--admin {
+    background: color-mix(in srgb, #006d77 14%, var(--admin-surface-container-high));
+    color: #006d77;
+  }
+
+  .owner-dash-section-head-icon--chart {
+    background: color-mix(in srgb, var(--admin-primary-container) 18%, var(--admin-surface-container-high));
+    color: var(--admin-primary-container);
+  }
+
+  .owner-dash-section-title {
+    font-size: 0.92rem;
+    font-weight: 700;
+    margin: 0 0 0.15rem;
+    color: var(--admin-on-surface);
+  }
+
+  .owner-dash-section-subtitle {
+    font-size: 0.78rem;
+    color: var(--admin-on-surface-variant);
+    line-height: 1.35;
+  }
+
+  .owner-dash-admin-section {
+    margin-bottom: 1.15rem;
+    padding: 1rem;
+    border-radius: 0.85rem;
+    background: var(--admin-surface-container);
+    border: 1px solid var(--admin-outline-variant);
+  }
+
+  .owner-dash-admin-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+    gap: 0.75rem;
+  }
+
+  .owner-dash-admin-card {
+    padding: 0.85rem 0.9rem;
+    border-radius: 0.75rem;
+    background: var(--admin-surface-container-high);
+    border: 1px solid var(--admin-outline-variant);
+    min-width: 0;
+    transition: box-shadow 0.15s ease, border-color 0.15s ease;
+
+    &:hover {
+      border-color: color-mix(in srgb, #006d77 35%, var(--admin-outline-variant));
+      box-shadow: 0 4px 14px rgba(0, 109, 119, 0.08);
+    }
+  }
+
+  .owner-dash-admin-card--total {
+    background: linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--admin-primary-container) 12%, var(--admin-surface-container-high)),
+      var(--admin-surface-container-high)
+    );
+    border-style: dashed;
+    border-width: 1.5px;
+
+    &:hover {
+      border-color: var(--admin-primary-container);
+    }
+  }
+
+  .owner-dash-admin-card-head {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    margin-bottom: 0.75rem;
+    min-width: 0;
+  }
+
+  .owner-dash-admin-card-name {
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin: 0.15rem 0 0;
+    color: var(--admin-on-surface);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .owner-dash-admin-stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.45rem;
+  }
+
+  .owner-dash-admin-stat {
+    padding: 0.45rem 0.5rem;
+    border-radius: 0.5rem;
+    background: var(--admin-surface-container-low);
+    border: 1px solid var(--admin-outline-variant);
+    min-width: 0;
+  }
+
+  .owner-dash-admin-stat-value {
+    display: block;
+    font-size: 1.05rem;
+    font-weight: 700;
+    line-height: 1.1;
+  }
+
+  .owner-dash-admin-stat-label {
+    display: block;
+    font-size: 0.62rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--admin-on-surface-variant);
+    margin-top: 0.1rem;
+  }
+
+  .owner-dash-admin-stat--ontime .owner-dash-admin-stat-value {
+    color: #2e7d32;
+  }
+
+  .owner-dash-admin-stat--late .owner-dash-admin-stat-value {
+    color: #e65100;
+  }
+
+  .owner-dash-admin-stat--pending .owner-dash-admin-stat-value {
+    color: var(--admin-on-surface-variant);
+  }
+
+  .owner-dash-admin-stat--allocated .owner-dash-admin-stat-value {
+    color: var(--admin-primary-container);
+  }
+
+  .owner-dash-chart-section {
+    margin-top: 0.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--admin-outline-variant);
+  }
+
+  .owner-dash-late-section {
+    margin-top: 0.25rem;
+
+    .admin-report-late-section {
+      border-top: none;
+      padding-top: 0;
+    }
+  }
+
+  .owner-dash-inline-person {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    max-width: 100%;
+  }
+
+  .owner-dash-inline-person--admin {
+    padding: 0.15rem 0.45rem 0.15rem 0.2rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, #006d77 10%, var(--admin-surface-container-high));
+    border: 1px solid color-mix(in srgb, #006d77 22%, transparent);
+  }
+
+  .owner-dash-inline-person-avatar {
+    width: 1.35rem;
+    height: 1.35rem;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.58rem;
+    font-weight: 700;
+    background: linear-gradient(145deg, #006d77, #004f58);
+    color: #fff;
+    flex-shrink: 0;
+  }
+
+  .owner-dash-inline-person-name {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #006d77;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .admin-report-by-admin-title {
     font-weight: 600;
   }
@@ -425,6 +784,20 @@
 
     .admin-report-chart-wrap--emp-perf {
       height: 16rem;
+    }
+
+    .owner-dash-admin-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .owner-dash-employee-banner {
+      flex-direction: column;
+      align-items: flex-start;
+      text-align: left;
+    }
+
+    .owner-dash-emp-filters {
+      width: 100%;
     }
 
     .admin-reports-charts {
