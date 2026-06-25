@@ -17,6 +17,7 @@ import {
   stopPolling as stopChatPolling,
   refreshUnreadBadges,
   openChatFromDeepLink,
+  refreshChatForLanguageChange,
 } from "./chat.js";
 import { adminNotificationsBellHtml, adminNotifOffcanvasHtml, wireAdminNotifications } from "./adminAnnouncements.js";
 import {
@@ -26,6 +27,7 @@ import {
   refreshAdminReports,
   destroyAdminReportsCharts,
   clearAdminReportsCache,
+  onReportsThemeChange,
 } from "./adminReports.js";
 import {
   compareTasksByRecurrenceThenCreated,
@@ -33,6 +35,7 @@ import {
   compareHighPriorityFirst,
 } from "./taskRecurrenceSort.js";
 import { initI18n, tr, dateLocale, setLanguageChangeHandler } from "./i18n/index.js";
+import { dt, ensureStateContentTranslations, initContentTranslate } from "./i18n/contentTranslate.js";
 import { languageSelectorHtml, wireLanguageSelector } from "./i18n/languageSelector.js";
 
 const app = document.getElementById("app");
@@ -98,6 +101,15 @@ function setThemePreference(mode) {
   localStorage.setItem(THEME_STORAGE_KEY, mode);
   applyTheme({ animate: true });
   syncThemeIconButtons();
+  syncAdminThemeToggleIcons();
+  onReportsThemeChange();
+}
+
+function syncAdminThemeToggleIcons() {
+  const isDark = document.documentElement.getAttribute("data-bs-theme") === "dark";
+  document.querySelectorAll(".js-admin-theme-toggle .material-symbols-outlined").forEach((icon) => {
+    icon.textContent = isDark ? "light_mode" : "dark_mode";
+  });
 }
 
 function initTheme() {
@@ -1691,7 +1703,7 @@ function adminHeaderVisitUsItemHtml() {
 }
 
 function ownerAdminHeaderProfileHtml() {
-  const name = state.user?.displayName ? escapeHtml(state.user.displayName) : tr("common.admin");
+  const name = state.user?.displayName ? escapeHtml(dt(state.user.displayName)) : tr("common.admin");
   const isDark = document.documentElement.getAttribute("data-bs-theme") === "dark";
   return `<div class="admin-header-profile-dropdown">
     <button
@@ -1757,9 +1769,7 @@ function wireAdminHeaderProfileMenu(root) {
     btn.addEventListener("click", () => {
       const cur = document.documentElement.getAttribute("data-bs-theme") || "light";
       setThemePreference(cur === "dark" ? "light" : "dark");
-      document.querySelectorAll(".js-admin-theme-toggle .material-symbols-outlined").forEach((icon) => {
-        icon.textContent = document.documentElement.getAttribute("data-bs-theme") === "dark" ? "light_mode" : "dark_mode";
-      });
+      syncAdminThemeToggleIcons();
     });
   });
 
@@ -1875,7 +1885,7 @@ function dismissEmpMobileNav() {
 }
 
 function employeeAdminHeaderProfileHtml() {
-  const name = state.user?.displayName ? escapeHtml(state.user.displayName) : tr("common.employee");
+  const name = state.user?.displayName ? escapeHtml(dt(state.user.displayName)) : tr("common.employee");
   const isDark = document.documentElement.getAttribute("data-bs-theme") === "dark";
   const pushItem = isPushSupported()
     ? `<button type="button" class="admin-header-profile-item js-emp-enable-push" role="menuitem">
@@ -2028,10 +2038,12 @@ function empTaskDescriptionBoxHtml(notesRaw, taskId, taskTitle) {
   if (!notesRaw) {
     return `<div class="owner-task-desc-box emp-task-desc-box emp-task-desc-box--empty small text-muted fst-italic mb-0">${tr("common.noDescription")}</div>`;
   }
-  const wordCount = notesRaw.split(/\s+/).filter(Boolean).length;
-  const preview = taskDescriptionPreviewWords(notesRaw, 2);
+  const displayNotes = dt(notesRaw);
+  const displayTitle = dt(taskTitle || "");
+  const wordCount = displayNotes.split(/\s+/).filter(Boolean).length;
+  const preview = taskDescriptionPreviewWords(displayNotes, 2);
   if (wordCount <= 2) {
-    return `<div class="owner-task-desc-box emp-task-desc-box owner-task-desc-box--static small text-body-secondary mb-0">${escapeHtml(notesRaw)}</div>`;
+    return `<div class="owner-task-desc-box emp-task-desc-box owner-task-desc-box--static small text-body-secondary mb-0">${escapeHtml(displayNotes)}</div>`;
   }
   return `<button type="button" class="owner-task-desc-box emp-task-desc-box owner-task-desc-box--clickable js-emp-desc-popup small text-body-secondary mb-0" data-full="${escapeHtml(notesRaw)}" data-task-title="${escapeHtml(taskTitle || "")}" data-task-id="${escapeHtml(taskId)}" aria-label="${tr("common.readFullDescription")}">
     <span class="owner-task-desc-preview emp-task-desc-preview">${escapeHtml(preview)}</span>
@@ -2045,7 +2057,7 @@ function bindEmpDescriptionPopups(root) {
       e.stopPropagation();
       const full = btn.getAttribute("data-full") || "";
       const taskTitle = btn.getAttribute("data-task-title") || "";
-      if (full) openTaskDescriptionModal(full, taskTitle);
+      if (full) openTaskDescriptionModal(dt(full), dt(taskTitle));
     });
   });
 }
@@ -2095,7 +2107,7 @@ function bindOwnerDescriptionPopups(root) {
       e.stopPropagation();
       const full = btn.getAttribute("data-full") || "";
       const taskTitle = btn.getAttribute("data-task-title") || "";
-      if (full) openTaskDescriptionModal(full, taskTitle);
+      if (full) openTaskDescriptionModal(dt(full), dt(taskTitle));
     });
   });
 }
@@ -2346,7 +2358,7 @@ function fillModalAssigneeCheckboxes(selectedIds) {
         set.has(u.id) ? "checked" : ""
       }>
       <span class="admin-task-modal-employee-avatar" aria-hidden="true">${escapeHtml(assigneeInitials(u.displayName))}</span>
-      <span class="admin-task-modal-employee-name">${escapeHtml(u.displayName)}</span>
+      <span class="admin-task-modal-employee-name">${escapeHtml(dt(u.displayName))}</span>
     </label>`
     )
     .join("");
@@ -2376,7 +2388,7 @@ function refreshModalAssigneeChipsAndLabel() {
     if (!u) continue;
     const chip = document.createElement("span");
     chip.className = "admin-task-modal-chip modal-assignee-chip";
-    const safeName = escapeHtml(u.displayName);
+    const safeName = escapeHtml(dt(u.displayName));
     chip.innerHTML = `<span class="modal-assignee-chip-text">${safeName}</span><button type="button" class="admin-task-modal-chip-remove modal-assignee-chip-remove" data-user-id="${escapeHtml(
       u.id
     )}" aria-label="${tr("common.removeAssignee", { name: safeName })}">${adminMsIcon("close", "admin-task-modal-chip-close")}</button>`;
@@ -3187,7 +3199,7 @@ async function refreshTeamAdminList() {
           }
           return `<div class="list-group-item d-flex justify-content-between align-items-center gap-2">
             <div class="min-w-0">
-              <div class="fw-medium text-truncate">${escapeHtml(u.displayName)}</div>
+              <div class="fw-medium text-truncate">${escapeHtml(dt(u.displayName))}</div>
               <div class="small text-muted text-truncate">${escapeHtml(u.email)}</div>
             </div>
             ${action}
@@ -3303,7 +3315,7 @@ function fillOwnerMarkDoneModalList(taskId) {
           <input class="form-check-input owner-mark-done-modal-cb" type="checkbox" data-task-id="${taskId}" data-user-id="${
         a.id
       }" id="${cbId}" ${assigneeShowsSubmittedForOwner(a) ? "checked" : ""} />
-          <label class="form-check-label" for="${cbId}">${escapeHtml(a.displayName)}</label>
+          <label class="form-check-label" for="${cbId}">${escapeHtml(dt(a.displayName))}</label>
         </div>
       </div>`;
     })
@@ -3692,7 +3704,7 @@ function openEmpSubmissionModal(task) {
   const currentText = freshOccurrence ? "" : me?.submissionText?.trim() || "";
 
   idInput.value = task.id;
-  titleEl.textContent = task.title;
+  titleEl.textContent = dt(task.title);
   ta.value = currentText;
   errEl.textContent = "";
   errEl.classList.add("d-none");
@@ -4028,7 +4040,7 @@ function ownerProgressUpdateBadgeHtml(assignee) {
 }
 
 function ownerLatestUpdateSnippet(message, max = 96) {
-  const text = (message || "").trim().replace(/\s+/g, " ");
+  const text = dt((message || "").trim().replace(/\s+/g, " "));
   if (!text) return "";
   return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }
@@ -4046,9 +4058,9 @@ function ownerAssigneeUpdatesHtml(taskId, assignee) {
       class="owner-assignee-update-preview owner-view-progress-btn"
       data-view-progress-task-id="${taskId}"
       data-view-progress-user-id="${escapeHtml(assignee.id)}"
-      data-view-progress-user-name="${escapeHtml(assignee.displayName)}"
-      title="${escapeHtml((latest.message || "").trim())}"
-      aria-label="${tr("owner.viewAllUpdatesFor", { name: escapeHtml(assignee.displayName) })}"
+      data-view-progress-user-name="${escapeHtml(dt(assignee.displayName))}"
+      title="${escapeHtml(dt((latest.message || "").trim()))}"
+      aria-label="${tr("owner.viewAllUpdatesFor", { name: escapeHtml(dt(assignee.displayName)) })}"
     >
       ${badge}
       <span class="owner-assignee-update-text">${escapeHtml(snippet)}</span>
@@ -4094,7 +4106,7 @@ function ownerMockAssigneeUpdatesHtml(taskId, assignee) {
       <span class="admin-expand-col-label">${tr("owner.updatesCol")}</span>
       ${badge}
     </div>
-    <button type="button" class="admin-expand-snippet-btn owner-view-progress-btn" data-view-progress-task-id="${taskId}" data-view-progress-user-id="${escapeHtml(assignee.id)}" data-view-progress-user-name="${escapeHtml(assignee.displayName)}" title="${escapeHtml((latest.message || "").trim())}">
+    <button type="button" class="admin-expand-snippet-btn owner-view-progress-btn" data-view-progress-task-id="${taskId}" data-view-progress-user-id="${escapeHtml(assignee.id)}" data-view-progress-user-name="${escapeHtml(dt(assignee.displayName))}" title="${escapeHtml(dt((latest.message || "").trim()))}">
       <span class="admin-expand-snippet">"${escapeHtml(snippet)}"</span>
     </button>
   </div>`;
@@ -4111,7 +4123,7 @@ function ownerMockAssigneeSubmissionHtml(taskId, assignee) {
   const when = view.submittedAt ? formatProgressUpdateTime(view.submittedAt) : "";
   return `<div class="admin-expand-col-block admin-expand-col-block--submission">
     <span class="admin-expand-col-label">${tr("modals.submission")}</span>
-    <button type="button" class="admin-expand-view-submission owner-view-submission-btn" data-view-submission-task-id="${taskId}" data-view-submission-user-id="${escapeHtml(assignee.id)}" aria-label="${tr("owner.viewSubmissionFor", { name: escapeHtml(assignee.displayName) })}">${tr("owner.viewSubmission")}</button>
+    <button type="button" class="admin-expand-view-submission owner-view-submission-btn" data-view-submission-task-id="${taskId}" data-view-submission-user-id="${escapeHtml(assignee.id)}" aria-label="${tr("owner.viewSubmissionFor", { name: escapeHtml(dt(assignee.displayName)) })}">${tr("owner.viewSubmission")}</button>
     ${when ? `<span class="admin-expand-submission-meta tabular-nums">${escapeHtml(when)}</span>` : ""}
   </div>`;
 }
@@ -4128,9 +4140,9 @@ function ownerMockAssigneeCardHtml(task, assignee, { isEmpAssignList = false } =
   const avatarClass = isDone ? "admin-expand-card-avatar--done" : "admin-expand-card-avatar--pending";
   let chainLine = "";
   if (isEmpAssignList && assignee.assignedBy?.displayName) {
-    chainLine = `${escapeHtml(assignee.assignedBy.displayName)} → ${escapeHtml(assignee.displayName)}`;
+    chainLine = `${escapeHtml(dt(assignee.assignedBy.displayName))} → ${escapeHtml(dt(assignee.displayName))}`;
   } else if (!isEmpAssignList && assignee.assignedBy?.displayName) {
-    chainLine = `${escapeHtml(assignee.assignedBy.displayName)} → ${escapeHtml(assignee.displayName)}`;
+    chainLine = `${escapeHtml(dt(assignee.assignedBy.displayName))} → ${escapeHtml(dt(assignee.displayName))}`;
   } else {
     chainLine = `<span class="admin-expand-chain-direct">${tr("owner.directAssignment")}</span>`;
   }
@@ -4139,7 +4151,7 @@ function ownerMockAssigneeCardHtml(task, assignee, { isEmpAssignList = false } =
       <div class="admin-expand-card-avatar ${avatarClass}" aria-hidden="true">${escapeHtml(assigneeInitials(assignee.displayName))}</div>
       <div class="admin-expand-card-ident min-w-0">
         <div class="admin-expand-card-name-row">
-          <span class="admin-expand-card-name">${escapeHtml(assignee.displayName)}</span>
+          <span class="admin-expand-card-name">${escapeHtml(dt(assignee.displayName))}</span>
           <span class="admin-expand-status ${statusClass}">${statusLabel}</span>
         </div>
         <p class="admin-expand-card-chain">${chainLine}</p>
@@ -4190,7 +4202,7 @@ function ownerAssigneeSubmissionHtml(taskId, assignee) {
         data-view-submission-task-id="${taskId}"
         data-view-submission-user-id="${escapeHtml(assignee.id)}"
         title="${tr("owner.viewSubmission")}"
-        aria-label="${tr("owner.viewSubmissionFor", { name: escapeHtml(assignee.displayName) })}"
+        aria-label="${tr("owner.viewSubmissionFor", { name: escapeHtml(dt(assignee.displayName)) })}"
       >
         <i class="bi bi-eye me-1" aria-hidden="true"></i>${tr("owner.viewSubmission")}
       </button>
@@ -4221,7 +4233,7 @@ function renderProgressUpdateTimeline(updates, { showAuthor = false } = {}) {
       const meta = progressUpdateTypeMeta(u.updateType);
       const author =
         showAuthor && u.displayName
-          ? `<span class="small fw-semibold text-body-secondary">${escapeHtml(u.displayName)}</span>`
+          ? `<span class="small fw-semibold text-body-secondary">${escapeHtml(dt(u.displayName))}</span>`
           : "";
       return `<article class="progress-update-item">
         <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
@@ -4231,7 +4243,7 @@ function renderProgressUpdateTimeline(updates, { showAuthor = false } = {}) {
         formatProgressUpdateTime(u.createdAt)
       )}</time>
         </div>
-        <p class="progress-update-item-message small mb-0">${escapeHtml(u.message)}</p>
+        <p class="progress-update-item-message small mb-0">${escapeHtml(dt(u.message))}</p>
       </article>`;
     })
     .join("");
@@ -4317,7 +4329,7 @@ async function openEmpProgressUpdateModal(task) {
 
   idInput.value = task.id;
   userInput.value = state.user.id;
-  titleEl.textContent = task.title;
+  titleEl.textContent = dt(task.title);
   assigneeLabel?.classList.add("d-none");
   if (modalTitle) modalTitle.textContent = tr("modals.postTaskUpdate");
   ta.value = "";
@@ -4556,7 +4568,7 @@ function populateTaskModalListOptions(selectedListId) {
   select.innerHTML = lists
     .map(
       (l) =>
-        `<option value="${l.id}" ${l.id === selectedListId ? "selected" : ""}>${escapeHtml(l.title)}</option>`
+        `<option value="${l.id}" ${l.id === selectedListId ? "selected" : ""}>${escapeHtml(dt(l.title))}</option>`
     )
     .join("");
   select.disabled = lists.length === 0;
@@ -4692,6 +4704,7 @@ async function loadTasks(listId) {
   const { tasks } = await api(`/api/tasks/lists/${listId}`);
   state.tasks = tasks;
   updateOwnerTasksFingerprint();
+  await ensureStateContentTranslations(state);
 }
 
 async function loadAssignees() {
@@ -4883,10 +4896,10 @@ function ownerListNavButtonHtml(list, { systemPinned = false } = {}) {
       : tr("lists.listItemHint");
   const deleteBtn = systemPinned
     ? ""
-    : `<span class="list-delete-btn js-list-delete" role="button" tabindex="0" title="${tr("lists.deleteList")}" aria-label="${tr("lists.deleteListNamed", { title: escapeHtml(list.title) })}">${adminMsIcon("delete")}</span>`;
+    : `<span class="list-delete-btn js-list-delete" role="button" tabindex="0" title="${tr("lists.deleteList")}" aria-label="${tr("lists.deleteListNamed", { title: escapeHtml(dt(list.title)) })}">${adminMsIcon("delete")}</span>`;
   const titleHtml = systemPinned
     ? `<span class="owner-emp-assign-title" title="${holdHint}">${escapeHtml(tr("nav.employeeAssignments"))}</span>`
-    : `<span class="text-truncate list-title-edit" title="${holdHint}">${escapeHtml(list.title)}</span>`;
+    : `<span class="text-truncate list-title-edit" title="${holdHint}">${escapeHtml(dt(list.title))}</span>`;
   const itemClass = systemPinned
     ? "admin-sidebar-nav-item owner-list-item owner-list-item--pinned"
     : `list-group-item list-group-item-action owner-list-item d-flex justify-content-between align-items-center gap-2${userPinned ? " owner-list-item--user-pinned" : ""}`;
@@ -5119,7 +5132,7 @@ function ownerTaskGroupTbody(task) {
 
   const descriptionFull = (task.notes || "").trim();
   const descriptionPanel = descriptionFull
-    ? `<p class="admin-expand-desc-text">${escapeHtml(descriptionFull)}</p>`
+    ? `<p class="admin-expand-desc-text">${escapeHtml(dt(descriptionFull))}</p>`
     : `<p class="admin-expand-desc-text admin-expand-desc-text--empty">${tr("common.noDescriptionDot")}</p>`;
 
   const assigneeCards =
@@ -5150,7 +5163,7 @@ function ownerTaskGroupTbody(task) {
         <div class="owner-task-title-wrap">
           <button type="button" class="btn btn-link text-start text-decoration-none p-0 owner-task-open-details" data-open-id="${
           task.id
-        }" aria-label="${tr("common.openTaskDetails")}">${escapeHtml(task.title)}</button>
+        }" aria-label="${tr("common.openTaskDetails")}">${escapeHtml(dt(task.title))}</button>
           ${taskCreatedMetaHtml(task.createdAt)}
         </div>
       </td>
@@ -5216,7 +5229,7 @@ function renderOwnerMain() {
   const list = state.lists.find((l) => l.id === state.activeListId);
   const listId = state.activeListId;
   const adminWelcomeName = state.user?.displayName
-    ? escapeHtml(state.user.displayName)
+    ? escapeHtml(dt(state.user.displayName))
     : tr("common.admin");
 
   const filteredTasks = ownerFilteredTasks();
@@ -5473,7 +5486,7 @@ function renderOwnerMain() {
 
 function ownerReportsChromeHeaderHtml() {
   const adminWelcomeName = state.user?.displayName
-    ? escapeHtml(state.user.displayName)
+    ? escapeHtml(dt(state.user.displayName))
     : tr("common.admin");
   return `<header class="admin-dash-header">
       ${adminMobileNavToggleHtml()}
@@ -5551,9 +5564,7 @@ function wireChromeNav() {
     btn.addEventListener("click", () => {
       const cur = document.documentElement.getAttribute("data-bs-theme") || "light";
       setThemePreference(cur === "dark" ? "light" : "dark");
-      document.querySelectorAll(".js-admin-theme-toggle .material-symbols-outlined").forEach((icon) => {
-        icon.textContent = document.documentElement.getAttribute("data-bs-theme") === "dark" ? "light_mode" : "dark_mode";
-      });
+      syncAdminThemeToggleIcons();
       if (state.ownerView === "reports") void refreshAdminReports({ force: true });
     });
   });
@@ -5782,6 +5793,7 @@ async function loadEmployeeAssignedByMeTasks() {
 
 async function loadEmployeeDashboard() {
   await Promise.all([loadEmployeeTasks(), loadEmployeeAssignedByMeTasks()]);
+  await ensureStateContentTranslations(state);
 }
 
 async function empRefreshDashboard(btn) {
@@ -5928,7 +5940,7 @@ async function openEmpDelegateModal(task) {
   if (!idInput || !titleEl || !select || !errEl) return;
 
   idInput.value = task.id;
-  titleEl.textContent = task.title;
+  titleEl.textContent = dt(task.title);
   errEl.classList.add("d-none");
   errEl.textContent = "";
   select.innerHTML = `<option value="">${tr("employee.chooseEmployee")}</option>`;
@@ -6102,7 +6114,7 @@ function empTaskTableRows(tasks) {
         : { icon: "clipboard2-plus", title: tr("empty.empNoActive"), desc: tr("empty.empNoActiveDesc") };
 
   if (!tasks.length) {
-    return `<tbody class="owner-task-empty"><tr><td colspan="5">
+    return `<tbody class="owner-task-empty"><tr><td colspan="4">
       <div class="owner-empty-state py-5 px-3">
         <i class="bi bi-${emptyCopy.icon} owner-empty-icon text-primary" aria-hidden="true"></i>
         <p class="owner-empty-title mb-1">${emptyCopy.title}</p>
@@ -6144,7 +6156,7 @@ function empTaskTableRows(tasks) {
             : `<span class="small text-success"><i class="bi bi-check-circle me-1" aria-hidden="true"></i>${tr("employee.submittedLabel")}</span>`
         : `<button type="button" class="btn btn-sm btn-primary emp-open-submit emp-action-btn" data-task-id="${task.id}"><i class="bi bi-send me-1" aria-hidden="true"></i>${tr("common.submit")}</button>`;
       const assignedByLine = me?.assignedBy?.displayName
-        ? `<div class="small text-muted emp-assigned-by-line mt-1">From ${escapeHtml(me.assignedBy.displayName)}</div>`
+        ? `<div class="small text-muted emp-assigned-by-line mt-1">From ${escapeHtml(dt(me.assignedBy.displayName))}</div>`
         : "";
       const showRecurrenceOnActive = displayMode === "active" && (task.recurrence ?? "none") !== "none";
       const recurrenceLines = showRecurrenceOnActive ? empActiveRecurrenceLinesHtml(task) : "";
@@ -6159,13 +6171,8 @@ function empTaskTableRows(tasks) {
       const submittedWhen = me?.lastSubmittedAt || me?.assigneeDoneAt || null;
       const datesCell = empTaskDatesCellHtml(task, submitted, submittedWhen);
       return `<tr class="owner-task-row emp-task-row${priorityClass} ${rowDone}" data-task-id="${task.id}">
-        <td class="owner-task-cell emp-col-check text-center align-middle">
-          <input type="checkbox" class="form-check-input emp-task-check" data-task-id="${task.id}" ${
-        submitted ? "checked" : ""
-      } aria-label="${tr("common.markSubmitted", { title: escapeHtml(task.title) })}" />
-        </td>
         <td class="owner-task-cell owner-task-col--task emp-col-task align-middle">
-          <span class="fw-semibold emp-task-title ${submitted ? "text-muted text-decoration-line-through" : ""}">${escapeHtml(task.title)}</span>
+          <span class="fw-semibold emp-task-title ${submitted ? "text-muted text-decoration-line-through" : ""}">${escapeHtml(dt(task.title))}</span>
           ${assignedByLine}
           ${recurrenceLines}
           ${archivedNotesLine}
@@ -6190,11 +6197,12 @@ function empAssignedByMeCardsHtml(tasks) {
   return `<div class="emp-assigned-by-me-cards d-flex flex-column gap-3">${tasks
     .map((task) => {
       const assignees = task.assignedTo ?? [];
-      const assigneeNames = assignees.map((a) => escapeHtml(a.displayName)).join(", ") || "—";
+      const assigneeNames = assignees.map((a) => escapeHtml(dt(a.displayName))).join(", ") || "—";
       const notesRaw = (task.notes || "").trim().replace(/\s+/g, " ");
+      const displayNotes = dt(notesRaw);
       const descriptionText =
         notesRaw.length > 0
-          ? escapeHtml(notesRaw.length > 200 ? `${notesRaw.slice(0, 197)}…` : notesRaw)
+          ? escapeHtml(displayNotes.length > 200 ? `${displayNotes.slice(0, 197)}…` : displayNotes)
           : `<span class="text-muted fst-italic">${tr("common.noDescription")}</span>`;
       const assignedWhen = assignees[0]?.delegatedAt
         ? escapeHtml(formatProgressUpdateTime(assignees[0].delegatedAt))
@@ -6203,14 +6211,14 @@ function empAssignedByMeCardsHtml(tasks) {
         ? formatEmpDeadlineDisplay(task, { submitted: false })
         : `<span class="text-muted">—</span>`;
       const deleteBtn = task.canDelete
-        ? `<button type="button" class="btn btn-sm btn-outline-danger js-emp-delete-assigned" data-task-id="${task.id}" data-task-title="${escapeHtml(task.title)}" aria-label="${tr("common.deleteTask")}">
+        ? `<button type="button" class="btn btn-sm btn-outline-danger js-emp-delete-assigned" data-task-id="${task.id}" data-task-title="${escapeHtml(dt(task.title))}" aria-label="${tr("common.deleteTask")}">
             <i class="bi bi-trash" aria-hidden="true"></i>
             <span class="d-none d-sm-inline ms-1">${tr("common.delete")}</span>
           </button>`
         : "";
       return `<article class="emp-assigned-out-card" data-task-id="${task.id}">
         <div class="emp-assigned-out-card-head">
-          <h3 class="emp-assigned-out-card-title h6 mb-0">${escapeHtml(task.title)}</h3>
+          <h3 class="emp-assigned-out-card-title h6 mb-0">${escapeHtml(dt(task.title))}</h3>
           ${taskCreatedMetaHtml(task.createdAt)}
           <div class="emp-assigned-out-card-meta d-flex flex-wrap align-items-center gap-2">
             ${assignedWhen ? `<time class="emp-assigned-out-card-when small text-muted tabular-nums">Assigned ${assignedWhen}</time>` : ""}
@@ -6315,7 +6323,7 @@ function renderEmployeeMain() {
   if (!main) return;
 
   const isAssignedByMe = state.empFilter === "assigned-by-me";
-  const welcomeName = state.user?.displayName ? escapeHtml(state.user.displayName) : tr("common.employee");
+  const welcomeName = state.user?.displayName ? escapeHtml(dt(state.user.displayName)) : tr("common.employee");
 
   let kpiRow = "";
   let tableSection = "";
@@ -6355,7 +6363,6 @@ function renderEmployeeMain() {
         <table class="table table-hover align-middle mb-0 owner-task-table admin-task-table emp-owner-task-table">
           <thead>
             <tr>
-              <th scope="col" class="owner-task-head text-center" style="width:3rem;"><span class="visually-hidden">${tr("common.doneCol")}</span></th>
               <th scope="col" class="owner-task-head owner-task-col--task">${tr("common.task")}</th>
               <th scope="col" class="owner-task-head owner-task-col--deadline text-nowrap text-center">${tr("common.dates")}</th>
               <th scope="col" class="owner-task-head">${tr("common.description")}</th>
@@ -6416,48 +6423,6 @@ function renderEmployeeMain() {
     });
     return;
   }
-
-  main.querySelectorAll(".emp-task-check").forEach((cb) => {
-    cb.addEventListener("change", async () => {
-      const id = cb.getAttribute("data-task-id");
-      if (!id) return;
-      const task = state.empTasks.find((t) => t.id === id);
-      const completed = cb.checked;
-      const me = employeeMyAssignee(task);
-
-      if (completed && !employeeHasCurrentSubmission(me)) {
-        cb.checked = false;
-        if (task) openEmpSubmissionModal(task);
-        return;
-      }
-
-      if (!completed) {
-        const ok = window.confirm(tr("employee.removeSubmissionConfirm"));
-        if (!ok) {
-          cb.checked = true;
-          return;
-        }
-      }
-
-      cb.disabled = true;
-      try {
-        await api(`/api/tasks/${id}`, {
-          method: "PATCH",
-          body: JSON.stringify({ completed }),
-        });
-        if (completed && task?.dueAt) clearReminderForTask(id, task.dueAt);
-        if (completed) state.empFilter = "submitted";
-        await loadEmployeeTasks();
-        renderEmpListContentOnly();
-        renderEmployeeMain();
-        syncEmpTopbarTitle();
-      } catch (err) {
-        showToast(err.message, "danger");
-        cb.checked = !completed;
-        cb.disabled = false;
-      }
-    });
-  });
 
   main.querySelectorAll(".js-emp-refresh").forEach((btn) => {
     btn.addEventListener("click", () => void empRefreshDashboard(btn));
@@ -6589,8 +6554,11 @@ initTheme();
 
 async function startup() {
   await initI18n();
-  setLanguageChangeHandler(() => {
-    void render();
+  initContentTranslate(api);
+  setLanguageChangeHandler(async () => {
+    await ensureStateContentTranslations(state);
+    await refreshChatForLanguageChange();
+    await render();
   });
   await render();
 }

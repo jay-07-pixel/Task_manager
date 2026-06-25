@@ -1,6 +1,7 @@
 /** @typedef {{ api: Function, escapeHtml: Function, showToast: Function, bootstrap: any, getUser: () => any }} ChatDeps */
 
 import { tr } from "./i18n/index.js";
+import { dt, ensureContentTranslations } from "./i18n/contentTranslate.js";
 
 const CHAT_POLL_MS_HIDDEN = 20000;
 const CHAT_POLL_MS_CLOSED = 6000;
@@ -61,6 +62,22 @@ let chatJumpDate = null;
 /** @type {number | null} */
 let typingDebounceTimer = null;
 
+async function syncChatTranslations() {
+  const texts = [];
+  for (const c of contacts) texts.push(c.displayName);
+  for (const t of threads) {
+    if (t.peer?.displayName) texts.push(t.peer.displayName);
+    if (t.group?.name) texts.push(t.group.name);
+    if (t.lastMessage?.body) texts.push(t.lastMessage.body);
+    if (t.lastMessage?.senderName) texts.push(t.lastMessage.senderName);
+  }
+  for (const m of activeMessages) {
+    if (m.body) texts.push(m.body);
+    if (m.senderName) texts.push(m.senderName);
+  }
+  await ensureContentTranslations(texts.filter(Boolean));
+}
+
 function getChatPollMs() {
   if (document.hidden) return CHAT_POLL_MS_HIDDEN;
   if (!isChatPanelOpen()) return CHAT_POLL_MS_CLOSED;
@@ -106,6 +123,7 @@ async function refreshActiveMessages() {
 
   activeMessages = next;
   activeTypingUsers = typingUsers;
+  await syncChatTranslations();
   const scrollOpts = chatJumpDate ? { scrollToDateKey: chatJumpDate.dateKey } : {};
   renderMessages(scrollOpts);
   updateTypingIndicator();
@@ -507,7 +525,7 @@ function pulseTyping() {
 
 function previewText(body, hasAttachment, deleted = false) {
   if (deleted) return tr("chat.messageDeleted");
-  const text = String(body || "").trim().replace(/\s+/g, " ");
+  const text = dt(String(body || "").trim().replace(/\s+/g, " "));
   if (text) return text.length > 72 ? `${text.slice(0, 69)}…` : text;
   if (hasAttachment) return tr("chat.attachment");
   return tr("chat.noMessagesYet");
@@ -524,7 +542,7 @@ function messageCanDelete(m) {
 function replyQuotePreview(replyTo) {
   if (!replyTo) return "";
   if (replyTo.deleted) return tr("chat.messageDeleted");
-  const text = String(replyTo.body || "").trim();
+  const text = dt(String(replyTo.body || "").trim());
   if (text) return text.length > 120 ? `${text.slice(0, 117)}…` : text;
   return tr("chat.attachment");
 }
@@ -559,7 +577,7 @@ function renderReplyComposerPreview() {
     <div class="team-chat-reply-compose">
       <div class="team-chat-reply-compose-main min-w-0">
         <span class="team-chat-reply-compose-label">${tr("chat.replyingTo", { name: d().escapeHtml(replyingTo.senderName) })}</span>
-        <span class="team-chat-reply-compose-text text-truncate">${d().escapeHtml(replyingTo.body)}</span>
+        <span class="team-chat-reply-compose-text text-truncate">${d().escapeHtml(dt(replyingTo.body))}</span>
       </div>
       <button type="button" class="btn btn-sm btn-link text-muted p-0 js-chat-reply-cancel" aria-label="${tr("chat.cancelReply")}">&times;</button>
     </div>`;
@@ -822,7 +840,7 @@ function messageBodyHtml(m) {
   const attach = messageAttachmentHtml(m);
   const text = String(m.body || "").trim();
   const textHtml = text
-    ? `<div class="team-chat-bubble-body text-break">${d().escapeHtml(m.body)}</div>`
+    ? `<div class="team-chat-bubble-body text-break">${d().escapeHtml(dt(m.body))}</div>`
     : "";
   return `${messageReplyQuoteHtml(m)}${attach}${textHtml}`;
 }
@@ -1300,7 +1318,7 @@ function memberPickRowHtml(c, selected, inputPrefix, meId) {
     <input type="checkbox" class="form-check-input team-chat-member-pick-input flex-shrink-0" value="${c.id}" id="${inputPrefix}-pick-${c.id}"${checked ? " checked" : ""}${isMe ? " disabled" : ""} />
     ${neutralAvatarHtml(c.displayName)}
     <span class="team-chat-member-pick-info min-w-0">
-      <span class="team-chat-member-pick-name text-truncate">${d().escapeHtml(c.displayName)}${isMe ? ` <span class="team-chat-member-you-tag">${tr("chat.youTag")}</span>` : ""}</span>
+      <span class="team-chat-member-pick-name text-truncate">${d().escapeHtml(dt(c.displayName))}${isMe ? ` <span class="team-chat-member-you-tag">${tr("chat.youTag")}</span>` : ""}</span>
       <span class="team-chat-member-pick-role">${d().escapeHtml(roleLabel)}</span>
     </span>
   </label>`;
@@ -1489,11 +1507,13 @@ function renderThreadList() {
           : "";
       const unreadRow = thread.unreadCount > 0 ? " team-chat-thread-item--unread" : "";
       const isGroup = thread.type === "group";
-      const title = isGroup ? thread.group.name : thread.peer.displayName;
+      const title = isGroup ? dt(thread.group.name) : dt(thread.peer.displayName);
       const avatar = isGroup
         ? groupAvatarHtml(thread.group.name)
         : contactAvatarHtml(thread.peer.displayName, thread.peer.role);
-      const prefix = thread.lastMessage?.isMine ? tr("chat.youPrefix") : thread.lastMessage?.senderName && isGroup ? `${thread.lastMessage.senderName}: ` : "";
+      const senderPrefix =
+        thread.lastMessage?.senderName && isGroup ? `${dt(thread.lastMessage.senderName)}: ` : "";
+      const prefix = thread.lastMessage?.isMine ? tr("chat.youPrefix") : senderPrefix;
       const typeCls = isGroup ? " team-chat-thread-item--group" : " team-chat-thread-item--dm";
       return `<button type="button" class="team-chat-thread-item${typeCls}${active}${unreadRow}" data-thread-type="${thread.type}" data-thread-id="${thread.id}">
         ${avatar}
@@ -1542,7 +1562,7 @@ function renderContactList() {
             ${contactAvatarHtml(c.displayName, c.role)}
             <span class="min-w-0 flex-grow-1">
               <span class="d-flex align-items-center gap-2">
-                <span class="fw-medium text-truncate">${d().escapeHtml(c.displayName)}</span>
+                <span class="fw-medium text-truncate">${d().escapeHtml(dt(c.displayName))}</span>
                 ${rolePillHtml(c.roleLabel)}
               </span>
               <span class="d-block small text-muted text-truncate">${d().escapeHtml(c.email)}</span>
@@ -1646,7 +1666,7 @@ function updateThreadHeaderFromThread(thread) {
   const avatarEl = document.getElementById("team-chat-peer-avatar");
   if (!thread) return;
   if (thread.type === "group") {
-    if (nameEl) nameEl.textContent = thread.group?.name || tr("chat.group");
+    if (nameEl) nameEl.textContent = dt(thread.group?.name) || tr("chat.group");
     if (roleEl) {
       roleEl.innerHTML = `<span class="team-chat-role-pill team-chat-role-pill--group">${tr("chat.memberCount", { count: thread.group?.memberCount ?? 0 })}</span>`;
     }
@@ -1655,7 +1675,7 @@ function updateThreadHeaderFromThread(thread) {
     return;
   }
   const peer = thread.peer;
-  if (nameEl) nameEl.textContent = peer?.displayName || tr("chat.chat");
+  if (nameEl) nameEl.textContent = dt(peer?.displayName) || tr("chat.chat");
   if (roleEl) roleEl.innerHTML = peer ? rolePillHtml(peer.roleLabel || peer.role) : "";
   if (avatarEl) avatarEl.innerHTML = peer ? contactAvatarHtml(peer.displayName, peer.role, true) : "";
   syncGroupManageUi();
@@ -1681,10 +1701,10 @@ function isChatPanelOpen() {
 
 function notifyIncomingMessage(thread) {
   const isGroup = thread.type === "group";
-  const name = isGroup ? thread.group?.name : thread.peer?.displayName || tr("chat.someone");
+  const name = isGroup ? dt(thread.group?.name) : dt(thread.peer?.displayName) || tr("chat.someone");
   const preview = previewText(thread.lastMessage?.body, thread.lastMessage?.hasAttachment, thread.lastMessage?.deleted);
   const label = isGroup && thread.lastMessage?.senderName
-    ? tr("chat.senderInGroup", { sender: thread.lastMessage.senderName, group: name })
+    ? tr("chat.senderInGroup", { sender: dt(thread.lastMessage.senderName), group: name })
     : name;
   d().showToast(tr("chat.newMessageFrom", { label, preview }), "primary");
   if (typeof Notification !== "undefined" && Notification.permission === "granted" && document.hidden) {
@@ -1717,6 +1737,7 @@ function syncChatPushButton() {
 async function loadContacts() {
   const data = await d().api("/api/chat/contacts");
   contacts = data.contacts ?? [];
+  await syncChatTranslations();
   renderContactList();
   renderGroupMemberPicks();
 }
@@ -1724,6 +1745,7 @@ async function loadContacts() {
 async function loadThreads() {
   const data = await d().api("/api/chat/threads");
   threads = data.threads ?? [];
+  await syncChatTranslations();
   renderThreadList();
   await refreshUnreadBadges();
 }
@@ -1772,6 +1794,7 @@ async function openThread(type, id) {
         peer: data.conversation.peer,
       });
     }
+    await syncChatTranslations();
     renderMessages({ scrollToBottom: true });
     updateTypingIndicator();
     await markActiveThreadRead();
@@ -1991,6 +2014,19 @@ export function wireTeamChatButtons() {
   document.querySelectorAll(".js-open-team-chat").forEach((btn) => {
     btn.addEventListener("click", () => openTeamChat());
   });
+}
+
+export async function refreshChatForLanguageChange() {
+  if (!deps) return;
+  await syncChatTranslations();
+  renderThreadList();
+  renderContactList();
+  renderGroupMemberPicks();
+  if (activeChatId && activeThreadType) {
+    const cached = threads.find((t) => t.type === activeThreadType && t.id === activeChatId);
+    if (cached) updateThreadHeaderFromThread(cached);
+    renderMessages();
+  }
 }
 
 export function initTeamChat(chatDeps) {

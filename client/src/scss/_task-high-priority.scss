@@ -73,7 +73,7 @@
   }
 
   .task-grip {
-    background: rgba(255, 204, 204, 0.92) !important;
+    background: color-mix(in srgb, var(--hp-card-bg) 92%, transparent) !important;
   }
 }
 

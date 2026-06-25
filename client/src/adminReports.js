@@ -1,5 +1,6 @@
 import { Chart } from "chart.js/auto";
 import { tr, dateLocale } from "./i18n/index.js";
+import { dt, ensureContentTranslations } from "./i18n/contentTranslate.js";
 
 /** @type {Record<string, Chart>} */
 const chartInstances = {};
@@ -174,12 +175,23 @@ function baseChartOptions() {
 }
 
 function perfChartColors() {
+  const dark = document.documentElement.getAttribute("data-bs-theme") === "dark";
   return {
-    onTime: "#2e7d32",
-    late: "#e65100",
-    pending: "#78909c",
-    allocated: "#006d77",
+    onTime: dark ? "#66bb6a" : "#2e7d32",
+    late: dark ? "#ffb74d" : "#e65100",
+    pending: dark ? "#90a4ae" : "#78909c",
+    allocated: dark ? "#4db6ac" : "#006d77",
   };
+}
+
+function statusBreakdownColors(labels) {
+  const dark = document.documentElement.getAttribute("data-bs-theme") === "dark";
+  const map = {
+    Active: dark ? "#4db6ac" : "#006d77",
+    "In review": dark ? "#ffb74d" : "#e65100",
+    Completed: dark ? "#66bb6a" : "#2e7d32",
+  };
+  return labels.map((label) => map[label] ?? (dark ? "#90a4ae" : "#78909c"));
 }
 
 function formatReportDateTime(iso) {
@@ -196,7 +208,7 @@ function lateSubmissionsTableHtml(items) {
         .map((row) => {
           const lateLabel = tr("reports.submittedLateByDays", { count: row.lateDays });
           return `<tr>
-            <td class="admin-report-late-task">${escapeHtmlFn(row.title)}</td>
+            <td class="admin-report-late-task">${escapeHtml(dt(row.title))}</td>
             <td class="tabular-nums text-nowrap">${escapeHtmlFn(formatReportDateTime(row.dueAt))}</td>
             <td class="tabular-nums text-nowrap">${escapeHtmlFn(formatReportDateTime(row.submittedAt))}</td>
             <td class="admin-report-late-days text-danger fw-semibold text-nowrap">${escapeHtmlFn(lateLabel)}</td>
@@ -484,7 +496,7 @@ function renderCharts(data) {
         datasets: [
           {
             data: data.statusBreakdown.map((s) => s.value),
-            backgroundColor: data.statusBreakdown.map((s) => s.color),
+            backgroundColor: statusBreakdownColors(data.statusBreakdown.map((s) => s.label)),
             borderWidth: 0,
             hoverOffset: 6,
           },
@@ -694,6 +706,7 @@ async function loadEmployeePerformance(main) {
       period: employeePerfFilters.period || "daily",
     });
     employeePerfData = await apiFn(`/api/reports/employee-performance?${q}`);
+    await ensureContentTranslations((employeePerfData?.lateSubmissions ?? []).map((r) => r.title));
   } catch {
     employeePerfData = null;
   } finally {
@@ -713,6 +726,14 @@ async function loadEmployeePerformance(main) {
     }
     requestAnimationFrame(() => renderEmployeePerfChart());
   }
+}
+
+export function onReportsThemeChange() {
+  if (!reportData || !document.querySelector(".admin-reports-page")) return;
+  requestAnimationFrame(() => {
+    renderCharts(reportData);
+    renderEmployeePerfChart();
+  });
 }
 
 export async function refreshAdminReports({ force = false } = {}) {

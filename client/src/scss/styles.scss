@@ -1562,12 +1562,12 @@ body {
 
   .emp-owner-task-table tbody tr.emp-task-row {
     display: grid;
-    grid-template-columns: 2.35rem minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
     grid-template-areas:
-      "check task"
-      "deadline deadline"
-      "desc desc"
-      "proof proof";
+      "task"
+      "deadline"
+      "desc"
+      "proof";
     gap: 0.45rem 0.55rem;
     align-items: start;
     padding: 0.8rem 0.85rem;
@@ -1596,18 +1596,6 @@ body {
     min-width: 0 !important;
     max-width: none !important;
     text-align: start !important;
-  }
-
-  .emp-owner-task-table tbody tr.emp-task-row .emp-col-check {
-    grid-area: check;
-    justify-self: center;
-    align-self: start;
-    padding-top: 0.2rem !important;
-  }
-
-  .emp-owner-task-table tbody tr.emp-task-row .emp-col-check .form-check-input {
-    width: 1.15rem;
-    height: 1.15rem;
   }
 
   .emp-owner-task-table tbody tr.emp-task-row .emp-col-task {
@@ -1641,7 +1629,7 @@ body {
     font-size: 0.65rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: var(--bs-secondary);
+    color: var(--admin-on-surface-variant, var(--bs-secondary-color));
     margin-bottom: 0.35rem;
   }
 
@@ -1657,7 +1645,7 @@ body {
     font-size: 0.65rem;
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: var(--bs-secondary);
+    color: var(--admin-on-surface-variant, var(--bs-secondary-color));
     margin-bottom: 0.25rem;
   }
 

@@ -42,24 +42,24 @@
     }
 
     .btn-outline-primary {
-      border-color: rgba(0, 83, 91, 0.45);
-      color: #00535b;
+      border-color: color-mix(in srgb, var(--admin-primary) 45%, transparent);
+      color: var(--admin-primary);
 
       &:hover {
-        background: rgba(169, 236, 229, 0.2);
-        border-color: #00535b;
-        color: #00535b;
+        background: color-mix(in srgb, var(--admin-secondary-container) 20%, transparent);
+        border-color: var(--admin-primary);
+        color: var(--admin-primary);
       }
     }
 
     .btn-outline-secondary {
-      border-color: rgba(190, 200, 202, 0.65);
+      border-color: color-mix(in srgb, var(--admin-outline-variant) 65%, transparent);
       color: var(--admin-on-surface-variant);
 
       &:hover {
-        background: rgba(169, 236, 229, 0.15);
-        border-color: rgba(0, 83, 91, 0.35);
-        color: #00535b;
+        background: color-mix(in srgb, var(--admin-secondary-container) 15%, transparent);
+        border-color: color-mix(in srgb, var(--admin-primary) 35%, transparent);
+        color: var(--admin-primary);
       }
     }
 
@@ -90,30 +90,30 @@
         font-size: 0.625rem;
         font-weight: 700;
         line-height: 1;
-        background: #00535b;
+        background: var(--admin-primary-container);
         color: #fff;
       }
     }
 
     .emp-update-btn {
-      border: 1px solid rgba(0, 83, 91, 0.5);
-      color: #00535b;
-      background: rgba(169, 236, 229, 0.28);
+      border: 1px solid color-mix(in srgb, var(--admin-primary) 50%, transparent);
+      color: var(--admin-primary);
+      background: color-mix(in srgb, var(--admin-secondary-container) 28%, transparent);
       font-weight: 600;
 
       &:hover {
-        background: rgba(169, 236, 229, 0.45);
-        border-color: #00535b;
-        color: #004a52;
+        background: color-mix(in srgb, var(--admin-secondary-container) 45%, transparent);
+        border-color: var(--admin-primary);
+        color: var(--admin-primary);
       }
     }
   }
 
   .emp-assigned-out-card {
-    border-color: rgba(190, 200, 202, 0.55);
-    background: #fff;
+    border-color: color-mix(in srgb, var(--admin-outline-variant) 55%, transparent);
+    background: var(--admin-surface-container-low);
     border-radius: 0.75rem;
-    box-shadow: 0 2px 8px rgba(24, 26, 46, 0.06);
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--admin-on-surface) 6%, transparent);
   }
 
   .emp-assigned-out-card-label {
@@ -125,7 +125,7 @@
   }
 
   .owner-empty-state .owner-empty-icon {
-    color: #00535b !important;
+    color: var(--admin-primary) !important;
   }
 
   .task-created-meta {
@@ -189,23 +189,24 @@
     max-width: 11rem;
     min-height: 1.55rem;
     padding: 0.2rem 0.45rem;
-    border-color: rgba(190, 200, 202, 0.55);
-    background: #fff;
+    border-color: color-mix(in srgb, var(--admin-outline-variant) 55%, transparent);
+    background: var(--admin-surface-container-low);
+    color: var(--admin-on-surface);
     font-size: 0.75rem;
     line-height: 1.25;
   }
 
   .emp-task-desc-box--empty {
     max-width: 11rem;
-    background: rgba(244, 242, 255, 0.65);
+    background: color-mix(in srgb, var(--admin-surface-container-high) 65%, transparent);
   }
 
   .emp-task-desc-box.owner-task-desc-box--clickable {
-    background: #fff;
+    background: var(--admin-surface-container-low);
 
     &:hover {
-      border-color: rgba(0, 83, 91, 0.45);
-      background: rgba(169, 236, 229, 0.12);
+      border-color: color-mix(in srgb, var(--admin-primary) 45%, transparent);
+      background: color-mix(in srgb, var(--admin-secondary-container) 12%, transparent);
     }
   }
 
@@ -221,7 +222,7 @@
   .emp-task-desc-popup-icon {
     flex-shrink: 0;
     font-size: 0.65rem;
-    color: #00535b;
+    color: var(--admin-primary);
     opacity: 0.7;
   }
 }
@@ -229,10 +230,10 @@
 @media (max-width: 767.98px) {
   .owner-shell.admin-mockup-ui.emp-shell {
     .emp-owner-task-table tbody tr.emp-task-row {
-      border-color: rgba(190, 200, 202, 0.55) !important;
-      background: #fff;
+      border-color: color-mix(in srgb, var(--admin-outline-variant) 55%, transparent) !important;
+      background: var(--admin-surface-container-low);
       border-radius: 0.75rem;
-      box-shadow: 0 2px 8px rgba(24, 26, 46, 0.06);
+      box-shadow: 0 2px 8px color-mix(in srgb, var(--admin-on-surface) 6%, transparent);
 
       &.owner-task-row--high-priority {
         background: var(--hp-card-bg, #ffcccc) !important;
@@ -242,7 +243,7 @@
     }
 
     .emp-owner-task-table tbody tr.emp-task-row.owner-task-row--completed {
-      background: rgba(169, 236, 229, 0.12);
+      background: color-mix(in srgb, var(--admin-secondary-container) 12%, var(--admin-surface-container-low));
     }
   }
 }
@@ -250,8 +251,11 @@
 [data-bs-theme="dark"] .owner-shell.admin-mockup-ui.emp-shell {
   .emp-assigned-out-card,
   .emp-owner-task-table tbody tr.emp-task-row:not(.owner-task-row--high-priority) {
-    background: #1e1e28;
-    border-color: #3a3a48 !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  }
+
+  .emp-owner-task-table tbody tr.emp-task-row.owner-task-row--completed {
+    background: color-mix(in srgb, #66bb6a 12%, var(--admin-surface-container-low));
   }
 
   .admin-nav-count {
@@ -274,9 +278,10 @@ body:has(.admin-emp-modal.show) .modal-backdrop {
   flex-direction: column;
   max-height: calc(100vh - 2rem);
   border-radius: 0.75rem;
-  border: 1px solid #bec8ca;
-  background: #fbf8ff;
-  box-shadow: 0 16px 48px rgba(24, 26, 46, 0.18);
+  border: 1px solid var(--bs-border-color);
+  background: var(--bs-body-bg);
+  color: var(--bs-body-color);
+  box-shadow: 0 16px 48px color-mix(in srgb, var(--bs-body-color) 18%, transparent);
   overflow: hidden;
 }
 
@@ -294,13 +299,13 @@ body:has(.admin-emp-modal.show) .modal-backdrop {
   font-size: 1.25rem;
   font-weight: 700;
   line-height: 1.3;
-  color: #181a2e;
+  color: var(--bs-body-color);
 }
 
 .admin-emp-modal-close {
   border: none;
   background: transparent;
-  color: #3e494a;
+  color: var(--bs-secondary-color);
   width: 2.25rem;
   height: 2.25rem;
   border-radius: 0.5rem;
@@ -310,8 +315,8 @@ body:has(.admin-emp-modal.show) .modal-backdrop {
   flex-shrink: 0;
 
   &:hover {
-    background: rgba(169, 236, 229, 0.25);
-    color: #00535b;
+    background: color-mix(in srgb, var(--bs-primary) 12%, transparent);
+    color: var(--bs-primary);
   }
 
   .material-symbols-outlined {
@@ -331,14 +336,14 @@ body:has(.admin-emp-modal.show) .modal-backdrop {
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #3e494a;
+  color: var(--bs-secondary-color);
 }
 
 .admin-emp-modal-task-title {
   margin: 0 0 1rem;
   font-size: 1.0625rem;
   font-weight: 600;
-  color: #181a2e;
+  color: var(--bs-body-color);
 }
 
 .admin-emp-modal-label {
@@ -346,22 +351,22 @@ body:has(.admin-emp-modal.show) .modal-backdrop {
   margin-bottom: 0.35rem;
   font-size: 0.875rem;
   font-weight: 600;
-  color: #181a2e;
+  color: var(--bs-body-color);
 }
 
 .admin-emp-modal-label-optional {
   font-weight: 400;
-  color: #6f797a;
+  color: var(--bs-secondary-color);
 }
 
 .admin-emp-modal-hint {
   font-size: 0.8125rem;
-  color: #3e494a;
+  color: var(--bs-secondary-color);
 }
 
 .admin-emp-modal-counter {
   font-size: 0.8125rem;
-  color: #6f797a;
+  color: var(--bs-secondary-color);
 }
 
 .admin-emp-modal-error {
@@ -373,7 +378,7 @@ body:has(.admin-emp-modal.show) .modal-backdrop {
 .admin-emp-modal-divider {
   margin: 1.25rem 0;
   border: none;
-  border-top: 1px solid rgba(190, 200, 202, 0.55);
+  border-top: 1px solid var(--bs-border-color);
 }
 
 .admin-emp-modal-input,
@@ -381,22 +386,22 @@ body:has(.admin-emp-modal.show) .modal-backdrop {
 .admin-emp-modal-select,
 .admin-emp-modal-file {
   width: 100%;
-  border: 1px solid rgba(190, 200, 202, 0.65);
+  border: 1px solid var(--bs-border-color);
   border-radius: 0.5rem;
-  background: #fff;
-  color: #181a2e;
+  background: var(--bs-body-bg);
+  color: var(--bs-body-color);
   font-size: 0.9375rem;
   padding: 0.55rem 0.75rem;
   transition: border-color 0.12s ease, box-shadow 0.12s ease;
 
   &:focus {
     outline: none;
-    border-color: #00535b;
-    box-shadow: 0 0 0 3px rgba(0, 83, 91, 0.12);
+    border-color: var(--bs-primary);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--bs-primary) 12%, transparent);
   }
 
   &::placeholder {
-    color: #6f797a;
+    color: var(--bs-secondary-color);
   }
 }
 
@@ -409,17 +414,17 @@ body:has(.admin-emp-modal.show) .modal-backdrop {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  border: 1px solid rgba(0, 83, 91, 0.35);
+  border: 1px solid color-mix(in srgb, var(--bs-primary) 35%, transparent);
   border-radius: 0.5rem;
-  background: rgba(169, 236, 229, 0.2);
-  color: #00535b;
+  background: color-mix(in srgb, var(--bs-primary) 10%, transparent);
+  color: var(--bs-primary);
   font-size: 0.8125rem;
   font-weight: 600;
   padding: 0.35rem 0.75rem;
 
   &:hover {
-    background: rgba(169, 236, 229, 0.35);
-    border-color: #00535b;
+    background: color-mix(in srgb, var(--bs-primary) 18%, transparent);
+    border-color: var(--bs-primary);
   }
 
   .material-symbols-outlined {
@@ -429,9 +434,9 @@ body:has(.admin-emp-modal.show) .modal-backdrop {
 
 .admin-emp-modal-preview-img,
 .admin-emp-modal-preview-pdf {
-  border: 1px solid rgba(190, 200, 202, 0.55);
+  border: 1px solid var(--bs-border-color);
   border-radius: 0.5rem;
-  background: #fff;
+  background: var(--bs-tertiary-bg);
 }
 
 .admin-emp-modal-preview-pdf {
@@ -445,8 +450,8 @@ body:has(.admin-emp-modal.show) .modal-backdrop {
   gap: 1rem;
   flex-shrink: 0;
   padding: 1rem 1.5rem;
-  background: #f4f2ff;
-  border-top: 1px solid #bec8ca;
+  background: var(--bs-tertiary-bg);
+  border-top: 1px solid var(--bs-border-color);
 }
 
 .admin-emp-modal-footer-actions {
@@ -477,47 +482,15 @@ body:has(.admin-emp-modal.show) .modal-backdrop {
 .admin-emp-desc-modal-text {
   font-size: 0.9375rem;
   line-height: 1.55;
-  color: #181a2e;
+  color: var(--bs-body-color);
   white-space: pre-wrap;
   overflow-wrap: break-word;
   word-break: break-word;
 }
 
 [data-bs-theme="dark"] {
-  .admin-emp-modal-card {
-    background: #1e1e28;
-    border-color: #3a3a48;
-  }
-
-  .admin-emp-modal-title,
-  .admin-emp-modal-label,
-  .admin-emp-modal-task-title {
-    color: #e8e8f0;
-  }
-
-  .admin-emp-modal-field-label,
-  .admin-emp-modal-hint,
-  .admin-emp-modal-counter {
-    color: #b0b0c0;
-  }
-
-  .admin-emp-modal-input,
-  .admin-emp-modal-textarea,
-  .admin-emp-modal-select,
-  .admin-emp-modal-file,
-  .admin-emp-modal-preview-img,
-  .admin-emp-modal-preview-pdf {
-    background: #121218;
-    border-color: #3a3a48;
-    color: #e8e8f0;
-  }
-
-  .admin-emp-modal-footer {
-    background: #121218;
-    border-top-color: #3a3a48;
-  }
-
-  .admin-emp-desc-modal-text {
-    color: #e8e8f0;
+  .admin-emp-modal-close:hover {
+    background: color-mix(in srgb, var(--bs-primary) 18%, transparent);
+    color: var(--bs-primary);
   }
 }
