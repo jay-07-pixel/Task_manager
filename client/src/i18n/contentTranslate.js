@@ -10,6 +10,18 @@ function cacheKey(lang, text) {
   return `${lang}\0${text}`;
 }
 
+function shouldCacheTranslation(original, translated, lang) {
+  if (!translated || normalizeComparable(translated) === normalizeComparable(original)) return false;
+  if (lang === "hi" || lang === "mr") {
+    return hasDevanagari(translated) || normalizeComparable(translated) !== normalizeComparable(original);
+  }
+  return true;
+}
+
+function normalizeComparable(text) {
+  return String(text).trim().replace(/\s+/g, " ").toLowerCase();
+}
+
 function hasDevanagari(text) {
   return /[\u0900-\u097F]/.test(text);
 }
@@ -22,7 +34,7 @@ function hasLatin(text) {
 function needsTranslation(text, lang) {
   if (!text) return false;
   if (lang === "en") return hasDevanagari(text);
-  if (lang === "hi" || lang === "mr") return hasLatin(text);
+  if (lang === "hi" || lang === "mr") return hasLatin(text) || !hasDevanagari(text);
   return false;
 }
 
@@ -85,7 +97,7 @@ export async function ensureContentTranslations(texts) {
         if (!t) return false;
         const cached = cache.get(cacheKey(lang, t));
         if (!cached) return true;
-        return needsTranslation(t, lang) && cached === t;
+        return needsTranslation(t, lang) && normalizeComparable(cached) === normalizeComparable(t);
       })
     ),
   ];
@@ -100,7 +112,7 @@ export async function ensureContentTranslations(texts) {
         body: JSON.stringify({ texts: batch, to: lang }),
       });
       for (const [original, translated] of Object.entries(data.translations ?? {})) {
-        if (translated != null && String(translated).trim()) {
+        if (shouldCacheTranslation(original, translated, lang)) {
           cache.set(cacheKey(lang, original), translated);
         }
       }

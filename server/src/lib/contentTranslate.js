@@ -4,6 +4,8 @@ const MAX_BATCH = 40;
 const cache = new Map();
 const MAX_CACHE = 12_000;
 
+const LANG_CODES = { en: "en", hi: "hi", mr: "mr" };
+
 function cacheKey(text, toLang) {
   return `${toLang}\0${text}`;
 }
@@ -14,6 +16,10 @@ function hasDevanagari(text) {
 
 function hasLatin(text) {
   return /[a-zA-Z]/.test(text);
+}
+
+function normalizeComparable(text) {
+  return String(text).trim().replace(/\s+/g, " ").toLowerCase();
 }
 
 /** @returns {"en" | "inc" | "mixed"} */
@@ -28,16 +34,15 @@ function detectSourceLang(text) {
 }
 
 function translationLooksValid(text, translated, toLang) {
-  if (!translated || translated === text) return false;
-  if (/MYMEMORY\s+WARNING/i.test(translated)) return false;
-  if (toLang === "hi" || toLang === "mr") return hasDevanagari(translated) || !hasLatin(translated);
-  if (toLang === "en") return hasLatin(translated) && !hasDevanagari(translated);
-  return translated.trim() !== text.trim();
+  if (!translated || /MYMEMORY\s+WARNING/i.test(translated)) return false;
+  if (normalizeComparable(translated) === normalizeComparable(text)) return false;
+  if (toLang === "hi" || toLang === "mr") {
+    return hasDevanagari(translated) || normalizeComparable(translated) !== normalizeComparable(text);
+  }
+  if (toLang === "en") return hasLatin(translated);
+  return true;
 }
 
-/**
- * Langpairs to try when translating `text` into the UI language.
- */
 function langPairsFor(text, toLang) {
   const src = detectSourceLang(text);
   if (src === "en" && toLang === "en") return [];
@@ -52,7 +57,7 @@ function langPairsFor(text, toLang) {
   return [];
 }
 
-async function fetchTranslation(text, langpair) {
+async function fetchMyMemory(text, langpair) {
   const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${langpair}`;
   const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
   if (!res.ok) return null;
@@ -62,8 +67,43 @@ async function fetchTranslation(text, langpair) {
   if (status && Number(status) !== 200) return null;
 
   const translated = String(data?.responseData?.translatedText || "").trim();
-  if (!translated) return null;
-  return translated;
+  return translated || null;
+}
+
+async function fetchGoogleTranslate(text, toLang) {
+  const tl = LANG_CODES[toLang];
+  if (!tl) return null;
+  const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${tl}&dt=t&q=${encodeURIComponent(text)}`;
+  try {
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(15_000),
+      headers: { "User-Agent": "Mozilla/5.0 TaskManager/1.0" },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const parts = Array.isArray(data?.[0]) ? data[0] : [];
+    const translated = parts
+      .map((chunk) => chunk?.[0])
+      .filter(Boolean)
+      .join("")
+      .trim();
+    return translated || null;
+  } catch {
+    return null;
+  }
+}
+
+async function translateText(text, toLang) {
+  const pairs = langPairsFor(text, toLang);
+  for (const pair of pairs) {
+    const attempt = await fetchMyMemory(text, pair);
+    if (attempt && translationLooksValid(text, attempt, toLang)) return attempt;
+  }
+
+  const google = await fetchGoogleTranslate(text, toLang);
+  if (google && translationLooksValid(text, google, toLang)) return google;
+
+  return text;
 }
 
 async function translateWithPair(text, toLang) {
@@ -76,20 +116,14 @@ async function translateWithPair(text, toLang) {
     return text;
   }
 
-  let translated = text;
-  for (const pair of pairs) {
-    const attempt = await fetchTranslation(text, pair);
-    if (attempt && translationLooksValid(text, attempt, toLang)) {
-      translated = attempt;
-      break;
+  const translated = await translateText(text, toLang);
+  if (translated !== text) {
+    if (cache.size >= MAX_CACHE) {
+      const drop = Math.floor(MAX_CACHE / 4);
+      for (const k of [...cache.keys()].slice(0, drop)) cache.delete(k);
     }
+    cache.set(key, translated);
   }
-
-  if (cache.size >= MAX_CACHE) {
-    const drop = Math.floor(MAX_CACHE / 4);
-    for (const k of [...cache.keys()].slice(0, drop)) cache.delete(k);
-  }
-  cache.set(key, translated);
   return translated;
 }
 
