@@ -59,6 +59,14 @@ function formatNotificationCopy(payload) {
     };
   }
 
+  if (msgType === "task_submitted") {
+    return {
+      title: payload.title || "Task submitted",
+      body: payload.body || "An employee submitted work on a task.",
+      data: { ...data, type: "task_submitted" },
+    };
+  }
+
   const taskTitle = data?.title || payload.taskTitle || "Your task";
   const slot = data?.slot || payload.slot;
 
@@ -82,11 +90,21 @@ function formatNotificationCopy(payload) {
 async function showNotificationFromPayload(payload) {
   const { title, body, data } = formatNotificationCopy(payload);
   const isChat = data?.type === "chat_message";
+  const isTaskSubmitted = data?.type === "task_submitted";
   const tag =
     payload.tag ||
     (isChat
       ? `taskmgr-chat-${data.conversationId || "message"}`
-      : `taskmgr-${data.taskId || "reminder"}-${data.slot || "alert"}`);
+      : isTaskSubmitted
+        ? `taskmgr-submit-${data.taskId || "task"}`
+        : `taskmgr-${data.taskId || "reminder"}-${data.slot || "alert"}`);
+
+  const notifyUrl =
+    isTaskSubmitted && data?.url
+      ? data.url.startsWith("/")
+        ? data.url
+        : `/${data.url}`
+      : taskDashboardUrl(data);
 
   const options = {
     body,
@@ -97,7 +115,7 @@ async function showNotificationFromPayload(payload) {
     renotify: true,
     silent: false,
     vibrate: [400, 150, 400, 150, 400],
-    data: { ...data, url: taskDashboardUrl(data) },
+    data: { ...data, url: notifyUrl },
   };
 
   try {
@@ -132,6 +150,11 @@ self.addEventListener("notificationclick", (event) => {
   const data = event.notification.data || {};
   if (data.type === "chat_message") {
     event.waitUntil(openChatFromNotification(data));
+    return;
+  }
+  if (data.type === "task_submitted" && data.url) {
+    const path = data.url.startsWith("/") ? data.url : `/${data.url}`;
+    event.waitUntil(openAppUrl(path));
     return;
   }
   event.waitUntil(openTaskDashboard(data));

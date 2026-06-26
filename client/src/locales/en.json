@@ -386,6 +386,7 @@
     "pastedClipboard": "Pasted from clipboard.",
     "clipboardReadFailed": "Could not read clipboard. Allow paste permission and try again.",
     "taskSubmitted": "Task submitted.",
+    "taskSubmittedNotify": "Task update: {{title}}",
     "updatePosted": "Update posted.",
     "createListFirst": "Create a list first.",
     "enterTaskTitle": "Enter a task title.",

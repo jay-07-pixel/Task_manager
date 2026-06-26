@@ -386,6 +386,7 @@
     "pastedClipboard": "क्लिपबोर्डवरून पेस्ट केले.",
     "clipboardReadFailed": "क्लिपबोर्ड वाचता आला नाही. पेस्ट परवानगी द्या आणि पुन्हा प्रयत्न करा.",
     "taskSubmitted": "कार्य सबमिट केले.",
+    "taskSubmittedNotify": "कार्य अपडेट: {{title}}",
     "updatePosted": "अपडेट पोस्ट केले.",
     "createListFirst": "प्रथम यादी तयार करा.",
     "enterTaskTitle": "कार्य शीर्षक प्रविष्ट करा.",

@@ -1393,8 +1393,20 @@ function wireChatNotifyHandlers() {
     navigator.serviceWorker.addEventListener("message", (event) => {
       if (event.data?.type === "taskmgr-navigate" && state.user) {
         const url = event.data.url || "";
-        const match = url.match(/openChat=([^&]+)/);
-        if (match?.[1]) void openChatFromDeepLink(decodeURIComponent(match[1]));
+        const chatMatch = url.match(/openChat=([^&]+)/);
+        if (chatMatch?.[1]) {
+          void openChatFromDeepLink(decodeURIComponent(chatMatch[1]));
+          return;
+        }
+        const taskMatch = url.match(/openTask=([^&]+)/);
+        if (taskMatch?.[1] && state.user.role === "owner") {
+          const params = new URLSearchParams(url.split("?")[1] || "");
+          void focusOwnerTaskFromNotify({
+            taskId: decodeURIComponent(taskMatch[1]),
+            listId: params.get("listId") || "",
+            employeeId: params.get("employeeId") || "",
+          });
+        }
       }
     });
   }
@@ -1462,6 +1474,80 @@ async function focusEmployeeTaskFromNotify(notify) {
 async function handleEmployeeNotifyDeepLink() {
   const notify = getEmployeeNotifyParams();
   if (notify) await focusEmployeeTaskFromNotify(notify);
+}
+
+function getOwnerNotifyParams() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("from") !== "notify") return null;
+  const taskId = params.get("openTask");
+  if (!taskId) return null;
+  return {
+    taskId,
+    listId: params.get("listId") || "",
+    employeeId: params.get("employeeId") || "",
+    allAssigneesDone: params.get("allAssigneesDone") === "1",
+  };
+}
+
+async function focusOwnerTaskFromNotify(notify) {
+  if (!notify?.taskId || state.user?.role !== "owner") return;
+
+  if (window.location.search) {
+    window.history.replaceState({}, "", window.location.pathname);
+  }
+
+  state.ownerView = "dashboard";
+
+  if (notify.listId && notify.listId !== state.activeListId) {
+    state.activeListId = notify.listId;
+    try {
+      await loadTasks(state.activeListId);
+    } catch {
+      /* keep going */
+    }
+  } else if (!state.tasks.some((t) => t.id === notify.taskId)) {
+    try {
+      await loadTasks(state.activeListId);
+    } catch {
+      /* keep going */
+    }
+  }
+
+  const task = state.tasks.find((t) => t.id === notify.taskId);
+  if (task?.completed || notify.allAssigneesDone) {
+    state.ownerTaskFilter = "completed";
+  } else {
+    state.ownerTaskFilter = "active";
+  }
+
+  renderOwnerChrome();
+
+  const title = task?.title ? dt(task.title) : tr("common.task");
+  showToast(tr("toast.taskSubmittedNotify", { title }), "success");
+
+  requestAnimationFrame(() => {
+    const row = document.querySelector(
+      `tr.owner-task-row[data-task-id="${CSS.escape(notify.taskId)}"]`
+    );
+    if (row) {
+      row.classList.add("owner-task-row--notify-highlight");
+      row.scrollIntoView({ behavior: "smooth", block: "center" });
+      window.setTimeout(() => row.classList.remove("owner-task-row--notify-highlight"), 12000);
+    }
+  });
+
+  if (notify.employeeId) {
+    try {
+      await openSubmissionDetailForAssignee(notify.taskId, notify.employeeId);
+    } catch {
+      /* task visible without submission modal */
+    }
+  }
+}
+
+async function handleOwnerNotifyDeepLink() {
+  const notify = getOwnerNotifyParams();
+  if (notify) await focusOwnerTaskFromNotify(notify);
 }
 
 function wireEmployeeNotifyHandlers() {
@@ -6579,6 +6665,11 @@ async function render() {
       sessionStorage.setItem("taskmgr-pending-notify", JSON.stringify(notify));
       window.history.replaceState({}, "", window.location.pathname);
     }
+    const ownerNotify = getOwnerNotifyParams();
+    if (ownerNotify) {
+      sessionStorage.setItem("taskmgr-pending-owner-notify", JSON.stringify(ownerNotify));
+      window.history.replaceState({}, "", window.location.pathname);
+    }
     renderAuthForm();
     return;
   }
@@ -6615,6 +6706,16 @@ async function render() {
   renderOwnerChrome();
   maybeShowOwnerTrialMessageModal();
   wireChatNotifyHandlers();
+  await handleOwnerNotifyDeepLink();
+  const pendingOwnerNotify = sessionStorage.getItem("taskmgr-pending-owner-notify");
+  if (pendingOwnerNotify) {
+    sessionStorage.removeItem("taskmgr-pending-owner-notify");
+    try {
+      await focusOwnerTaskFromNotify(JSON.parse(pendingOwnerNotify));
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 initTheme();

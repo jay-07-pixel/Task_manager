@@ -20,6 +20,7 @@ import {
   sortTasksByRecurrenceThenCreated,
   compareHighPriorityFirst,
 } from "../lib/taskRecurrenceSort.js";
+import { notifyAdminsTaskSubmitted } from "../services/taskCompletionNotificationService.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const uploadsRoot = path.join(__dirname, "..", "..", "uploads", "completion-proofs");
@@ -566,6 +567,30 @@ async function syncTaskCompletedFromAssignments(taskId) {
     where: { id: taskId },
     data: { completed: allDone },
   });
+}
+
+async function notifyAdminsIfEmployeeSubmitted(task, employeeUserId, wasAlreadyDone) {
+  if (wasAlreadyDone) return;
+  const employee = await prisma.user.findUnique({
+    where: { id: employeeUserId },
+    select: { id: true, displayName: true, role: true },
+  });
+  if (!employee || employee.role !== "employee") return;
+
+  const rows = await prisma.taskAssignee.findMany({
+    where: { taskId: task.id },
+    select: { assigneeDone: true },
+  });
+  const allAssigneesDone = rows.length > 0 && rows.every((r) => r.assigneeDone);
+
+  void notifyAdminsTaskSubmitted({
+    taskId: task.id,
+    taskTitle: task.title,
+    listId: task.listId,
+    employeeId: employee.id,
+    employeeName: employee.displayName,
+    allAssigneesDone,
+  }).catch((err) => console.error("[task-complete-notify]", err));
 }
 
 async function attachProgressUpdateMeta(tasks, ownerId = null, { employeeViewerId = null } = {}) {
@@ -1416,6 +1441,7 @@ router.post("/:id/completion-proof", requireAuth, handleProofUpload, async (req,
       return res.status(400).json({ error: SUBMISSION_REQUIRED_MSG });
     }
 
+    const wasAlreadyDone = my?.assigneeDone === true;
     const submittedAt = new Date();
     await prisma.taskAssignee.update({
       where: { taskId_userId: { taskId: task.id, userId: req.session.userId } },
@@ -1427,6 +1453,7 @@ router.post("/:id/completion-proof", requireAuth, handleProofUpload, async (req,
       },
     });
     await syncTaskCompletedFromAssignments(task.id);
+    void notifyAdminsIfEmployeeSubmitted(task, req.session.userId, wasAlreadyDone);
     const fresh = await prisma.task.findFirst({
       where: { id: task.id },
       include: { ...taskAssigneeInclude, ...taskListSelect },
@@ -1737,6 +1764,7 @@ router.patch("/:id", requireAuth, async (req, res) => {
     if (d.completed === true && !assigneeHasSubmissionContent(myRow)) {
       return res.status(400).json({ error: SUBMISSION_REQUIRED_MSG });
     }
+    const wasAlreadyDone = myRow?.assigneeDone === true;
     const prevPath = myRow?.completionProofPath;
     if (d.completed === false) {
       if (prevPath) deleteProofFile(prevPath);
@@ -1752,6 +1780,9 @@ router.patch("/:id", requireAuth, async (req, res) => {
       });
     }
     await syncTaskCompletedFromAssignments(task.id);
+    if (d.completed === true) {
+      void notifyAdminsIfEmployeeSubmitted(task, req.session.userId, wasAlreadyDone);
+    }
     const fresh = await prisma.task.findFirst({
       where: { id: task.id },
       include: { ...taskAssigneeInclude, ...taskListSelect },
