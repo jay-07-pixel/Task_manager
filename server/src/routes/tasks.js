@@ -32,6 +32,8 @@ const router = Router();
 const SUBMISSION_TEXT_MAX = 2000;
 const SUBMISSION_REQUIRED_MSG = "Please provide submission text or upload an image, video, or PDF.";
 const MAX_SUBMISSION_PROOFS = 10;
+const TASK_SUBMISSION_MEDIA_MAX_BYTES = 15 * 1024 * 1024;
+const TASK_SUBMISSION_PDF_MAX_BYTES = 5 * 1024 * 1024;
 const PROGRESS_UPDATE_TEXT_MAX = 2000;
 
 const progressUpdateTypeSchema = z.enum(["started", "in_progress", "blocked", "update"]);
@@ -476,6 +478,20 @@ function isProofUploadAllowed(file) {
   return isVideoAttachment(file.mimetype, file.originalname);
 }
 
+/** @param {{ mimetype: string, size: number }} file */
+function proofFileSizeError(file) {
+  if (file.mimetype === "application/pdf") {
+    if (file.size > TASK_SUBMISSION_PDF_MAX_BYTES) {
+      return "PDF files must be 5 MB or smaller.";
+    }
+    return null;
+  }
+  if (file.size > TASK_SUBMISSION_MEDIA_MAX_BYTES) {
+    return "Each photo or video must be 15 MB or smaller.";
+  }
+  return null;
+}
+
 /** @param {unknown} err */
 function submissionServerErrorMessage(err) {
   const msg = String(err && typeof err === "object" && "message" in err ? err.message : err || "");
@@ -509,7 +525,7 @@ const proofUpload = multer({
       cb(null, `${req.params.id}-${uid}-${randomUUID()}${ext}`);
     },
   }),
-  limits: { fileSize: 5 * 1024 * 1024 },
+  limits: { fileSize: TASK_SUBMISSION_MEDIA_MAX_BYTES },
   fileFilter: (_req, file, cb) => {
     if (isProofUploadAllowed(file)) {
       cb(null, true);
@@ -544,7 +560,7 @@ function handleProofUpload(req, res, next) {
   proofUpload.fields([{ name: "proof", maxCount: MAX_SUBMISSION_PROOFS }])(req, res, (err) => {
     if (!err) return next();
     if (err.code === "LIMIT_FILE_SIZE") {
-      return res.status(400).json({ error: "Each file must be 5 MB or smaller." });
+      return res.status(400).json({ error: "Each photo or video must be 15 MB or smaller." });
     }
     if (err.code === "LIMIT_UNEXPECTED_FILE" || err.code === "LIMIT_FIELD_COUNT") {
       return res.status(400).json({ error: `You can upload up to ${MAX_SUBMISSION_PROOFS} images per submission.` });
@@ -1417,6 +1433,10 @@ router.post("/:id/completion-proof", requireAuth, handleProofUpload, async (req,
     const pdfCount = proofFiles.filter((f) => f.mimetype === "application/pdf").length;
     if (pdfCount > 0 && proofFiles.length > 1) {
       return res.status(400).json({ error: "Submit one PDF alone, or upload multiple images and videos." });
+    }
+    for (const f of proofFiles) {
+      const sizeErr = proofFileSizeError(f);
+      if (sizeErr) return res.status(400).json({ error: sizeErr });
     }
 
     let completionProofPath = my?.completionProofPath ?? null;

@@ -56,10 +56,18 @@ fi
 # Ensure upload limit in server blocks (idempotent)
 for f in "${files[@]}"; do
   [[ -f "$f" ]] || continue
-  if grep -qE 'location[[:space:]]+/api/' "$f" && ! grep -q 'client_max_body_size' "$f"; then
-    sed -i '/server[[:space:]]*{/a\    client_max_body_size 6m;' "$f"
-    echo "Added client_max_body_size 6m to: $f"
+  if ! grep -qE 'location[[:space:]]+/api/' "$f"; then
+    continue
   fi
+  if grep -q 'client_max_body_size' "$f"; then
+    if grep -qE 'client_max_body_size[[:space:]]+6m' "$f"; then
+      sed -i 's/client_max_body_size[[:space:]]\+6m/client_max_body_size 16m/g' "$f"
+      echo "Updated client_max_body_size 6m -> 16m in: $f"
+    fi
+    continue
+  fi
+  sed -i '/server[[:space:]]*{/a\    client_max_body_size 16m;' "$f"
+  echo "Added client_max_body_size 16m to: $f"
 done
 
 nginx -t

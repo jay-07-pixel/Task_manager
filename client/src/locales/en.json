@@ -293,7 +293,7 @@
       "updateBadge": "Update"
     },
     "pasteFromClipboard": "Paste from clipboard",
-    "submissionFilesOptional": "(up to {{max}} images/videos, or one PDF)",
+    "submissionFilesOptional": "(up to {{max}} photos/videos — 15 MB each — or one PDF up to 5 MB)",
     "reminders": {
       "fallbackTaskTitle": "Your task"
     },
@@ -435,11 +435,11 @@
   },
   "validation": {
     "submissionRequired": "Please provide submission text or upload at least one image or video.",
-    "imageTooLarge": "Image is too large for the server (max 5 MB). Use a smaller image or submit text only.",
-    "uploadTooLarge": "Upload is too large. Use an image under 5 MB, or ask your admin to raise nginx client_max_body_size.",
+    "imageTooLarge": "Image or video is too large (max {{max}} MB). Use a smaller file or submit text only.",
+    "uploadTooLarge": "Upload is too large. Photos and videos must be under {{max}} MB, or ask your admin to raise nginx client_max_body_size.",
     "submissionFailed": "Submission failed. Please try again.",
     "fileTypesAllowed": "Only JPEG, PNG, GIF, WebP images, MP4/WebM/MOV videos, or PDF files are allowed.",
-    "fileMaxSize": "Each file must be 5 MB or smaller.",
+    "fileMaxSize": "Each file must be {{max}} MB or smaller.",
     "pdfAloneOrMedia": "Submit one PDF alone, or upload multiple images and videos.",
     "signInForFiles": "Sign in again to view submission files.",
     "noPermissionSubmission": "You do not have permission to view this submission.",

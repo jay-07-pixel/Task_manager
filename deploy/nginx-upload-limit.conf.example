@@ -7,9 +7,10 @@
 #   add inside server { }:  client_max_body_size 6m;
 #   sudo nginx -t && sudo systemctl reload nginx
 #
-# Limits: task proof images/PDFs 5 MB, chat attachments 5 MB (any file type).
+# Limits: task submission photos/videos 15 MB each, PDF 5 MB; chat attachments 5 MB.
+# Use at least 16m so 15 MB task uploads are not rejected with 413.
 
-client_max_body_size 6m;
+client_max_body_size 16m;
 
 # API proxy (adjust port per site: 3000 / 3002 / 3004)
 # location /api/ {
