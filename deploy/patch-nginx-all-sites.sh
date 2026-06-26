@@ -60,14 +60,14 @@ for f in "${files[@]}"; do
     continue
   fi
   if grep -q 'client_max_body_size' "$f"; then
-    if grep -qE 'client_max_body_size[[:space:]]+6m' "$f"; then
-      sed -i 's/client_max_body_size[[:space:]]\+6m/client_max_body_size 16m/g' "$f"
-      echo "Updated client_max_body_size 6m -> 16m in: $f"
+    if grep -qE 'client_max_body_size[[:space:]]+(6m|16m)' "$f"; then
+      sed -i -E 's/client_max_body_size[[:space:]]+(6m|16m)/client_max_body_size 0/g' "$f"
+      echo "Updated client_max_body_size -> 0 (unlimited) in: $f"
     fi
     continue
   fi
-  sed -i '/server[[:space:]]*{/a\    client_max_body_size 16m;' "$f"
-  echo "Added client_max_body_size 16m to: $f"
+  sed -i '/server[[:space:]]*{/a\    client_max_body_size 0;' "$f"
+  echo "Added client_max_body_size 0 to: $f"
 done
 
 nginx -t

@@ -293,7 +293,7 @@
       "updateBadge": "अपडेट"
     },
     "pasteFromClipboard": "क्लिपबोर्डवरून पेस्ट",
-    "submissionFilesOptional": "(जास्तीत जास्त {{max}} फोटो/व्हिडिओ — प्रत्येक 15 MB — किंवा एक PDF 5 MB पर्यंत)",
+    "submissionFilesOptional": "(जास्तीत जास्त {{max}} फोटो/व्हिडिओ, कोणताही आकार — किंवा एक PDF 5 MB पर्यंत)",
     "reminders": {
       "fallbackTaskTitle": "तुमचे कार्य"
     },
@@ -437,6 +437,7 @@
     "submissionRequired": "सबमिशन मजकूर द्या किंवा किमान एक प्रतिमा/व्हिडिओ अपलोड करा.",
     "imageTooLarge": "प्रतिमा किंवा व्हिडिओ खूप मोठा (जास्तीत जास्त {{max}} MB). लहान फाइल किंवा फक्त मजकूर सबमिट करा.",
     "uploadTooLarge": "अपलोड खूप मोठा. फोटो/व्हिडिओ {{max}} MB पेक्षा लहान असावेत, किंवा अॅडमिनला nginx client_max_body_size वाढवण्यास सांगा.",
+    "uploadTooLargeNginx": "सर्व्हरने अपलोड थांबवला (खूप मोठा). अॅडमिनला nginx client_max_body_size 0 (अमर्यादित) सेट करण्यास सांगा.",
     "submissionFailed": "सबमिशन अयशस्वी. कृपया पुन्हा प्रयत्न करा.",
     "fileTypesAllowed": "फक्त JPEG, PNG, GIF, WebP, MP4/WebM/MOV व्हिडिओ किंवा PDF परवानगी.",
     "fileMaxSize": "प्रत्येक फाइल {{max}} MB किंवा लहान असावी.",

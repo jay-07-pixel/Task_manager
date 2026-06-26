@@ -293,7 +293,7 @@
       "updateBadge": "Update"
     },
     "pasteFromClipboard": "Paste from clipboard",
-    "submissionFilesOptional": "(up to {{max}} photos/videos — 15 MB each — or one PDF up to 5 MB)",
+    "submissionFilesOptional": "(up to {{max}} photos/videos, any size — or one PDF up to 5 MB)",
     "reminders": {
       "fallbackTaskTitle": "Your task"
     },
@@ -437,6 +437,7 @@
     "submissionRequired": "Please provide submission text or upload at least one image or video.",
     "imageTooLarge": "Image or video is too large (max {{max}} MB). Use a smaller file or submit text only.",
     "uploadTooLarge": "Upload is too large. Photos and videos must be under {{max}} MB, or ask your admin to raise nginx client_max_body_size.",
+    "uploadTooLargeNginx": "Upload was blocked by the server (too large). Ask your admin to set nginx client_max_body_size to 0 (unlimited) and redeploy.",
     "submissionFailed": "Submission failed. Please try again.",
     "fileTypesAllowed": "Only JPEG, PNG, GIF, WebP images, MP4/WebM/MOV videos, or PDF files are allowed.",
     "fileMaxSize": "Each file must be {{max}} MB or smaller.",

@@ -253,8 +253,6 @@ function escapeHtml(s) {
 const proofBlobUrls = new Set();
 
 const EMP_SUBMISSION_TEXT_MAX = 2000;
-const EMP_SUBMISSION_MEDIA_MAX_BYTES = 15 * 1024 * 1024;
-const EMP_SUBMISSION_MEDIA_MAX_MB = 15;
 const EMP_SUBMISSION_PDF_MAX_BYTES = 5 * 1024 * 1024;
 const EMP_SUBMISSION_PDF_MAX_MB = 5;
 const EMP_SUBMISSION_MAX_IMAGES = 10;
@@ -301,14 +299,14 @@ function getProgressUpdateTypes() {
 
 function submissionUploadErrorMessage(res, rawText) {
   if (res.status === 413) {
-    return tr("validation.uploadTooLarge", { max: EMP_SUBMISSION_MEDIA_MAX_MB });
+    return tr("validation.uploadTooLargeNginx");
   }
   let data = null;
   try {
     data = rawText ? JSON.parse(rawText) : null;
   } catch {
     if (rawText && /413|entity too large/i.test(rawText)) {
-      return tr("validation.uploadTooLarge", { max: EMP_SUBMISSION_MEDIA_MAX_MB });
+      return tr("validation.uploadTooLargeNginx");
     }
     return tr("validation.submissionFailed");
   }
@@ -331,16 +329,6 @@ function isEmpSubmissionImageFile(file) {
   return /^image\/(jpeg|png|gif|webp)$/i.test(file.type);
 }
 
-function empSubmissionMaxBytesFor(file) {
-  if (isEmpSubmissionPdfFile(file)) return EMP_SUBMISSION_PDF_MAX_BYTES;
-  return EMP_SUBMISSION_MEDIA_MAX_BYTES;
-}
-
-function empSubmissionMaxMbFor(file) {
-  if (isEmpSubmissionPdfFile(file)) return EMP_SUBMISSION_PDF_MAX_MB;
-  return EMP_SUBMISSION_MEDIA_MAX_MB;
-}
-
 function validateEmpSubmissionFile(file) {
   if (!file) return null;
   const isImage = isEmpSubmissionImageFile(file);
@@ -349,9 +337,8 @@ function validateEmpSubmissionFile(file) {
   if (!isImage && !isPdf && !isVideo) {
     return tr("validation.fileTypesAllowed");
   }
-  const maxBytes = empSubmissionMaxBytesFor(file);
-  if (file.size > maxBytes) {
-    return tr("validation.fileMaxSize", { max: empSubmissionMaxMbFor(file) });
+  if (isPdf && file.size > EMP_SUBMISSION_PDF_MAX_BYTES) {
+    return tr("validation.fileMaxSize", { max: EMP_SUBMISSION_PDF_MAX_MB });
   }
   return null;
 }

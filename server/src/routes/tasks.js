@@ -32,7 +32,6 @@ const router = Router();
 const SUBMISSION_TEXT_MAX = 2000;
 const SUBMISSION_REQUIRED_MSG = "Please provide submission text or upload an image, video, or PDF.";
 const MAX_SUBMISSION_PROOFS = 10;
-const TASK_SUBMISSION_MEDIA_MAX_BYTES = 15 * 1024 * 1024;
 const TASK_SUBMISSION_PDF_MAX_BYTES = 5 * 1024 * 1024;
 const PROGRESS_UPDATE_TEXT_MAX = 2000;
 
@@ -480,14 +479,8 @@ function isProofUploadAllowed(file) {
 
 /** @param {{ mimetype: string, size: number }} file */
 function proofFileSizeError(file) {
-  if (file.mimetype === "application/pdf") {
-    if (file.size > TASK_SUBMISSION_PDF_MAX_BYTES) {
-      return "PDF files must be 5 MB or smaller.";
-    }
-    return null;
-  }
-  if (file.size > TASK_SUBMISSION_MEDIA_MAX_BYTES) {
-    return "Each photo or video must be 15 MB or smaller.";
+  if (file.mimetype === "application/pdf" && file.size > TASK_SUBMISSION_PDF_MAX_BYTES) {
+    return "PDF files must be 5 MB or smaller.";
   }
   return null;
 }
@@ -525,7 +518,6 @@ const proofUpload = multer({
       cb(null, `${req.params.id}-${uid}-${randomUUID()}${ext}`);
     },
   }),
-  limits: { fileSize: TASK_SUBMISSION_MEDIA_MAX_BYTES },
   fileFilter: (_req, file, cb) => {
     if (isProofUploadAllowed(file)) {
       cb(null, true);
@@ -560,7 +552,7 @@ function handleProofUpload(req, res, next) {
   proofUpload.fields([{ name: "proof", maxCount: MAX_SUBMISSION_PROOFS }])(req, res, (err) => {
     if (!err) return next();
     if (err.code === "LIMIT_FILE_SIZE") {
-      return res.status(400).json({ error: "Each photo or video must be 15 MB or smaller." });
+      return res.status(400).json({ error: "Upload is too large for the server." });
     }
     if (err.code === "LIMIT_UNEXPECTED_FILE" || err.code === "LIMIT_FIELD_COUNT") {
       return res.status(400).json({ error: `You can upload up to ${MAX_SUBMISSION_PROOFS} images per submission.` });

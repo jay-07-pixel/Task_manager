@@ -17,7 +17,7 @@ Admins manage lists, tasks, assignees, progress, reports, and team chat on the w
 - **Employee assignments** pinned list — tasks created or delegated between users
 - Tasks with title, description, due date/time, timezone, all-day, recurrence (including custom rules)
 - Assign one or more users per task (all registered users, including admins)
-- Per-assignee status: **Pending** / **Submitted**, progress updates, proof images/video (up to **15 MB** each) or PDF (5 MB)
+- Per-assignee status: **Pending** / **Submitted**, progress updates, proof images/video (any size) or PDF (5 MB)
 - Mark assignees done; drag-and-drop task ordering
 - **Team chat** — direct messages and groups, attachments, **voice-to-text** in compose (EN / HI / MR)
 - **Admin announcements** — in-app notification bell
@@ -318,7 +318,7 @@ FIREBASE_SERVICE_ACCOUNT_PATH="firebase-service-account.json"
 - `COOKIE_SECURE=false` on **HTTP** — required or login cookie is dropped.
 - Turnstile: add VPS hostname in Cloudflare widget domains.
 - Brevo: sender must be **verified**.
-- Nginx: `client_max_body_size 16m;` for task submission (15 MB photos/videos) and chat — see `deploy/nginx-upload-limit.conf.example`.
+- Nginx: `client_max_body_size 0;` (unlimited) for large task photo/video uploads — see `deploy/nginx-upload-limit.conf.example`.
 
 ## Troubleshooting
 
@@ -333,7 +333,7 @@ FIREBASE_SERVICE_ACCOUNT_PATH="firebase-service-account.json"
 | Session lost on HTTP | `COOKIE_SECURE=false` |
 | `500` / health `db:error` | MySQL, `DATABASE_URL`, run migrate + seed |
 | Push not received (admin) | Enable notifications in Messages; check VAPID keys |
-| Submit / chat upload **413** | Nginx `client_max_body_size 16m;` (task photos/videos up to 15 MB) |
+| Submit **413** (too large) | Set nginx `client_max_body_size 0;` and reload — run `sudo bash deploy/patch-nginx-all-sites.sh` |
 | Prisma EPERM on Windows | Stop dev server, rerun `db:generate` |
 
 ## License
