@@ -1,78 +1,121 @@
 # Task Manager (Kalpanik)
 
-A full-stack task management app for **admins** and **users** (employees). Everyone registers on the website as a user. Admins can grant or revoke **admin access**; users with admin access can sign in as **admin** or as **user** and switch anytime from the profile menu.
+Full-stack task management for **admins** and **users** (employees). Built for teams that assign work, collect proof (photos, videos, notes), chat, and get reminders on web and Android.
 
-Admins manage lists, tasks, assignees, progress, reports, and team chat on the web. Users work assigned tasks on the **website** or in the **Kalpanik Reminder** Android app (FCM reminders, alarms).
+**Production example:** [https://sugandhshoppee.kalpanik.in](https://sugandhshoppee.kalpanik.in)
+
+---
+
+## Table of contents
+
+1. [Overview](#overview)
+2. [Features](#features)
+3. [Tech stack](#tech-stack)
+4. [Local development](#local-development)
+5. [Admin access & dual login](#admin-access--dual-login)
+6. [Android app (Kalpanik Reminder)](#android-app-kalpanik-reminder)
+7. [File uploads & limits](#file-uploads--limits)
+8. [Push notifications](#push-notifications)
+9. [Internationalization](#internationalization)
+10. [Project structure](#project-structure)
+11. [API overview](#api-overview)
+12. [Production deployment (VPS)](#production-deployment-vps)
+13. [Nginx configuration](#nginx-configuration)
+14. [Troubleshooting](#troubleshooting)
+
+---
+
+## Overview
+
+| Role | Where they work | What they do |
+|------|-----------------|--------------|
+| **Admin** | Website (admin dashboard) | Lists, tasks, assignees, reports, owner dashboard, team chat, grant/revoke admin |
+| **User** | Website (user dashboard) or **Android app** | View assigned tasks, submit proof, progress updates, delegate tasks, chat |
+| **Admin + user** | Both views | Same account; switch between admin and user from profile menu |
+
+Everyone **registers as a user**. Admins are promoted via **Manage Admin** (`isAdmin` flag in the database). Promoted admins keep their user account and can still be assigned tasks.
+
+### Production VPS layout (example)
+
+| Directory on server | PM2 process | Typical domain |
+|---------------------|-------------|----------------|
+| `~/Task_manager` | `taskmanager` | `sugandhshoppee.kalpanik.in` |
+| `~/Task_manager_safari` | `safari` | safari subdomain |
+| `~/Task_manager_ss2n` | `ss2n` | `ss2n.kalpanik.in` |
+
+Each instance has its own `server/.env`, MySQL database, and nginx vhost. Code is deployed from the same GitHub repo: [jay-07-pixel/Task_manager](https://github.com/jay-07-pixel/Task_manager).
+
+---
 
 ## Features
 
-### Admin (website)
+### Admin dashboard (website)
 
-- **Admin dashboard** — KPI cards (Active, In Review, Completed, Employee Assigned), task table with filters, expandable rows (description, assignee progress, submissions)
-- **Owner dashboard** — org-wide employee performance and **per-admin task allocation** (Profile → Owner dashboard)
-- **Reports** — employee filter, stacked performance chart, late submissions table
-- **High-priority tasks** — red styling, pinned to top
-- **Push notifications** — browser push when an employee submits or completes a task (enable via Messages → Enable message notifications)
-- Multiple task lists (create, rename, reorder, delete, pin)
-- **Employee assignments** pinned list — tasks created or delegated between users
-- Tasks with title, description, due date/time, timezone, all-day, recurrence (including custom rules)
-- Assign one or more users per task (all registered users, including admins)
-- Per-assignee status: **Pending** / **Submitted**, progress updates, proof images/video (any size) or PDF (5 MB)
-- Mark assignees done; drag-and-drop task ordering
-- **Team chat** — direct messages and groups, attachments, **voice-to-text** in compose (EN / HI / MR)
-- **Admin announcements** — in-app notification bell
-- **Manage admin** — grant or revoke admin access (email notification on change)
-- **Dual login** — admins can switch to **user view** for their own assigned tasks
-- **i18n** — English, Hindi, Marathi UI; dynamic translation of task titles, descriptions, and chat
-- Light / dark theme
+- **KPI cards** — Active, In Review, Completed, Employee Assigned (click to filter)
+- **Task table** — sortable rows, expandable assignee progress, view submissions, mark assignees done
+- **High-priority tasks** — red styling, pinned to top of list
+- **Lists** — create, rename, reorder, delete, pin; **Employee assignments** list for delegated tasks
+- **Tasks** — title, description, due date/time, timezone, all-day, recurrence (daily / weekly / monthly / yearly / custom)
+- **Multi-assignee** — any registered user (including admins with user view)
+- **Per-assignee** — Pending / Submitted, progress updates (started / in progress / blocked / update), proof files
+- **Owner dashboard** — org-wide employee performance + per-admin task allocation (Profile → Owner dashboard)
+- **Reports** — employee filter, performance chart, late submissions table
+- **Team chat** — DMs, groups, file attachments, voice-to-text (EN / HI / MR)
+- **Push alerts** — browser notification when an employee submits or completes a task
+- **Admin announcements** — in-app bell for feature updates
+- **Manage admin** — promote / revoke admin (email sent via Brevo)
+- **Theme** — light / dark
+- **Languages** — English, Hindi, Marathi (+ dynamic translation of task/chat content)
 
-### User / employee (website)
+### User dashboard (website)
 
-- **Register** on the website (OTP + CAPTCHA)
-- **User dashboard** — assigned tasks, submit work (notes + proof), progress updates, delegate to colleagues, create & assign tasks
-- **Overdue** label — “Overdue by X days” on late tasks
-- **Team chat** with voice-to-text
-- **Switch to admin view** when the account has admin access
-- APK download link in profile for the Android app
-
-### Android app (Kalpanik Reminder)
-
-- Assigned tasks, completion, proof upload, FCM reminders/alarms (same backend APIs)
-- APK: `client/public/downloads/sugandh-reminder.apk` (copied to `client/dist` on build via `npm run sync-apk`)
+- Assigned tasks with filters (active / submitted / all / assigned-by-me)
+- Submit notes + proof (images, videos, PDF)
+- Progress updates and delegate tasks to colleagues
+- **Overdue** badge — “Overdue by X days”
+- Team chat + voice-to-text
+- Download **Kalpanik Reminder** APK from profile menu
+- **Switch to admin view** if account has admin access
 
 ### Auth & registration
 
-- Email + password sign-in
-- **Registration:** CAPTCHA → **Send OTP** → verify → **Create account** (always creates a **user** account)
-- **Cloudflare Turnstile** verified server-side before OTP (rate-limited)
-- **Email OTP** via **Brevo** (6-digit, 10-minute expiry)
-- Phone: **10 digits** on register
-- First bootstrap admin: only if no admin exists yet (`isAdmin` flag)
-- Session-based API auth (cookie); active view stored as `owner` (admin) or `employee` (user) in session
+1. Display name, email, phone (10 digits), password
+2. Cloudflare **Turnstile** CAPTCHA
+3. **Send OTP** → verify 6-digit email code (Brevo)
+4. **Create account** → user role (`isAdmin: false`)
+5. First-ever bootstrap: only when no admin exists, first registrant can become admin
+
+Session cookie auth. Active UI mode: `owner` (admin) or `employee` (user) via `POST /api/auth/switch-role`.
+
+---
 
 ## Tech stack
 
-| Layer    | Stack |
-|----------|--------|
-| Frontend | Vite 6, Bootstrap 5, Sass, SortableJS, Inter, Material Symbols Outlined |
-| Backend  | Node.js, Express, Zod |
-| Database | MySQL, Prisma ORM |
-| Auth     | `express-session` + file store |
-| Email    | Brevo Transactional API |
-| CAPTCHA  | Cloudflare Turnstile |
-| Push     | Firebase Cloud Messaging (Android) + `web-push` / VAPID (browser) |
-| Realtime | Server-Sent Events for team chat |
-| i18n     | Client locales + `POST /api/translate` (MyMemory + Google fallback) |
+| Layer | Technology |
+|-------|------------|
+| Frontend | Vite 6, Bootstrap 5, Sass, SortableJS, Inter, Material Symbols |
+| Backend | Node.js, Express, Zod |
+| Database | MySQL 8+, Prisma ORM |
+| Auth | `express-session` + file store |
+| Email OTP | Brevo Transactional API |
+| CAPTCHA | Cloudflare Turnstile |
+| Browser push | `web-push` + VAPID |
+| Android push | Firebase Cloud Messaging (FCM) |
+| Chat realtime | Server-Sent Events (SSE) |
+| Translation | `POST /api/translate` (MyMemory + Google fallback) |
+| Android app | Kotlin/Java — separate repo `SugandhReminder` |
 
-## Prerequisites
+---
 
-- **Node.js** 18+ (20+ recommended)
-- **MySQL** 8+
+## Local development
+
+### Prerequisites
+
+- Node.js 18+ (20+ recommended)
+- MySQL 8+
 - npm
-- [Brevo](https://www.brevo.com) (registration OTP)
-- [Cloudflare Turnstile](https://dash.cloudflare.com/?to=/:account/turnstile) (registration CAPTCHA)
-
-## Quick start
+- Brevo account (OTP emails)
+- Cloudflare Turnstile site (registration CAPTCHA)
 
 ### 1. Clone and install
 
@@ -84,44 +127,46 @@ npm install --prefix server
 npm install --prefix client
 ```
 
-### 2. Database and environment
-
-Create a MySQL database (example: `taskmanager`).
+### 2. Environment
 
 ```bash
 cp server/.env.example server/.env
 ```
 
-Edit `server/.env` — minimum:
+Minimum `server/.env`:
 
 ```env
 DATABASE_URL="mysql://USER:PASSWORD@localhost:3306/taskmanager"
 SESSION_SECRET="change-this-to-a-long-random-string"
 ```
 
-**Registration (recommended):**
+Recommended for registration:
 
 ```env
 BREVO_API_KEY="xkeysib-..."
 BREVO_SENDER_NAME="Task Manager"
 BREVO_SENDER_EMAIL="verified-sender@yourdomain.com"
-
 TURNSTILE_SITE_KEY="your-site-key"
 TURNSTILE_SECRET_KEY="your-secret-key"
 ```
 
 | Variable | Purpose |
 |----------|---------|
-| `BREVO_*` | OTP emails. Without Brevo in dev, OTP prints in the API console. |
-| `TURNSTILE_*` | CAPTCHA before Send OTP. Add hostname in Turnstile dashboard. |
-| `COOKIE_SECURE` | `false` for HTTP VPS; `true` for HTTPS. |
-| `PORT` | API port (default **3000**). |
-| `VAPID_*` | Browser Web Push (chat + admin task-completion alerts). |
-| `FIREBASE_SERVICE_ACCOUNT_*` | Android FCM. |
+| `DATABASE_URL` | MySQL connection string |
+| `SESSION_SECRET` | Session signing key |
+| `COOKIE_SECURE` | `false` on HTTP VPS; `true` on HTTPS |
+| `PORT` | API port (default `3000`) |
+| `BREVO_*` | Registration OTP emails (dev: OTP logged to console if missing) |
+| `TURNSTILE_*` | Registration CAPTCHA |
+| `VAPID_*` | Browser Web Push (chat + admin task alerts) |
+| `FIREBASE_SERVICE_ACCOUNT_PATH` | Android FCM + scheduled reminders |
+| `APP_PUBLIC_URL` | Link in admin promotion emails (e.g. `https://sugandhshoppee.kalpanik.in`) |
+| `TRUST_PROXY` | `true` behind nginx |
+| `CLIENT_ORIGIN` | Extra CORS origins if UI/API split |
 
-**Local Turnstile test keys** (always pass): site `1x00000000000000000000AA`, secret `1x0000000000000000000000000000000AA`.
+**Turnstile test keys** (always pass): site `1x00000000000000000000AA`, secret `1x0000000000000000000000000000000AA`.
 
-### 3. Migrate and seed
+### 3. Database
 
 ```bash
 npm run db:generate --prefix server
@@ -129,69 +174,158 @@ npm run db:migrate --prefix server
 npm run db:seed --prefix server
 ```
 
-### 4. Run in development
+### 4. Run
 
 ```bash
 npm run dev
 ```
 
-- **Web UI:** http://localhost:5173 (Vite proxies `/api` to the API)
-- **API:** http://localhost:3000
+| URL | Purpose |
+|-----|---------|
+| http://localhost:5173 | Vite dev UI (proxies `/api` → API) |
+| http://localhost:3000 | API + built `client/dist` in production mode |
 
-Use **localhost:5173** during development. Port **3000** serves built `client/dist` only after `npm run build`.
+Use **5173** during development for the latest UI.
 
 ### Demo accounts (after seed)
 
-| Account | Email                  | Password      | Notes |
-|---------|------------------------|---------------|-------|
-| Admin   | `owner@local.test`     | `password123` | `isAdmin`; opens admin dashboard by default |
-| User    | `employee1@local.test` | `password123` | Assigned sample daily task |
-| User    | `employee2@local.test` | `password123` | |
+| Account | Email | Password | Notes |
+|---------|-------|----------|-------|
+| Admin | `owner@local.test` | `password123` | `isAdmin: true` |
+| User | `employee1@local.test` | `password123` | Sample daily task assigned |
+| User | `employee2@local.test` | `password123` | |
+
+### npm scripts
+
+**Root**
+
+| Script | Description |
+|--------|-------------|
+| `npm run dev` | API + Vite together |
+| `npm run build` | Production client → `client/dist` |
+| `npm run sync-apk` | Copy Android APK → `client/public/downloads/` |
+| `npm run start` | Build client + start API (`NODE_ENV=production`) |
+| `npm run deploy` | Install deps, `db:generate`, build — before VPS restart |
+
+**Server** (`server/`): `dev`, `start`, `db:generate`, `db:migrate`, `db:migrate:deploy`, `db:seed`, `vapid:generate`
+
+**Client** (`client/`): `dev`, `build`, `preview`
+
+---
 
 ## Admin access & dual login
 
-| Action | How |
-|--------|-----|
-| Register | Everyone becomes a **user** (`role: employee`, `isAdmin: false`) |
-| Grant admin | Admin → Profile → **Manage Admin** → **Make admin** |
-| Revoke admin | Same modal → **Revoke** (cannot revoke the last admin or yourself) |
-| Sign in with both roles | On first login, pick **Admin dashboard** or **My tasks (user)**; choice is remembered |
-| Switch later | Profile menu → **Switch to user view** / **Switch to admin view** |
+| Action | Steps |
+|--------|--------|
+| Register | Always creates a **user** (`role: employee`, `isAdmin: false`) |
+| Grant admin | Profile → **Manage Admin** → **Make admin** |
+| Revoke admin | Same modal → **Revoke** (not yourself; not the last admin) |
+| First login (admin) | Picker: **Admin dashboard** or **My tasks (user)** — saved in browser |
+| Switch anytime | Profile → **Switch to admin view** / **Switch to user view** |
 
-Promoted admins **keep** their user account — they can still be assigned tasks and submit work in user view.
+API: `POST /api/auth/switch-role` with `{ "role": "owner" | "employee" }`.
 
-## npm scripts
+Promoted admins remain assignable as users and can submit tasks from user view or the Android app.
 
-### Root
+---
 
-| Script | Description |
-|--------|-------------|
-| `npm run dev` | API + Vite dev servers |
-| `npm run build` | Production client build → `client/dist` |
-| `npm run sync-apk` | Copy Android APK → `client/dist/downloads/` |
-| `npm run start` | Rebuild client, start API (`NODE_ENV=production`) |
-| `npm run deploy` | `npm install` (server), `db:generate`, `build` — before VPS restart |
+## Android app (Kalpanik Reminder)
 
-### Server (`server/`)
+Separate project: `AndroidStudioProjects/SugandhReminder`  
+Package: `in.kalpanik.sugandhreminder`
 
-| Script | Description |
-|--------|-------------|
-| `npm run dev` | API with file watch |
-| `npm run start` | API (production) |
-| `npm run db:generate` | Generate Prisma client |
-| `npm run db:migrate` | Apply migrations (local) |
-| `npm run db:migrate:deploy` | Apply migrations on production VPS |
-| `npm run db:push` | Push schema to DB |
-| `npm run db:seed` | Seed demo users and sample data |
-| `npm run vapid:generate` | Generate VAPID keys for browser push |
+### What the app does
 
-### Client (`client/`)
+- Login with same email/password as website
+- View assigned tasks, submit completion proof (large photos/videos supported when nginx allows)
+- FCM reminders and alarms
+- Uses same API as web (`/api/tasks/assigned`, `/api/tasks/:id/completion-proof`, etc.)
 
-| Script | Description |
-|--------|-------------|
-| `npm run dev` | Vite dev server |
-| `npm run build` | Build static assets |
-| `npm run preview` | Preview production build |
+### Build APK (Windows)
+
+```powershell
+cd C:\Users\jayjo\AndroidStudioProjects\SugandhReminder
+.\gradlew.bat assembleDebug
+```
+
+Output: `app\build\outputs\apk\debug\app-debug.apk`
+
+### Publish APK to website
+
+```powershell
+cd "C:\Users\jayjo\OneDrive\Desktop\Task Manager"
+npm run sync-apk
+npm run build --prefix client
+git add client/public/downloads/sugandh-reminder.apk
+git commit -m "Update Kalpanik Reminder APK for employee download."
+git push origin main
+```
+
+`npm run sync-apk` copies from the default Android build path (override with `APK_SOURCE` env var).  
+Vite copies `client/public/downloads/` into `client/dist/downloads/` on build.
+
+### Users install the app
+
+1. Open **https://sugandhshoppee.kalpanik.in** (or your deployed URL)
+2. Sign in → profile menu → **Download app (APK)**
+3. Or direct link: **/downloads/sugandh-reminder.apk**
+4. Allow “Install unknown apps” on Android if prompted
+
+### Sideload via USB (dev)
+
+```powershell
+adb install -r "C:\Users\jayjo\AndroidStudioProjects\SugandhReminder\app\build\outputs\apk\debug\app-debug.apk"
+```
+
+---
+
+## File uploads & limits
+
+| Context | Photos / videos | PDF | Notes |
+|---------|-----------------|-----|-------|
+| **Task submission** (web + Android) | **No app size limit** | 5 MB max | Up to 10 files per submit (images/videos) or one PDF alone |
+| **Team chat** | 5 MB | 5 MB | Any file type |
+
+Server stores proofs in `server/uploads/completion-proofs/`, chat files in `server/uploads/chat/`.
+
+**Important:** Large uploads can still fail with **HTTP 413** if **nginx** `client_max_body_size` is too small. See [Nginx configuration](#nginx-configuration).
+
+---
+
+## Push notifications
+
+### Admin — task submitted / completed
+
+When an employee submits work, all admins with browser push enabled get an alert.
+
+1. Admin → **Messages** → **Enable message notifications**
+2. Requires `VAPID_*` in `server/.env` (`npm run vapid:generate --prefix server`)
+
+### User — due reminders
+
+Server scheduler (~every 60s):
+
+- ~10 minutes before due
+- +1 hour follow-up if not submitted
+
+Delivery: **FCM** (Android) and/or **Web Push** (browser). Requires Firebase service account in `.env`.
+
+### Test FCM (browser console, logged in)
+
+```javascript
+fetch("/api/push/test", { method: "POST", credentials: "include" }).then((r) => r.json()).then(console.log);
+```
+
+---
+
+## Internationalization
+
+- UI strings: `client/src/locales/en.json`, `hi.json`, `mr.json`
+- Language selector in header
+- Dynamic content (task titles, descriptions, chat): `POST /api/translate` with `{ texts, to: "en"|"hi"|"mr" }`
+- Chat voice-to-text: EN / HI / MR via Web Speech API
+
+---
 
 ## Project structure
 
@@ -199,88 +333,68 @@ Promoted admins **keep** their user account — they can still be assigned tasks
 Task Manager/
 ├── client/
 │   ├── src/
-│   │   ├── main.js                 # Admin/user UI, dashboards, modals
-│   │   ├── adminReports.js         # Reports + owner dashboard
-│   │   ├── adminAnnouncements.js   # In-app admin bell
-│   │   ├── chat.js                 # Team chat (DM + groups)
-│   │   ├── chatSpeechToText.js     # Voice-to-text in chat
-│   │   ├── reminders.js            # In-tab employee reminders
-│   │   ├── sw-register.js          # Web Push subscribe
-│   │   ├── i18n/                   # Locales + content translation
+│   │   ├── main.js              # Admin + user UI, dashboards, modals
+│   │   ├── adminReports.js      # Reports + owner dashboard
+│   │   ├── adminAnnouncements.js
+│   │   ├── chat.js              # Team chat (DM + groups)
+│   │   ├── chatSpeechToText.js
+│   │   ├── reminders.js
+│   │   ├── sw-register.js       # Web Push subscribe
+│   │   ├── i18n/                # Locales + content translation
 │   │   └── scss/
-│   │       ├── styles.scss
-│   │       ├── _admin-mockup.scss
-│   │       └── _admin-reports.scss
 │   ├── public/
-│   │   ├── icons/
-│   │   ├── downloads/              # sugandh-reminder.apk
-│   │   ├── sw.js                   # Service worker (push)
-│   │   └── alarm.html
-│   └── dist/                       # Built assets (not in git)
+│   │   ├── downloads/sugandh-reminder.apk
+│   │   ├── sw.js                # Service worker (push)
+│   │   └── icons/
+│   └── dist/                    # Build output (not in git)
 ├── server/
-│   ├── prisma/
-│   │   ├── schema.prisma
-│   │   ├── seed.js
-│   │   └── migrations/
+│   ├── prisma/schema.prisma
 │   ├── src/
-│   │   ├── index.js
-│   │   ├── routes/                 # auth, lists, tasks, users, push, chat, reports, translate, support
-│   │   ├── services/               # FCM, chat notify, task-completion notify
-│   │   └── lib/                    # mail, otp, turnstile, push, adminUsers, contentTranslate
+│   │   ├── routes/              # auth, lists, tasks, users, push, chat, reports, translate, support
+│   │   ├── services/            # FCM, chat notify, task-completion notify
+│   │   ├── middleware/
+│   │   └── lib/                 # mail, otp, turnstile, push, adminUsers, recurrence, …
 │   ├── uploads/
 │   └── sessions/
-├── scripts/
-│   └── sync-apk.mjs
+├── scripts/sync-apk.mjs
 ├── deploy/
-│   └── nginx-upload-limit.conf.example
+│   ├── nginx-upload-limit.conf.example
+│   └── patch-nginx-all-sites.sh
 └── package.json
 ```
 
+---
+
 ## API overview
 
-All JSON routes are under `/api`. Authenticated routes use the session cookie (`credentials: include`).
+Base path: `/api`. Authenticated routes use session cookie (`credentials: "include"`).
 
-| Area | Endpoints |
-|------|-----------|
-| Auth | `POST /api/auth/login`, `register`, `logout`, `GET /me`, `POST /switch-role` |
-| Auth OTP | `GET /turnstile-site-key`, `POST /send-otp`, `POST /verify-otp`, forgot-password |
-| Lists | `GET/POST /api/lists`, `PATCH /api/lists/:id`, reorder |
-| Tasks | Lists CRUD, `PATCH /api/tasks/:id`, progress updates, completion proof, reorder |
-| Users | `GET /assignees`, `GET /team`, `PATCH /:id/role` (grant/revoke admin) |
-| Reports | `GET /api/reports/...` (summary, employee performance, owner dashboard) |
-| Translate | `POST /api/translate` — `{ texts, to: "en"\|"hi"\|"mr" }` |
-| Push | VAPID key, subscribe, device register, test |
-| Chat | Threads, messages, groups, SSE stream, attachments |
-| Support | `POST /api/support/contact` |
+| Area | Key endpoints |
+|------|----------------|
+| **Auth** | `POST /login`, `/register`, `/logout`, `GET /me`, `POST /switch-role` |
+| **OTP** | `GET /turnstile-site-key`, `POST /send-otp`, `/verify-otp`, forgot-password |
+| **Lists** | `GET/POST /lists`, `PATCH /lists/:id`, reorder |
+| **Tasks** | `GET /tasks/lists/:listId`, `POST` create, `PATCH /tasks/:id`, progress updates, `POST /tasks/:id/completion-proof`, reorder |
+| **Users** | `GET /assignees`, `GET /team`, `PATCH /users/:id/role` |
+| **Reports** | `GET /reports/...` (summary, employee performance, owner dashboard) |
+| **Translate** | `POST /translate` |
+| **Push** | VAPID key, subscribe, `POST /push/devices/register`, test |
+| **Chat** | contacts, threads, messages, groups, SSE `/chat/live`, attachments |
+| **Support** | `POST /support/contact` |
+| **Health** | `GET /health` |
 
-`GET /api/health` — health check (database connectivity).
+---
 
-## Push notifications
+## Production deployment (VPS)
 
-### Admin — task submitted / completed
-
-When an employee submits work, all admins with browser push enabled receive a notification. Enable once: **Messages → Enable message notifications** (same as chat). Requires `VAPID_*` in `server/.env`.
-
-### User — due reminders
-
-Server scheduler (~every 60s): ~10 min before due, +1 h follow-up if not submitted. Channels: **FCM** (Android) and/or **Web Push** (browser).
+### Health check
 
 ```bash
-npm run vapid:generate --prefix server   # browser push
-# FIREBASE_SERVICE_ACCOUNT_PATH for Android
+curl -s http://localhost:3000/api/health
+# Expect: "db":"connected"
 ```
 
-### Test FCM (logged in)
-
-```javascript
-fetch("/api/push/test", { method: "POST", credentials: "include" }).then((r) => r.json()).then(console.log);
-```
-
-## Deployed server (VPS)
-
-**Health:** `http://YOUR_HOST:3000/api/health` → `"db":"connected"`
-
-### Production deploy (all instances)
+### Deploy all instances
 
 ```bash
 for dir in Task_manager Task_manager_safari Task_manager_ss2n; do
@@ -292,14 +406,20 @@ done
 pm2 restart taskmanager && pm2 restart safari && pm2 restart ss2n
 ```
 
-**`client/dist` is not in git.** Always run `npm run build` after `git pull`.
+`client/dist` is **not** in git — always run `npm run build` after `git pull`.
 
-### `server/.env` checklist
+### After pushing a new APK
+
+Same deploy loop above; the APK lives in `client/public/downloads/` and is copied to `client/dist/downloads/` during build.
+
+### `server/.env` checklist (production)
 
 ```env
 DATABASE_URL="mysql://USER:PASS@localhost:3306/taskmanager"
 SESSION_SECRET="long-random-string"
 COOKIE_SECURE=false
+TRUST_PROXY=true
+APP_PUBLIC_URL="https://sugandhshoppee.kalpanik.in"
 
 BREVO_API_KEY="xkeysib-..."
 BREVO_SENDER_NAME="Task Manager"
@@ -315,27 +435,97 @@ VAPID_SUBJECT="mailto:admin@yourdomain.com"
 FIREBASE_SERVICE_ACCOUNT_PATH="firebase-service-account.json"
 ```
 
-- `COOKIE_SECURE=false` on **HTTP** — required or login cookie is dropped.
-- Turnstile: add VPS hostname in Cloudflare widget domains.
-- Brevo: sender must be **verified**.
-- Nginx: `client_max_body_size 0;` (unlimited) for large task photo/video uploads — see `deploy/nginx-upload-limit.conf.example`.
+- `COOKIE_SECURE=false` on **HTTP** only; use `true` on HTTPS.
+- Turnstile: add every hostname (e.g. `sugandhshoppee.kalpanik.in`) in Cloudflare dashboard.
+- Brevo sender email must be verified.
+
+---
+
+## Nginx configuration
+
+Nginx sits in front of Node/PM2. Default limit is **1 MB** — large task uploads will return **413 Request Entity Too Large**.
+
+### Required: unlimited body size for task uploads
+
+In each **active** site config (not `.bak` files), inside `server { }`:
+
+```nginx
+client_max_body_size 0;
+```
+
+`0` = unlimited in nginx.
+
+### Sites to check on this server
+
+| Config file | Domain | Notes |
+|-------------|--------|-------|
+| `/etc/nginx/sites-enabled/sugandhshoppe` | `sugandhshoppee.kalpanik.in` | **Main production** — often still `6m` if not fixed |
+| `/etc/nginx/sites-enabled/safari` | safari subdomain | Check limit |
+| `/etc/nginx/sites-enabled/kalpanik` | `kalpanik.in` | May proxy different port |
+| `/etc/nginx/sites-enabled/ss2n` | `ss2n.kalpanik.in` | Preview / staging |
+
+### Fix sugandhshoppee (one-liner)
+
+```bash
+sudo sed -i 's/client_max_body_size 6m/client_max_body_size 0/g' /etc/nginx/sites-enabled/sugandhshoppe
+sudo sed -i 's/client_max_body_size 11m/client_max_body_size 0/g' /etc/nginx/sites-available/sugandhshoppe
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+Verify:
+
+```bash
+sudo grep client_max_body_size /etc/nginx/sites-enabled/sugandhshoppe
+```
+
+### Patch script (SSE + upload limit for sites with `location /api/`)
+
+```bash
+cd ~/Task_manager && git pull origin main
+sudo bash deploy/patch-nginx-all-sites.sh
+```
+
+**Note:** This script only auto-patches vhosts that contain `location /api/`. **`sugandhshoppee` may need the manual `sed` above.** Do not keep `*.bak*` files in `sites-enabled/` — move them to `/etc/nginx/backup-configs/`.
+
+### Chat SSE + video byte ranges
+
+The patch script installs `/etc/nginx/snippets/taskmgr-api-proxy.conf` inside `location /api/` blocks (disables buffering for SSE, passes Range headers for video playback).
+
+### Upload size reference
+
+See `deploy/nginx-upload-limit.conf.example`.
+
+---
 
 ## Troubleshooting
 
-| Issue | What to try |
+| Issue | Cause / fix |
 |-------|-------------|
 | `401` on `/api/auth/me` before login | Normal — not signed in |
-| `401` on login | Wrong credentials or user not seeded |
-| `403` on register | OTP not verified first |
-| `503` on turnstile-site-key | Add Turnstile keys to `.env`, restart API |
-| No OTP email | Check Brevo; in dev read API console |
-| Old UI after deploy | `npm run build`; hard-refresh (`Ctrl+Shift+R`) |
-| Session lost on HTTP | `COOKIE_SECURE=false` |
-| `500` / health `db:error` | MySQL, `DATABASE_URL`, run migrate + seed |
-| Push not received (admin) | Enable notifications in Messages; check VAPID keys |
-| Submit **413** (too large) | Set nginx `client_max_body_size 0;` and reload — run `sudo bash deploy/patch-nginx-all-sites.sh` |
-| Prisma EPERM on Windows | Stop dev server, rerun `db:generate` |
+| `401` on login | Wrong password or user not seeded on this server |
+| `403` on register | Complete OTP verify before Create account |
+| `413` on task submit (Android/web) | Nginx `client_max_body_size` too small — set `0` on **sugandhshoppe** vhost |
+| `413` only on large files (~20 MB+) | Same — production was `6m`, file was ~21 MB |
+| Old UI after deploy | `npm run build`; hard-refresh `Ctrl+Shift+R` |
+| Session lost on HTTP | `COOKIE_SECURE=false` in `.env` |
+| `500` / health `db:error` | MySQL down, wrong `DATABASE_URL`, or run migrate |
+| No OTP email | Brevo keys / verified sender; dev: read API console |
+| Turnstile fails | Add site hostname in Cloudflare Turnstile |
+| Admin push not received | Messages → Enable notifications; set VAPID keys |
+| nginx “conflicting server name” | Remove `*.bak*` from `sites-enabled/` |
+| Prisma EPERM (Windows) | Stop dev server; rerun `db:generate` |
+| Chat upload 413 | Chat limit 5 MB in app; nginx must allow at least that |
+| APK download 404 | Run `npm run sync-apk` + `npm run build`; redeploy VPS |
+
+### Confirm nginx is not blocking (should return 401, not 413)
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" -X POST \
+  https://sugandhshoppee.kalpanik.in/api/tasks/test/completion-proof
+```
+
+---
 
 ## License
 
-Private / educational use unless you add a license file.
+Private / educational use unless a license file is added.
