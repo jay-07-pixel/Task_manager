@@ -9,13 +9,14 @@ async function main() {
 
   const owner = await prisma.user.upsert({
     where: { email: "owner@local.test" },
-    update: { phone: "5550100100" },
+    update: { phone: "5550100100", isAdmin: true },
     create: {
       email: "owner@local.test",
       passwordHash,
       displayName: "Owner User",
       phone: "5550100100",
       role: "owner",
+      isAdmin: true,
     },
   });
 

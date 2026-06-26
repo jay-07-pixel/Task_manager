@@ -19,8 +19,28 @@ import {
   PASSWORD_RESET_WINDOW_MS,
   OTP_LENGTH,
 } from "../lib/otp.js";
+import { adminUserWhere, userHasAdminAccess } from "../lib/adminUsers.js";
 
 const router = Router();
+
+function serializeSessionUser(user, activeRole) {
+  const isAdmin = userHasAdminAccess(user);
+  return {
+    id: user.id,
+    email: user.email,
+    displayName: user.displayName,
+    phone: user.phone,
+    isAdmin,
+    role: activeRole,
+  };
+}
+
+function resolveActiveRole(user, viewAs) {
+  const isAdmin = userHasAdminAccess(user);
+  if (!isAdmin) return "employee";
+  if (viewAs === "employee" || viewAs === "owner") return viewAs;
+  return "owner";
+}
 
 const sendOtpLimiter = createRateLimiter({ max: 15, windowMs: 15 * 60 * 1000, keyPrefix: "send-otp" });
 const verifyOtpLimiter = createRateLimiter({ max: 30, windowMs: 15 * 60 * 1000, keyPrefix: "verify-otp" });
@@ -273,35 +293,39 @@ router.post("/register", async (req, res) => {
   }
 
   if (role === "owner") {
-    const hasOwner = await prisma.user.findFirst({ where: { role: "owner" } });
-    if (hasOwner) {
-      return res.status(403).json({ error: "Owner already exists; register as employee or ask an owner." });
+    const hasAdmin = await prisma.user.findFirst({ where: adminUserWhere });
+    if (hasAdmin) {
+      return res.status(403).json({ error: "An admin already exists; register as a user or ask an admin for access." });
     }
   }
 
   const passwordHash = await bcrypt.hash(password, 10);
+  const bootstrapAdmin = role === "owner";
   const user = await prisma.user.create({
     data: {
       email: normalizedEmail,
       passwordHash,
       displayName,
       phone: phone.trim(),
-      role: role ?? "employee",
+      role: "employee",
+      isAdmin: bootstrapAdmin,
     },
-    select: { id: true, email: true, displayName: true, phone: true, role: true },
+    select: { id: true, email: true, displayName: true, phone: true, role: true, isAdmin: true },
   });
 
   await prisma.emailVerification.deleteMany({ where: { email: normalizedEmail } }).catch(() => {});
   delete req.session.otpVerifiedEmail;
 
+  const activeRole = resolveActiveRole(user, bootstrapAdmin ? "owner" : "employee");
   req.session.userId = user.id;
-  req.session.role = user.role;
-  res.status(201).json({ user });
+  req.session.role = activeRole;
+  res.status(201).json({ user: serializeSessionUser(user, activeRole) });
 });
 
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string(),
+  viewAs: z.enum(["owner", "employee"]).optional(),
 });
 
 router.post("/login", async (req, res) => {
@@ -310,22 +334,15 @@ router.post("/login", async (req, res) => {
     if (!parsed.success) {
       return res.status(400).json({ error: "Invalid credentials" });
     }
-    const { email, password } = parsed.data;
+    const { email, password, viewAs } = parsed.data;
     const user = await prisma.user.findUnique({ where: { email: normalizeEmail(email) } });
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
       return res.status(401).json({ error: "Invalid email or password" });
     }
+    const activeRole = resolveActiveRole(user, viewAs);
     req.session.userId = user.id;
-    req.session.role = user.role;
-    res.json({
-      user: {
-        id: user.id,
-        email: user.email,
-        displayName: user.displayName,
-        phone: user.phone,
-        role: user.role,
-      },
-    });
+    req.session.role = activeRole;
+    res.json({ user: serializeSessionUser(user, activeRole) });
   } catch (err) {
     console.error("[auth/login]", err);
     res.status(500).json({ error: friendlyAuthError(err) });
@@ -571,15 +588,46 @@ router.post("/logout", (req, res) => {
   });
 });
 
-router.get("/me", requireAuth, async (req, res) => {
+const switchRoleSchema = z.object({
+  role: z.enum(["owner", "employee"]),
+});
+
+router.post("/switch-role", requireAuth, async (req, res) => {
+  const parsed = switchRoleSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid role. Use owner or employee." });
+  }
+
   const user = await prisma.user.findUnique({
     where: { id: req.session.userId },
-    select: { id: true, email: true, displayName: true, phone: true, role: true },
+    select: { id: true, email: true, displayName: true, phone: true, role: true, isAdmin: true },
   });
   if (!user) {
     return res.status(401).json({ error: "Not found" });
   }
-  res.json({ user });
+
+  const nextRole = parsed.data.role;
+  if (nextRole === "owner" && !userHasAdminAccess(user)) {
+    return res.status(403).json({ error: "You do not have admin access." });
+  }
+
+  req.session.role = nextRole;
+  res.json({ user: serializeSessionUser(user, nextRole) });
+});
+
+router.get("/me", requireAuth, async (req, res) => {
+  const user = await prisma.user.findUnique({
+    where: { id: req.session.userId },
+    select: { id: true, email: true, displayName: true, phone: true, role: true, isAdmin: true },
+  });
+  if (!user) {
+    return res.status(401).json({ error: "Not found" });
+  }
+  const activeRole = req.session.role === "owner" && userHasAdminAccess(user) ? "owner" : "employee";
+  if (req.session.role !== activeRole) {
+    req.session.role = activeRole;
+  }
+  res.json({ user: serializeSessionUser(user, activeRole) });
 });
 
 export default router;

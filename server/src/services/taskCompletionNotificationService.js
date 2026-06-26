@@ -2,6 +2,7 @@ import { prisma } from "../lib/prisma.js";
 import { isPushConfigured, sendPushToSubscription } from "../lib/push.js";
 import { sendFcmDataMessage } from "../lib/fcm.js";
 import { getEmployeeDevicesForUser } from "./fcmPushService.js";
+import { adminUserWhere } from "../lib/adminUsers.js";
 
 const LOG = "[task-complete-notify]";
 
@@ -34,7 +35,7 @@ export async function notifyAdminsTaskSubmitted({
   allAssigneesDone,
 }) {
   const admins = await prisma.user.findMany({
-    where: { role: "owner", id: { not: employeeId } },
+    where: { AND: [adminUserWhere, { id: { not: employeeId } }] },
     select: { id: true },
   });
   if (!admins.length) return;

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../lib/prisma.js";
 import { requireOwner } from "../middleware/auth.js";
+import { adminUserWhere } from "../lib/adminUsers.js";
 
 const router = Router();
 
@@ -109,7 +110,7 @@ function bucketForDate(date, period) {
 
 async function orgOwnerIds() {
   const owners = await prisma.user.findMany({
-    where: { role: "owner" },
+    where: adminUserWhere,
     select: { id: true },
     orderBy: { createdAt: "asc" },
   });

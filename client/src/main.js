@@ -43,6 +43,7 @@ import { languageSelectorHtml, wireLanguageSelector } from "./i18n/languageSelec
 
 const app = document.getElementById("app");
 const toastHost = document.getElementById("toastHost");
+const ACCOUNT_VIEW_PREF_KEY = "taskmgr-account-view";
 
 /** @type {any} */
 let state = {
@@ -395,6 +396,85 @@ async function refreshMe() {
     state.user = null;
     return false;
   }
+}
+
+async function switchAccountView(role) {
+  const { user } = await api("/api/auth/switch-role", {
+    method: "POST",
+    body: JSON.stringify({ role }),
+  });
+  state.user = user;
+  localStorage.setItem(ACCOUNT_VIEW_PREF_KEY, role);
+  stopOwnerAutoSync();
+  stopEmployeeReminders();
+  stopChatPolling();
+  await render();
+}
+
+function accountViewPickerModalHtml() {
+  return `
+    <div class="modal fade" id="accountViewPickerModal" tabindex="-1" aria-labelledby="accountViewPickerTitle" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <div class="modal-header border-0 pb-0">
+            <h2 class="modal-title h5" id="accountViewPickerTitle">${tr("modals.accountViewPickerTitle")}</h2>
+          </div>
+          <div class="modal-body pt-2">
+            <p class="small text-muted mb-4">${tr("modals.accountViewPickerIntro")}</p>
+            <div class="d-grid gap-2">
+              <button type="button" class="btn btn-primary js-account-view-pick" data-view-role="owner">
+                ${adminMsIcon("admin_panel_settings")}
+                <span class="ms-1">${tr("modals.openAsAdmin")}</span>
+              </button>
+              <button type="button" class="btn btn-outline-primary js-account-view-pick" data-view-role="employee">
+                ${adminMsIcon("task_alt")}
+                <span class="ms-1">${tr("modals.openAsUser")}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function ensureAccountViewPickerModal() {
+  if (document.getElementById("accountViewPickerModal")) return;
+  document.body.insertAdjacentHTML("beforeend", accountViewPickerModalHtml());
+  document.querySelectorAll("#accountViewPickerModal .js-account-view-pick").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const role = btn.getAttribute("data-view-role");
+      if (role !== "owner" && role !== "employee") return;
+      localStorage.setItem(ACCOUNT_VIEW_PREF_KEY, role);
+      const modalEl = document.getElementById("accountViewPickerModal");
+      bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+      void switchAccountView(role);
+    });
+  });
+}
+
+function showAccountViewPickerModal() {
+  ensureAccountViewPickerModal();
+  const modalEl = document.getElementById("accountViewPickerModal");
+  if (!modalEl) return;
+  bootstrap.Modal.getOrCreateInstance(modalEl).show();
+}
+
+async function applyAccountViewAfterAuth() {
+  if (!state.user?.isAdmin) return true;
+  ensureAccountViewPickerModal();
+  const pref = localStorage.getItem(ACCOUNT_VIEW_PREF_KEY);
+  if (!pref) {
+    showAccountViewPickerModal();
+    return false;
+  }
+  if (pref !== state.user.role) {
+    const { user } = await api("/api/auth/switch-role", {
+      method: "POST",
+      body: JSON.stringify({ role: pref }),
+    });
+    state.user = user;
+  }
+  return true;
 }
 
 const PUBLIC_AUTH_PATHS = [
@@ -1300,7 +1380,8 @@ function renderAuthForm() {
           body: JSON.stringify({ email: fd.get("email"), password: fd.get("password") }),
         });
         await refreshMe();
-        render();
+        if (!(await applyAccountViewAfterAuth())) return;
+        await render();
       } catch (err) {
         showToast(err.message, "danger");
       }
@@ -1818,6 +1899,10 @@ function ownerAdminHeaderProfileHtml() {
         ${adminMsIcon("dashboard")}
         <span>${tr("owner.ownerDashboard")}</span>
       </button>
+      <button type="button" class="admin-header-profile-item js-switch-account-view" data-view-role="employee" role="menuitem">
+        ${adminMsIcon("person")}
+        <span>${tr("owner.switchToUserView")}</span>
+      </button>
       ${adminHeaderVisitUsItemHtml()}
       <div class="admin-header-profile-divider" role="separator"></div>
       <button type="button" class="admin-header-profile-item admin-header-profile-item--danger js-logout" role="menuitem">
@@ -1870,6 +1955,15 @@ function wireAdminHeaderProfileMenu(root) {
     if (btn.dataset.wired === "1") return;
     btn.dataset.wired = "1";
     btn.addEventListener("click", logout);
+  });
+
+  root.querySelectorAll(".js-switch-account-view").forEach((btn) => {
+    if (btn.dataset.wired === "1") return;
+    btn.dataset.wired = "1";
+    btn.addEventListener("click", () => {
+      const role = btn.getAttribute("data-view-role");
+      if (role === "owner" || role === "employee") void switchAccountView(role);
+    });
   });
 }
 
@@ -2014,6 +2108,10 @@ function employeeAdminHeaderProfileHtml() {
         ${adminMsIcon(isDark ? "light_mode" : "dark_mode")}
         <span>${tr("owner.themeToggle")}</span>
       </button>
+      ${state.user?.isAdmin ? `<button type="button" class="admin-header-profile-item js-switch-account-view" data-view-role="owner" role="menuitem">
+        ${adminMsIcon("admin_panel_settings")}
+        <span>${tr("owner.switchToAdminView")}</span>
+      </button>` : ""}
       ${pushItem}
       ${apkItem}
       ${playItem}
@@ -3274,7 +3372,7 @@ async function refreshTeamAdminList() {
     host.innerHTML = `<div class="list-group list-group-flush border rounded team-admin-list">
       ${users
         .map((u) => {
-          const isAdmin = u.role === "owner";
+          const isAdmin = Boolean(u.isAdmin);
           const isSelf = u.id === selfId;
           let action;
           if (isAdmin) {

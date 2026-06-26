@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { sendAdminPromotionEmail, sendAdminRevocationEmail } from "../lib/mail.js";
+import { adminUserWhere, userHasAdminAccess } from "../lib/adminUsers.js";
 import { requireAuth, requireOwner } from "../middleware/auth.js";
 
 const router = Router();
@@ -10,12 +11,22 @@ const rolePatchSchema = z.object({
   role: z.enum(["owner", "employee"]),
 });
 
+function serializeTeamUser(user) {
+  return {
+    id: user.id,
+    email: user.email,
+    displayName: user.displayName,
+    role: user.role,
+    isAdmin: userHasAdminAccess(user),
+  };
+}
+
 router.get("/peers", requireAuth, async (req, res) => {
   if (req.session.role !== "employee") {
     return res.status(403).json({ error: "Employees only" });
   }
   const users = await prisma.user.findMany({
-    where: { role: "employee", id: { not: req.session.userId } },
+    where: { id: { not: req.session.userId } },
     select: { id: true, email: true, displayName: true },
     orderBy: { displayName: "asc" },
   });
@@ -24,7 +35,6 @@ router.get("/peers", requireAuth, async (req, res) => {
 
 router.get("/assignees", requireOwner, async (req, res) => {
   const users = await prisma.user.findMany({
-    where: { role: "employee" },
     select: { id: true, email: true, displayName: true },
     orderBy: { displayName: "asc" },
   });
@@ -33,10 +43,10 @@ router.get("/assignees", requireOwner, async (req, res) => {
 
 router.get("/team", requireOwner, async (req, res) => {
   const users = await prisma.user.findMany({
-    select: { id: true, email: true, displayName: true, role: true },
-    orderBy: [{ role: "asc" }, { displayName: "asc" }],
+    select: { id: true, email: true, displayName: true, role: true, isAdmin: true },
+    orderBy: [{ isAdmin: "desc" }, { displayName: "asc" }],
   });
-  res.json({ users });
+  res.json({ users: users.map(serializeTeamUser) });
 });
 
 router.patch("/:id/role", requireOwner, async (req, res) => {
@@ -61,17 +71,20 @@ router.patch("/:id/role", requireOwner, async (req, res) => {
   if (!actor?.email) {
     return res.status(500).json({ error: "Could not identify the acting admin." });
   }
-  if (target.role === nextRole) {
-    return res.status(400).json({
-      error: nextRole === "owner" ? "User is already an admin." : "User is already an employee.",
-    });
+
+  const currentlyAdmin = userHasAdminAccess(target);
+  if (nextRole === "owner" && currentlyAdmin) {
+    return res.status(400).json({ error: "User already has admin access." });
+  }
+  if (nextRole === "employee" && !currentlyAdmin) {
+    return res.status(400).json({ error: "User does not have admin access." });
   }
 
   if (nextRole === "owner") {
     const user = await prisma.user.update({
       where: { id: target.id },
-      data: { role: "owner" },
-      select: { id: true, email: true, displayName: true, role: true },
+      data: { isAdmin: true, role: "employee" },
+      select: { id: true, email: true, displayName: true, role: true, isAdmin: true },
     });
 
     let emailSent = false;
@@ -86,22 +99,22 @@ router.patch("/:id/role", requireOwner, async (req, res) => {
       console.error("[users] admin promotion email failed", err);
     }
 
-    return res.json({ user, emailSent });
+    return res.json({ user: serializeTeamUser(user), emailSent });
   }
 
   if (target.id === req.session.userId) {
     return res.status(400).json({ error: "You cannot revoke your own admin access." });
   }
 
-  const ownerCount = await prisma.user.count({ where: { role: "owner" } });
-  if (ownerCount <= 1) {
+  const adminCount = await prisma.user.count({ where: adminUserWhere });
+  if (adminCount <= 1) {
     return res.status(400).json({ error: "Cannot revoke the last admin. Promote another admin first." });
   }
 
   const user = await prisma.user.update({
     where: { id: target.id },
-    data: { role: "employee" },
-    select: { id: true, email: true, displayName: true, role: true },
+    data: { isAdmin: false, role: "employee" },
+    select: { id: true, email: true, displayName: true, role: true, isAdmin: true },
   });
 
   let emailSent = false;
@@ -116,7 +129,7 @@ router.patch("/:id/role", requireOwner, async (req, res) => {
     console.error("[users] admin revocation email failed", err);
   }
 
-  res.json({ user, emailSent });
+  res.json({ user: serializeTeamUser(user), emailSent });
 });
 
 export default router;

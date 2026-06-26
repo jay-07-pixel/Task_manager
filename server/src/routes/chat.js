@@ -3,6 +3,7 @@ import path from "path";
 import fs from "fs";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
+import { userHasAdminAccess } from "../lib/adminUsers.js";
 import { requireAuth, requireOwner } from "../middleware/auth.js";
 import { notifyChatMessage, notifyGroupMessage } from "../services/chatNotificationService.js";
 import { addChatLiveClient, removeChatLiveClient, publishChatLive } from "../lib/chatLive.js";
@@ -299,17 +300,18 @@ async function findPeerUser(peerUserId, currentUserId) {
   if (peerUserId === currentUserId) return null;
   return prisma.user.findUnique({
     where: { id: peerUserId },
-    select: { id: true, displayName: true, email: true, role: true },
+    select: { id: true, displayName: true, email: true, role: true, isAdmin: true },
   });
 }
 
 function serializeContact(user) {
+  const isAdmin = userHasAdminAccess(user);
   return {
     id: user.id,
     displayName: user.displayName,
     email: user.email,
-    role: user.role,
-    roleLabel: user.role === "owner" ? "Admin" : "Employee",
+    role: isAdmin ? "owner" : "employee",
+    roleLabel: isAdmin ? "Admin" : "Employee",
   };
 }
 
@@ -317,8 +319,8 @@ router.get("/contacts", requireAuth, async (req, res) => {
   const meId = req.session.userId;
   const users = await prisma.user.findMany({
     where: { id: { not: meId } },
-    select: { id: true, displayName: true, email: true, role: true },
-    orderBy: [{ role: "asc" }, { displayName: "asc" }],
+    select: { id: true, displayName: true, email: true, role: true, isAdmin: true },
+    orderBy: [{ isAdmin: "desc" }, { displayName: "asc" }],
   });
   res.json({ contacts: users.map(serializeContact) });
 });

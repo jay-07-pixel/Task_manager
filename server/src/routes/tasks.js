@@ -21,6 +21,7 @@ import {
   compareHighPriorityFirst,
 } from "../lib/taskRecurrenceSort.js";
 import { notifyAdminsTaskSubmitted } from "../services/taskCompletionNotificationService.js";
+import { adminUserWhere } from "../lib/adminUsers.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const uploadsRoot = path.join(__dirname, "..", "..", "uploads", "completion-proofs");
@@ -805,7 +806,7 @@ async function assertListOwner(listId, userId) {
 /** First owner account's default task list (for employee-created tasks visible to admin). */
 async function resolveOwnerDefaultList() {
   const owner = await prisma.user.findFirst({
-    where: { role: "owner" },
+    where: adminUserWhere,
     orderBy: { createdAt: "asc" },
     select: { id: true },
   });
@@ -826,9 +827,12 @@ async function resolveOwnerDefaultList() {
 /** Dedicated list so admin can find tasks employees created or assigned to each other. */
 async function resolveOwnerEmployeeAssignmentsList(ownerId = null) {
   const owner = ownerId
-    ? await prisma.user.findFirst({ where: { id: ownerId, role: "owner" }, select: { id: true } })
+    ? await prisma.user.findFirst({
+        where: { AND: [{ id: ownerId }, adminUserWhere] },
+        select: { id: true },
+      })
     : await prisma.user.findFirst({
-        where: { role: "owner" },
+        where: adminUserWhere,
         orderBy: { createdAt: "asc" },
         select: { id: true },
       });
