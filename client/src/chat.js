@@ -62,6 +62,12 @@ let typingPulseActive = false;
 let typingStopTimer = null;
 /** @type {any | null} */
 let replyingTo = null;
+/** @type {{ message: any, fromThreadType: "dm" | "group", fromThreadId: string } | null} */
+let forwardingMessage = null;
+/** @type {string} */
+let forwardFilter = "";
+/** @type {boolean} */
+let forwardInProgress = false;
 /** @type {{ dateKey: string, after: string, before: string, label: string } | null} */
 let chatJumpDate = null;
 /** @type {number | null} */
@@ -86,6 +92,7 @@ async function syncChatTranslations() {
     add(m.senderName);
     add(m.replyTo?.body);
     add(m.replyTo?.senderName);
+    add(m.forwardedFromName);
   }
   return ensureContentTranslations(texts);
 }
@@ -618,6 +625,122 @@ async function deleteChatMessage(messageId) {
   }
 }
 
+function threadDisplayTitle(thread) {
+  if (thread.type === "group") return dt(thread.group?.name) || tr("chat.group");
+  return dt(thread.peer?.displayName) || tr("chat.chat");
+}
+
+function filteredForwardThreads() {
+  if (!forwardingMessage) return [];
+  const q = forwardFilter.trim().toLowerCase();
+  const { fromThreadType, fromThreadId } = forwardingMessage;
+  return threads.filter((thread) => {
+    if (thread.type === fromThreadType && thread.id === fromThreadId) return false;
+    if (!q) return true;
+    return threadDisplayTitle(thread).toLowerCase().includes(q);
+  });
+}
+
+function renderForwardThreadList() {
+  const host = document.getElementById("team-chat-forward-list");
+  if (!host) return;
+  const list = filteredForwardThreads();
+  if (!list.length) {
+    host.innerHTML = `<div class="team-chat-list-empty"><p class="small text-muted mb-0">${forwardFilter.trim() ? tr("chat.noChatsMatchSearch") : tr("chat.noForwardTargets")}</p></div>`;
+    return;
+  }
+  host.innerHTML = list
+    .map((thread) => {
+      const isGroup = thread.type === "group";
+      const title = threadDisplayTitle(thread);
+      const avatar = isGroup
+        ? groupAvatarHtml(thread.group?.name || tr("chat.group"))
+        : contactAvatarHtml(thread.peer?.displayName, thread.peer?.role);
+      const typeCls = isGroup ? " team-chat-thread-item--group" : " team-chat-thread-item--dm";
+      return `<button type="button" class="team-chat-thread-item team-chat-forward-item${typeCls}" data-forward-type="${thread.type}" data-forward-id="${thread.id}">
+        ${avatar}
+        <span class="team-chat-thread-item-main">
+          <span class="team-chat-thread-item-top">
+            <span class="team-chat-thread-item-title-wrap">
+              <span class="team-chat-thread-item-name text-truncate">${d().escapeHtml(title)}</span>
+            </span>
+          </span>
+          <span class="team-chat-thread-item-bottom">
+            <span class="team-chat-thread-item-preview text-truncate text-muted">${isGroup ? tr("chat.group") : tr("chat.oneToOne")}</span>
+          </span>
+        </span>
+      </button>`;
+    })
+    .join("");
+}
+
+function closeForwardModal() {
+  forwardingMessage = null;
+  forwardFilter = "";
+  const search = document.getElementById("team-chat-forward-search");
+  if (search) search.value = "";
+  const modalEl = document.getElementById("teamChatForwardModal");
+  if (modalEl) d().bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+}
+
+async function forwardMessageTo(targetType, targetId) {
+  if (!forwardingMessage || forwardInProgress) return;
+  forwardInProgress = true;
+  const { message, fromThreadType, fromThreadId } = forwardingMessage;
+  try {
+    const data = await d().api("/api/chat/forward", {
+      method: "POST",
+      body: JSON.stringify({
+        from: { threadType: fromThreadType, threadId: fromThreadId, messageId: message.id },
+        to: { threadType: targetType, threadId: targetId },
+      }),
+    });
+    closeForwardModal();
+    d().showToast(tr("chat.messageForwarded"), "success");
+    await loadThreads();
+    if (activeChatId === targetId && activeThreadType === targetType) {
+      if (data.message) {
+        activeMessages = [...activeMessages, data.message];
+        renderMessages({ scrollToBottom: true });
+      } else {
+        void refreshActiveMessages();
+      }
+    } else {
+      await openThread(targetType, targetId);
+    }
+  } catch (err) {
+    d().showToast(err.message || tr("chat.couldNotForward"), "danger");
+  } finally {
+    forwardInProgress = false;
+  }
+}
+
+function openForwardModal(message) {
+  if (!message || message.deleted || !activeChatId || !activeThreadType) return;
+  forwardingMessage = {
+    message,
+    fromThreadType: activeThreadType,
+    fromThreadId: activeChatId,
+  };
+  forwardFilter = "";
+  const preview = document.getElementById("team-chat-forward-preview");
+  if (preview) {
+    const sender = message.isMine ? tr("chat.you") : message.senderName || tr("chat.member");
+    preview.innerHTML = `
+      <div class="team-chat-forward-preview-inner">
+        <span class="team-chat-forward-preview-label">${tr("chat.forwardingMessage")}</span>
+        <span class="team-chat-forward-preview-text text-truncate">${d().escapeHtml(sender)}: ${d().escapeHtml(replyQuotePreview(message))}</span>
+      </div>`;
+  }
+  const search = document.getElementById("team-chat-forward-search");
+  if (search) search.value = "";
+  void loadThreads().then(() => {
+    if (forwardingMessage) renderForwardThreadList();
+  });
+  const modalEl = document.getElementById("teamChatForwardModal");
+  if (modalEl) d().bootstrap.Modal.getOrCreateInstance(modalEl).show();
+}
+
 function chatMessageCopyText(m) {
   if (!m || m.deleted) return "";
   const parts = [];
@@ -737,6 +860,14 @@ function wireChatMediaLightbox() {
       if (message) startReplyToMessage(message);
       return;
     }
+    const forwardBtn = e.target.closest(".js-chat-forward");
+    if (forwardBtn) {
+      e.preventDefault();
+      const messageId = forwardBtn.getAttribute("data-message-id");
+      const message = activeMessages.find((m) => m.id === messageId);
+      if (message) openForwardModal(message);
+      return;
+    }
     const deleteBtn = e.target.closest(".js-chat-delete");
     if (deleteBtn) {
       e.preventDefault();
@@ -831,6 +962,17 @@ function messageAttachmentHtml(m) {
   </a>`;
 }
 
+function messageForwardQuoteHtml(m) {
+  if (!m.forwardedFromName) return "";
+  const name = d().escapeHtml(dt(m.forwardedFromName));
+  const label = d().escapeHtml(tr("chat.forwardedFrom", { name: dt(m.forwardedFromName) }));
+  return `<div class="team-chat-forward-quote" aria-label="${label}">
+    <i class="bi bi-forward-fill team-chat-forward-quote-icon" aria-hidden="true"></i>
+    <span class="team-chat-forward-quote-label">${tr("chat.forwarded")}</span>
+    <span class="team-chat-forward-quote-name">${name}</span>
+  </div>`;
+}
+
 function messageReplyQuoteHtml(m) {
   if (!m.replyTo) return "";
   const name = d().escapeHtml(m.replyTo.senderName || tr("chat.member"));
@@ -854,7 +996,7 @@ function messageBodyHtml(m) {
   const textHtml = text
     ? `<div class="team-chat-bubble-body text-break">${d().escapeHtml(dt(m.body))}</div>`
     : "";
-  return `${messageReplyQuoteHtml(m)}${attach}${textHtml}`;
+  return `${messageForwardQuoteHtml(m)}${messageReplyQuoteHtml(m)}${attach}${textHtml}`;
 }
 
 function messageActionsHtml(m) {
@@ -866,12 +1008,15 @@ function messageActionsHtml(m) {
   const replyBtn = `<button type="button" class="team-chat-msg-action js-chat-reply" data-message-id="${d().escapeHtml(m.id)}" aria-label="${tr("chat.reply")}" title="${tr("chat.reply")}">
     <i class="bi bi-reply-fill" aria-hidden="true"></i>
   </button>`;
+  const forwardBtn = `<button type="button" class="team-chat-msg-action js-chat-forward" data-message-id="${d().escapeHtml(m.id)}" aria-label="${tr("chat.forward")}" title="${tr("chat.forward")}">
+    <i class="bi bi-forward-fill" aria-hidden="true"></i>
+  </button>`;
   const deleteBtn = canDelete
     ? `<button type="button" class="team-chat-msg-action team-chat-msg-action--danger js-chat-delete" data-message-id="${d().escapeHtml(m.id)}" aria-label="${tr("common.delete")}" title="${isAdminUser() && !m.isMine ? tr("chat.deleteAsAdmin") : isAdminUser() ? tr("chat.deleteMessage") : tr("chat.deleteThirtyMin")}">
         <i class="bi bi-trash" aria-hidden="true"></i>
       </button>`
     : "";
-  return `<div class="team-chat-msg-actions">${copyBtn}${replyBtn}${deleteBtn}</div>`;
+  return `<div class="team-chat-msg-actions">${copyBtn}${replyBtn}${forwardBtn}${deleteBtn}</div>`;
 }
 
 function clearPendingChatFile() {
@@ -1321,6 +1466,24 @@ export function teamChatOffcanvasHtml() {
               </div>
             </div>
           </form>
+        </div>
+      </div>
+    </div>
+    <div class="modal fade team-chat-group-modal" id="teamChatForwardModal" tabindex="-1" aria-labelledby="teamChatForwardLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content team-chat-group-modal-content">
+          <div class="modal-header border-bottom-0 pb-0">
+            <h2 class="modal-title h5" id="teamChatForwardLabel">${tr("chat.forwardTo")}</h2>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="${tr("common.close")}"></button>
+          </div>
+          <div class="modal-body team-chat-group-modal-body pt-2">
+            <div id="team-chat-forward-preview" class="team-chat-forward-preview mb-3"></div>
+            <input type="search" class="form-control form-control-sm mb-2" id="team-chat-forward-search" placeholder="${tr("chat.searchPlaceholder")}" autocomplete="off" />
+            <div class="team-chat-forward-list" id="team-chat-forward-list"></div>
+          </div>
+          <div class="modal-footer border-top-0 pt-0">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">${tr("common.cancel")}</button>
+          </div>
         </div>
       </div>
     </div>
@@ -2194,6 +2357,21 @@ export function initTeamChat(chatDeps) {
   });
   document.getElementById("team-chat-create-group-form")?.addEventListener("submit", (e) => {
     void createGroup(e);
+  });
+  document.getElementById("team-chat-forward-search")?.addEventListener("input", (e) => {
+    forwardFilter = e.target.value || "";
+    renderForwardThreadList();
+  });
+  document.getElementById("team-chat-forward-list")?.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-forward-id]");
+    if (!btn) return;
+    const type = btn.getAttribute("data-forward-type");
+    const id = btn.getAttribute("data-forward-id");
+    if (type && id) void forwardMessageTo(type, id);
+  });
+  document.getElementById("teamChatForwardModal")?.addEventListener("hidden.bs.modal", () => {
+    forwardingMessage = null;
+    forwardFilter = "";
   });
   document.getElementById("team-chat-group-everyone")?.addEventListener("change", (e) => {
     const wrap = document.getElementById("team-chat-group-members-wrap");

@@ -1873,6 +1873,13 @@ function adminHeaderVisitUsItemHtml() {
     </a>`;
 }
 
+function adminHeaderMyProfileItemHtml() {
+  return `<button type="button" class="admin-header-profile-item js-open-my-profile" role="menuitem">
+      ${adminMsIcon("account_circle")}
+      <span>${tr("profile.myProfile")}</span>
+    </button>`;
+}
+
 function ownerAdminHeaderProfileHtml() {
   const name = state.user?.displayName ? escapeHtml(dt(state.user.displayName)) : tr("common.admin");
   const isDark = document.documentElement.getAttribute("data-bs-theme") === "dark";
@@ -1904,6 +1911,7 @@ function ownerAdminHeaderProfileHtml() {
         ${adminMsIcon("person")}
         <span>${tr("owner.switchToUserView")}</span>
       </button>
+      ${adminHeaderMyProfileItemHtml()}
       ${adminHeaderVisitUsItemHtml()}
       <div class="admin-header-profile-divider" role="separator"></div>
       <button type="button" class="admin-header-profile-item admin-header-profile-item--danger js-logout" role="menuitem">
@@ -1964,6 +1972,14 @@ function wireAdminHeaderProfileMenu(root) {
     btn.addEventListener("click", () => {
       const role = btn.getAttribute("data-view-role");
       if (role === "owner" || role === "employee") void switchAccountView(role);
+    });
+  });
+
+  root.querySelectorAll(".js-open-my-profile").forEach((btn) => {
+    if (btn.dataset.wired === "1") return;
+    btn.dataset.wired = "1";
+    btn.addEventListener("click", () => {
+      void openMyProfileModal();
     });
   });
 }
@@ -2116,6 +2132,7 @@ function employeeAdminHeaderProfileHtml() {
       ${pushItem}
       ${apkItem}
       ${playItem}
+      ${adminHeaderMyProfileItemHtml()}
       ${adminHeaderVisitUsItemHtml()}
       <div class="admin-header-profile-divider" role="separator"></div>
       <button type="button" class="admin-header-profile-item admin-header-profile-item--danger js-logout" role="menuitem">
@@ -3338,6 +3355,195 @@ function ownerTrialStatusChipHtml() {
   </div>`;
 }
 
+function myProfileModalHtml() {
+  return `
+    <div class="modal fade" id="myProfileModal" tabindex="-1" aria-labelledby="myProfileModalTitle" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <form id="my-profile-form">
+            <div class="modal-header">
+              <h2 class="modal-title h5 mb-0" id="myProfileModalTitle">${tr("profile.myProfile")}</h2>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="${tr("common.close")}"></button>
+            </div>
+            <div class="modal-body">
+              <p class="small text-muted mb-3" id="my-profile-intro">${tr("profile.personalDetailsIntro")}</p>
+              <div class="mb-3">
+                <label class="form-label" for="my-profile-display-name">${tr("profile.fullName")}</label>
+                <input type="text" class="form-control" id="my-profile-display-name" maxlength="120" required autocomplete="name" />
+              </div>
+              <div class="mb-3">
+                <label class="form-label" for="my-profile-email">${tr("common.email")}</label>
+                <input type="email" class="form-control" id="my-profile-email" readonly disabled />
+              </div>
+              <div class="mb-3">
+                <label class="form-label" for="my-profile-phone">${tr("common.phone")}</label>
+                <input type="tel" class="form-control" id="my-profile-phone" inputmode="numeric" pattern="\\d{10}" maxlength="10" autocomplete="tel" placeholder="${tr("auth.phonePlaceholder")}" />
+              </div>
+              <div class="mb-2">
+                <label class="form-label" for="my-profile-salary">${tr("profile.salary")}</label>
+                <div class="input-group">
+                  <span class="input-group-text">₹</span>
+                  <input type="number" class="form-control" id="my-profile-salary" min="0" step="1" />
+                </div>
+              </div>
+              <p class="small text-muted mb-0 d-none" id="my-profile-salary-hint">${tr("profile.salaryReadOnlyHint")}</p>
+              <p class="small text-muted mt-3 mb-0" id="my-profile-member-since"></p>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">${tr("common.cancel")}</button>
+              <button type="submit" class="btn btn-primary" id="my-profile-save">${tr("common.save")}</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>`;
+}
+
+/** @type {string | null} */
+let profileEditUserId = null;
+
+function canEditSalaryInProfileModal() {
+  if (!(state.user?.isAdmin && state.user?.role === "owner")) return false;
+  return true;
+}
+
+function formatProfileMemberSince(iso) {
+  if (!iso) return "";
+  try {
+    return new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+  } catch {
+    return "";
+  }
+}
+
+async function loadMyProfileForm(userId = null) {
+  const endpoint = userId ? `/api/users/${userId}/profile` : "/api/users/profile";
+  const { profile } = await api(endpoint);
+  profileEditUserId = userId || null;
+
+  const titleEl = document.getElementById("myProfileModalTitle");
+  const introEl = document.getElementById("my-profile-intro");
+  const nameEl = document.getElementById("my-profile-display-name");
+  const emailEl = document.getElementById("my-profile-email");
+  const phoneEl = document.getElementById("my-profile-phone");
+  const salaryEl = document.getElementById("my-profile-salary");
+  const salaryHint = document.getElementById("my-profile-salary-hint");
+  const memberSinceEl = document.getElementById("my-profile-member-since");
+
+  if (titleEl) {
+    titleEl.textContent =
+      userId && userId !== state.user?.id
+        ? tr("profile.editUserProfile", { name: profile.displayName })
+        : tr("profile.myProfile");
+  }
+  if (introEl) {
+    introEl.textContent =
+      userId && userId !== state.user?.id
+        ? tr("profile.adminEditIntro")
+        : tr("profile.personalDetailsIntro");
+  }
+  if (nameEl) nameEl.value = profile.displayName || "";
+  if (emailEl) emailEl.value = profile.email || "";
+  if (phoneEl) phoneEl.value = profile.phone || "";
+  if (salaryEl) salaryEl.value = String(profile.salary ?? 15000);
+
+  const salaryEditable = canEditSalaryInProfileModal();
+  if (salaryEl) {
+    salaryEl.readOnly = !salaryEditable;
+    salaryEl.classList.toggle("bg-body-secondary", !salaryEditable);
+  }
+  salaryHint?.classList.toggle("d-none", salaryEditable);
+
+  const since = formatProfileMemberSince(profile.createdAt);
+  if (memberSinceEl) {
+    memberSinceEl.textContent = since ? tr("profile.memberSince", { date: since }) : "";
+  }
+
+  return profile;
+}
+
+async function openMyProfileModal(userId = null) {
+  const modalEl = document.getElementById("myProfileModal");
+  if (!modalEl) return;
+  try {
+    await loadMyProfileForm(userId);
+    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+  } catch (err) {
+    showToast(err.message || tr("profile.couldNotLoad"), "danger");
+  }
+}
+
+async function saveMyProfile(e) {
+  e.preventDefault();
+  const saveBtn = document.getElementById("my-profile-save");
+  const nameEl = document.getElementById("my-profile-display-name");
+  const phoneEl = document.getElementById("my-profile-phone");
+  const salaryEl = document.getElementById("my-profile-salary");
+  if (!nameEl) return;
+
+  const displayName = nameEl.value.trim();
+  if (!displayName) {
+    nameEl.reportValidity();
+    return;
+  }
+
+  const phoneRaw = (phoneEl?.value || "").trim();
+  if (phoneRaw && !/^\d{10}$/.test(phoneRaw)) {
+    showToast(tr("profile.phoneInvalid"), "warning");
+    phoneEl?.focus();
+    return;
+  }
+
+  const body = {
+    displayName,
+    phone: phoneRaw || null,
+  };
+
+  if (canEditSalaryInProfileModal() && salaryEl) {
+    const salary = Number.parseInt(salaryEl.value, 10);
+    if (!Number.isFinite(salary) || salary < 0) {
+      showToast(tr("profile.salaryInvalid"), "warning");
+      salaryEl.focus();
+      return;
+    }
+    body.salary = salary;
+  }
+
+  const endpoint =
+    profileEditUserId && profileEditUserId !== state.user?.id
+      ? `/api/users/${profileEditUserId}/profile`
+      : "/api/users/profile";
+
+  if (saveBtn) saveBtn.disabled = true;
+  try {
+    const { profile } = await api(endpoint, { method: "PATCH", body: JSON.stringify(body) });
+    if (!profileEditUserId || profileEditUserId === state.user?.id) {
+      state.user = { ...state.user, displayName: profile.displayName, phone: profile.phone };
+    }
+    bootstrap.Modal.getInstance(document.getElementById("myProfileModal"))?.hide();
+    showToast(tr("profile.saved"), "success");
+    if (document.getElementById("team-admin-list")) {
+      void refreshTeamAdminList();
+    }
+  } catch (err) {
+    showToast(err.message || tr("profile.couldNotSave"), "danger");
+  } finally {
+    if (saveBtn) saveBtn.disabled = false;
+  }
+}
+
+function wireMyProfileModal() {
+  const form = document.getElementById("my-profile-form");
+  if (!form || form.dataset.wired === "1") return;
+  form.dataset.wired = "1";
+  form.addEventListener("submit", (e) => {
+    void saveMyProfile(e);
+  });
+  document.getElementById("myProfileModal")?.addEventListener("hidden.bs.modal", () => {
+    profileEditUserId = null;
+  });
+}
+
 function teamAdminModalHtml() {
   return `
     <div class="modal fade" id="teamAdminModal" tabindex="-1" aria-labelledby="teamAdminModalTitle" aria-hidden="true">
@@ -3393,8 +3599,12 @@ async function refreshTeamAdminList() {
             <div class="min-w-0">
               <div class="fw-medium text-truncate">${escapeHtml(dt(u.displayName))}</div>
               <div class="small text-muted text-truncate">${escapeHtml(u.email)}</div>
+              <div class="small text-muted">${tr("profile.salary")}: ₹${Number(u.salary ?? 15000).toLocaleString()}</div>
             </div>
-            ${action}
+            <div class="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center gap-1 flex-shrink-0">
+              <button type="button" class="btn btn-sm btn-outline-secondary team-profile-btn" data-user-id="${u.id}">${tr("profile.editProfile")}</button>
+              ${action}
+            </div>
           </div>`;
         })
         .join("")}
@@ -3454,6 +3664,13 @@ async function refreshTeamAdminList() {
           showToast(err.message, "danger");
           btn.disabled = false;
         }
+      });
+    });
+
+    host.querySelectorAll(".team-profile-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.getAttribute("data-user-id");
+        if (id) void openMyProfileModal(id);
       });
     });
   } catch (err) {
@@ -4817,6 +5034,7 @@ function isOwnerInteractiveBusy() {
     "listNameModal",
     "customRecurrenceModal",
     "teamAdminModal",
+    "myProfileModal",
     "progressUpdateModal",
   ]) {
     const el = document.getElementById(id);
@@ -5848,6 +6066,7 @@ function renderOwnerChrome() {
       ${ownerMarkDoneModalHtml()}
       ${ownerTrialMessageModalHtml()}
       ${teamAdminModalHtml()}
+      ${myProfileModalHtml()}
       ${adminNotifOffcanvasHtml(state.user?.id)}
       ${teamChatOffcanvasHtml()}
     </div>`;
@@ -5870,6 +6089,7 @@ function renderOwnerChrome() {
   wireProgressUpdateModal();
   wireOwnerMarkDoneModal();
   wireTeamAdminModal();
+  wireMyProfileModal();
   wireThemeIconToggles();
   initTeamChat(chatInitDeps());
   startOwnerAutoSync();
@@ -6740,6 +6960,7 @@ function renderEmployeeChrome() {
       ${empDelegateModalHtml()}
       ${empCreateTaskModalHtml()}
       ${taskDescriptionModalHtml()}
+      ${myProfileModalHtml()}
       ${teamChatOffcanvasHtml()}
     </div>`;
 
@@ -6750,6 +6971,7 @@ function renderEmployeeChrome() {
   wireProgressUpdateModal();
   wireEmpDelegateModal();
   wireEmpCreateTaskModal();
+  wireMyProfileModal();
   initTeamChat(chatInitDeps());
   renderEmployeeMain();
   wireChatNotifyHandlers();

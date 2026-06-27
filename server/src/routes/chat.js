@@ -11,6 +11,7 @@ import { getChatTypingUsers, setChatTyping } from "../lib/chatTyping.js";
 import {
   attachmentFilePath,
   CHAT_MESSAGE_DELETE_MS,
+  copyChatAttachment,
   dmMessageSelect,
   groupMessageSelect,
   handleChatFileUpload,
@@ -102,6 +103,18 @@ const createGroupSchema = z.object({
 const updateGroupSchema = z.object({
   name: z.string().trim().min(1).max(80).optional(),
   memberIds: z.array(z.string().uuid()).min(1).optional(),
+});
+
+const forwardMessageSchema = z.object({
+  from: z.object({
+    threadType: z.enum(["dm", "group"]),
+    threadId: z.string().uuid(),
+    messageId: z.string().uuid(),
+  }),
+  to: z.object({
+    threadType: z.enum(["dm", "group"]),
+    threadId: z.string().uuid(),
+  }),
 });
 
 function canonicalPair(userIdA, userIdB) {
@@ -1118,6 +1131,176 @@ router.post("/groups/:id/typing", requireAuth, async (req, res) => {
   );
 
   res.json({ ok: true });
+});
+
+router.post("/forward", requireAuth, async (req, res) => {
+  const parsed = forwardMessageSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid forward request." });
+  }
+
+  const meId = req.session.userId;
+  const { from, to } = parsed.data;
+
+  if (from.threadType === to.threadType && from.threadId === to.threadId) {
+    return res.status(400).json({ error: "Choose a different chat to forward to." });
+  }
+
+  /** @type {{ body: string, attachmentPath: string | null, attachmentMime: string | null, attachmentName: string | null, forwardedFromName: string } | null} */
+  let payload = null;
+
+  if (from.threadType === "dm") {
+    const conversation = await prisma.chatConversation.findUnique({ where: { id: from.threadId } });
+    if (!conversation || !userInConversation(conversation, meId)) {
+      return res.status(404).json({ error: "Conversation not found." });
+    }
+    const source = await prisma.chatMessage.findFirst({
+      where: { id: from.messageId, conversationId: from.threadId },
+      include: { sender: { select: { displayName: true } } },
+    });
+    if (!source) return res.status(404).json({ error: "Message not found." });
+    if (source.deletedAt) return res.status(400).json({ error: "Cannot forward a deleted message." });
+    payload = {
+      body: source.body,
+      attachmentPath: source.attachmentPath,
+      attachmentMime: source.attachmentMime,
+      attachmentName: source.attachmentName,
+      forwardedFromName: source.sender.displayName,
+    };
+  } else {
+    const membership = await prisma.chatGroupMember.findUnique({
+      where: { groupId_userId: { groupId: from.threadId, userId: meId } },
+    });
+    if (!membership) return res.status(404).json({ error: "Group not found." });
+    const source = await prisma.chatGroupMessage.findFirst({
+      where: { id: from.messageId, groupId: from.threadId },
+      include: { sender: { select: { displayName: true } } },
+    });
+    if (!source) return res.status(404).json({ error: "Message not found." });
+    if (source.deletedAt) return res.status(400).json({ error: "Cannot forward a deleted message." });
+    payload = {
+      body: source.body,
+      attachmentPath: source.attachmentPath,
+      attachmentMime: source.attachmentMime,
+      attachmentName: source.attachmentName,
+      forwardedFromName: source.sender.displayName,
+    };
+  }
+
+  const text = String(payload.body || "").trim();
+  if (!text && !payload.attachmentPath) {
+    return res.status(400).json({ error: "Nothing to forward." });
+  }
+
+  const copiedAttachmentPath = copyChatAttachment(payload.attachmentPath, to.threadId, meId);
+
+  if (to.threadType === "dm") {
+    const conversation = await prisma.chatConversation.findUnique({ where: { id: to.threadId } });
+    if (!conversation || !userInConversation(conversation, meId)) {
+      return res.status(404).json({ error: "Conversation not found." });
+    }
+
+    const [message] = await prisma.$transaction([
+      prisma.chatMessage.create({
+        data: {
+          conversationId: conversation.id,
+          senderId: meId,
+          body: payload.body,
+          attachmentPath: copiedAttachmentPath,
+          attachmentMime: copiedAttachmentPath ? payload.attachmentMime : null,
+          attachmentName: copiedAttachmentPath ? payload.attachmentName : null,
+          forwardedFromName: payload.forwardedFromName,
+        },
+        select: dmMessageSelect,
+      }),
+      prisma.chatConversation.update({
+        where: { id: conversation.id },
+        data: { updatedAt: new Date() },
+      }),
+    ]);
+
+    const serialized = serializeChatMessage(message, meId, "dm");
+    res.status(201).json({ message: serialized });
+
+    void notifyChatMessage({
+      conversation,
+      message: {
+        id: message.id,
+        body: messagePreviewLabel(message.body, message.attachmentMime, message.attachmentName),
+      },
+      sender: { id: message.sender.id, displayName: message.sender.displayName },
+    }).catch((err) => {
+      console.error("[chat] forward notify failed", err?.message ?? err);
+    });
+
+    publishChatLive([dmRecipientId(conversation, meId), meId], {
+      kind: "message",
+      threadType: "dm",
+      threadId: conversation.id,
+      messageId: message.id,
+      senderId: meId,
+    });
+    return;
+  }
+
+  const membership = await prisma.chatGroupMember.findUnique({
+    where: { groupId_userId: { groupId: to.threadId, userId: meId } },
+    include: { group: true },
+  });
+  if (!membership) {
+    return res.status(404).json({ error: "Group not found." });
+  }
+
+  const [message] = await prisma.$transaction([
+    prisma.chatGroupMessage.create({
+      data: {
+        groupId: membership.groupId,
+        senderId: meId,
+        body: payload.body,
+        attachmentPath: copiedAttachmentPath,
+        attachmentMime: copiedAttachmentPath ? payload.attachmentMime : null,
+        attachmentName: copiedAttachmentPath ? payload.attachmentName : null,
+        forwardedFromName: payload.forwardedFromName,
+      },
+      select: groupMessageSelect,
+    }),
+    prisma.chatGroup.update({
+      where: { id: membership.groupId },
+      data: { updatedAt: new Date() },
+    }),
+  ]);
+
+  const serialized = serializeChatMessage(message, meId, "group");
+  res.status(201).json({ message: serialized });
+
+  void notifyGroupMessage({
+    group: membership.group,
+    message: {
+      id: message.id,
+      body: messagePreviewLabel(message.body, message.attachmentMime, message.attachmentName),
+    },
+    sender: { id: message.sender.id, displayName: message.sender.displayName },
+  }).catch((err) => {
+    console.error("[chat] forward group notify failed", err?.message ?? err);
+  });
+
+  void prisma.chatGroupMember
+    .findMany({
+      where: { groupId: membership.groupId },
+      select: { userId: true },
+    })
+    .then((members) => {
+      publishChatLive(
+        members.map((m) => m.userId),
+        {
+          kind: "message",
+          threadType: "group",
+          threadId: membership.groupId,
+          messageId: message.id,
+          senderId: meId,
+        }
+      );
+    });
 });
 
 async function sendDmAttachment(req, res) {

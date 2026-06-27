@@ -123,6 +123,18 @@ export function attachmentFilePath(storedName) {
   return path.join(chatUploadsRoot, path.basename(storedName));
 }
 
+/** Copy a stored chat attachment into a new file for another thread. */
+export function copyChatAttachment(storedName, threadId, userId) {
+  if (!storedName) return null;
+  const src = attachmentFilePath(storedName);
+  if (!fs.existsSync(src)) return null;
+  const ext = path.extname(storedName).toLowerCase().slice(0, 16);
+  const destName = `${threadId}-${userId}-${randomUUID()}${ext}`;
+  const dest = path.join(chatUploadsRoot, destName);
+  fs.copyFileSync(src, dest);
+  return destName;
+}
+
 /**
  * Stream a chat attachment with explicit range support and no-store headers.
  * Avoids Chrome ERR_CACHE_OPERATION_NOT_SUPPORTED on video byte-range requests.
@@ -204,6 +216,7 @@ export const dmMessageSelect = {
   readAt: true,
   deletedAt: true,
   replyToMessageId: true,
+  forwardedFromName: true,
   attachmentPath: true,
   attachmentMime: true,
   attachmentName: true,
@@ -218,6 +231,7 @@ export const groupMessageSelect = {
   createdAt: true,
   deletedAt: true,
   replyToMessageId: true,
+  forwardedFromName: true,
   attachmentPath: true,
   attachmentMime: true,
   attachmentName: true,
@@ -272,6 +286,9 @@ export function serializeChatMessage(m, meId, threadType, seen = null) {
   }
   if (m.replyTo) {
     out.replyTo = serializeReplyTo(m.replyTo);
+  }
+  if (!deleted && m.forwardedFromName) {
+    out.forwardedFromName = m.forwardedFromName;
   }
   return out;
 }

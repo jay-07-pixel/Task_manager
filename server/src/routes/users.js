@@ -11,6 +11,40 @@ const rolePatchSchema = z.object({
   role: z.enum(["owner", "employee"]),
 });
 
+const phoneSchema = z
+  .string()
+  .trim()
+  .regex(/^\d{10}$/, "Phone must be exactly 10 digits (numbers only)");
+
+const profilePatchSchema = z.object({
+  displayName: z.string().trim().min(1).max(120).optional(),
+  phone: z.union([phoneSchema, z.literal(""), z.null()]).optional(),
+  salary: z.number().int().min(0).max(999_999_999).optional(),
+});
+
+const profileSelect = {
+  id: true,
+  email: true,
+  displayName: true,
+  phone: true,
+  salary: true,
+  role: true,
+  isAdmin: true,
+  createdAt: true,
+};
+
+function serializeProfileUser(user) {
+  return {
+    id: user.id,
+    email: user.email,
+    displayName: user.displayName,
+    phone: user.phone,
+    salary: user.salary,
+    createdAt: user.createdAt,
+    isAdmin: userHasAdminAccess(user),
+  };
+}
+
 function serializeTeamUser(user) {
   return {
     id: user.id,
@@ -18,6 +52,7 @@ function serializeTeamUser(user) {
     displayName: user.displayName,
     role: user.role,
     isAdmin: userHasAdminAccess(user),
+    salary: user.salary,
   };
 }
 
@@ -43,10 +78,96 @@ router.get("/assignees", requireOwner, async (req, res) => {
 
 router.get("/team", requireOwner, async (req, res) => {
   const users = await prisma.user.findMany({
-    select: { id: true, email: true, displayName: true, role: true, isAdmin: true },
+    select: { id: true, email: true, displayName: true, role: true, isAdmin: true, salary: true },
     orderBy: [{ isAdmin: "desc" }, { displayName: "asc" }],
   });
   res.json({ users: users.map(serializeTeamUser) });
+});
+
+router.get("/profile", requireAuth, async (req, res) => {
+  const user = await prisma.user.findUnique({
+    where: { id: req.session.userId },
+    select: profileSelect,
+  });
+  if (!user) return res.status(404).json({ error: "User not found." });
+  res.json({ profile: serializeProfileUser(user) });
+});
+
+router.patch("/profile", requireAuth, async (req, res) => {
+  const parsed = profilePatchSchema.safeParse(req.body);
+  if (!parsed.success) {
+    const flat = parsed.error.flatten();
+    const firstField = Object.values(flat.fieldErrors).flat()[0];
+    return res.status(400).json({ error: firstField || "Invalid profile data." });
+  }
+
+  const actor = await prisma.user.findUnique({
+    where: { id: req.session.userId },
+    select: profileSelect,
+  });
+  if (!actor) return res.status(404).json({ error: "User not found." });
+
+  const data = {};
+  if (parsed.data.displayName !== undefined) data.displayName = parsed.data.displayName;
+  if (parsed.data.phone !== undefined) {
+    data.phone = parsed.data.phone ? parsed.data.phone : null;
+  }
+  if (parsed.data.salary !== undefined) {
+    if (!userHasAdminAccess(actor) || req.session.role !== "owner") {
+      return res.status(403).json({ error: "Only admins can change salary." });
+    }
+    data.salary = parsed.data.salary;
+  }
+
+  if (!Object.keys(data).length) {
+    return res.status(400).json({ error: "No changes to save." });
+  }
+
+  const user = await prisma.user.update({
+    where: { id: actor.id },
+    data,
+    select: profileSelect,
+  });
+  res.json({ profile: serializeProfileUser(user) });
+});
+
+router.get("/:id/profile", requireOwner, async (req, res) => {
+  const user = await prisma.user.findUnique({
+    where: { id: req.params.id },
+    select: profileSelect,
+  });
+  if (!user) return res.status(404).json({ error: "User not found." });
+  res.json({ profile: serializeProfileUser(user) });
+});
+
+router.patch("/:id/profile", requireOwner, async (req, res) => {
+  const parsed = profilePatchSchema.safeParse(req.body);
+  if (!parsed.success) {
+    const flat = parsed.error.flatten();
+    const firstField = Object.values(flat.fieldErrors).flat()[0];
+    return res.status(400).json({ error: firstField || "Invalid profile data." });
+  }
+
+  const target = await prisma.user.findUnique({ where: { id: req.params.id } });
+  if (!target) return res.status(404).json({ error: "User not found." });
+
+  const data = {};
+  if (parsed.data.displayName !== undefined) data.displayName = parsed.data.displayName;
+  if (parsed.data.phone !== undefined) {
+    data.phone = parsed.data.phone ? parsed.data.phone : null;
+  }
+  if (parsed.data.salary !== undefined) data.salary = parsed.data.salary;
+
+  if (!Object.keys(data).length) {
+    return res.status(400).json({ error: "No changes to save." });
+  }
+
+  const user = await prisma.user.update({
+    where: { id: target.id },
+    data,
+    select: profileSelect,
+  });
+  res.json({ profile: serializeProfileUser(user) });
 });
 
 router.patch("/:id/role", requireOwner, async (req, res) => {

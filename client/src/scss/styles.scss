@@ -3227,6 +3227,76 @@ body {
   color: rgba(255, 255, 255, 0.82);
 }
 
+.team-chat-forward-quote {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.35rem;
+  margin-bottom: 0.45rem;
+  font-size: 0.68rem;
+  color: var(--bs-secondary-color);
+}
+
+.team-chat-forward-quote-icon {
+  font-size: 0.72rem;
+  color: var(--bs-primary);
+}
+
+.team-chat-bubble-row--mine .team-chat-forward-quote {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.team-chat-bubble-row--mine .team-chat-forward-quote-icon {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.team-chat-forward-quote-label {
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.team-chat-forward-quote-name {
+  font-weight: 700;
+  color: var(--bs-primary);
+}
+
+.team-chat-bubble-row--mine .team-chat-forward-quote-name {
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.team-chat-forward-preview {
+  padding: 0.55rem 0.75rem;
+  border-radius: 0.5rem;
+  background: rgba(var(--bs-secondary-rgb), 0.08);
+  border: 1px solid rgba(var(--bs-secondary-rgb), 0.15);
+}
+
+.team-chat-forward-preview-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.team-chat-forward-preview-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--bs-secondary-color);
+}
+
+.team-chat-forward-preview-text {
+  font-size: 0.85rem;
+  color: var(--bs-body-color);
+}
+
+.team-chat-forward-list {
+  max-height: min(50vh, 320px);
+  overflow-y: auto;
+}
+
 .team-chat-msg-actions {
   display: flex;
   align-items: center;
