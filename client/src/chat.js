@@ -66,8 +66,14 @@ let replyingTo = null;
 let forwardingMessage = null;
 /** @type {string} */
 let forwardFilter = "";
+/** @type {Set<string>} */
+let forwardSelectedTargets = new Set();
 /** @type {boolean} */
 let forwardInProgress = false;
+
+function forwardTargetKey(threadType, threadId) {
+  return `${threadType}:${threadId}`;
+}
 /** @type {{ dateKey: string, after: string, before: string, label: string } | null} */
 let chatJumpDate = null;
 /** @type {number | null} */
@@ -641,12 +647,21 @@ function filteredForwardThreads() {
   });
 }
 
+function updateForwardSubmitBtn() {
+  const btn = document.getElementById("team-chat-forward-submit");
+  if (!btn) return;
+  const n = forwardSelectedTargets.size;
+  btn.disabled = n === 0 || forwardInProgress;
+  btn.textContent = n > 0 ? tr("chat.forwardSelected", { count: n }) : tr("chat.forward");
+}
+
 function renderForwardThreadList() {
   const host = document.getElementById("team-chat-forward-list");
   if (!host) return;
   const list = filteredForwardThreads();
   if (!list.length) {
     host.innerHTML = `<div class="team-chat-list-empty"><p class="small text-muted mb-0">${forwardFilter.trim() ? tr("chat.noChatsMatchSearch") : tr("chat.noForwardTargets")}</p></div>`;
+    updateForwardSubmitBtn();
     return;
   }
   host.innerHTML = list
@@ -657,61 +672,96 @@ function renderForwardThreadList() {
         ? groupAvatarHtml(thread.group?.name || tr("chat.group"))
         : contactAvatarHtml(thread.peer?.displayName, thread.peer?.role);
       const typeCls = isGroup ? " team-chat-thread-item--group" : " team-chat-thread-item--dm";
-      return `<button type="button" class="team-chat-thread-item team-chat-forward-item${typeCls}" data-forward-type="${thread.type}" data-forward-id="${thread.id}">
+      const key = forwardTargetKey(thread.type, thread.id);
+      const checked = forwardSelectedTargets.has(key);
+      const onCls = checked ? " team-chat-member-pick-row--on" : "";
+      return `<label class="team-chat-thread-item team-chat-forward-item team-chat-member-pick-row team-chat-forward-pick-row${typeCls}${onCls}">
+        <input type="checkbox" class="form-check-input team-chat-forward-pick-input flex-shrink-0" data-forward-type="${thread.type}" data-forward-id="${thread.id}"${checked ? " checked" : ""} />
         ${avatar}
-        <span class="team-chat-thread-item-main">
+        <span class="team-chat-thread-item-main team-chat-member-pick-info min-w-0">
           <span class="team-chat-thread-item-top">
             <span class="team-chat-thread-item-title-wrap">
-              <span class="team-chat-thread-item-name text-truncate">${d().escapeHtml(title)}</span>
+              <span class="team-chat-thread-item-name team-chat-member-pick-name text-truncate">${d().escapeHtml(title)}</span>
             </span>
           </span>
           <span class="team-chat-thread-item-bottom">
-            <span class="team-chat-thread-item-preview text-truncate text-muted">${isGroup ? tr("chat.group") : tr("chat.oneToOne")}</span>
+            <span class="team-chat-thread-item-preview team-chat-member-pick-role text-truncate">${isGroup ? tr("chat.group") : tr("chat.oneToOne")}</span>
           </span>
         </span>
-      </button>`;
+      </label>`;
     })
     .join("");
+  updateForwardSubmitBtn();
 }
 
 function closeForwardModal() {
   forwardingMessage = null;
   forwardFilter = "";
+  forwardSelectedTargets = new Set();
   const search = document.getElementById("team-chat-forward-search");
   if (search) search.value = "";
   const modalEl = document.getElementById("teamChatForwardModal");
   if (modalEl) d().bootstrap.Modal.getOrCreateInstance(modalEl).hide();
 }
 
-async function forwardMessageTo(targetType, targetId) {
-  if (!forwardingMessage || forwardInProgress) return;
+async function forwardMessageToSelected() {
+  if (!forwardingMessage || forwardInProgress || forwardSelectedTargets.size === 0) return;
   forwardInProgress = true;
+  updateForwardSubmitBtn();
   const { message, fromThreadType, fromThreadId } = forwardingMessage;
-  try {
-    const data = await d().api("/api/chat/forward", {
-      method: "POST",
-      body: JSON.stringify({
-        from: { threadType: fromThreadType, threadId: fromThreadId, messageId: message.id },
-        to: { threadType: targetType, threadId: targetId },
-      }),
-    });
-    closeForwardModal();
-    d().showToast(tr("chat.messageForwarded"), "success");
-    await loadThreads();
-    if (activeChatId === targetId && activeThreadType === targetType) {
-      if (data.message) {
-        activeMessages = [...activeMessages, data.message];
-        renderMessages({ scrollToBottom: true });
-      } else {
-        void refreshActiveMessages();
+  const targets = [...forwardSelectedTargets].map((key) => {
+    const sep = key.indexOf(":");
+    return { threadType: key.slice(0, sep), threadId: key.slice(sep + 1) };
+  });
+  let ok = 0;
+  /** @type {any | null} */
+  let activeThreadMessage = null;
+  const activeInTargets = targets.some(
+    (t) => t.threadType === activeThreadType && t.threadId === activeChatId
+  );
+
+  for (const to of targets) {
+    try {
+      const data = await d().api("/api/chat/forward", {
+        method: "POST",
+        body: JSON.stringify({
+          from: { threadType: fromThreadType, threadId: fromThreadId, messageId: message.id },
+          to: { threadType: to.threadType, threadId: to.threadId },
+        }),
+      });
+      ok += 1;
+      if (to.threadType === activeThreadType && to.threadId === activeChatId && data?.message) {
+        activeThreadMessage = data.message;
       }
-    } else {
-      await openThread(targetType, targetId);
+    } catch {
+      /* try remaining targets */
     }
-  } catch (err) {
-    d().showToast(err.message || tr("chat.couldNotForward"), "danger");
-  } finally {
-    forwardInProgress = false;
+  }
+
+  forwardInProgress = false;
+
+  if (ok === 0) {
+    d().showToast(tr("chat.couldNotForward"), "danger");
+    updateForwardSubmitBtn();
+    return;
+  }
+
+  closeForwardModal();
+  if (ok === targets.length) {
+    d().showToast(
+      ok === 1 ? tr("chat.messageForwarded") : tr("chat.messageForwardedMany", { count: ok }),
+      "success"
+    );
+  } else {
+    d().showToast(tr("chat.messageForwardedPartial", { ok, total: targets.length }), "warning");
+  }
+
+  await loadThreads();
+  if (activeThreadMessage) {
+    activeMessages = [...activeMessages, activeThreadMessage];
+    renderMessages({ scrollToBottom: true });
+  } else if (activeInTargets) {
+    void refreshActiveMessages();
   }
 }
 
@@ -723,6 +773,7 @@ function openForwardModal(message) {
     fromThreadId: activeChatId,
   };
   forwardFilter = "";
+  forwardSelectedTargets = new Set();
   const preview = document.getElementById("team-chat-forward-preview");
   if (preview) {
     const sender = message.isMine ? tr("chat.you") : message.senderName || tr("chat.member");
@@ -1478,11 +1529,17 @@ export function teamChatOffcanvasHtml() {
           </div>
           <div class="modal-body team-chat-group-modal-body pt-2">
             <div id="team-chat-forward-preview" class="team-chat-forward-preview mb-3"></div>
+            <p class="small text-muted mb-2">${tr("chat.forwardSelectHint")}</p>
             <input type="search" class="form-control form-control-sm mb-2" id="team-chat-forward-search" placeholder="${tr("chat.searchPlaceholder")}" autocomplete="off" />
+            <div class="d-flex justify-content-end gap-2 mb-2">
+              <button type="button" class="btn btn-sm btn-link text-muted text-decoration-none p-0" id="team-chat-forward-select-all">${tr("chat.selectAll")}</button>
+              <button type="button" class="btn btn-sm btn-link text-muted text-decoration-none p-0" id="team-chat-forward-clear">${tr("chat.clear")}</button>
+            </div>
             <div class="team-chat-forward-list" id="team-chat-forward-list"></div>
           </div>
           <div class="modal-footer border-top-0 pt-0">
             <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">${tr("common.cancel")}</button>
+            <button type="button" class="btn btn-primary" id="team-chat-forward-submit" disabled>${tr("chat.forward")}</button>
           </div>
         </div>
       </div>
@@ -2362,16 +2419,35 @@ export function initTeamChat(chatDeps) {
     forwardFilter = e.target.value || "";
     renderForwardThreadList();
   });
-  document.getElementById("team-chat-forward-list")?.addEventListener("click", (e) => {
-    const btn = e.target.closest("[data-forward-id]");
-    if (!btn) return;
-    const type = btn.getAttribute("data-forward-type");
-    const id = btn.getAttribute("data-forward-id");
-    if (type && id) void forwardMessageTo(type, id);
+  document.getElementById("team-chat-forward-list")?.addEventListener("change", (e) => {
+    const input = /** @type {HTMLInputElement | null} */ (e.target.closest(".team-chat-forward-pick-input"));
+    if (!input) return;
+    const type = input.getAttribute("data-forward-type");
+    const id = input.getAttribute("data-forward-id");
+    if (!type || !id) return;
+    const key = forwardTargetKey(type, id);
+    if (input.checked) forwardSelectedTargets.add(key);
+    else forwardSelectedTargets.delete(key);
+    input.closest(".team-chat-forward-pick-row")?.classList.toggle("team-chat-member-pick-row--on", input.checked);
+    updateForwardSubmitBtn();
+  });
+  document.getElementById("team-chat-forward-select-all")?.addEventListener("click", () => {
+    for (const thread of filteredForwardThreads()) {
+      forwardSelectedTargets.add(forwardTargetKey(thread.type, thread.id));
+    }
+    renderForwardThreadList();
+  });
+  document.getElementById("team-chat-forward-clear")?.addEventListener("click", () => {
+    forwardSelectedTargets.clear();
+    renderForwardThreadList();
+  });
+  document.getElementById("team-chat-forward-submit")?.addEventListener("click", () => {
+    void forwardMessageToSelected();
   });
   document.getElementById("teamChatForwardModal")?.addEventListener("hidden.bs.modal", () => {
     forwardingMessage = null;
     forwardFilter = "";
+    forwardSelectedTargets = new Set();
   });
   document.getElementById("team-chat-group-everyone")?.addEventListener("change", (e) => {
     const wrap = document.getElementById("team-chat-group-members-wrap");

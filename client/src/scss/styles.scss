@@ -3297,6 +3297,18 @@ body {
   overflow-y: auto;
 }
 
+.team-chat-forward-pick-row {
+  cursor: pointer;
+  margin-bottom: 0;
+  border-radius: 0.65rem;
+  gap: 0.65rem;
+}
+
+.team-chat-forward-pick-row .team-chat-thread-item-main {
+  flex: 1;
+  min-width: 0;
+}
+
 .team-chat-msg-actions {
   display: flex;
   align-items: center;

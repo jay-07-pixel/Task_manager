@@ -3,7 +3,7 @@ import nodemailer from "nodemailer";
 function getSupportSmtpConfig() {
   const user = process.env.SUPPORT_SMTP_USER?.trim();
   const pass = process.env.SUPPORT_SMTP_PASSWORD?.replace(/\s+/g, "").trim();
-  const to = process.env.SUPPORT_SMTP_TO?.trim() || user;
+  const to = process.env.SUPPORT_SMTP_TO?.trim() || "support@kalpanik.in";
 
   if (!user || !pass) {
     return null;
@@ -31,12 +31,19 @@ export async function sendSupportContactEmail(params) {
     throw new Error("Support email is not configured on the server.");
   }
 
+  const appLabel =
+    params.appVersion === "web" || params.appVersionCode === "web"
+      ? "Kalpanik Task Manager (web)"
+      : "Kalpanik Reminder";
+
   const body = [
     params.message,
     "",
     "---",
-    "App: Kalpanik Reminder",
-    `Version: ${params.appVersion} (${params.appVersionCode})`,
+    `App: ${appLabel}`,
+    params.appVersion && params.appVersion !== "web"
+      ? `Version: ${params.appVersion}${params.appVersionCode ? ` (${params.appVersionCode})` : ""}`
+      : null,
     params.user.displayName ? `User: ${params.user.displayName}` : null,
     params.user.email ? `Signed in as: ${params.user.email}` : null,
   ]
@@ -57,7 +64,7 @@ export async function sendSupportContactEmail(params) {
     from: config.user,
     to: config.to,
     replyTo: params.user.email || undefined,
-    subject: `[Kalpanik Reminder] ${params.subject}`,
+    subject: `[Kalpanik Support] ${params.subject}`,
     text: body,
   });
 

@@ -1880,6 +1880,13 @@ function adminHeaderMyProfileItemHtml() {
     </button>`;
 }
 
+function adminHeaderContactUsItemHtml() {
+  return `<button type="button" class="admin-header-profile-item js-open-contact-us" role="menuitem">
+      ${adminMsIcon("mail")}
+      <span>${tr("contact.menuLabel")}</span>
+    </button>`;
+}
+
 function ownerAdminHeaderProfileHtml() {
   const name = state.user?.displayName ? escapeHtml(dt(state.user.displayName)) : tr("common.admin");
   const isDark = document.documentElement.getAttribute("data-bs-theme") === "dark";
@@ -1912,6 +1919,7 @@ function ownerAdminHeaderProfileHtml() {
         <span>${tr("owner.switchToUserView")}</span>
       </button>
       ${adminHeaderMyProfileItemHtml()}
+      ${adminHeaderContactUsItemHtml()}
       ${adminHeaderVisitUsItemHtml()}
       <div class="admin-header-profile-divider" role="separator"></div>
       <button type="button" class="admin-header-profile-item admin-header-profile-item--danger js-logout" role="menuitem">
@@ -1980,6 +1988,14 @@ function wireAdminHeaderProfileMenu(root) {
     btn.dataset.wired = "1";
     btn.addEventListener("click", () => {
       void openMyProfileModal();
+    });
+  });
+
+  root.querySelectorAll(".js-open-contact-us").forEach((btn) => {
+    if (btn.dataset.wired === "1") return;
+    btn.dataset.wired = "1";
+    btn.addEventListener("click", () => {
+      openContactUsModal();
     });
   });
 }
@@ -2191,6 +2207,7 @@ function employeeAdminHeaderProfileHtml() {
       ${apkItem}
       ${playItem}
       ${adminHeaderMyProfileItemHtml()}
+      ${adminHeaderContactUsItemHtml()}
       ${adminHeaderVisitUsItemHtml()}
       <div class="admin-header-profile-divider" role="separator"></div>
       <button type="button" class="admin-header-profile-item admin-header-profile-item--danger js-logout" role="menuitem">
@@ -3777,6 +3794,123 @@ function wireMyProfileModal() {
   });
 }
 
+function contactUsModalHtml() {
+  return `
+    <div class="modal fade" id="contactUsModal" tabindex="-1" aria-labelledby="contactUsModalTitle" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+          <form id="contact-us-form">
+            <div class="modal-header">
+              <h2 class="modal-title h5 mb-0" id="contactUsModalTitle">${tr("contact.title")}</h2>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="${tr("common.close")}"></button>
+            </div>
+            <div class="modal-body">
+              <div class="contact-us-intro mb-3">
+                <p class="mb-0">${tr("contact.intro")}</p>
+              </div>
+              <div class="mb-3">
+                <label class="form-label" for="contact-us-email">${tr("common.email")}</label>
+                <input type="email" class="form-control" id="contact-us-email" readonly disabled />
+              </div>
+              <div class="mb-3">
+                <label class="form-label" for="contact-us-subject">${tr("contact.subject")}</label>
+                <input type="text" class="form-control" id="contact-us-subject" maxlength="200" required autocomplete="off" placeholder="${tr("contact.subjectPlaceholder")}" />
+              </div>
+              <div class="mb-2">
+                <label class="form-label" for="contact-us-message">${tr("contact.message")}</label>
+                <textarea class="form-control" id="contact-us-message" rows="6" maxlength="8000" required placeholder="${tr("contact.messagePlaceholder")}"></textarea>
+              </div>
+              <p class="small text-muted mb-0" id="contact-us-reply-note"></p>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">${tr("common.cancel")}</button>
+              <button type="submit" class="btn btn-primary" id="contact-us-send">${tr("contact.send")}</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>`;
+}
+
+function openContactUsModal() {
+  const modalEl = document.getElementById("contactUsModal");
+  if (!modalEl) return;
+  closeAdminHeaderProfileMenus();
+  const emailEl = document.getElementById("contact-us-email");
+  const subjectEl = document.getElementById("contact-us-subject");
+  const messageEl = document.getElementById("contact-us-message");
+  const replyNote = document.getElementById("contact-us-reply-note");
+  if (emailEl) emailEl.value = state.user?.email || "";
+  if (subjectEl) subjectEl.value = "";
+  if (messageEl) messageEl.value = "";
+  if (replyNote) {
+    const email = state.user?.email || "";
+    replyNote.textContent = email ? tr("contact.replyNote", { email }) : tr("contact.replyNoteGeneric");
+  }
+  bootstrap.Modal.getOrCreateInstance(modalEl).show();
+  queueMicrotask(() => subjectEl?.focus());
+}
+
+async function submitContactUs(e) {
+  e.preventDefault();
+  const subjectEl = document.getElementById("contact-us-subject");
+  const messageEl = document.getElementById("contact-us-message");
+  const sendBtn = document.getElementById("contact-us-send");
+  if (!subjectEl || !messageEl) return;
+
+  const subject = subjectEl.value.trim();
+  const message = messageEl.value.trim();
+  if (!subject) {
+    showToast(tr("contact.subjectRequired"), "warning");
+    subjectEl.focus();
+    return;
+  }
+  if (!message) {
+    showToast(tr("contact.messageRequired"), "warning");
+    messageEl.focus();
+    return;
+  }
+
+  if (sendBtn) {
+    sendBtn.disabled = true;
+    sendBtn.textContent = tr("contact.sending");
+  }
+  try {
+    await api("/api/support/contact", {
+      method: "POST",
+      body: JSON.stringify({
+        subject,
+        message,
+        appVersion: "web",
+        appVersionCode: "web",
+      }),
+    });
+    bootstrap.Modal.getInstance(document.getElementById("contactUsModal"))?.hide();
+    showToast(tr("contact.sent"), "success");
+  } catch (err) {
+    const msg = String(err?.message || "");
+    if (msg.toLowerCase().includes("not configured")) {
+      showToast(tr("contact.notConfigured"), "warning");
+    } else {
+      showToast(err.message || tr("contact.couldNotSend"), "danger");
+    }
+  } finally {
+    if (sendBtn) {
+      sendBtn.disabled = false;
+      sendBtn.textContent = tr("contact.send");
+    }
+  }
+}
+
+function wireContactUsModal() {
+  const form = document.getElementById("contact-us-form");
+  if (!form || form.dataset.wired === "1") return;
+  form.dataset.wired = "1";
+  form.addEventListener("submit", (e) => {
+    void submitContactUs(e);
+  });
+}
+
 function teamAdminModalHtml() {
   return `
     <div class="modal fade" id="teamAdminModal" tabindex="-1" aria-labelledby="teamAdminModalTitle" aria-hidden="true">
@@ -5269,6 +5403,7 @@ function isOwnerInteractiveBusy() {
     "customRecurrenceModal",
     "teamAdminModal",
     "myProfileModal",
+    "contactUsModal",
     "progressUpdateModal",
   ]) {
     const el = document.getElementById(id);
@@ -6306,6 +6441,7 @@ function renderOwnerChrome() {
       ${ownerTrialMessageModalHtml()}
       ${teamAdminModalHtml()}
       ${myProfileModalHtml()}
+      ${contactUsModalHtml()}
       ${adminNotifOffcanvasHtml(state.user?.id)}
       ${teamChatOffcanvasHtml()}
     </div>`;
@@ -6329,6 +6465,7 @@ function renderOwnerChrome() {
   wireOwnerMarkDoneModal();
   wireTeamAdminModal();
   wireMyProfileModal();
+  wireContactUsModal();
   wireThemeIconToggles();
   initTeamChat(chatInitDeps());
   startOwnerAutoSync();
@@ -7208,6 +7345,7 @@ function renderEmployeeChrome() {
       ${empCreateTaskModalHtml()}
       ${taskDescriptionModalHtml()}
       ${myProfileModalHtml()}
+      ${contactUsModalHtml()}
       ${teamChatOffcanvasHtml()}
     </div>`;
 
@@ -7219,6 +7357,7 @@ function renderEmployeeChrome() {
   wireEmpDelegateModal();
   wireEmpCreateTaskModal();
   wireMyProfileModal();
+  wireContactUsModal();
   initTeamChat(chatInitDeps());
   renderEmployeeMain();
   wireChatNotifyHandlers();
