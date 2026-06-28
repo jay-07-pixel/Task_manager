@@ -68,6 +68,7 @@ function onReportsResize() {
     if (!document.querySelector(".admin-reports-page") || !reportData) return;
     renderCharts(reportData);
     renderEmployeePerfChart();
+    renderMonthlyBudgetChart();
   }, 220);
 }
 
@@ -202,6 +203,36 @@ function formatReportDateTime(iso) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "—";
   return d.toLocaleString(dateLocale(), { dateStyle: "medium", timeStyle: "short" });
+}
+
+function formatBudgetMinutes(n) {
+  return Math.round(Number(n) || 0).toLocaleString();
+}
+
+function budgetMonthLabel(year, month) {
+  const d = new Date(year, month - 1, 1);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString(dateLocale(), { month: "long", year: "numeric" });
+}
+
+function recurrenceLabel(recurrence) {
+  const map = {
+    none: tr("owner.recurrenceNoRepeat"),
+    daily: tr("owner.recurrenceDaily"),
+    weekly: tr("owner.recurrenceWeekly"),
+    monthly: tr("owner.recurrenceMonthly"),
+    yearly: tr("owner.recurrenceYearly"),
+    custom: tr("owner.recurrenceCustom"),
+  };
+  return map[recurrence] ?? recurrence;
+}
+
+function utilizationBarHtml(pct, overBudget = false) {
+  const width = Math.min(100, Math.max(0, pct));
+  const mod = overBudget ? " owner-dash-budget-bar--over" : pct >= 90 ? " owner-dash-budget-bar--warn" : "";
+  return `<div class="owner-dash-budget-bar${mod}" role="progressbar" aria-valuenow="${escapeHtmlFn(String(Math.round(pct)))}" aria-valuemin="0" aria-valuemax="100">
+    <div class="owner-dash-budget-bar-fill" style="width: ${width}%"></div>
+  </div>`;
 }
 
 function personInitials(name) {
@@ -352,6 +383,192 @@ function byAdminSectionHtml(byAdmin, totals) {
     </header>
     <div class="owner-dash-admin-grid">${cards}${totalCard}</div>
   </div>`;
+}
+
+function monthlyMinuteBudgetSectionHtml(data) {
+  const budget = data.monthlyMinuteBudget;
+  if (!budget) return "";
+
+  const { employees = [], totals = {}, monthlyBudgetMinutes, budgetYear, budgetMonth } = budget;
+  const monthLabel = budgetMonthLabel(budgetYear, budgetMonth);
+
+  const kpiRow = `<div class="admin-report-emp-kpi-grid owner-dash-budget-kpis">
+    ${kpiCard(tr("owner.monthlyCapacityEmployees"), totals.employeeCount ?? 0, "groups")}
+    ${kpiCard(tr("owner.monthlyCapacityUsed"), formatBudgetMinutes(totals.totalUsedMinutes ?? 0), "schedule", "review")}
+    ${kpiCard(tr("owner.monthlyCapacityRemaining"), formatBudgetMinutes(totals.totalRemainingMinutes ?? 0), "hourglass_top", "done")}
+    ${kpiCard(
+      tr("owner.monthlyCapacityOverBudgetCount"),
+      totals.overBudgetEmployeeCount ?? 0,
+      "warning",
+      (totals.overBudgetEmployeeCount ?? 0) > 0 ? "warn" : ""
+    )}
+  </div>`;
+
+  const summaryRows = employees.length
+    ? employees
+        .map((emp) => {
+          const over = emp.usedMinutes > monthlyBudgetMinutes;
+          const pctLabel = `${emp.utilizationPct}%`;
+          const remainingCls = over ? "text-danger fw-semibold" : "";
+          return `<tr class="${over ? "owner-dash-budget-row--over" : ""}">
+            <td class="owner-dash-budget-employee">
+              ${personAvatarHtml(emp.name, "employee")}
+              <span>${escapeHtmlFn(dt(emp.name))}</span>
+            </td>
+            <td class="tabular-nums text-nowrap">${escapeHtmlFn(formatBudgetMinutes(monthlyBudgetMinutes))}</td>
+            <td class="tabular-nums text-nowrap">${escapeHtmlFn(formatBudgetMinutes(emp.usedMinutes))}</td>
+            <td class="tabular-nums text-nowrap ${remainingCls}">${escapeHtmlFn(formatBudgetMinutes(emp.remainingMinutes))}${over ? ` (+${escapeHtmlFn(formatBudgetMinutes(emp.overBudgetMinutes))})` : ""}</td>
+            <td class="owner-dash-budget-util-cell">
+              <span class="owner-dash-budget-util-pct tabular-nums">${escapeHtmlFn(pctLabel)}</span>
+              ${utilizationBarHtml(emp.utilizationPct, over)}
+            </td>
+          </tr>`;
+        })
+        .join("")
+    : `<tr><td colspan="5" class="text-muted small py-3">${escapeHtmlFn(tr("reports.noEmployeesWithTasks"))}</td></tr>`;
+
+  const taskRows = employees.flatMap((emp) =>
+    emp.tasks.map((task) => {
+      const recur = recurrenceLabel(task.recurrence);
+      const occ =
+        task.occurrencesPerMonth > 1
+          ? tr("owner.monthlyCapacityOccurrences", { count: task.occurrencesPerMonth })
+          : "";
+      return `<tr>
+        <td class="owner-dash-budget-employee">
+          ${personAvatarHtml(emp.name, "employee")}
+          <span>${escapeHtmlFn(dt(emp.name))}</span>
+        </td>
+        <td>${escapeHtmlFn(dt(task.title))}</td>
+        <td class="text-muted small">${escapeHtmlFn(dt(task.listTitle))}</td>
+        <td class="tabular-nums text-nowrap">${escapeHtmlFn(formatBudgetMinutes(task.durationMinutes))}</td>
+        <td class="text-nowrap small">${escapeHtmlFn(recur)}${occ ? ` <span class="text-muted">(${escapeHtmlFn(occ)})</span>` : ""}</td>
+        <td class="tabular-nums text-nowrap fw-semibold">${escapeHtmlFn(formatBudgetMinutes(task.monthlyMinutes))}</td>
+      </tr>`;
+    })
+  );
+
+  const taskTableBody = taskRows.length
+    ? taskRows.join("")
+    : `<tr><td colspan="6" class="text-muted small py-3">${escapeHtmlFn(tr("owner.monthlyCapacityNoTasks"))}</td></tr>`;
+
+  const chartBlock =
+    employees.length > 0
+      ? `<div class="admin-report-chart-wrap admin-report-chart-wrap--tall admin-report-chart-wrap--budget">
+          <canvas id="report-chart-monthly-budget" aria-label="${escapeHtmlFn(tr("owner.monthlyCapacityChartAria"))}"></canvas>
+        </div>`
+      : "";
+
+  return `<section class="admin-report-card admin-report-card--wide owner-dash-budget-card">
+    <header class="owner-dash-section-header mb-3">
+      <div>
+        <h2 class="admin-report-card-title mb-1">${escapeHtmlFn(tr("owner.monthlyCapacityTitle"))}</h2>
+        <p class="owner-dash-section-subtitle mb-0">${escapeHtmlFn(tr("owner.monthlyCapacitySubtitle", { month: monthLabel, budget: formatBudgetMinutes(monthlyBudgetMinutes) }))}</p>
+      </div>
+    </header>
+    ${kpiRow}
+    ${chartBlock}
+    <div class="table-responsive owner-dash-budget-table-wrap mt-3">
+      <table class="table table-sm admin-report-table owner-dash-budget-table mb-0">
+        <thead>
+          <tr>
+            <th>${escapeHtmlFn(tr("common.employee"))}</th>
+            <th class="text-nowrap">${escapeHtmlFn(tr("owner.monthlyCapacityBudget"))}</th>
+            <th class="text-nowrap">${escapeHtmlFn(tr("owner.monthlyCapacityUsed"))}</th>
+            <th class="text-nowrap">${escapeHtmlFn(tr("owner.monthlyCapacityRemaining"))}</th>
+            <th>${escapeHtmlFn(tr("owner.monthlyCapacityUtilization"))}</th>
+          </tr>
+        </thead>
+        <tbody>${summaryRows}</tbody>
+      </table>
+    </div>
+    <h3 class="owner-dash-budget-breakdown-title mt-4 mb-2">${escapeHtmlFn(tr("owner.monthlyCapacityTaskBreakdown"))}</h3>
+    <div class="table-responsive owner-dash-budget-table-wrap">
+      <table class="table table-sm admin-report-table owner-dash-budget-table mb-0">
+        <thead>
+          <tr>
+            <th>${escapeHtmlFn(tr("common.employee"))}</th>
+            <th>${escapeHtmlFn(tr("owner.tableTaskTitle"))}</th>
+            <th>${escapeHtmlFn(tr("tasks.list"))}</th>
+            <th class="text-nowrap">${escapeHtmlFn(tr("owner.monthlyCapacityDuration"))}</th>
+            <th>${escapeHtmlFn(tr("owner.tableRecurrence"))}</th>
+            <th class="text-nowrap">${escapeHtmlFn(tr("owner.monthlyCapacityMonthlyCost"))}</th>
+          </tr>
+        </thead>
+        <tbody>${taskTableBody}</tbody>
+      </table>
+    </div>
+  </section>`;
+}
+
+function renderMonthlyBudgetChart() {
+  destroyChart("monthlyBudget");
+  const budget = reportData?.monthlyMinuteBudget;
+  if (!budget?.employees?.length) return;
+
+  const el = document.getElementById("report-chart-monthly-budget");
+  if (!el) return;
+
+  const colors = perfChartColors();
+  const opts = baseChartOptions();
+  const mobile = isReportMobile();
+  const employees = budget.employees;
+  const wrap = el.closest(".admin-report-chart-wrap--budget");
+  if (wrap) setChartWrapHeight(wrap, employees.length);
+
+  chartInstances.monthlyBudget = new Chart(el, {
+    type: "bar",
+    data: {
+      labels: employees.map((e) => truncateLabel(e.name, mobile ? 12 : 20)),
+      datasets: [
+        {
+          label: tr("owner.monthlyCapacityUsed"),
+          data: employees.map((e) => e.usedMinutes),
+          backgroundColor: colors.late,
+          borderRadius: 4,
+          stack: "capacity",
+        },
+        {
+          label: tr("owner.monthlyCapacityRemaining"),
+          data: employees.map((e) => e.remainingMinutes),
+          backgroundColor: colors.onTime,
+          borderRadius: 4,
+          stack: "capacity",
+        },
+      ],
+    },
+    options: {
+      ...opts,
+      indexAxis: "y",
+      plugins: {
+        ...opts.plugins,
+        legend: { ...opts.plugins.legend, position: mobile ? "bottom" : "top" },
+        tooltip: {
+          ...opts.plugins.tooltip,
+          callbacks: {
+            label(ctx) {
+              const val = Number(ctx.raw) || 0;
+              return `${ctx.dataset.label}: ${formatBudgetMinutes(val)} min`;
+            },
+          },
+        },
+      },
+      scales: {
+        x: {
+          ...opts.scales.x,
+          stacked: true,
+          ticks: {
+            ...opts.scales.x.ticks,
+            callback: (v) => formatBudgetMinutes(v),
+          },
+        },
+        y: {
+          ...opts.scales.y,
+          stacked: true,
+        },
+      },
+    },
+  });
 }
 
 function employeePerfSectionHtml(data) {
@@ -531,6 +748,7 @@ function ownerDashboardPageHtml(data) {
       </header>
 
       <div class="admin-reports-charts admin-reports-charts--owner-dashboard">
+        ${monthlyMinuteBudgetSectionHtml(data)}
         ${employeePerfSectionHtml(data)}
       </div>
     </div>
@@ -1000,7 +1218,10 @@ export async function refreshOwnerDashboard({ force = false } = {}) {
   const hasLayout = !!main.querySelector(".admin-owner-dashboard-page");
 
   if (!force && reportData && hasLayout) {
-    requestAnimationFrame(() => renderEmployeePerfChart());
+    requestAnimationFrame(() => {
+      renderEmployeePerfChart();
+      renderMonthlyBudgetChart();
+    });
     return;
   }
 
@@ -1023,6 +1244,7 @@ export async function refreshOwnerDashboard({ force = false } = {}) {
     wireReportsPage(main);
     if (wireChromeHeaderFn) wireChromeHeaderFn(main);
     requestAnimationFrame(() => {
+      renderMonthlyBudgetChart();
       void loadEmployeePerformance(main);
     });
   } catch (err) {

@@ -2608,6 +2608,122 @@ function buildDueAtFromModal() {
   return new Date(y, mo - 1, d, hh, mm, 0, 0).toISOString();
 }
 
+function formatBudgetMinutes(n) {
+  const value = Math.max(0, Math.round(Number(n) || 0));
+  return value.toLocaleString();
+}
+
+function draftTaskPreviewFromModal() {
+  const durationMinutes = parseDurationMinutesFromModal();
+  const recurrence = document.getElementById("modal-repeat")?.value || "none";
+  let recurrenceRule = null;
+  if (recurrence === "custom" && pendingCustomRecurrence) {
+    const dueDate = document.getElementById("modal-due")?.value || "";
+    recurrenceRule = {
+      ...pendingCustomRecurrence,
+      ...(dueDate ? { startDate: dueDate } : {}),
+    };
+  }
+  const dueAt = buildDueAtFromModal();
+  return {
+    durationMinutes,
+    recurrence,
+    recurrenceRule,
+    dueAt,
+  };
+}
+
+function assigneeBudgetQueryParams() {
+  const modalEl = document.getElementById("taskModal");
+  const excludeTaskId = (document.getElementById("modal-task-id")?.value || "").trim();
+  const draft = draftTaskPreviewFromModal();
+  const params = new URLSearchParams();
+  if (excludeTaskId) params.set("excludeTaskId", excludeTaskId);
+  if (draft.durationMinutes && draft.durationMinutes > 0) {
+    params.set("previewDurationMinutes", String(draft.durationMinutes));
+    params.set("previewRecurrence", draft.recurrence || "none");
+    if (draft.dueAt) params.set("previewDueAt", draft.dueAt);
+    if (draft.recurrenceRule) {
+      params.set("previewRecurrenceRule", JSON.stringify(draft.recurrenceRule));
+    }
+  }
+  return params.toString();
+}
+
+function assigneeBudgetLabel(user, { afterPreview = true } = {}) {
+  const remaining = afterPreview
+    ? (user.remainingAfterPreview ?? user.remainingMinutes)
+    : user.remainingMinutes;
+  if (remaining == null) return "";
+  const formatted = formatBudgetMinutes(remaining);
+  const budget = user.monthlyBudgetMinutes ?? state.monthlyBudgetMinutes ?? 12480;
+  const used = user.usedMinutes ?? 0;
+  const preview = user.previewAssignmentMinutes ?? 0;
+  const rawAfter = (user.remainingMinutes ?? budget - used) - preview;
+  const exhausted = rawAfter < 0;
+  const low = !exhausted && remaining < budget * 0.1;
+  const cls = exhausted
+    ? "admin-task-modal-employee-budget--exhausted"
+    : low
+      ? "admin-task-modal-employee-budget--low"
+      : "";
+  if (exhausted) {
+    return `<span class="admin-task-modal-employee-budget ${cls}">${tr("owner.minutesOverBudget", { minutes: formatBudgetMinutes(Math.abs(rawAfter)) })}</span>`;
+  }
+  return `<span class="admin-task-modal-employee-budget ${cls}">${tr("owner.minutesRemainingThisMonth", { minutes: formatted })}</span>`;
+}
+
+let assigneeBudgetRefreshTimer = null;
+
+function scheduleAssigneeBudgetRefresh() {
+  if (assigneeBudgetRefreshTimer != null) window.clearTimeout(assigneeBudgetRefreshTimer);
+  assigneeBudgetRefreshTimer = window.setTimeout(() => {
+    assigneeBudgetRefreshTimer = null;
+    void refreshAssigneeBudget();
+  }, 250);
+}
+
+async function refreshAssigneeBudget() {
+  if (!document.getElementById("taskModal")?.classList.contains("show")) return;
+  try {
+    const qs = assigneeBudgetQueryParams();
+    const data = await api(`/api/users/assignees${qs ? `?${qs}` : ""}`);
+    state.assignees = data.users ?? [];
+    state.monthlyBudgetMinutes = data.monthlyBudgetMinutes ?? state.monthlyBudgetMinutes;
+    const selected = getSelectedAssigneeIdsFromModal();
+    fillModalAssigneeCheckboxes(selected);
+    updateAssigneeBudgetPreviewBanner();
+  } catch {
+    /* keep prior assignee list */
+  }
+}
+
+function updateAssigneeBudgetPreviewBanner() {
+  const banner = document.getElementById("modal-assignee-budget-banner");
+  const hint = document.getElementById("modal-assignee-budget-hint");
+  const budget = state.monthlyBudgetMinutes ?? 12480;
+  if (hint) {
+    hint.textContent = tr("owner.monthlyMinuteBudget", { budget: formatBudgetMinutes(budget) });
+  }
+  if (!banner) return;
+  const draft = draftTaskPreviewFromModal();
+  if (!draft.durationMinutes || draft.durationMinutes <= 0) {
+    banner.classList.add("d-none");
+    banner.textContent = "";
+    return;
+  }
+  const previewMinutes = state.assignees[0]?.previewAssignmentMinutes ?? 0;
+  if (!previewMinutes) {
+    banner.classList.add("d-none");
+    return;
+  }
+  banner.classList.remove("d-none");
+  banner.textContent = tr("owner.taskMonthlyMinuteCost", {
+    minutes: formatBudgetMinutes(previewMinutes),
+    budget: formatBudgetMinutes(state.monthlyBudgetMinutes ?? 12480),
+  });
+}
+
 function fillModalAssigneeCheckboxes(selectedIds) {
   const host = document.getElementById("modal-assignee-options");
   if (!host) return;
@@ -2625,7 +2741,10 @@ function fillModalAssigneeCheckboxes(selectedIds) {
         set.has(u.id) ? "checked" : ""
       }>
       <span class="admin-task-modal-employee-avatar" aria-hidden="true">${escapeHtml(assigneeInitials(u.displayName))}</span>
-      <span class="admin-task-modal-employee-name">${escapeHtml(dt(u.displayName))}</span>
+      <span class="admin-task-modal-employee-main min-w-0">
+        <span class="admin-task-modal-employee-name text-truncate">${escapeHtml(dt(u.displayName))}</span>
+        ${assigneeBudgetLabel(u)}
+      </span>
     </label>`
     )
     .join("");
@@ -2695,6 +2814,17 @@ function wireModalAssigneePicker() {
       refreshModalAssigneeChipsAndLabel();
     }
   });
+
+  modal.addEventListener("shown.bs.modal", () => {
+    void refreshAssigneeBudget();
+  });
+
+  const budgetFields = ["modal-duration-value", "modal-duration-unit", "modal-repeat", "modal-due", "modal-all-day"];
+  for (const id of budgetFields) {
+    document.getElementById(id)?.addEventListener("change", scheduleAssigneeBudgetRefresh);
+    document.getElementById(id)?.addEventListener("input", scheduleAssigneeBudgetRefresh);
+  }
+  document.getElementById("modal-due-time")?.addEventListener("change", scheduleAssigneeBudgetRefresh);
 
   document.getElementById("modal-assignee-search")?.addEventListener("input", filterModalAssigneeOptions);
 
@@ -2893,6 +3023,7 @@ function wireCustomRecurrenceModal() {
     const t = pendingCustomRecurrence.startTime;
     if (t) document.getElementById("modal-due-time").value = t;
     refreshModalRepeatLabels();
+    scheduleAssigneeBudgetRefresh();
     bootstrap.Modal.getInstance(document.getElementById("customRecurrenceModal")).hide();
   });
   document.getElementById("cr-cancel").addEventListener("click", () => {
@@ -3114,8 +3245,8 @@ function taskModalHtml() {
               <div class="admin-task-modal-row">
                 <span class="admin-task-modal-row-icon">${adminMsIcon("group")}</span>
                 <button
-                  class="admin-task-modal-assign-toggle"
                   type="button"
+                  class="admin-task-modal-assign-toggle"
                   data-bs-toggle="collapse"
                   data-bs-target="#modal-assignee-panel"
                   aria-expanded="false"
@@ -3127,11 +3258,13 @@ function taskModalHtml() {
                 </button>
               </div>
               <div class="collapse admin-task-modal-assign-panel" id="modal-assignee-panel">
+                <p id="modal-assignee-budget-hint" class="admin-task-modal-assign-budget-hint small text-muted mb-2 px-1"></p>
                 <div class="admin-task-modal-assign-search-wrap">
                   ${adminMsIcon("search", "admin-task-modal-search-icon")}
                   <input type="search" class="admin-task-modal-assign-search" id="modal-assignee-search" placeholder="${tr("common.searchEmployees")}..." autocomplete="off" aria-label="${tr("common.searchEmployees")}" />
                 </div>
                 <div id="modal-assignee-chips" class="admin-task-modal-chips" role="list" aria-label="${tr("common.selectedAssignees")}"></div>
+                <p id="modal-assignee-budget-banner" class="admin-task-modal-budget-banner small text-muted mb-2 d-none" aria-live="polite"></p>
                 <div id="modal-assignee-options" class="admin-task-modal-employee-list"></div>
               </div>
             </div>
@@ -5210,8 +5343,9 @@ async function loadTasks(listId) {
 
 async function loadAssignees() {
   try {
-    const { users } = await api("/api/users/assignees");
+    const { users, monthlyBudgetMinutes } = await api("/api/users/assignees");
     state.assignees = users;
+    if (monthlyBudgetMinutes != null) state.monthlyBudgetMinutes = monthlyBudgetMinutes;
   } catch {
     state.assignees = [];
   }

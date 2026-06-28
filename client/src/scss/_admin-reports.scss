@@ -601,6 +601,100 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .owner-dash-budget-card {
+    grid-column: 1 / -1;
+  }
+
+  .owner-dash-budget-kpis {
+    margin-bottom: 1rem;
+  }
+
+  .owner-dash-budget-table-wrap {
+    border: 1px solid var(--admin-outline-variant);
+    border-radius: 0.65rem;
+    overflow: hidden;
+  }
+
+  .owner-dash-budget-table {
+    margin-bottom: 0;
+
+    th {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      color: var(--admin-on-surface-variant);
+      background: var(--admin-surface-container);
+      border-bottom-width: 1px;
+    }
+
+    td {
+      vertical-align: middle;
+    }
+  }
+
+  .owner-dash-budget-employee {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 8rem;
+
+    .owner-dash-person-avatar {
+      width: 1.75rem;
+      height: 1.75rem;
+      font-size: 0.65rem;
+      flex-shrink: 0;
+    }
+  }
+
+  .owner-dash-budget-util-cell {
+    min-width: 7rem;
+  }
+
+  .owner-dash-budget-util-pct {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--admin-on-surface-variant);
+    margin-bottom: 0.2rem;
+  }
+
+  .owner-dash-budget-bar {
+    height: 0.45rem;
+    border-radius: 999px;
+    background: var(--admin-surface-container-high);
+    overflow: hidden;
+
+    &--warn .owner-dash-budget-bar-fill {
+      background: var(--admin-tertiary, #7d5800);
+    }
+
+    &--over .owner-dash-budget-bar-fill {
+      background: var(--admin-error);
+    }
+  }
+
+  .owner-dash-budget-bar-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: var(--admin-primary);
+    transition: width 0.25s ease;
+  }
+
+  .owner-dash-budget-row--over td {
+    background: color-mix(in srgb, var(--admin-error) 6%, transparent);
+  }
+
+  .owner-dash-budget-breakdown-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--admin-on-surface-variant);
+  }
+
+  .admin-report-chart-wrap--budget {
+    height: auto;
+    min-height: 12rem;
+    margin-bottom: 0.5rem;
+  }
+
   .admin-owner-dashboard-page .admin-report-card--employee-perf {
     grid-column: 1 / -1;
   }

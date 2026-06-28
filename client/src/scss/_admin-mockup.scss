@@ -2239,6 +2239,38 @@ body:has(.admin-task-modal.show) .modal-backdrop {
   min-width: 0;
 }
 
+.admin-task-modal-employee-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.admin-task-modal-employee-budget {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: #5c6570;
+  line-height: 1.25;
+}
+
+.admin-task-modal-employee-budget--low {
+  color: #b45309;
+}
+
+.admin-task-modal-employee-budget--exhausted {
+  color: #b42318;
+  font-weight: 600;
+}
+
+.admin-task-modal-budget-banner {
+  padding: 0.45rem 0.65rem;
+  border-radius: 0.45rem;
+  background: rgba(0, 83, 91, 0.06);
+  border: 1px solid rgba(0, 83, 91, 0.12);
+  line-height: 1.35;
+}
+
 .admin-task-modal-footer {
   display: flex;
   align-items: center;

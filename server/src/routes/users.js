@@ -4,6 +4,7 @@ import { prisma } from "../lib/prisma.js";
 import { sendAdminPromotionEmail, sendAdminRevocationEmail } from "../lib/mail.js";
 import { adminUserWhere, userHasAdminAccess } from "../lib/adminUsers.js";
 import { requireAuth, requireOwner } from "../middleware/auth.js";
+import { buildEmployeeMonthlyBudgetRows } from "../services/employeeMonthlyMinutesService.js";
 
 const router = Router();
 
@@ -73,7 +74,68 @@ router.get("/assignees", requireOwner, async (req, res) => {
     select: { id: true, email: true, displayName: true },
     orderBy: { displayName: "asc" },
   });
-  res.json({ users });
+
+  const excludeTaskId = typeof req.query.excludeTaskId === "string" ? req.query.excludeTaskId.trim() : "";
+  const previewDurationRaw = typeof req.query.previewDurationMinutes === "string"
+    ? req.query.previewDurationMinutes.trim()
+    : "";
+  const previewDurationMinutes = previewDurationRaw ? Number.parseInt(previewDurationRaw, 10) : null;
+  const previewRecurrence =
+    typeof req.query.previewRecurrence === "string" && req.query.previewRecurrence.trim()
+      ? req.query.previewRecurrence.trim()
+      : "none";
+  let previewRecurrenceRule = null;
+  if (typeof req.query.previewRecurrenceRule === "string" && req.query.previewRecurrenceRule.trim()) {
+    try {
+      previewRecurrenceRule = JSON.parse(req.query.previewRecurrenceRule);
+    } catch {
+      previewRecurrenceRule = null;
+    }
+  }
+  const previewDueAt =
+    typeof req.query.previewDueAt === "string" && req.query.previewDueAt.trim()
+      ? req.query.previewDueAt.trim()
+      : null;
+
+  const preview =
+    previewDurationMinutes != null &&
+    Number.isFinite(previewDurationMinutes) &&
+    previewDurationMinutes > 0
+      ? {
+          durationMinutes: previewDurationMinutes,
+          recurrence: previewRecurrence,
+          recurrenceRule: previewRecurrenceRule,
+          dueAt: previewDueAt,
+        }
+      : null;
+
+  const budgetRows = await buildEmployeeMonthlyBudgetRows(
+    users.map((u) => u.id),
+    {
+      excludeTaskId: excludeTaskId || null,
+      preview,
+    }
+  );
+  const budgetByUser = new Map(budgetRows.map((row) => [row.userId, row]));
+
+  res.json({
+    users: users.map((u) => {
+      const budget = budgetByUser.get(u.id);
+      return {
+        id: u.id,
+        email: u.email,
+        displayName: u.displayName,
+        monthlyBudgetMinutes: budget?.monthlyBudgetMinutes ?? null,
+        usedMinutes: budget?.usedMinutes ?? 0,
+        remainingMinutes: budget?.remainingMinutes ?? null,
+        previewAssignmentMinutes: budget?.previewAssignmentMinutes ?? 0,
+        remainingAfterPreview: budget?.remainingAfterPreview ?? null,
+      };
+    }),
+    monthlyBudgetMinutes: budgetRows[0]?.monthlyBudgetMinutes ?? null,
+    budgetYear: budgetRows[0]?.budgetYear ?? null,
+    budgetMonth: budgetRows[0]?.budgetMonth ?? null,
+  });
 });
 
 router.get("/team", requireOwner, async (req, res) => {

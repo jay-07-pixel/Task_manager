@@ -2,6 +2,7 @@ import { Router } from "express";
 import { prisma } from "../lib/prisma.js";
 import { requireOwner } from "../middleware/auth.js";
 import { adminUserWhere } from "../lib/adminUsers.js";
+import { buildOrgMonthlyMinuteBudgetReport } from "../services/employeeMonthlyMinutesService.js";
 
 const router = Router();
 
@@ -163,10 +164,12 @@ router.get("/owner-dashboard/summary", async (req, res) => {
     }
 
     const employeeOptions = [...byEmployee.values()].sort((a, b) => a.name.localeCompare(b.name));
+    const monthlyMinuteBudget = await buildOrgMonthlyMinuteBudgetReport(ownerIds);
 
     res.json({
       generatedAt: new Date().toISOString(),
       employeeOptions,
+      monthlyMinuteBudget,
     });
   } catch (err) {
     console.error("owner-dashboard summary error:", err);
