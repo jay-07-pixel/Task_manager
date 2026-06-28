@@ -2809,22 +2809,35 @@ function wireModalAssigneePicker() {
   if (!modal || modal.dataset.assigneePickerWired === "1") return;
   modal.dataset.assigneePickerWired = "1";
 
+  const budgetFieldIds = new Set([
+    "modal-duration-value",
+    "modal-duration-unit",
+    "modal-repeat",
+    "modal-due",
+    "modal-all-day",
+    "modal-due-time",
+  ]);
+
   modal.addEventListener("change", (e) => {
-    if (e.target?.classList?.contains("modal-assignee-cb")) {
+    const target = /** @type {HTMLElement | null} */ (e.target);
+    if (target?.classList?.contains("modal-assignee-cb")) {
       refreshModalAssigneeChipsAndLabel();
+      return;
+    }
+    if (budgetFieldIds.has(target?.id)) {
+      scheduleAssigneeBudgetRefresh();
+    }
+  });
+
+  modal.addEventListener("input", (e) => {
+    if (/** @type {HTMLElement} */ (e.target).id === "modal-duration-value") {
+      scheduleAssigneeBudgetRefresh();
     }
   });
 
   modal.addEventListener("shown.bs.modal", () => {
     void refreshAssigneeBudget();
   });
-
-  const budgetFields = ["modal-duration-value", "modal-duration-unit", "modal-repeat", "modal-due", "modal-all-day"];
-  for (const id of budgetFields) {
-    document.getElementById(id)?.addEventListener("change", scheduleAssigneeBudgetRefresh);
-    document.getElementById(id)?.addEventListener("input", scheduleAssigneeBudgetRefresh);
-  }
-  document.getElementById("modal-due-time")?.addEventListener("change", scheduleAssigneeBudgetRefresh);
 
   document.getElementById("modal-assignee-search")?.addEventListener("input", filterModalAssigneeOptions);
 
@@ -5747,6 +5760,7 @@ function wireTaskModal() {
       syncModalCustomRepeatUi();
     }
     refreshModalRepeatLabels();
+    scheduleAssigneeBudgetRefresh();
   });
   document.getElementById("modal-custom-repeat-edit")?.addEventListener("click", () => {
     openCustomRecurrenceEditor();
