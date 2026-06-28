@@ -2021,6 +2021,64 @@ function ownerRecurrenceCellHtml(task) {
   return `<span class="admin-recurrence-pill ${cls}">${repeatIcon}${escapeHtml(label)}</span>`;
 }
 
+function formatTaskDuration(minutes) {
+  if (minutes == null || minutes <= 0) return "";
+  if (minutes % (24 * 60) === 0 && minutes >= 24 * 60) {
+    const days = minutes / (24 * 60);
+    const key = days === 1 ? "common.durationDisplayDays_one" : "common.durationDisplayDays_other";
+    return tr(key, { count: days });
+  }
+  if (minutes % 60 === 0 && minutes >= 60) {
+    return tr("common.durationDisplayHours", { count: minutes / 60 });
+  }
+  return tr("common.durationDisplayMinutes", { count: minutes });
+}
+
+function parseDurationMinutesFromModal() {
+  const valueEl = document.getElementById("modal-duration-value");
+  const unitEl = document.getElementById("modal-duration-unit");
+  const raw = String(valueEl?.value ?? "").trim();
+  if (!raw) return null;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  const unit = unitEl?.value || "hours";
+  if (unit === "minutes") return Math.min(525600, Math.round(n));
+  if (unit === "days") return Math.min(525600, Math.round(n * 24 * 60));
+  return Math.min(525600, Math.round(n * 60));
+}
+
+function fillModalDurationFields(task) {
+  const valueEl = document.getElementById("modal-duration-value");
+  const unitEl = document.getElementById("modal-duration-unit");
+  if (!valueEl || !unitEl) return;
+  const minutes = task?.durationMinutes;
+  if (minutes == null || minutes <= 0) {
+    valueEl.value = "";
+    unitEl.value = "hours";
+    return;
+  }
+  if (minutes % (24 * 60) === 0 && minutes >= 24 * 60) {
+    unitEl.value = "days";
+    valueEl.value = String(minutes / (24 * 60));
+    return;
+  }
+  if (minutes % 60 === 0 && minutes >= 60) {
+    unitEl.value = "hours";
+    valueEl.value = String(minutes / 60);
+    return;
+  }
+  unitEl.value = "minutes";
+  valueEl.value = String(minutes);
+}
+
+function taskDurationMetaHtml(minutes) {
+  const label = formatTaskDuration(minutes);
+  if (!label) return "";
+  return `<div class="admin-task-duration-meta small text-muted mt-1">
+    <i class="bi bi-hourglass-split me-1" aria-hidden="true"></i>${escapeHtml(label)}
+  </div>`;
+}
+
 function formatOwnerTaskDeadlineMock(task) {
   if (!task.dueAt) return `<span class="admin-deadline admin-deadline--none">—</span>`;
   const due = new Date(task.dueAt);
@@ -2981,6 +3039,35 @@ function taskModalHtml() {
                     <input type="checkbox" id="modal-high-priority" />
                     <span>${tr("modals.highPriority")}</span>
                   </label>
+                </div>
+              </div>
+              <div class="admin-task-modal-row admin-task-modal-row--duration">
+                <span class="admin-task-modal-row-icon">${adminMsIcon("hourglass_top")}</span>
+                <div class="admin-task-modal-row-content">
+                  <label class="admin-task-modal-field-label" for="modal-duration-value">
+                    ${tr("modals.taskDuration")} <span class="text-muted fw-normal">${tr("common.optional")}</span>
+                  </label>
+                  <p class="admin-task-modal-field-hint small text-muted mb-2">${tr("modals.taskDurationHint")}</p>
+                  <div class="admin-task-modal-duration-row">
+                    <input
+                      type="number"
+                      class="admin-task-modal-input"
+                      id="modal-duration-value"
+                      min="1"
+                      step="1"
+                      inputmode="numeric"
+                      placeholder="2"
+                      aria-label="${tr("modals.taskDuration")}"
+                    />
+                    <div class="admin-task-modal-select-wrap admin-task-modal-duration-unit-wrap">
+                      <select class="admin-task-modal-select" id="modal-duration-unit" aria-label="${tr("modals.taskDuration")}">
+                        <option value="minutes">${tr("common.durationMinutesUnit")}</option>
+                        <option value="hours" selected>${tr("common.durationHoursUnit")}</option>
+                        <option value="days">${tr("common.durationDaysUnit")}</option>
+                      </select>
+                      <span class="admin-task-modal-select-chevron">${adminMsIcon("expand_more")}</span>
+                    </div>
+                  </div>
                 </div>
               </div>
               <div class="admin-task-modal-row admin-task-modal-row--recurrence">
@@ -5005,6 +5092,7 @@ function openOwnerCreateTaskModal() {
   if (highPriEl) highPriEl.checked = false;
   pendingCustomRecurrence = null;
   fillModalDueFields({ allDay: false, recurrence: "none", dueAt: null });
+  fillModalDurationFields(null);
   syncModalCustomRepeatUi();
   document.getElementById("modal-schedule-wrap")?.classList.remove("d-none");
   document.getElementById("modal-list-wrap")?.classList.remove("d-none");
@@ -5409,6 +5497,7 @@ function openTaskModal(task) {
       ? { ...task.recurrenceRule }
       : null;
   fillModalDueFields(task);
+  fillModalDurationFields(task);
   syncModalCustomRepeatUi();
   document.getElementById("modal-schedule-wrap").classList.remove("d-none");
   document.getElementById("modal-list-wrap").classList.remove("d-none");
@@ -5467,6 +5556,7 @@ function wireTaskModal() {
       recurrenceRule,
       assigneeIds: getSelectedAssigneeIdsFromModal(),
       highPriority: document.getElementById("modal-high-priority")?.checked ?? false,
+      durationMinutes: parseDurationMinutesFromModal(),
     };
     try {
       if (!id) {
@@ -5540,7 +5630,7 @@ function ownerTaskGroupTbody(task) {
   const nDone = assignees.filter((a) => assigneeShowsSubmittedForOwner(a)).length;
   const detailId = `owner-task-detail-${task.id}`;
 
-  const deadlineCell = formatOwnerTaskDeadlineMock(task);
+  const deadlineCell = `${formatOwnerTaskDeadlineMock(task)}${taskDurationMetaHtml(task.durationMinutes)}`;
   const recurrenceCell = ownerRecurrenceCellHtml(task);
 
   const descriptionFull = (task.notes || "").trim();
@@ -5603,6 +5693,7 @@ function ownerTaskGroupTbody(task) {
           <div class="admin-task-expand-panel">
             <div class="admin-expand-section admin-expand-section--desc">
               <h4 class="admin-expand-section-label">${tr("common.description")}</h4>
+              ${task.durationMinutes ? `<p class="small text-muted mb-2"><strong>${tr("common.durationLabel")}:</strong> ${escapeHtml(formatTaskDuration(task.durationMinutes))}</p>` : ""}
               ${descriptionPanel}
             </div>
             <div class="admin-expand-section">
@@ -6205,12 +6296,20 @@ function empTaskDatesCellHtml(t, submitted, submittedWhen) {
     </div>`;
   }
   const deadlineValue = formatEmpDeadlineDisplay(t, { submitted });
+  const durationLine =
+    t.durationMinutes > 0
+      ? `<div class="emp-task-date-row">
+      <span class="emp-task-date-label">${tr("common.durationLabel")}</span>
+      <span class="tabular-nums">${escapeHtml(formatTaskDuration(t.durationMinutes))}</span>
+    </div>`
+      : "";
   return `<div class="emp-task-dates-stack">
     ${created}
     <div class="emp-task-date-row">
       <span class="emp-task-date-label">${tr("common.deadlineLabel")}</span>
       ${deadlineValue}
     </div>
+    ${durationLine}
   </div>`;
 }
 

@@ -62,6 +62,7 @@ async function createCompletedOccurrenceTask(activeTask, prevDue, assigneeRows) 
       completed: true,
       starred: activeTask.starred,
       highPriority: activeTask.highPriority,
+      durationMinutes: activeTask.durationMinutes,
       sortOrder,
       assignments: { create: assigneeCreates },
     },

@@ -1937,6 +1937,37 @@ body:has(.admin-task-modal.show) .modal-backdrop {
   align-items: center;
 }
 
+.admin-task-modal-field-label {
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #181a2e;
+  margin-bottom: 0.15rem;
+}
+
+.admin-task-modal-field-hint {
+  line-height: 1.35;
+}
+
+.admin-task-modal-duration-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+
+  .admin-task-modal-input {
+    flex: 1 1 5rem;
+    min-width: 4.5rem;
+    max-width: 8rem;
+  }
+}
+
+.admin-task-modal-duration-unit-wrap {
+  flex: 1 1 7rem;
+  min-width: 6.5rem;
+  max-width: 10rem;
+}
+
 .admin-task-modal-input,
 .admin-task-modal-textarea,
 .admin-task-modal-select {

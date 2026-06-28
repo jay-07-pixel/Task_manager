@@ -226,6 +226,7 @@ async function spawnNextRecurringTask(completedTask, nextRecurrenceRuleJson = nu
     completed: false,
     starred: completedTask.starred,
     highPriority: completedTask.highPriority,
+    durationMinutes: completedTask.durationMinutes,
     assignments: assigneeCreates.length ? { create: assigneeCreates } : undefined,
   };
 
@@ -800,6 +801,7 @@ export function serializeTask(t) {
     completed: t.completed,
     starred: t.starred,
     highPriority: !!t.highPriority,
+    durationMinutes: t.durationMinutes ?? null,
     sortOrder: t.sortOrder,
     createdAt: t.createdAt?.toISOString?.() ?? t.createdAt ?? null,
   };
@@ -1541,11 +1543,17 @@ router.post("/lists/:listId/clear-completed", requireOwner, async (req, res) => 
   res.json({ ok: true });
 });
 
+const durationMinutesSchema = z.union([
+  z.number().int().min(1).max(525600),
+  z.null(),
+]);
+
 const createTaskSchema = z.object({
   title: z.string().min(1).max(500),
   notes: z.string().max(20000).optional(),
   starred: z.boolean().optional(),
   highPriority: z.boolean().optional(),
+  durationMinutes: durationMinutesSchema.optional(),
   dueAt: z.union([z.string().min(1), z.literal(""), z.null()]).optional(),
   dueTimeZone: z.string().min(1).max(64).optional().nullable(),
   allDay: z.boolean().optional(),
@@ -1595,6 +1603,7 @@ router.post("/lists/:listId", requireOwner, async (req, res) => {
     notes: parsed.data.notes?.trim() ?? "",
     starred: parsed.data.starred ?? false,
     highPriority: parsed.data.highPriority ?? false,
+    durationMinutes: parsed.data.durationMinutes ?? null,
     dueAt,
     dueTimeZone,
     allDay: parsed.data.allDay ?? false,
@@ -1624,6 +1633,7 @@ const patchTaskSchema = z.object({
   completed: z.boolean().optional(),
   starred: z.boolean().optional(),
   highPriority: z.boolean().optional(),
+  durationMinutes: durationMinutesSchema.optional(),
   dueAt: z.union([z.string().min(1), z.null()]).optional(),
   dueTimeZone: z.string().min(1).max(64).optional().nullable(),
   allDay: z.boolean().optional(),
@@ -1694,6 +1704,9 @@ router.patch("/:id", requireAuth, async (req, res) => {
     if (parsed.data.notes != null) data.notes = parsed.data.notes;
     if (parsed.data.starred != null) data.starred = parsed.data.starred;
     if (parsed.data.highPriority != null) data.highPriority = parsed.data.highPriority;
+    if (parsed.data.durationMinutes !== undefined) {
+      data.durationMinutes = parsed.data.durationMinutes;
+    }
     if (parsed.data.dueAt !== undefined) {
       data.dueAt = parsed.data.dueAt ? new Date(parsed.data.dueAt) : null;
       data.dueTimeZone = parsed.data.dueAt
