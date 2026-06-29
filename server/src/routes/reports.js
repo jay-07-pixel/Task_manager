@@ -3,6 +3,7 @@ import { prisma } from "../lib/prisma.js";
 import { requireOwner } from "../middleware/auth.js";
 import { adminUserWhere } from "../lib/adminUsers.js";
 import { buildOrgMonthlyMinuteBudgetReport } from "../services/employeeMonthlyMinutesService.js";
+import { MONTHLY_BUDGET_MINUTES, currentYearMonthInAppTz } from "../lib/employeeMonthlyMinutes.js";
 
 const router = Router();
 
@@ -138,7 +139,24 @@ router.get("/owner-dashboard/summary", async (req, res) => {
   try {
     const ownerIds = await orgOwnerIds();
     if (!ownerIds.length) {
-      return res.json({ generatedAt: new Date().toISOString(), employeeOptions: [] });
+      const { year, month } = currentYearMonthInAppTz();
+      return res.json({
+        generatedAt: new Date().toISOString(),
+        employeeOptions: [],
+        monthlyMinuteBudget: {
+          budgetYear: year,
+          budgetMonth: month,
+          monthlyBudgetMinutes: MONTHLY_BUDGET_MINUTES,
+          employees: [],
+          totals: {
+            employeeCount: 0,
+            totalBudgetMinutes: 0,
+            totalUsedMinutes: 0,
+            totalRemainingMinutes: 0,
+            overBudgetEmployeeCount: 0,
+          },
+        },
+      });
     }
 
     const tasks = await prisma.task.findMany({

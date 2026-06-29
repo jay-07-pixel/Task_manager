@@ -135,7 +135,7 @@ export async function buildOrgMonthlyMinuteBudgetReport(ownerIds) {
       },
       orderBy: { title: "asc" },
     }),
-    prisma.taskAssignment.findMany({
+    prisma.taskAssignee.findMany({
       where: { task: { list: { ownerId: { in: ids } } } },
       select: {
         userId: true,
