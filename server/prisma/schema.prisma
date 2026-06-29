@@ -129,7 +129,7 @@ model Task {
   listId          String           @map("list_id")
   createdById     String           @map("created_by_id")
   title           String
-  notes           String           @db.Text @default("")
+  notes           String           @db.Text
   dueAt           DateTime?        @map("due_at")
   dueTimeZone     String?          @map("due_time_zone") @db.VarChar(64)
   allDay          Boolean          @default(false) @map("all_day")
