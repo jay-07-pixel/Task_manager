@@ -385,6 +385,61 @@ function byAdminSectionHtml(byAdmin, totals) {
   </div>`;
 }
 
+function employeeBudgetSummaryCardHtml(emp, monthlyBudgetMinutes) {
+  const over = emp.usedMinutes > monthlyBudgetMinutes;
+  const remainingCls = over ? "text-danger fw-semibold" : "";
+  const pctLabel = `${emp.utilizationPct}%`;
+  return `<article class="owner-dash-budget-emp-card${over ? " owner-dash-budget-emp-card--over" : ""}">
+    <div class="owner-dash-budget-emp-card-head">
+      <div class="owner-dash-budget-employee">
+        ${personAvatarHtml(emp.name, "employee")}
+        <span class="text-truncate">${escapeHtmlFn(dt(emp.name))}</span>
+      </div>
+      <span class="owner-dash-budget-emp-card-pct tabular-nums">${escapeHtmlFn(pctLabel)}</span>
+    </div>
+    ${utilizationBarHtml(emp.utilizationPct, over)}
+    <dl class="owner-dash-budget-emp-card-stats">
+      <div>
+        <dt>${escapeHtmlFn(tr("owner.monthlyCapacityBudget"))}</dt>
+        <dd class="tabular-nums">${escapeHtmlFn(formatBudgetMinutes(monthlyBudgetMinutes))}</dd>
+      </div>
+      <div>
+        <dt>${escapeHtmlFn(tr("owner.monthlyCapacityUsed"))}</dt>
+        <dd class="tabular-nums">${escapeHtmlFn(formatBudgetMinutes(emp.usedMinutes))}</dd>
+      </div>
+      <div>
+        <dt>${escapeHtmlFn(tr("owner.monthlyCapacityRemaining"))}</dt>
+        <dd class="tabular-nums ${remainingCls}">${escapeHtmlFn(formatBudgetMinutes(emp.remainingMinutes))}${over ? ` (+${escapeHtmlFn(formatBudgetMinutes(emp.overBudgetMinutes))})` : ""}</dd>
+      </div>
+    </dl>
+  </article>`;
+}
+
+function taskBudgetBreakdownCardHtml(emp, task) {
+  const recur = recurrenceLabel(task.recurrence);
+  const occ =
+    task.occurrencesPerMonth > 1
+      ? tr("owner.monthlyCapacityOccurrences", { count: task.occurrencesPerMonth })
+      : "";
+  return `<article class="owner-dash-budget-task-card">
+    <div class="owner-dash-budget-task-card-top">
+      <div class="owner-dash-budget-employee owner-dash-budget-employee--compact">
+        ${personAvatarHtml(emp.name, "employee")}
+        <span class="text-truncate">${escapeHtmlFn(dt(emp.name))}</span>
+      </div>
+      <span class="owner-dash-budget-task-card-cost tabular-nums">${escapeHtmlFn(formatBudgetMinutes(task.monthlyMinutes))} <span class="owner-dash-budget-task-card-cost-unit">min</span></span>
+    </div>
+    <h4 class="owner-dash-budget-task-card-title">${escapeHtmlFn(dt(task.title))}</h4>
+    <p class="owner-dash-budget-task-card-meta mb-0">
+      <span>${escapeHtmlFn(dt(task.listTitle))}</span>
+      <span aria-hidden="true">·</span>
+      <span>${escapeHtmlFn(formatBudgetMinutes(task.durationMinutes))} min</span>
+      <span aria-hidden="true">·</span>
+      <span>${escapeHtmlFn(recur)}${occ ? ` (${escapeHtmlFn(occ)})` : ""}</span>
+    </p>
+  </article>`;
+}
+
 function monthlyMinuteBudgetSectionHtml(data) {
   const budget = data.monthlyMinuteBudget;
   if (!budget) return "";
@@ -459,6 +514,16 @@ function monthlyMinuteBudgetSectionHtml(data) {
         </div>`
       : "";
 
+  const summaryMobile = employees.length
+    ? `<div class="owner-dash-budget-mobile-list d-md-none">${employees.map((emp) => employeeBudgetSummaryCardHtml(emp, monthlyBudgetMinutes)).join("")}</div>`
+    : `<p class="text-muted small py-2 mb-0 d-md-none">${escapeHtmlFn(tr("reports.noEmployeesWithTasks"))}</p>`;
+
+  const taskMobile = taskRows.length
+    ? `<div class="owner-dash-budget-mobile-list d-md-none">${employees
+        .flatMap((emp) => emp.tasks.map((task) => taskBudgetBreakdownCardHtml(emp, task)))
+        .join("")}</div>`
+    : `<p class="text-muted small py-2 mb-0 d-md-none">${escapeHtmlFn(tr("owner.monthlyCapacityNoTasks"))}</p>`;
+
   return `<section class="admin-report-card admin-report-card--wide owner-dash-budget-card">
     <header class="owner-dash-section-header mb-3">
       <div>
@@ -468,7 +533,8 @@ function monthlyMinuteBudgetSectionHtml(data) {
     </header>
     ${kpiRow}
     ${chartBlock}
-    <div class="table-responsive owner-dash-budget-table-wrap mt-3">
+    ${summaryMobile}
+    <div class="table-responsive owner-dash-budget-table-wrap mt-3 d-none d-md-block">
       <table class="table table-sm admin-report-table owner-dash-budget-table mb-0">
         <thead>
           <tr>
@@ -483,7 +549,8 @@ function monthlyMinuteBudgetSectionHtml(data) {
       </table>
     </div>
     <h3 class="owner-dash-budget-breakdown-title mt-4 mb-2">${escapeHtmlFn(tr("owner.monthlyCapacityTaskBreakdown"))}</h3>
-    <div class="table-responsive owner-dash-budget-table-wrap">
+    ${taskMobile}
+    <div class="table-responsive owner-dash-budget-table-wrap d-none d-md-block">
       <table class="table table-sm admin-report-table owner-dash-budget-table mb-0">
         <thead>
           <tr>
