@@ -3,16 +3,35 @@ import en from "../locales/en.json";
 import hi from "../locales/hi.json";
 import mr from "../locales/mr.json";
 import ta from "../locales/ta.json";
+import {
+  hideLanguageChangeOverlay,
+  showLanguageChangeOverlay,
+  updateLanguageChangeOverlay,
+} from "./languageChangeOverlay.js";
 
 export const LANG_STORAGE_KEY = "task-manager-lang";
 const SUPPORTED = ["en", "hi", "mr", "ta"];
 
-/** @type {(() => void) | null} */
+const CHANGING_MESSAGE = {
+  en: "Changing language… Please wait.",
+  hi: "भाषा बदली जा रही है… कृपया प्रतीक्षा करें।",
+  mr: "भाषा बदलली जात आहे… कृपया प्रतीक्षा करा.",
+  ta: "மொழி மாற்றப்படுகிறது… தயவுசெய்து காத்திருக்கவும்.",
+};
+
+/** @type {(() => void | Promise<void>) | null} */
 let onLanguageChange = null;
+
+/** @type {Promise<void> | null} */
+let languageChangeInFlight = null;
 
 function normalizeLang(lng) {
   const base = String(lng || "en").split("-")[0];
   return SUPPORTED.includes(base) ? base : "en";
+}
+
+function changingMessageFor(lang) {
+  return CHANGING_MESSAGE[normalizeLang(lang)] ?? CHANGING_MESSAGE.en;
 }
 
 export function setLanguageChangeHandler(fn) {
@@ -43,13 +62,6 @@ export async function initI18n() {
     localStorage.setItem(LANG_STORAGE_KEY, code);
     document.documentElement.lang = code;
     updateDocumentTitle();
-    void (async () => {
-      try {
-        await onLanguageChange?.();
-      } catch (err) {
-        console.error("language change handler failed:", err);
-      }
-    })();
   });
 }
 
@@ -65,8 +77,33 @@ export function tr(key, opts) {
 /** @deprecated Use `tr` — kept as alias to avoid shadowing bugs with task variables named `t`. */
 export const t = tr;
 
-export function changeLanguage(lng) {
-  return i18n.changeLanguage(normalizeLang(lng));
+export async function changeLanguage(lng) {
+  const code = normalizeLang(lng);
+  if (code === currentLanguage()) return;
+
+  if (languageChangeInFlight) {
+    await languageChangeInFlight;
+    if (code === currentLanguage()) return;
+  }
+
+  languageChangeInFlight = (async () => {
+    showLanguageChangeOverlay(changingMessageFor(code));
+    try {
+      await i18n.changeLanguage(code);
+      updateLanguageChangeOverlay(tr("language.changing"));
+      await onLanguageChange?.();
+    } catch (err) {
+      console.error("language change failed:", err);
+    } finally {
+      hideLanguageChangeOverlay();
+    }
+  })();
+
+  try {
+    await languageChangeInFlight;
+  } finally {
+    languageChangeInFlight = null;
+  }
 }
 
 export function currentLanguage() {
