@@ -34,10 +34,18 @@ function shouldCacheTranslation(original, translated, lang) {
   if (!translated || normalizeComparable(translated) === normalizeComparable(original)) return false;
   if (lang === "en") return hasLatin(translated);
   if (lang === "hi" || lang === "mr") {
-    return hasDevanagari(translated) || normalizeComparable(translated) !== normalizeComparable(original);
+    if (hasDevanagari(translated)) return true;
+    if (!hasDevanagari(original) && hasLatin(original)) {
+      return normalizeComparable(translated) !== normalizeComparable(original);
+    }
+    return normalizeComparable(translated) !== normalizeComparable(original);
   }
   if (lang === "ta") {
-    return hasTamil(translated) || normalizeComparable(translated) !== normalizeComparable(original);
+    if (hasTamil(translated)) return true;
+    if (!hasTamil(original) && (hasLatin(original) || hasDevanagari(original))) {
+      return normalizeComparable(translated) !== normalizeComparable(original);
+    }
+    return normalizeComparable(translated) !== normalizeComparable(original);
   }
   return true;
 }

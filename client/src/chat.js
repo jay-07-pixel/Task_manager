@@ -1027,9 +1027,9 @@ function messageForwardQuoteHtml(m) {
 
 function messageReplyQuoteHtml(m) {
   if (!m.replyTo) return "";
-  const name = d().escapeHtml(m.replyTo.senderName || tr("chat.member"));
+  const name = d().escapeHtml(dt(m.replyTo.senderName || tr("chat.member")));
   const text = d().escapeHtml(replyQuotePreview(m.replyTo));
-  return `<div class="team-chat-reply-quote" aria-label="${tr("chat.replyTo", { name: m.replyTo.senderName || tr("chat.member") })}">
+  return `<div class="team-chat-reply-quote" aria-label="${tr("chat.replyTo", { name: dt(m.replyTo.senderName || tr("chat.member")) })}">
     <span class="team-chat-reply-quote-name">${name}</span>
     <span class="team-chat-reply-quote-text">${text}</span>
   </div>`;
@@ -1792,6 +1792,10 @@ function setThreadTypeFilter(nextFilter) {
 }
 
 function renderThreadList() {
+  void renderThreadListWithTranslations();
+}
+
+async function renderThreadListWithTranslations() {
   const host = document.getElementById("team-chat-thread-list");
   if (!host) return;
   const list = filteredThreads().filter((thread) => {
@@ -1799,6 +1803,10 @@ function renderThreadList() {
     if (threadTypeFilter === "dm") return thread.type === "dm";
     return true;
   });
+  const bodies = list
+    .map((thread) => thread.lastMessage?.body)
+    .filter((body) => typeof body === "string" && body.trim());
+  if (bodies.length) await ensureContentTranslations(bodies);
   if (!list.length) {
     const emptyByType =
       threadTypeFilter === "group"
@@ -1901,7 +1909,31 @@ function isChatNearBottom(host, threshold = 120) {
   return host.scrollHeight - host.scrollTop - host.clientHeight <= threshold;
 }
 
+function collectActiveChatMessageTexts() {
+  const texts = [];
+  const add = (value) => {
+    const key = String(value ?? "").trim().replace(/\s+/g, " ");
+    if (key && key.length <= 500) texts.push(key);
+  };
+  for (const m of activeMessages) {
+    if (m.deleted) continue;
+    add(m.body);
+    add(m.replyTo?.body);
+  }
+  return texts;
+}
+
 function renderMessages(options = {}) {
+  void renderMessagesWithTranslations(options);
+}
+
+async function renderMessagesWithTranslations(options = {}) {
+  const texts = collectActiveChatMessageTexts();
+  if (texts.length) await ensureContentTranslations(texts);
+  renderMessagesNow(options);
+}
+
+function renderMessagesNow(options = {}) {
   const host = document.getElementById("team-chat-messages");
   if (!host) return;
   const forceBottom = options.scrollToBottom === true;
@@ -1937,7 +1969,7 @@ function renderMessages(options = {}) {
     const typeCls = activeThreadType === "group" ? " team-chat-bubble-row--group" : " team-chat-bubble-row--dm";
     const senderLine =
       activeThreadIsGroup && !m.isMine
-        ? `<div class="team-chat-bubble-sender">${d().escapeHtml(m.senderName || tr("chat.member"))}</div>`
+        ? `<div class="team-chat-bubble-sender">${d().escapeHtml(dt(m.senderName || tr("chat.member")))}</div>`
         : "";
     rows.push(`<div class="team-chat-bubble-row${typeCls}${mine}" data-message-id="${d().escapeHtml(m.id)}">
         <div class="team-chat-bubble-wrap">
@@ -2340,7 +2372,7 @@ export function rerenderChatTranslatedContent() {
   if (activeChatId && activeThreadType) {
     const cached = threads.find((t) => t.type === activeThreadType && t.id === activeChatId);
     if (cached) updateThreadHeaderFromThread(cached);
-    renderMessages();
+    void renderMessagesWithTranslations();
   }
 }
 

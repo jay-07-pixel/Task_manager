@@ -62,19 +62,19 @@ function langPairsFor(text, toLang) {
     if (src === "mixed") return ["Autodetect|en", "hi|en", "mr|en", "ta|en"];
   }
   if (toLang === "hi") {
-    if (src === "en") return ["en|hi", "Autodetect|hi"];
+    if (src === "en") return ["Autodetect|hi", "en|hi"];
     if (src === "inc") return ["Autodetect|hi", "mr|hi"];
     if (src === "tam") return ["ta|hi", "Autodetect|hi"];
     if (src === "mixed") return ["Autodetect|hi", "en|hi", "mr|hi", "ta|hi"];
   }
   if (toLang === "mr") {
-    if (src === "en") return ["en|mr", "Autodetect|mr"];
+    if (src === "en") return ["Autodetect|mr", "en|mr"];
     if (src === "inc") return ["Autodetect|mr", "hi|mr"];
     if (src === "tam") return ["ta|mr", "Autodetect|mr"];
     if (src === "mixed") return ["Autodetect|mr", "en|mr", "hi|mr", "ta|mr"];
   }
   if (toLang === "ta") {
-    if (src === "en") return ["en|ta", "Autodetect|ta"];
+    if (src === "en") return ["Autodetect|ta", "en|ta"];
     if (src === "inc") return ["Autodetect|ta", "hi|ta", "mr|ta"];
     if (src === "tam") return [];
     if (src === "mixed") return ["Autodetect|ta", "en|ta", "hi|ta", "mr|ta"];
@@ -119,14 +119,26 @@ async function fetchGoogleTranslate(text, toLang) {
 }
 
 async function translateText(text, toLang) {
+  const src = detectSourceLang(text);
+  const preferGoogleFirst =
+    (toLang === "hi" || toLang === "mr" || toLang === "ta") &&
+    (src === "en" || src === "mixed" || src === "inc" || src === "tam");
+
+  if (preferGoogleFirst) {
+    const google = await fetchGoogleTranslate(text, toLang);
+    if (google && translationLooksValid(text, google, toLang)) return google;
+  }
+
   const pairs = langPairsFor(text, toLang);
   for (const pair of pairs) {
     const attempt = await fetchMyMemory(text, pair);
     if (attempt && translationLooksValid(text, attempt, toLang)) return attempt;
   }
 
-  const google = await fetchGoogleTranslate(text, toLang);
-  if (google && translationLooksValid(text, google, toLang)) return google;
+  if (!preferGoogleFirst) {
+    const google = await fetchGoogleTranslate(text, toLang);
+    if (google && translationLooksValid(text, google, toLang)) return google;
+  }
 
   return text;
 }
