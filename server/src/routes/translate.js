@@ -1,22 +1,28 @@
 import { Router } from "express";
-import { z } from "zod";
 import { requireAuth } from "../middleware/auth.js";
 import { translateTexts } from "../lib/contentTranslate.js";
 
 const router = Router();
 
-const bodySchema = z.object({
-  texts: z.array(z.string().max(500)).max(40),
-  to: z.enum(["en", "hi", "mr", "ta"]),
-});
+const UI_LANGS = new Set(["en", "hi", "mr", "ta"]);
+const MAX_TEXT_LEN = 500;
+const MAX_BATCH = 40;
+
+function normalizeTranslateTexts(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .slice(0, MAX_BATCH)
+    .map((value) => String(value ?? "").trim().replace(/\s+/g, " "))
+    .filter((value) => value && value.length <= MAX_TEXT_LEN);
+}
 
 router.post("/", requireAuth, async (req, res) => {
-  const parsed = bodySchema.safeParse(req.body);
-  if (!parsed.success) {
-    return res.status(400).json({ error: "Invalid translate request" });
+  const to = String(req.body?.to || "");
+  if (!UI_LANGS.has(to)) {
+    return res.status(400).json({ error: "Invalid target language" });
   }
 
-  const { texts, to } = parsed.data;
+  const texts = normalizeTranslateTexts(req.body?.texts);
   if (!texts.length) {
     return res.json({ translations: {} });
   }

@@ -82,9 +82,10 @@ let typingDebounceTimer = null;
 let chatSpeechInput = null;
 
 async function syncChatTranslations() {
-  const texts = [];
+  const texts = new Set();
   const add = (value) => {
-    if (value) texts.push(value);
+    const key = String(value ?? "").trim().replace(/\s+/g, " ");
+    if (key && key.length <= 500) texts.add(key);
   };
   for (const c of contacts) add(c.displayName);
   for (const t of threads) {
@@ -100,7 +101,7 @@ async function syncChatTranslations() {
     add(m.replyTo?.senderName);
     add(m.forwardedFromName);
   }
-  return ensureContentTranslations(texts);
+  return ensureContentTranslations([...texts]);
 }
 
 function getChatPollMs() {

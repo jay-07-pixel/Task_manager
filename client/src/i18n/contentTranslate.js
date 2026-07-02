@@ -13,6 +13,14 @@ const pendingTexts = new Set();
 /** @type {number | null} */
 let flushTimer = null;
 
+const MAX_TRANSLATE_TEXT_LEN = 500;
+
+function translatableContentText(text) {
+  const key = normalizeContentText(text);
+  if (!key || key.length > MAX_TRANSLATE_TEXT_LEN) return "";
+  return key;
+}
+
 function cacheKey(lang, text) {
   return `${lang}\0${text}`;
 }
@@ -71,7 +79,7 @@ function notifyTranslationUpdate() {
 
 function scheduleContentTranslation(text) {
   const lang = currentLanguage();
-  const key = normalizeContentText(text);
+  const key = translatableContentText(text);
   if (!key || !apiFn || !needsTranslation(key, lang)) return;
   if (cache.has(cacheKey(lang, key))) return;
   pendingTexts.add(key);
@@ -102,8 +110,8 @@ export function initContentTranslate(api) {
 export function collectTranslatableTexts(state) {
   const texts = new Set();
   const add = (value) => {
-    const key = normalizeContentText(value);
-    if (key && key.length <= 500) texts.add(key);
+    const key = translatableContentText(value);
+    if (key) texts.add(key);
   };
 
   const addTask = (task) => {
@@ -152,7 +160,7 @@ export async function ensureContentTranslations(texts) {
   const missing = [
     ...new Set(
       texts
-        .map((t) => normalizeContentText(t))
+        .map((t) => translatableContentText(t))
         .filter((t) => {
           if (!t) return false;
           const cached = cache.get(cacheKey(lang, t));
@@ -173,14 +181,14 @@ export async function ensureContentTranslations(texts) {
         body: JSON.stringify({ texts: batch, to: lang }),
       });
       for (const [original, translated] of Object.entries(data.translations ?? {})) {
-        const key = normalizeContentText(original);
+        const key = translatableContentText(original);
         if (shouldCacheTranslation(key, translated, lang)) {
           cache.set(cacheKey(lang, key), translated);
           updated = true;
         }
       }
     } catch {
-      break;
+      /* try remaining batches */
     }
   }
   return updated;
