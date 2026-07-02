@@ -1367,8 +1367,10 @@ export async function refreshOwnerDashboard({ force = false } = {}) {
   if (!main || !apiFn) return;
 
   const hasLayout = !!main.querySelector(".admin-owner-dashboard-page");
+  const hasOwnerDashboardData = reportData?.monthlyMinuteBudget != null;
+  const needsFetch = force || !hasOwnerDashboardData;
 
-  if (!force && reportData && hasLayout) {
+  if (!force && reportData && hasLayout && hasOwnerDashboardData) {
     requestAnimationFrame(() => {
       renderEmployeePerfChart();
       renderMonthlyBudgetChart();
@@ -1376,7 +1378,7 @@ export async function refreshOwnerDashboard({ force = false } = {}) {
     return;
   }
 
-  if (!reportData || force) {
+  if (needsFetch || !reportData) {
     main.innerHTML = `<div class="admin-reports-loading p-5 text-center text-muted">
       ${adminMsIconFn("hourglass_top")}
       <p class="mb-0 mt-2">${escapeHtmlFn(tr("reports.loading"))}</p>
@@ -1384,7 +1386,7 @@ export async function refreshOwnerDashboard({ force = false } = {}) {
   }
 
   try {
-    if (!reportData || force) {
+    if (needsFetch || !reportData) {
       const month = parseBudgetMonthInput(ownerBudgetMonthFilter);
       const q = month
         ? `?year=${encodeURIComponent(String(month.year))}&month=${encodeURIComponent(String(month.month))}`
@@ -1425,7 +1427,7 @@ export async function refreshOwnerDashboard({ force = false } = {}) {
 
 export function openOwnerDashboardView() {
   reportViewMode = "owner-dashboard";
-  void refreshOwnerDashboard();
+  void refreshOwnerDashboard({ force: !reportData?.monthlyMinuteBudget });
 }
 
 export function openOwnerReportsView() {

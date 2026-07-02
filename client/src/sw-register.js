@@ -562,3 +562,42 @@ export async function cancelBackgroundAlarms() {
 export function backgroundAlarmsSupported() {
   return isPushSupported();
 }
+
+/** @returns {Promise<boolean>} */
+export async function isPushSubscribed() {
+  if (!isPushSupported()) return false;
+  if (Notification.permission !== "granted") return false;
+  const sub = await getLocalPushSubscription();
+  return !!sub;
+}
+
+/**
+ * Unsubscribe this browser from push and remove the server row.
+ * @param {(path: string, options?: RequestInit) => Promise<any>} apiFetch
+ */
+export async function unsubscribeFromPush(apiFetch) {
+  if (!isPushSupported()) return { ok: true };
+  const sub = await getLocalPushSubscription();
+  if (!sub) return { ok: true };
+
+  const endpoint = sub.endpoint;
+  try {
+    await sub.unsubscribe();
+  } catch (err) {
+    console.warn("[push] local unsubscribe failed:", err);
+  }
+
+  if (apiFetch && endpoint) {
+    try {
+      await apiFetch("/api/push/subscribe", {
+        method: "DELETE",
+        body: JSON.stringify({ endpoint }),
+      });
+    } catch (err) {
+      console.warn("[push] DELETE /api/push/subscribe failed:", err);
+    }
+  }
+
+  document.dispatchEvent(new CustomEvent("taskmgr-push-unsubscribed"));
+  return { ok: true };
+}

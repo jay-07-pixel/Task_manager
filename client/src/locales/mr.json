@@ -406,6 +406,14 @@
     "phoneInvalid": "फोन नंबर नेमके 10 अंकी असावा.",
     "salaryInvalid": "वैध पगार रक्कम प्रविष्ट करा."
   },
+  "settings": {
+    "title": "सेटिंग्ज",
+    "menuLabel": "सेटिंग्ज",
+    "intro": "तुमची प्रोफाइल, थीम आणि प्रशासक पर्याय व्यवस्थापित करा.",
+    "manageNotifications": "सूचना व्यवस्थापित करा",
+    "notificationsTurnedOn": "सूचना सुरू केल्या.",
+    "notificationsTurnedOff": "सूचना बंद केल्या."
+  },
   "contact": {
     "menuLabel": "आमच्याशी संपर्क",
     "title": "आमच्याशी संपर्क",

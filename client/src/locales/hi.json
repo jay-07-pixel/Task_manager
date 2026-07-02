@@ -406,6 +406,14 @@
     "phoneInvalid": "फ़ोन ठीक 10 अंकों का होना चाहिए।",
     "salaryInvalid": "मान्य वेतन राशि दर्ज करें।"
   },
+  "settings": {
+    "title": "सेटिंग्स",
+    "menuLabel": "सेटिंग्स",
+    "intro": "अपनी प्रोफ़ाइल, थीम और एडमिन विकल्प प्रबंधित करें।",
+    "manageNotifications": "सूचनाएँ प्रबंधित करें",
+    "notificationsTurnedOn": "सूचनाएँ चालू कर दी गईं।",
+    "notificationsTurnedOff": "सूचनाएँ बंद कर दी गईं।"
+  },
   "contact": {
     "menuLabel": "हमसे संपर्क करें",
     "title": "हमसे संपर्क करें",

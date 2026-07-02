@@ -33,6 +33,12 @@ import {
   onReportsThemeChange,
 } from "./adminReports.js";
 import {
+  initAdminSettings,
+  openOwnerSettingsView,
+  openEmployeeSettingsView,
+  onSettingsThemeChange,
+} from "./adminSettings.js";
+import {
   compareTasksByRecurrenceThenCreated,
   sortTasksByRecurrenceThenCreated,
   compareHighPriorityFirst,
@@ -57,6 +63,7 @@ let state = {
   empFilter: "active",
   ownerTaskFilter: "active",
   ownerView: "dashboard",
+  empView: "dashboard",
   companyTrial: null,
 };
 
@@ -1894,6 +1901,13 @@ function adminHeaderMyProfileItemHtml() {
     </button>`;
 }
 
+function adminHeaderSettingsItemHtml() {
+  return `<button type="button" class="admin-header-profile-item js-open-settings" role="menuitem">
+      ${adminMsIcon("settings")}
+      <span>${tr("settings.menuLabel")}</span>
+    </button>`;
+}
+
 function adminHeaderContactUsItemHtml() {
   return `<button type="button" class="admin-header-profile-item js-open-contact-us" role="menuitem">
       ${adminMsIcon("mail")}
@@ -1903,7 +1917,6 @@ function adminHeaderContactUsItemHtml() {
 
 function ownerAdminHeaderProfileHtml() {
   const name = state.user?.displayName ? escapeHtml(dt(state.user.displayName)) : tr("common.admin");
-  const isDark = document.documentElement.getAttribute("data-bs-theme") === "dark";
   return `<div class="admin-header-profile-dropdown">
     <button
       type="button"
@@ -1916,25 +1929,12 @@ function ownerAdminHeaderProfileHtml() {
       <img class="admin-header-profile-photo" src="/icons/admin-profile-avatar.png" alt="" width="48" height="48" />
     </button>
     <div class="admin-header-profile-menu" role="menu">
-      <button type="button" class="admin-header-profile-item js-admin-theme-toggle" role="menuitem">
-        ${adminMsIcon(isDark ? "light_mode" : "dark_mode")}
-        <span>${tr("owner.themeToggle")}</span>
-      </button>
-      <button type="button" class="admin-header-profile-item js-admin-manage-admin" role="menuitem" data-bs-toggle="modal" data-bs-target="#teamAdminModal">
-        ${adminMsIcon("admin_panel_settings")}
-        <span>${tr("owner.manageAdmin")}</span>
-      </button>
       <button type="button" class="admin-header-profile-item js-owner-dashboard-open" role="menuitem">
         ${adminMsIcon("dashboard")}
         <span>${tr("owner.ownerDashboard")}</span>
       </button>
-      <button type="button" class="admin-header-profile-item js-switch-account-view" data-view-role="employee" role="menuitem">
-        ${adminMsIcon("person")}
-        <span>${tr("owner.switchToUserView")}</span>
-      </button>
-      ${adminHeaderMyProfileItemHtml()}
       ${adminHeaderContactUsItemHtml()}
-      ${adminHeaderVisitUsItemHtml()}
+      ${adminHeaderSettingsItemHtml()}
       <div class="admin-header-profile-divider" role="separator"></div>
       <button type="button" class="admin-header-profile-item admin-header-profile-item--danger js-logout" role="menuitem">
         ${adminMsIcon("logout")}
@@ -1976,9 +1976,7 @@ function wireAdminHeaderProfileMenu(root) {
     if (btn.dataset.wired === "1") return;
     btn.dataset.wired = "1";
     btn.addEventListener("click", () => {
-      const cur = document.documentElement.getAttribute("data-bs-theme") || "light";
-      setThemePreference(cur === "dark" ? "light" : "dark");
-      syncAdminThemeToggleIcons();
+      toggleAdminTheme();
     });
   });
 
@@ -2010,6 +2008,27 @@ function wireAdminHeaderProfileMenu(root) {
     btn.dataset.wired = "1";
     btn.addEventListener("click", () => {
       openContactUsModal();
+    });
+  });
+
+  wireSettingsOpen(root);
+}
+
+function wireSettingsOpen(root = document) {
+  root.querySelectorAll(".js-open-settings").forEach((btn) => {
+    if (btn.dataset.wired === "1") return;
+    btn.dataset.wired = "1";
+    btn.addEventListener("click", () => {
+      if (state.user?.role === "owner") {
+        state.ownerView = "settings";
+        renderListContentOnly();
+        renderOwnerMain();
+        dismissAdminMobileNav();
+      } else {
+        state.empView = "settings";
+        renderEmployeeMain();
+        dismissEmpMobileNav();
+      }
     });
   });
 }
@@ -2182,13 +2201,6 @@ function dismissEmpMobileNav() {
 
 function employeeAdminHeaderProfileHtml() {
   const name = state.user?.displayName ? escapeHtml(dt(state.user.displayName)) : tr("common.employee");
-  const isDark = document.documentElement.getAttribute("data-bs-theme") === "dark";
-  const pushItem = isPushSupported()
-    ? `<button type="button" class="admin-header-profile-item js-emp-enable-push" role="menuitem">
-        ${adminMsIcon("notifications")}
-        <span class="js-emp-push-btn-label">${escapeHtml(empPushButtonLabel())}</span>
-      </button>`
-    : "";
   const apkUrl = employeeApkDownloadUrl();
   const playStore = kalpanikPlayStoreUrl();
   const apkItem = `<a class="admin-header-profile-item" role="menuitem" href="${escapeHtml(apkUrl)}" download="kalpanik-reminder.apk">
@@ -2213,20 +2225,10 @@ function employeeAdminHeaderProfileHtml() {
       <img class="admin-header-profile-photo" src="/icons/admin-profile-avatar.png" alt="" width="48" height="48" />
     </button>
     <div class="admin-header-profile-menu" role="menu">
-      <button type="button" class="admin-header-profile-item js-admin-theme-toggle" role="menuitem">
-        ${adminMsIcon(isDark ? "light_mode" : "dark_mode")}
-        <span>${tr("owner.themeToggle")}</span>
-      </button>
-      ${state.user?.isAdmin ? `<button type="button" class="admin-header-profile-item js-switch-account-view" data-view-role="owner" role="menuitem">
-        ${adminMsIcon("admin_panel_settings")}
-        <span>${tr("owner.switchToAdminView")}</span>
-      </button>` : ""}
-      ${pushItem}
       ${apkItem}
       ${playItem}
-      ${adminHeaderMyProfileItemHtml()}
       ${adminHeaderContactUsItemHtml()}
-      ${adminHeaderVisitUsItemHtml()}
+      ${adminHeaderSettingsItemHtml()}
       <div class="admin-header-profile-divider" role="separator"></div>
       <button type="button" class="admin-header-profile-item admin-header-profile-item--danger js-logout" role="menuitem">
         ${adminMsIcon("logout")}
@@ -6053,6 +6055,11 @@ function renderOwnerMain() {
     openOwnerReportsView();
     return;
   }
+  if (state.ownerView === "settings") {
+    destroyTaskSortables();
+    openOwnerSettingsView();
+    return;
+  }
   const list = state.lists.find((l) => l.id === state.activeListId);
   const listId = state.activeListId;
   const adminWelcomeName = state.user?.displayName
@@ -6350,9 +6357,61 @@ function ownerDashboardChromeHeaderHtml() {
     </header>`;
 }
 
+function toggleAdminTheme() {
+  const cur = document.documentElement.getAttribute("data-bs-theme") || "light";
+  setThemePreference(cur === "dark" ? "light" : "dark");
+  syncAdminThemeToggleIcons();
+  if (state.ownerView === "reports") void refreshAdminReports({ force: true });
+  else if (state.ownerView === "owner-dashboard") void refreshOwnerDashboard({ force: true });
+  onReportsThemeChange();
+  onSettingsThemeChange();
+}
+
+function ownerSettingsChromeHeaderHtml() {
+  const adminWelcomeName = state.user?.displayName
+    ? escapeHtml(dt(state.user.displayName))
+    : tr("common.admin");
+  return `<header class="admin-dash-header">
+      ${adminMobileNavToggleHtml()}
+      <div class="admin-dash-heading">
+        <h1 class="admin-dash-title">${tr("settings.title")}</h1>
+        <p class="admin-dash-subtitle">${tr("common.welcome", { name: adminWelcomeName })}</p>
+      </div>
+      <div class="admin-dash-utilities">
+        ${languageSelectorHtml({ compact: true })}
+        ${ownerTrialTopBannerHtml()}
+        ${adminNotificationsBellHtml(state.user?.id)}
+        ${ownerAdminHeaderProfileHtml()}
+      </div>
+    </header>`;
+}
+
+function employeeSettingsChromeHeaderHtml() {
+  const welcomeName = state.user?.displayName ? escapeHtml(dt(state.user.displayName)) : tr("common.employee");
+  return `<header class="admin-dash-header">
+      ${empMobileNavToggleHtml()}
+      <div class="admin-dash-heading">
+        <h1 class="admin-dash-title">${tr("settings.title")}</h1>
+        <p class="admin-dash-subtitle">${tr("common.welcome", { name: welcomeName })}</p>
+      </div>
+      <div class="admin-dash-utilities">
+        ${languageSelectorHtml({ compact: true })}
+        ${employeeAdminHeaderProfileHtml()}
+      </div>
+    </header>`;
+}
+
 function ownerReportsChromeHeaderDynamic() {
   if (state.ownerView === "owner-dashboard") return ownerDashboardChromeHeaderHtml();
+  if (state.ownerView === "settings") return ownerSettingsChromeHeaderHtml();
   return ownerReportsChromeHeaderHtml();
+}
+
+function wireEmployeeSettingsChromeHeader(main) {
+  ensureAdminHeaderProfileMenuDocListener();
+  wireAdminHeaderProfileMenu(main);
+  wireLanguageSelector(main);
+  wireEmpEnablePush(main);
 }
 
 function wireOwnerReportsChromeHeader(main) {
@@ -6419,7 +6478,7 @@ function wireChromeNav() {
   );
   document.querySelectorAll(".js-owner-create-task").forEach((btn) => {
     btn.addEventListener("click", () => {
-      if (state.ownerView === "reports" || state.ownerView === "owner-dashboard") {
+      if (state.ownerView === "reports" || state.ownerView === "owner-dashboard" || state.ownerView === "settings") {
         state.ownerView = "dashboard";
         renderListContentOnly();
       }
@@ -6428,11 +6487,7 @@ function wireChromeNav() {
   });
   document.querySelectorAll(".js-admin-theme-toggle").forEach((btn) => {
     btn.addEventListener("click", () => {
-      const cur = document.documentElement.getAttribute("data-bs-theme") || "light";
-      setThemePreference(cur === "dark" ? "light" : "dark");
-      syncAdminThemeToggleIcons();
-      if (state.ownerView === "reports") void refreshAdminReports({ force: true });
-      else if (state.ownerView === "owner-dashboard") void refreshOwnerDashboard({ force: true });
+      toggleAdminTheme();
     });
   });
   wireOwnerReportsNav();
@@ -6488,6 +6543,22 @@ function renderOwnerChrome() {
     adminMsIcon,
     reportsChromeHeader: ownerReportsChromeHeaderDynamic,
     wireReportsChromeHeader: wireOwnerReportsChromeHeader,
+  });
+  initAdminSettings({
+    api,
+    escapeHtml,
+    adminMsIcon,
+    ownerChromeHeader: ownerSettingsChromeHeaderHtml,
+    employeeChromeHeader: employeeSettingsChromeHeaderHtml,
+    wireOwnerChromeHeader: wireOwnerReportsChromeHeader,
+    wireEmployeeChromeHeader: wireEmployeeSettingsChromeHeader,
+    onOpenMyProfile: () => {
+      void openMyProfileModal();
+    },
+    onToggleTheme: toggleAdminTheme,
+    getUser: () => state.user,
+    showToast,
+    kalpanikWebsiteUrl: KALPANIK_WEBSITE_URL,
   });
   renderListGroup();
   renderOwnerMain();
@@ -7187,6 +7258,7 @@ function bindEmpNavHandlers() {
   document.querySelectorAll(".js-emp-nav-host [data-emp-filter]").forEach((btn) => {
     btn.addEventListener("click", () => {
       state.empFilter = btn.getAttribute("data-emp-filter") || "active";
+      state.empView = "dashboard";
       renderEmpListContentOnly();
       renderEmployeeMain();
       dismissEmpMobileNav();
@@ -7212,6 +7284,11 @@ function wireEmpChromeNav() {
 function renderEmployeeMain() {
   const main = document.getElementById("emp-main-column");
   if (!main) return;
+
+  if (state.empView === "settings") {
+    openEmployeeSettingsView();
+    return;
+  }
 
   const isAssignedByMe = state.empFilter === "assigned-by-me";
   const welcomeName = state.user?.displayName ? escapeHtml(dt(state.user.displayName)) : tr("common.employee");
@@ -7297,6 +7374,7 @@ function renderEmployeeMain() {
       const filter = btn.getAttribute("data-emp-filter-kpi");
       if (!filter) return;
       state.empFilter = filter;
+      state.empView = "dashboard";
       renderEmpListContentOnly();
       renderEmployeeMain();
     });
@@ -7385,6 +7463,22 @@ function renderEmployeeChrome() {
     </div>`;
 
   wireEmpChromeNav();
+  initAdminSettings({
+    api,
+    escapeHtml,
+    adminMsIcon,
+    ownerChromeHeader: ownerSettingsChromeHeaderHtml,
+    employeeChromeHeader: employeeSettingsChromeHeaderHtml,
+    wireOwnerChromeHeader: wireOwnerReportsChromeHeader,
+    wireEmployeeChromeHeader: wireEmployeeSettingsChromeHeader,
+    onOpenMyProfile: () => {
+      void openMyProfileModal();
+    },
+    onToggleTheme: toggleAdminTheme,
+    getUser: () => state.user,
+    showToast,
+    kalpanikWebsiteUrl: KALPANIK_WEBSITE_URL,
+  });
   renderEmpListContentOnly();
   wireSubmissionDetailModal();
   wireEmpSubmissionModal();

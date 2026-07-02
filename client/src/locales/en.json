@@ -406,6 +406,14 @@
     "phoneInvalid": "Phone must be exactly 10 digits.",
     "salaryInvalid": "Enter a valid salary amount."
   },
+  "settings": {
+    "title": "Settings",
+    "menuLabel": "Settings",
+    "intro": "Manage your profile, appearance, and admin preferences.",
+    "manageNotifications": "Manage notifications",
+    "notificationsTurnedOn": "Notifications turned on.",
+    "notificationsTurnedOff": "Notifications turned off."
+  },
   "contact": {
     "menuLabel": "Contact us",
     "title": "Contact us",

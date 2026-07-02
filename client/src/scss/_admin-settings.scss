@@ -1,0 +1,129 @@
+.admin-settings-page {
+  padding: 0 1.25rem 2rem;
+  max-width: 640px;
+}
+
+.admin-settings-intro {
+  color: var(--admin-on-surface-variant, #3e494a);
+  font-size: 0.9rem;
+  margin: 0 0 1rem;
+}
+
+.admin-settings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.admin-settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--admin-outline-variant, #bec8ca);
+  border-radius: 12px;
+  background: var(--admin-surface-container, #f3f3ff);
+  color: var(--admin-on-surface, #181a2e);
+  text-align: left;
+  text-decoration: none;
+  font: inherit;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+
+  .material-symbols-outlined {
+    font-size: 1.35rem;
+    color: var(--admin-primary, #006d77);
+    flex-shrink: 0;
+  }
+
+  &:hover,
+  &:focus-visible {
+    background: var(--admin-surface-container-high, #e6e6ff);
+    border-color: var(--admin-outline, #6f797a);
+  }
+}
+
+.admin-settings-row-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.admin-settings-row-chevron {
+  font-size: 1.1rem !important;
+  color: var(--admin-on-surface-variant, #3e494a) !important;
+  opacity: 0.7;
+}
+
+.admin-settings-row--toggle {
+  cursor: default;
+
+  &:hover {
+    background: var(--admin-surface-container, #f3f3ff);
+    border-color: var(--admin-outline-variant, #bec8ca);
+  }
+}
+
+.admin-settings-row-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.admin-settings-switch {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.admin-settings-switch-input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+
+  &:focus-visible + .admin-settings-switch-track {
+    outline: 2px solid var(--admin-primary, #006d77);
+    outline-offset: 2px;
+  }
+
+  &:checked + .admin-settings-switch-track {
+    background: var(--admin-primary, #006d77);
+
+    &::after {
+      transform: translateX(1.15rem);
+    }
+  }
+
+  &:disabled + .admin-settings-switch-track {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+}
+
+.admin-settings-switch-track {
+  display: block;
+  width: 2.5rem;
+  height: 1.35rem;
+  border-radius: 999px;
+  background: var(--admin-outline-variant, #bec8ca);
+  position: relative;
+  transition: background-color 0.2s ease;
+
+  &::after {
+    content: "";
+    position: absolute;
+    top: 0.15rem;
+    left: 0.15rem;
+    width: 1.05rem;
+    height: 1.05rem;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    transition: transform 0.2s ease;
+  }
+}
