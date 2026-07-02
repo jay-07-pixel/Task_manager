@@ -28,6 +28,9 @@ function shouldCacheTranslation(original, translated, lang) {
   if (lang === "hi" || lang === "mr") {
     return hasDevanagari(translated) || normalizeComparable(translated) !== normalizeComparable(original);
   }
+  if (lang === "ta") {
+    return hasTamil(translated) || normalizeComparable(translated) !== normalizeComparable(original);
+  }
   return true;
 }
 
@@ -43,11 +46,16 @@ function hasLatin(text) {
   return /[a-zA-Z]/.test(text);
 }
 
+function hasTamil(text) {
+  return /[\u0B80-\u0BFF]/.test(text);
+}
+
 /** Whether `text` likely needs translation for the active UI language. */
 function needsTranslation(text, lang) {
   if (!text) return false;
   if (lang === "en") return hasDevanagari(text);
   if (lang === "hi" || lang === "mr") return hasLatin(text) || !hasDevanagari(text);
+  if (lang === "ta") return hasLatin(text) || hasDevanagari(text) || !hasTamil(text);
   return false;
 }
 

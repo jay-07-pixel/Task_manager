@@ -1126,7 +1126,7 @@ function insertTextIntoChatInput(text) {
 function getChatSpeechLang() {
   const sel = document.getElementById("team-chat-speech-lang");
   const value = sel?.value;
-  if (value === "en" || value === "hi" || value === "mr") return value;
+  if (value === "en" || value === "hi" || value === "mr" || value === "ta") return value;
   return currentLanguage();
 }
 
@@ -1134,7 +1134,7 @@ function syncChatSpeechLangSelect() {
   const sel = document.getElementById("team-chat-speech-lang");
   if (!sel) return;
   const lang = currentLanguage();
-  if (lang === "en" || lang === "hi" || lang === "mr") sel.value = lang;
+  if (lang === "en" || lang === "hi" || lang === "mr" || lang === "ta") sel.value = lang;
 }
 
 function updateChatVoiceButton(listening) {
@@ -1440,6 +1440,7 @@ export function teamChatOffcanvasHtml() {
                     <option value="en">${tr("chat.speechLangEn")}</option>
                     <option value="hi">${tr("chat.speechLangHi")}</option>
                     <option value="mr">${tr("chat.speechLangMr")}</option>
+                    <option value="ta">${tr("chat.speechLangTa")}</option>
                   </select>
                   <button type="button" class="btn btn-light border team-chat-voice-btn d-none" id="team-chat-voice-btn" aria-label="${tr("chat.voiceInput")}" title="${tr("chat.voiceInput")}" aria-pressed="false">
                     <i class="bi bi-mic-fill" aria-hidden="true"></i>

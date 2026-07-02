@@ -11,6 +11,7 @@ export function languageSelectorHtml({ compact = false } = {}) {
       <option value="en"${lang === "en" ? " selected" : ""}>${tr("language.en")}</option>
       <option value="hi"${lang === "hi" ? " selected" : ""}>${tr("language.hi")}</option>
       <option value="mr"${lang === "mr" ? " selected" : ""}>${tr("language.mr")}</option>
+      <option value="ta"${lang === "ta" ? " selected" : ""}>${tr("language.ta")}</option>
     </select>
   </div>`;
 }

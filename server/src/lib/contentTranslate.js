@@ -1,10 +1,10 @@
-const UI_LANGS = new Set(["en", "hi", "mr"]);
+const UI_LANGS = new Set(["en", "hi", "mr", "ta"]);
 const MAX_TEXT_LEN = 500;
 const MAX_BATCH = 40;
 const cache = new Map();
 const MAX_CACHE = 12_000;
 
-const LANG_CODES = { en: "en", hi: "hi", mr: "mr" };
+const LANG_CODES = { en: "en", hi: "hi", mr: "mr", ta: "ta" };
 
 function cacheKey(text, toLang) {
   return `${toLang}\0${text}`;
@@ -12,6 +12,10 @@ function cacheKey(text, toLang) {
 
 function hasDevanagari(text) {
   return /[\u0900-\u097F]/.test(text);
+}
+
+function hasTamil(text) {
+  return /[\u0B80-\u0BFF]/.test(text);
 }
 
 function hasLatin(text) {
@@ -22,13 +26,16 @@ function normalizeComparable(text) {
   return String(text).trim().replace(/\s+/g, " ").toLowerCase();
 }
 
-/** @returns {"en" | "inc" | "mixed"} */
+/** @returns {"en" | "inc" | "tam" | "mixed"} */
 function detectSourceLang(text) {
   const s = String(text).trim();
   if (!s) return "en";
   const devanagari = (s.match(/[\u0900-\u097F]/g) || []).length;
+  const tamil = (s.match(/[\u0B80-\u0BFF]/g) || []).length;
   const latin = (s.match(/[a-zA-Z]/g) || []).length;
-  if (devanagari > 0 && latin > 0) return "mixed";
+  const scripts = [devanagari > 0, tamil > 0, latin > 0].filter(Boolean).length;
+  if (scripts > 1) return "mixed";
+  if (tamil > 0) return "tam";
   if (devanagari > 0) return "inc";
   return "en";
 }
@@ -39,21 +46,39 @@ function translationLooksValid(text, translated, toLang) {
   if (toLang === "hi" || toLang === "mr") {
     return hasDevanagari(translated) || normalizeComparable(translated) !== normalizeComparable(text);
   }
+  if (toLang === "ta") {
+    return hasTamil(translated) || normalizeComparable(translated) !== normalizeComparable(text);
+  }
   if (toLang === "en") return hasLatin(translated);
   return true;
 }
 
 function langPairsFor(text, toLang) {
   const src = detectSourceLang(text);
-  if (src === "en" && toLang === "en") return [];
-  if (src === "inc" && toLang === "en") return ["hi|en", "mr|en", "Autodetect|en"];
-  if (src === "en" && toLang === "hi") return ["en|hi", "Autodetect|hi"];
-  if (src === "en" && toLang === "mr") return ["en|mr", "Autodetect|mr"];
-  if (src === "inc" && toLang === "hi") return ["Autodetect|hi", "mr|hi"];
-  if (src === "inc" && toLang === "mr") return ["Autodetect|mr", "hi|mr"];
-  if (src === "mixed" && toLang === "en") return ["Autodetect|en", "hi|en", "mr|en"];
-  if (src === "mixed" && toLang === "hi") return ["Autodetect|hi", "en|hi", "mr|hi"];
-  if (src === "mixed" && toLang === "mr") return ["Autodetect|mr", "en|mr", "hi|mr"];
+  if (toLang === "en") {
+    if (src === "en") return [];
+    if (src === "inc") return ["hi|en", "mr|en", "Autodetect|en"];
+    if (src === "tam") return ["ta|en", "Autodetect|en"];
+    if (src === "mixed") return ["Autodetect|en", "hi|en", "mr|en", "ta|en"];
+  }
+  if (toLang === "hi") {
+    if (src === "en") return ["en|hi", "Autodetect|hi"];
+    if (src === "inc") return ["Autodetect|hi", "mr|hi"];
+    if (src === "tam") return ["ta|hi", "Autodetect|hi"];
+    if (src === "mixed") return ["Autodetect|hi", "en|hi", "mr|hi", "ta|hi"];
+  }
+  if (toLang === "mr") {
+    if (src === "en") return ["en|mr", "Autodetect|mr"];
+    if (src === "inc") return ["Autodetect|mr", "hi|mr"];
+    if (src === "tam") return ["ta|mr", "Autodetect|mr"];
+    if (src === "mixed") return ["Autodetect|mr", "en|mr", "hi|mr", "ta|mr"];
+  }
+  if (toLang === "ta") {
+    if (src === "en") return ["en|ta", "Autodetect|ta"];
+    if (src === "inc") return ["Autodetect|ta", "hi|ta", "mr|ta"];
+    if (src === "tam") return [];
+    if (src === "mixed") return ["Autodetect|ta", "en|ta", "hi|ta", "mr|ta"];
+  }
   return [];
 }
 

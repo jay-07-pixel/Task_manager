@@ -2,9 +2,10 @@ import i18n from "i18next";
 import en from "../locales/en.json";
 import hi from "../locales/hi.json";
 import mr from "../locales/mr.json";
+import ta from "../locales/ta.json";
 
 export const LANG_STORAGE_KEY = "task-manager-lang";
-const SUPPORTED = ["en", "hi", "mr"];
+const SUPPORTED = ["en", "hi", "mr", "ta"];
 
 /** @type {(() => void) | null} */
 let onLanguageChange = null;
@@ -26,6 +27,7 @@ export async function initI18n() {
       en: { translation: en },
       hi: { translation: hi },
       mr: { translation: mr },
+      ta: { translation: ta },
     },
     lng: saved,
     fallbackLng: "en",
@@ -76,6 +78,7 @@ export function dateLocale() {
   const lang = currentLanguage();
   if (lang === "hi") return "hi-IN";
   if (lang === "mr") return "mr-IN";
+  if (lang === "ta") return "ta-IN";
   return "en-IN";
 }
 

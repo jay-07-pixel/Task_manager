@@ -3,6 +3,7 @@ const SPEECH_LANG = {
   en: "en-IN",
   hi: "hi-IN",
   mr: "mr-IN",
+  ta: "ta-IN",
 };
 
 export function speechRecognitionLangCode(uiLang) {

@@ -7,7 +7,7 @@ const router = Router();
 
 const bodySchema = z.object({
   texts: z.array(z.string().max(500)).max(40),
-  to: z.enum(["en", "hi", "mr"]),
+  to: z.enum(["en", "hi", "mr", "ta"]),
 });
 
 router.post("/", requireAuth, async (req, res) => {

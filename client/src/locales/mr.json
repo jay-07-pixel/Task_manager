@@ -7,7 +7,8 @@
     "label": "भाषा",
     "en": "English",
     "hi": "हिंदी",
-    "mr": "मराठी"
+    "mr": "मराठी",
+    "ta": "தமிழ்"
   },
   "common": {
     "close": "बंद करा",
@@ -558,6 +559,7 @@
     "speechLangEn": "इंग्रजी",
     "speechLangHi": "हिंदी",
     "speechLangMr": "मराठी",
+    "speechLangTa": "தமிழ்",
     "messagePlaceholder": "संदेश लिहा…",
     "sendMessage": "संदेश पाठवा",
     "messageLabel": "संदेश",
