@@ -20,6 +20,7 @@ import {
   OTP_LENGTH,
 } from "../lib/otp.js";
 import { adminUserWhere, userHasAdminAccess } from "../lib/adminUsers.js";
+import { getCompanyTrialStatus, TRIAL_EXPIRED_MESSAGE } from "../lib/companyTrial.js";
 
 const router = Router();
 
@@ -268,6 +269,15 @@ async function isEmailVerifiedForRegistration(email) {
   return age <= REGISTRATION_WINDOW_MS;
 }
 
+async function rejectIfTrialExpired(res) {
+  const status = await getCompanyTrialStatus();
+  if (status.isExpired) {
+    res.status(403).json({ error: TRIAL_EXPIRED_MESSAGE });
+    return true;
+  }
+  return false;
+}
+
 router.post("/register", async (req, res) => {
   const parsed = registerSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -298,6 +308,8 @@ router.post("/register", async (req, res) => {
       return res.status(403).json({ error: "An admin already exists; register as a user or ask an admin for access." });
     }
   }
+
+  if (await rejectIfTrialExpired(res)) return;
 
   const passwordHash = await bcrypt.hash(password, 10);
   const bootstrapAdmin = role === "owner";
@@ -339,6 +351,7 @@ router.post("/login", async (req, res) => {
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
       return res.status(401).json({ error: "Invalid email or password" });
     }
+    if (await rejectIfTrialExpired(res)) return;
     const activeRole = resolveActiveRole(user, viewAs);
     req.session.userId = user.id;
     req.session.role = activeRole;

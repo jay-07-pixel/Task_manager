@@ -605,6 +605,71 @@
     grid-column: 1 / -1;
   }
 
+  .owner-dash-trial-card {
+    grid-column: 1 / -1;
+  }
+
+  .owner-dash-trial-stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.75rem;
+  }
+
+  .owner-dash-trial-stat {
+    padding: 0.75rem 0.85rem;
+    border-radius: 0.65rem;
+    background: var(--admin-surface-container-high);
+    border: 1px solid var(--admin-outline-variant);
+    min-width: 0;
+  }
+
+  .owner-dash-trial-stat-label {
+    display: block;
+    font-size: 0.68rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--admin-on-surface-variant);
+    margin-bottom: 0.25rem;
+  }
+
+  .owner-dash-trial-stat-value {
+    display: block;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--admin-on-surface);
+    line-height: 1.2;
+  }
+
+  .owner-dash-trial-stat-unit {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--admin-on-surface-variant);
+  }
+
+  .owner-dash-trial-stat--remaining .owner-dash-trial-stat-value {
+    color: var(--admin-primary-container);
+  }
+
+  .owner-dash-trial-card--warn .owner-dash-trial-stat--remaining .owner-dash-trial-stat-value {
+    color: var(--admin-status-warning);
+  }
+
+  .owner-dash-trial-card--expired .owner-dash-trial-stat--remaining .owner-dash-trial-stat-value {
+    color: var(--admin-error);
+  }
+
+  .owner-dash-trial-expired-note {
+    margin-top: 0.85rem;
+    padding: 0.65rem 0.75rem;
+    border-radius: 0.55rem;
+    background: color-mix(in srgb, var(--admin-error) 8%, var(--admin-surface-container-high));
+    border: 1px solid color-mix(in srgb, var(--admin-error) 25%, var(--admin-outline-variant));
+    color: var(--admin-error);
+    font-size: 0.82rem;
+    line-height: 1.4;
+  }
+
   .owner-dash-budget-kpis {
     margin-bottom: 1rem;
   }
@@ -1055,6 +1120,21 @@
     .owner-dash-budget-breakdown-title {
       font-size: 0.82rem;
       margin-top: 1rem !important;
+    }
+
+    .owner-dash-trial-stats {
+      grid-template-columns: 1fr;
+    }
+
+    .owner-dash-trial-stat {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 0.75rem;
+    }
+
+    .owner-dash-trial-stat-label {
+      margin-bottom: 0;
     }
 
     .admin-report-chart-wrap--budget {

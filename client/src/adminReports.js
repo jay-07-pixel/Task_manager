@@ -790,6 +790,47 @@ function kpiCard(label, value, icon, accent = "") {
     </div>`;
 }
 
+function companyTrialSectionHtml(trial) {
+  if (!trial?.trialStartDate || !trial?.trialEndDate) return "";
+
+  const start = new Date(trial.trialStartDate);
+  const end = new Date(trial.trialEndDate);
+  const startStr = start.toLocaleDateString(dateLocale(), { month: "short", day: "numeric", year: "numeric" });
+  const endStr = end.toLocaleDateString(dateLocale(), { month: "short", day: "numeric", year: "numeric" });
+  const remaining = trial.remainingDays ?? 0;
+  const dayLabel = remaining === 1 ? tr("owner.day") : tr("owner.days");
+  const statusMod = trial.isExpired ? " owner-dash-trial-card--expired" : remaining <= 7 ? " owner-dash-trial-card--warn" : "";
+
+  return `<section class="admin-report-card admin-report-card--wide owner-dash-trial-card${statusMod}">
+    <header class="owner-dash-section-head owner-dash-section-head--compact mb-3">
+      <div class="owner-dash-section-head-icon owner-dash-section-head-icon--chart">${adminMsIconFn("schedule")}</div>
+      <div>
+        <h2 class="owner-dash-section-title mb-1">${escapeHtmlFn(tr("owner.companyTrialTitle"))}</h2>
+        <p class="owner-dash-section-subtitle mb-0">${escapeHtmlFn(tr("owner.companyTrialSubtitle"))}</p>
+      </div>
+    </header>
+    <div class="owner-dash-trial-stats">
+      <div class="owner-dash-trial-stat">
+        <span class="owner-dash-trial-stat-label">${escapeHtmlFn(tr("owner.trialStartDate"))}</span>
+        <span class="owner-dash-trial-stat-value tabular-nums">${escapeHtmlFn(startStr)}</span>
+      </div>
+      <div class="owner-dash-trial-stat">
+        <span class="owner-dash-trial-stat-label">${escapeHtmlFn(tr("owner.trialEndDate"))}</span>
+        <span class="owner-dash-trial-stat-value tabular-nums">${escapeHtmlFn(endStr)}</span>
+      </div>
+      <div class="owner-dash-trial-stat owner-dash-trial-stat--remaining">
+        <span class="owner-dash-trial-stat-label">${escapeHtmlFn(tr("owner.trialDaysRemainingLabel"))}</span>
+        <span class="owner-dash-trial-stat-value tabular-nums">${escapeHtmlFn(String(remaining))} <span class="owner-dash-trial-stat-unit">${escapeHtmlFn(dayLabel)}</span></span>
+      </div>
+    </div>
+    ${
+      trial.isExpired
+        ? `<p class="owner-dash-trial-expired-note mb-0">${escapeHtmlFn(tr("owner.companyTrialExpiredNote"))}</p>`
+        : ""
+    }
+  </section>`;
+}
+
 function ownerDashboardPageHtml(data) {
   const generated = new Date(data.generatedAt).toLocaleString(undefined, {
     dateStyle: "medium",
@@ -815,6 +856,7 @@ function ownerDashboardPageHtml(data) {
       </header>
 
       <div class="admin-reports-charts admin-reports-charts--owner-dashboard">
+        ${companyTrialSectionHtml(data.companyTrial)}
         ${monthlyMinuteBudgetSectionHtml(data)}
         ${employeePerfSectionHtml(data)}
       </div>
@@ -1301,7 +1343,11 @@ export async function refreshOwnerDashboard({ force = false } = {}) {
 
   try {
     if (!reportData || force) {
-      reportData = await apiFn("/api/reports/owner-dashboard/summary");
+      const [summary, companyTrial] = await Promise.all([
+        apiFn("/api/reports/owner-dashboard/summary"),
+        apiFn("/api/company/trial").catch(() => null),
+      ]);
+      reportData = { ...summary, companyTrial };
       if (force) {
         employeePerfData = null;
         employeePerfFilters = { employeeId: "", period: employeePerfFilters.period || "daily" };

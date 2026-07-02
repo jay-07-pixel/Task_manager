@@ -18,6 +18,7 @@ import supportRoutes from "./routes/support.js";
 import chatRoutes from "./routes/chat.js";
 import reportsRoutes from "./routes/reports.js";
 import translateRoutes from "./routes/translate.js";
+import companyRoutes from "./routes/company.js";
 import { prisma } from "./lib/prisma.js";
 import { initPush } from "./lib/push.js";
 import { initFcm } from "./lib/fcm.js";
@@ -25,6 +26,7 @@ import { startReminderScheduler } from "./lib/reminderScheduler.js";
 import { getTurnstileSiteKey } from "./lib/turnstile.js";
 import { reconcileAllLegacyRolledRecurringTasks } from "./lib/recurringLegacyBackfill.js";
 import { friendlyDbError } from "./lib/dbErrorMessage.js";
+import { syncCompanyTrialSettings } from "./lib/companyTrial.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const sessionsDir = path.join(__dirname, "..", "sessions");
@@ -88,6 +90,7 @@ app.use("/api/support", supportRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/reports", reportsRoutes);
 app.use("/api/translate", translateRoutes);
+app.use("/api/company", companyRoutes);
 
 app.get("/api/health", async (_req, res) => {
   try {
@@ -126,6 +129,7 @@ const server = app.listen(PORT, () => {
   initPush();
   initFcm();
   startReminderScheduler();
+  void syncCompanyTrialSettings().catch((err) => console.error("[company-trial]", err));
   void reconcileAllLegacyRolledRecurringTasks()
     .then((n) => {
       if (n > 0) {

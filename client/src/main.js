@@ -57,6 +57,7 @@ let state = {
   empFilter: "active",
   ownerTaskFilter: "active",
   ownerView: "dashboard",
+  companyTrial: null,
 };
 
 /** @type {any[]} */
@@ -395,7 +396,20 @@ async function refreshMe() {
     return true;
   } catch {
     state.user = null;
+    state.companyTrial = null;
     return false;
+  }
+}
+
+async function refreshCompanyTrial() {
+  if (state.user?.role !== "owner") {
+    state.companyTrial = null;
+    return;
+  }
+  try {
+    state.companyTrial = await api("/api/company/trial");
+  } catch {
+    state.companyTrial = null;
   }
 }
 
@@ -2132,6 +2146,10 @@ function formatOwnerTaskDeadlineMock(task) {
   return `<span class="admin-deadline${cls}">${escapeHtml(dateStr)}</span>`;
 }
 
+function formatTrialDate(date) {
+  return date.toLocaleDateString(dateLocale(), { month: "short", day: "numeric", year: "numeric" });
+}
+
 function ownerTrialTopBannerHtml() {
   const info = ownerTrialStatusInfo();
   if (info.isExpired) {
@@ -3546,13 +3564,8 @@ function ownerTrialMessageModalHtml() {
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="${tr("common.close")}"></button>
           </div>
           <div class="modal-body pt-2">
-            <p class="mb-2">
-              Your free trial started on <strong>15 June</strong> and will end on <strong>15 July</strong>.
-            </p>
-            <p class="mb-0">
-              To continue using our service after the trial period, please renew your plan by contacting
-              <a href="mailto:support@kalpanik.in">support@kalpanik.in</a>.
-            </p>
+            <p class="mb-2">${ownerTrialNoticeBodyHtml()}</p>
+            <p class="mb-0">${tr("owner.trialNoticeBody2")}</p>
           </div>
           <div class="modal-footer border-0 pt-2">
             <button type="button" class="btn btn-primary" data-bs-dismiss="modal">${tr("common.gotIt")}</button>
@@ -3571,14 +3584,36 @@ function maybeShowOwnerTrialMessageModal() {
   bootstrap.Modal.getOrCreateInstance(modalEl).show();
 }
 
+function ownerTrialNoticeBodyHtml() {
+  const info = ownerTrialStatusInfo();
+  if (!info.start || !info.end) return escapeHtml(tr("owner.trialNoticeBody1Fallback"));
+  return tr("owner.trialNoticeBody1", {
+    start: formatTrialDate(info.start),
+    end: formatTrialDate(info.end),
+  });
+}
+
 function ownerTrialStatusInfo() {
-  const start = new Date("2026-06-15T00:00:00");
-  const end = new Date("2026-07-15T23:59:59");
+  const trial = state.companyTrial;
+  if (!trial?.trialStartDate || !trial?.trialEndDate) {
+    return {
+      start: null,
+      end: null,
+      daysRemaining: 0,
+      hasStarted: false,
+      isExpired: false,
+    };
+  }
+  const start = new Date(trial.trialStartDate);
+  const end = new Date(trial.trialEndDate);
   const now = new Date();
   const dayMs = 24 * 60 * 60 * 1000;
-  const daysRemaining = Math.ceil((end.getTime() - now.getTime()) / dayMs);
-  const hasStarted = now.getTime() >= start.getTime();
-  const isExpired = now.getTime() > end.getTime();
+  const daysRemaining =
+    typeof trial.remainingDays === "number"
+      ? trial.remainingDays
+      : Math.max(0, Math.ceil((end.getTime() - now.getTime()) / dayMs));
+  const hasStarted = trial.hasStarted ?? now.getTime() >= start.getTime();
+  const isExpired = trial.isExpired ?? now.getTime() > end.getTime();
   return { start, end, daysRemaining, hasStarted, isExpired };
 }
 
@@ -7407,6 +7442,7 @@ async function render() {
     }
     return;
   }
+  await refreshCompanyTrial();
   await loadLists();
   await loadAssignees();
   await loadTasks(state.activeListId);

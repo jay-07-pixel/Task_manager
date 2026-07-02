@@ -351,3 +351,13 @@ model EmailVerification {
 
   @@map("email_verification")
 }
+
+model CompanySettings {
+  id             String   @id @default("default")
+  trialStartDate DateTime @map("trial_start_date")
+  trialEndDate   DateTime @map("trial_end_date")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@map("company_settings")
+}
