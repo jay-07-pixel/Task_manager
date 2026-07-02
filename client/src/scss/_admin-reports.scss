@@ -367,6 +367,11 @@
     border: 1px solid var(--admin-outline-variant);
   }
 
+  .owner-dash-filter--month {
+    min-width: 11.5rem;
+    align-self: flex-end;
+  }
+
   .owner-dash-section-head {
     display: flex;
     align-items: flex-start;

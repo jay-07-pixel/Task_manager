@@ -88,10 +88,16 @@ export async function buildEmployeeMonthlyBudgetRows(userIds, opts = {}) {
 /**
  * Owner-dashboard report: per-employee monthly minute usage from org task lists.
  * @param {string[]} ownerIds
+ * @param {{ year?: number, month?: number }} [opts]
  */
-export async function buildOrgMonthlyMinuteBudgetReport(ownerIds) {
+export async function buildOrgMonthlyMinuteBudgetReport(ownerIds, opts = {}) {
   const ids = [...new Set(ownerIds)].filter(Boolean);
-  const { year, month } = currentYearMonthInAppTz();
+  const cur = currentYearMonthInAppTz();
+  const year = Number.isInteger(opts.year) && opts.year > 2000 ? opts.year : cur.year;
+  const month =
+    Number.isInteger(opts.month) && opts.month >= 1 && opts.month <= 12
+      ? opts.month
+      : cur.month;
 
   if (!ids.length) {
     return {

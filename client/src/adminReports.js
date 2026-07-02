@@ -29,6 +29,9 @@ let employeePerfLoading = false;
 /** @type {"full" | "owner-dashboard"} */
 let reportViewMode = "full";
 
+/** @type {string} YYYY-MM for owner budget filter */
+let ownerBudgetMonthFilter = "";
+
 const PERIOD_BUCKET_COUNTS = { daily: 14, weekly: 12, monthly: 6 };
 
 /** @type {number | null} */
@@ -213,6 +216,23 @@ function budgetMonthLabel(year, month) {
   const d = new Date(year, month - 1, 1);
   if (Number.isNaN(d.getTime())) return "";
   return d.toLocaleDateString(dateLocale(), { month: "long", year: "numeric" });
+}
+
+function budgetMonthInputValue(year, month) {
+  const y = Number(year) || 0;
+  const m = Number(month) || 0;
+  if (y < 2000 || m < 1 || m > 12) return "";
+  return `${String(y)}-${String(m).padStart(2, "0")}`;
+}
+
+function parseBudgetMonthInput(value) {
+  const match = String(value || "").match(/^(\d{4})-(\d{2})$/);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  if (!Number.isInteger(year) || year < 2000 || year > 2100) return null;
+  if (!Number.isInteger(month) || month < 1 || month > 12) return null;
+  return { year, month };
 }
 
 function recurrenceLabel(recurrence) {
@@ -446,6 +466,7 @@ function monthlyMinuteBudgetSectionHtml(data) {
 
   const { employees = [], totals = {}, monthlyBudgetMinutes, budgetYear, budgetMonth } = budget;
   const monthLabel = budgetMonthLabel(budgetYear, budgetMonth);
+  const monthInput = budgetMonthInputValue(budgetYear, budgetMonth);
 
   const kpiRow = `<div class="admin-report-emp-kpi-grid owner-dash-budget-kpis">
     ${kpiCard(tr("owner.monthlyCapacityEmployees"), totals.employeeCount ?? 0, "groups")}
@@ -530,6 +551,12 @@ function monthlyMinuteBudgetSectionHtml(data) {
         <h2 class="admin-report-card-title mb-1">${escapeHtmlFn(tr("owner.monthlyCapacityTitle"))}</h2>
         <p class="owner-dash-section-subtitle mb-0">${escapeHtmlFn(tr("owner.monthlyCapacitySubtitle", { month: monthLabel, budget: formatBudgetMinutes(monthlyBudgetMinutes) }))}</p>
       </div>
+      <label class="admin-report-filter owner-dash-filter owner-dash-filter--month">
+        <span class="admin-report-filter-label owner-dash-filter-label">${adminMsIconFn("calendar_month", "owner-dash-filter-icon")}<span>${escapeHtmlFn(
+          tr("owner.monthlyCapacitySelectMonth")
+        )}</span></span>
+        <input type="month" class="form-control form-control-sm owner-dash-select js-budget-month" value="${escapeHtmlFn(monthInput)}" />
+      </label>
     </header>
     ${kpiRow}
     ${chartBlock}
@@ -1197,6 +1224,7 @@ function wireReportsPage(main) {
     });
   }
   wireEmployeePerfFilters(main);
+  wireMonthlyBudgetFilters(main);
 }
 
 function wireEmployeePerfFilters(main) {
@@ -1210,6 +1238,20 @@ function wireEmployeePerfFilters(main) {
     const target = /** @type {HTMLSelectElement} */ (e.target);
     employeePerfFilters.period = target.value;
     void loadEmployeePerformance(main);
+  });
+}
+
+function wireMonthlyBudgetFilters(main) {
+  const monthInput = main.querySelector(".js-budget-month");
+  if (!(monthInput instanceof HTMLInputElement) || monthInput.dataset.wiredBudgetMonth === "1") return;
+  monthInput.dataset.wiredBudgetMonth = "1";
+  monthInput.addEventListener("change", () => {
+    const next = parseBudgetMonthInput(monthInput.value);
+    if (!next) return;
+    const nextKey = budgetMonthInputValue(next.year, next.month);
+    if (nextKey === ownerBudgetMonthFilter) return;
+    ownerBudgetMonthFilter = nextKey;
+    void refreshOwnerDashboard({ force: true });
   });
 }
 
@@ -1343,11 +1385,19 @@ export async function refreshOwnerDashboard({ force = false } = {}) {
 
   try {
     if (!reportData || force) {
+      const month = parseBudgetMonthInput(ownerBudgetMonthFilter);
+      const q = month
+        ? `?year=${encodeURIComponent(String(month.year))}&month=${encodeURIComponent(String(month.month))}`
+        : "";
       const [summary, companyTrial] = await Promise.all([
-        apiFn("/api/reports/owner-dashboard/summary"),
+        apiFn(`/api/reports/owner-dashboard/summary${q}`),
         apiFn("/api/company/trial").catch(() => null),
       ]);
       reportData = { ...summary, companyTrial };
+      const budget = reportData.monthlyMinuteBudget;
+      if (budget?.budgetYear && budget?.budgetMonth) {
+        ownerBudgetMonthFilter = budgetMonthInputValue(budget.budgetYear, budget.budgetMonth);
+      }
       if (force) {
         employeePerfData = null;
         employeePerfFilters = { employeeId: "", period: employeePerfFilters.period || "daily" };
@@ -1387,6 +1437,7 @@ export function clearAdminReportsCache() {
   reportData = null;
   employeePerfData = null;
   employeePerfFilters = { employeeId: "", period: "daily" };
+  ownerBudgetMonthFilter = "";
   reportViewMode = "full";
   destroyAdminReportsCharts();
 }

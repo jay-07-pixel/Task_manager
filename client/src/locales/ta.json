@@ -247,6 +247,7 @@
     "monthlyCapacityOverBudgetCount": "பட்ஜெட்டை மீறியோர்",
     "monthlyCapacityTaskBreakdown": "பணி பிரிவு",
     "monthlyCapacityNoTasks": "இந்த மாதம் கால அளவு கொண்ட செயலில் உள்ள பணிகள் ஒதுக்கப்படவில்லை.",
+    "monthlyCapacitySelectMonth": "மாதத்தைத் தேர்வு செய்",
     "monthlyCapacityOccurrences": "×{{count}}/மாதம்",
     "monthlyCapacityMonthlyCost": "மாதச் செலவு (நிமி)",
     "monthlyCapacityDuration": "கால அளவு (நிமி)",

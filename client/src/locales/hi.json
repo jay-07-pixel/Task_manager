@@ -247,6 +247,7 @@
     "monthlyCapacityOverBudgetCount": "बजट से अधिक",
     "monthlyCapacityTaskBreakdown": "कार्य विवरण",
     "monthlyCapacityNoTasks": "इस महीने अवधि वाले कोई सक्रिय कार्य नियत नहीं हैं।",
+    "monthlyCapacitySelectMonth": "महीना चुनें",
     "monthlyCapacityOccurrences": "×{{count}}/माह",
     "monthlyCapacityMonthlyCost": "मासिक लागत (मिनट)",
     "monthlyCapacityDuration": "अवधि (मिनट)",

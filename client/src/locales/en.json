@@ -247,6 +247,7 @@
     "monthlyCapacityOverBudgetCount": "Over budget",
     "monthlyCapacityTaskBreakdown": "Task breakdown",
     "monthlyCapacityNoTasks": "No active tasks with duration are assigned this month.",
+    "monthlyCapacitySelectMonth": "Select month",
     "monthlyCapacityOccurrences": "×{{count}}/month",
     "monthlyCapacityMonthlyCost": "Monthly cost (min)",
     "monthlyCapacityDuration": "Duration (min)",

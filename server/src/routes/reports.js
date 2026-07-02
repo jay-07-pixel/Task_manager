@@ -135,11 +135,20 @@ function rowInPeriod(row, period, keySet) {
   return keySet.has(key);
 }
 
+function parseBudgetMonthQuery(req) {
+  const now = currentYearMonthInAppTz();
+  const yearRaw = Number(req.query.year);
+  const monthRaw = Number(req.query.month);
+  const year = Number.isInteger(yearRaw) && yearRaw >= 2000 && yearRaw <= 2100 ? yearRaw : now.year;
+  const month = Number.isInteger(monthRaw) && monthRaw >= 1 && monthRaw <= 12 ? monthRaw : now.month;
+  return { year, month };
+}
+
 router.get("/owner-dashboard/summary", async (req, res) => {
   try {
+    const { year, month } = parseBudgetMonthQuery(req);
     const ownerIds = await orgOwnerIds();
     if (!ownerIds.length) {
-      const { year, month } = currentYearMonthInAppTz();
       return res.json({
         generatedAt: new Date().toISOString(),
         employeeOptions: [],
@@ -182,7 +191,7 @@ router.get("/owner-dashboard/summary", async (req, res) => {
     }
 
     const employeeOptions = [...byEmployee.values()].sort((a, b) => a.name.localeCompare(b.name));
-    const monthlyMinuteBudget = await buildOrgMonthlyMinuteBudgetReport(ownerIds);
+    const monthlyMinuteBudget = await buildOrgMonthlyMinuteBudgetReport(ownerIds, { year, month });
 
     res.json({
       generatedAt: new Date().toISOString(),
