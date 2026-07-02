@@ -232,6 +232,9 @@
 }
 
 [data-bs-theme="dark"] .auth-shell.admin-mockup-ui {
+  --admin-primary: #4db6ac;
+  --admin-primary-container: #80cbc4;
+  --admin-accent-admin: #4db6ac;
   --admin-background: #121218;
   --admin-surface: #1e1e28;
   --admin-surface-container-low: #1e1e28;
@@ -271,6 +274,33 @@
     &:hover {
       color: #a9ece5;
       background: #3a3a48;
+    }
+  }
+
+  .theme-icon-toggles .btn-outline-secondary {
+    color: var(--admin-on-surface-variant);
+    border-color: var(--admin-outline-variant);
+
+    &:hover {
+      color: var(--admin-primary-container);
+      border-color: color-mix(in srgb, var(--admin-primary-container) 55%, var(--admin-outline-variant));
+      background: rgba(77, 182, 172, 0.12);
+    }
+  }
+
+  .theme-icon-toggles .btn-primary {
+    color: #fff;
+
+    .bi {
+      color: #fff;
+    }
+  }
+
+  .auth-admin-outline.btn-outline-primary {
+    &:hover:not(:disabled) {
+      background: rgba(77, 182, 172, 0.12);
+      color: var(--admin-primary-container);
+      border-color: var(--admin-primary-container);
     }
   }
 }

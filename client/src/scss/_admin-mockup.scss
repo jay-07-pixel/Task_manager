@@ -14,6 +14,14 @@
   --admin-on-surface: #181a2e;
   --admin-on-surface-variant: #3e494a;
   --admin-error: #ba1a1a;
+  --admin-accent-employee: #5e35d8;
+  --admin-accent-admin: #006d77;
+  --admin-status-success: #2e7d32;
+  --admin-status-warning: #e65100;
+  --admin-surface-container-lowest: #fff;
+  --admin-surface-container: var(--admin-surface-container-low);
+  --admin-nav-hover-bg: rgba(169, 236, 229, 0.2);
+  --admin-nav-active-bg: rgba(169, 236, 229, 0.3);
   --admin-sidebar-w: 16rem;
   --admin-topbar-h: 4rem;
   --admin-header-action-size: 2.25rem;
@@ -203,11 +211,11 @@
     }
 
     &:hover {
-      background: rgba(169, 236, 229, 0.2);
+      background: var(--admin-nav-hover-bg);
     }
 
     &.active {
-      background: rgba(169, 236, 229, 0.3);
+      background: var(--admin-nav-active-bg);
       color: var(--admin-on-secondary-container);
       font-weight: 700;
 
@@ -267,7 +275,7 @@
     justify-content: center;
 
     &:hover {
-      background: rgba(169, 236, 229, 0.2);
+      background: var(--admin-nav-hover-bg);
       color: var(--admin-primary);
     }
   }
@@ -509,7 +517,7 @@
     }
 
     &:hover {
-      background: rgba(169, 236, 229, 0.2);
+      background: var(--admin-nav-hover-bg);
       color: var(--admin-primary);
     }
   }
@@ -643,7 +651,7 @@
       padding: 0.65rem 0.75rem;
       border: 1px solid rgba(190, 200, 202, 0.55);
       border-radius: 0.75rem;
-      background: #fff;
+      background: var(--admin-surface-container-lowest);
 
       &.owner-task-row--high-priority {
         background: var(--hp-card-bg, #ffcccc) !important;
@@ -902,11 +910,11 @@
         font-size: var(--admin-header-action-icon);
       }
 
-      &:hover {
-        background: rgba(169, 236, 229, 0.2);
-      }
+    &:hover {
+      background: var(--admin-nav-hover-bg);
+    }
 
-      .badge {
+    .badge {
         position: absolute;
         top: 0.15rem;
         right: 0.15rem;
@@ -966,7 +974,7 @@
     }
 
     &:hover:not(:disabled) {
-      background: rgba(169, 236, 229, 0.2);
+      background: var(--admin-nav-hover-bg);
     }
 
     &:disabled {
@@ -1030,7 +1038,7 @@
     min-width: 11.5rem;
     padding: 0.35rem;
     border-radius: 0.75rem;
-    background: #fff;
+    background: var(--admin-surface-container-lowest);
     border: 1px solid rgba(190, 200, 202, 0.45);
     box-shadow: 0 10px 28px rgba(24, 26, 46, 0.12);
     opacity: 0;
@@ -1061,7 +1069,7 @@
     }
 
     &:hover {
-      background: rgba(169, 236, 229, 0.18);
+      background: var(--admin-nav-hover-bg);
       color: var(--admin-on-surface);
     }
 
@@ -1123,7 +1131,7 @@
     padding: 1.5rem;
     border: 1px solid var(--admin-outline-variant);
     border-radius: 0.75rem;
-    background: #fff;
+    background: var(--admin-surface-container-lowest);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
     text-align: left;
     transition: border-color 0.12s ease, transform 0.1s ease;
@@ -1197,7 +1205,7 @@
   .owner-task-panel {
     border: 1px solid var(--admin-outline-variant);
     border-radius: 0.75rem;
-    background: #fff;
+    background: var(--admin-surface-container-lowest);
     overflow: hidden;
     max-width: 100%;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
@@ -1465,7 +1473,7 @@
   }
 
   .admin-expand-card {
-    background: #fff;
+    background: var(--admin-surface-container-lowest);
     border: 1px solid rgba(190, 200, 202, 0.5);
     border-radius: 0.75rem;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
@@ -1749,6 +1757,20 @@
 }
 
 [data-bs-theme="dark"] .owner-shell.admin-mockup-ui {
+  --admin-primary: #4db6ac;
+  --admin-primary-container: #80cbc4;
+  --admin-secondary-container: rgba(77, 182, 172, 0.22);
+  --admin-on-secondary-container: #a9ece5;
+  --admin-outline: #8a8a9a;
+  --admin-accent-employee: #b39ddb;
+  --admin-accent-admin: #4db6ac;
+  --admin-status-success: #81c784;
+  --admin-status-warning: #ffb74d;
+  --admin-surface-container-lowest: #16161e;
+  --admin-surface-container: #222230;
+  --admin-nav-hover-bg: rgba(77, 182, 172, 0.14);
+  --admin-nav-active-bg: rgba(77, 182, 172, 0.22);
+  --admin-error: #ef9a9a;
   --admin-background: #121218;
   --admin-surface: #121218;
   --admin-surface-container-low: #1e1e28;
@@ -1771,30 +1793,98 @@
     background: #3a3a48;
   }
 
+  .admin-header-profile-photo {
+    background: var(--admin-surface-container-high);
+  }
+
   .admin-kpi-card,
   .owner-task-panel {
-    background: #1e1e28;
+    background: var(--admin-surface-container-low);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  }
+
+  .admin-kpi-card-icon {
+    background: rgba(77, 182, 172, 0.18);
+    color: var(--admin-primary-container);
+  }
+
+  .admin-kpi-card-num {
+    color: var(--admin-primary-container);
+  }
+
+  .admin-kpi-bar-fill {
+    background: linear-gradient(135deg, #00838f 0%, #4db6ac 100%);
   }
 
   .admin-expand-card {
-    background: #1e1e28;
-    border-color: #3a3a48;
+    background: var(--admin-surface-container-high);
+    border-color: var(--admin-outline-variant);
+    box-shadow: none;
   }
 
   .admin-task-expand-panel {
     background: rgba(30, 30, 40, 0.6);
+    border-top-color: var(--admin-outline-variant);
+  }
+
+  .admin-expand-section--desc {
+    border-bottom-color: var(--admin-outline-variant);
   }
 
   .admin-nav-toggle {
-    background: #1e1e28;
-    border-color: #3a3a48;
-    color: var(--admin-on-surface);
+    background: transparent;
+    border-color: transparent;
+    color: var(--admin-on-surface-variant);
+
+    &:hover {
+      color: var(--admin-primary-container);
+    }
   }
 
   .admin-mobile-nav,
   .admin-mobile-nav-header {
     background: #1e1e28 !important;
     border-color: #3a3a48;
+  }
+
+  .admin-sidebar-nav-item,
+  .owner-list-item.owner-list-item--pinned {
+    .material-symbols-outlined {
+      color: var(--admin-primary-container);
+    }
+
+    &.active .material-symbols-outlined {
+      color: var(--admin-on-secondary-container);
+    }
+  }
+
+  .admin-your-lists-section {
+    border-top-color: var(--admin-outline-variant);
+  }
+
+  .contact-us-intro {
+    background: rgba(77, 182, 172, 0.08);
+    border-color: rgba(77, 182, 172, 0.22);
+    color: var(--admin-on-surface-variant);
+  }
+
+  .admin-trial-banner {
+    border-color: var(--admin-outline-variant);
+
+    a {
+      color: var(--admin-primary-container);
+    }
+  }
+
+  .owner-task-table thead th {
+    border-bottom-color: var(--admin-outline-variant);
+  }
+
+  @media (max-width: 767.98px) {
+    .admin-task-table tbody.owner-task-group tr.task-sort-row {
+      background: var(--admin-surface-container-low);
+      border-color: var(--admin-outline-variant);
+    }
   }
 }
 
@@ -2360,10 +2450,48 @@ body:has(.admin-task-modal.show) .modal-backdrop {
   .admin-task-modal-card {
     background: #1e1e28;
     border-color: #3a3a48;
+    color: #e8e8f0;
   }
 
   .admin-task-modal-title-input {
     color: #e8e8f0;
+
+    &::placeholder {
+      color: rgba(176, 176, 192, 0.55);
+    }
+  }
+
+  .admin-task-modal-close {
+    color: #b0b0c0;
+
+    &:hover {
+      background: rgba(77, 182, 172, 0.14);
+      color: #80cbc4;
+    }
+  }
+
+  .admin-task-modal-row-icon {
+    color: #4db6ac;
+  }
+
+  .admin-task-modal-field-label {
+    color: #e8e8f0;
+  }
+
+  .admin-task-modal-check {
+    color: #b0b0c0;
+
+    input {
+      accent-color: #4db6ac;
+    }
+
+    &--priority span {
+      color: #ef9a9a;
+    }
+  }
+
+  .admin-task-modal-select-chevron {
+    color: #b0b0c0;
   }
 
   .admin-task-modal-input,
@@ -2374,10 +2502,47 @@ body:has(.admin-task-modal.show) .modal-backdrop {
     background: #121218;
     border-color: #3a3a48;
     color: #e8e8f0;
+
+    &:focus {
+      border-color: #4db6ac;
+      box-shadow: 0 0 0 3px rgba(77, 182, 172, 0.2);
+    }
   }
 
   .admin-task-modal-footer {
     background: #1e1e28;
     border-color: #3a3a48;
+  }
+
+  .admin-task-modal-section-label,
+  .admin-task-modal-assign-label,
+  .admin-task-modal-budget-hint,
+  .admin-task-modal-field-hint {
+    color: #b0b0c0;
+  }
+
+  .admin-task-modal-budget-value {
+    color: #80cbc4;
+  }
+
+  .admin-task-modal-assign-toggle {
+    color: #e8e8f0;
+  }
+
+  .admin-task-modal-employee-chip {
+    background: rgba(77, 182, 172, 0.14);
+    border-color: rgba(77, 182, 172, 0.28);
+    color: #e8e8f0;
+  }
+
+  .admin-task-modal-footer .btn-outline-secondary {
+    color: #e8e8f0;
+    border-color: #3a3a48;
+
+    &:hover {
+      background: rgba(77, 182, 172, 0.12);
+      color: #80cbc4;
+      border-color: #4db6ac;
+    }
   }
 }

@@ -85,11 +85,11 @@
   }
 
   .admin-report-kpi--review .admin-report-kpi-icon {
-    color: #e65100;
+    color: var(--admin-status-warning);
   }
 
   .admin-report-kpi--done .admin-report-kpi-icon {
-    color: #2e7d32;
+    color: var(--admin-status-success);
   }
 
   .admin-report-kpi--warn .admin-report-kpi-icon {
@@ -251,10 +251,10 @@
     border-radius: 0.85rem;
     background: linear-gradient(
       120deg,
-      color-mix(in srgb, #7c4dff 12%, var(--admin-surface-container-high)) 0%,
+      color-mix(in srgb, var(--admin-accent-employee) 12%, var(--admin-surface-container-high)) 0%,
       var(--admin-surface-container-high) 100%
     );
-    border: 1px solid color-mix(in srgb, #7c4dff 28%, var(--admin-outline-variant));
+    border: 1px solid color-mix(in srgb, var(--admin-accent-employee) 28%, var(--admin-outline-variant));
   }
 
   .owner-dash-employee-banner-name {
@@ -323,15 +323,15 @@
   }
 
   .owner-dash-role-pill--employee {
-    background: color-mix(in srgb, #7c4dff 18%, transparent);
-    color: #5e35d8;
-    border: 1px solid color-mix(in srgb, #7c4dff 35%, transparent);
+    background: color-mix(in srgb, var(--admin-accent-employee) 18%, transparent);
+    color: var(--admin-accent-employee);
+    border: 1px solid color-mix(in srgb, var(--admin-accent-employee) 35%, transparent);
   }
 
   .owner-dash-role-pill--admin {
-    background: color-mix(in srgb, #006d77 16%, transparent);
-    color: #006d77;
-    border: 1px solid color-mix(in srgb, #006d77 32%, transparent);
+    background: color-mix(in srgb, var(--admin-accent-admin) 16%, transparent);
+    color: var(--admin-accent-admin);
+    border: 1px solid color-mix(in srgb, var(--admin-accent-admin) 32%, transparent);
   }
 
   .owner-dash-role-pill--total {
@@ -347,7 +347,7 @@
   }
 
   .owner-dash-filter-label--employee {
-    color: #5e35d8;
+    color: var(--admin-accent-employee);
   }
 
   .owner-dash-filter-icon {
@@ -356,8 +356,8 @@
   }
 
   .owner-dash-select--employee {
-    border-color: color-mix(in srgb, #7c4dff 35%, var(--admin-outline-variant));
-    background-color: color-mix(in srgb, #7c4dff 6%, var(--admin-surface-container-high));
+    border-color: color-mix(in srgb, var(--admin-accent-employee) 35%, var(--admin-outline-variant));
+    background-color: color-mix(in srgb, var(--admin-accent-employee) 6%, var(--admin-surface-container-high));
   }
 
   .owner-dash-emp-filters {
@@ -393,8 +393,8 @@
   }
 
   .owner-dash-section-head-icon--admin {
-    background: color-mix(in srgb, #006d77 14%, var(--admin-surface-container-high));
-    color: #006d77;
+    background: color-mix(in srgb, var(--admin-accent-admin) 14%, var(--admin-surface-container-high));
+    color: var(--admin-accent-admin);
   }
 
   .owner-dash-section-head-icon--chart {
@@ -438,8 +438,8 @@
     transition: box-shadow 0.15s ease, border-color 0.15s ease;
 
     &:hover {
-      border-color: color-mix(in srgb, #006d77 35%, var(--admin-outline-variant));
-      box-shadow: 0 4px 14px rgba(0, 109, 119, 0.08);
+      border-color: color-mix(in srgb, var(--admin-accent-admin) 35%, var(--admin-outline-variant));
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
     }
   }
 
@@ -506,11 +506,11 @@
   }
 
   .owner-dash-admin-stat--ontime .owner-dash-admin-stat-value {
-    color: #2e7d32;
+    color: var(--admin-status-success);
   }
 
   .owner-dash-admin-stat--late .owner-dash-admin-stat-value {
-    color: #e65100;
+    color: var(--admin-status-warning);
   }
 
   .owner-dash-admin-stat--pending .owner-dash-admin-stat-value {
@@ -546,8 +546,8 @@
   .owner-dash-inline-person--admin {
     padding: 0.15rem 0.45rem 0.15rem 0.2rem;
     border-radius: 999px;
-    background: color-mix(in srgb, #006d77 10%, var(--admin-surface-container-high));
-    border: 1px solid color-mix(in srgb, #006d77 22%, transparent);
+    background: color-mix(in srgb, var(--admin-accent-admin) 10%, var(--admin-surface-container-high));
+    border: 1px solid color-mix(in srgb, var(--admin-accent-admin) 22%, transparent);
   }
 
   .owner-dash-inline-person-avatar {
@@ -567,7 +567,7 @@
   .owner-dash-inline-person-name {
     font-size: 0.78rem;
     font-weight: 600;
-    color: #006d77;
+    color: var(--admin-accent-admin);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -627,13 +627,13 @@
     border: 1px solid var(--admin-outline-variant);
     border-radius: 0.65rem;
     padding: 0.75rem 0.85rem;
-    background: var(--admin-surface-container-lowest, #fff);
+    background: var(--admin-surface-container-lowest);
     min-width: 0;
   }
 
   .owner-dash-budget-emp-card--over {
     border-color: color-mix(in srgb, var(--admin-error) 35%, var(--admin-outline-variant));
-    background: color-mix(in srgb, var(--admin-error) 5%, var(--admin-surface-container-lowest, #fff));
+    background: color-mix(in srgb, var(--admin-error) 5%, var(--admin-surface-container-lowest));
   }
 
   .owner-dash-budget-emp-card-head {
@@ -684,7 +684,7 @@
     border: 1px solid var(--admin-outline-variant);
     border-radius: 0.65rem;
     padding: 0.7rem 0.85rem;
-    background: var(--admin-surface-container-lowest, #fff);
+    background: var(--admin-surface-container-lowest);
     min-width: 0;
   }
 
@@ -1068,6 +1068,58 @@
       padding-right: 0.65rem;
       margin-left: -0.65rem;
       margin-right: -0.65rem;
+    }
+  }
+}
+
+[data-bs-theme="dark"] .owner-shell.admin-mockup-ui {
+  .admin-report-kpi-icon {
+    background: color-mix(in srgb, var(--admin-primary-container) 14%, var(--admin-surface-container-high));
+    color: var(--admin-primary-container);
+  }
+
+  .admin-report-card {
+    background: var(--admin-surface-container-low);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  }
+
+  .owner-dash-perf-card {
+    background: var(--admin-surface-container-low);
+  }
+
+  .owner-dash-admin-card:hover {
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+  }
+
+  .owner-dash-budget-bar-fill {
+    background: var(--admin-primary-container);
+  }
+
+  .owner-dash-budget-bar--warn .owner-dash-budget-bar-fill {
+    background: var(--admin-status-warning);
+  }
+
+  .owner-dash-budget-bar--over .owner-dash-budget-bar-fill {
+    background: var(--admin-error);
+  }
+
+  .admin-reports-loading .material-symbols-outlined {
+    color: var(--admin-on-surface-variant);
+    opacity: 0.85;
+  }
+
+  .admin-reports-header-actions .btn-outline-secondary {
+    color: var(--admin-on-surface);
+    border-color: var(--admin-outline-variant);
+
+    .material-symbols-outlined {
+      color: inherit;
+    }
+
+    &:hover {
+      background: var(--admin-nav-hover-bg);
+      color: var(--admin-primary-container);
+      border-color: color-mix(in srgb, var(--admin-primary-container) 45%, var(--admin-outline-variant));
     }
   }
 }
