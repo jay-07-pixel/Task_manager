@@ -1397,13 +1397,6 @@ export function teamChatOffcanvasHtml() {
             </div>
           </aside>
           <section class="team-chat-thread" id="team-chat-thread">
-            <div class="team-chat-thread-empty" id="team-chat-thread-empty">
-              <div class="team-chat-empty-card">
-                <div class="team-chat-empty-icon" aria-hidden="true"><i class="bi bi-chat-square-dots"></i></div>
-                <p class="fw-semibold mb-1">${tr("chat.teamChat")}</p>
-                <p class="small text-muted mb-0">${tr("chat.emptyThreadHint")}</p>
-              </div>
-            </div>
             <div class="team-chat-thread-active d-none flex-column h-100" id="team-chat-thread-active">
               <div class="team-chat-thread-head">
                 <button type="button" class="btn btn-sm btn-light border team-chat-back-btn d-md-none" id="team-chat-back" aria-label="${tr("chat.backToList")}">
@@ -2027,17 +2020,31 @@ function updateThreadHeaderFromThread(thread) {
 }
 
 function setThreadVisible(open) {
-  const empty = document.getElementById("team-chat-thread-empty");
   const active = document.getElementById("team-chat-thread-active");
   const sidebar = document.getElementById("team-chat-sidebar");
-  if (!empty || !active || !sidebar) return;
+  const threadSection = document.getElementById("team-chat-thread");
+  const layout = document.querySelector(".team-chat-layout");
+  if (!active || !sidebar || !threadSection || !layout) return;
+
   const hasThread = !!open && !!activeChatId && !!activeThreadType;
-  empty.classList.toggle("d-none", hasThread);
+  const mobile = isMobileChatLayout();
+  const showMobileThread = hasThread && mobileShowThread && mobile;
+
   active.classList.toggle("d-none", !hasThread);
   active.classList.toggle("d-flex", hasThread);
   active.classList.toggle("team-chat-thread-active--group", hasThread && activeThreadType === "group");
   active.classList.toggle("team-chat-thread-active--dm", hasThread && activeThreadType === "dm");
-  sidebar.classList.toggle("d-none", hasThread && mobileShowThread && isMobileChatLayout());
+
+  layout.classList.toggle("team-chat-layout--list-only", !hasThread || (mobile && !mobileShowThread));
+  layout.classList.toggle("team-chat-layout--thread-open", showMobileThread);
+
+  if (mobile) {
+    sidebar.classList.toggle("d-none", showMobileThread);
+    threadSection.classList.toggle("d-none", !showMobileThread);
+  } else {
+    sidebar.classList.remove("d-none");
+    threadSection.classList.remove("d-none");
+  }
 }
 
 function isChatPanelOpen() {
@@ -2585,8 +2592,13 @@ export function initTeamChat(chatDeps) {
   });
 
   window.addEventListener("resize", () => {
-    if (isChatPanelOpen() && activeChatId) {
+    if (!isChatPanelOpen()) return;
+    if (activeChatId) {
+      if (!isMobileChatLayout()) mobileShowThread = false;
       setThreadVisible(true);
+    } else {
+      mobileShowThread = false;
+      setThreadVisible(false);
     }
   });
 
