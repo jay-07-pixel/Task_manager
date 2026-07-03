@@ -9,6 +9,19 @@ const APK_FILENAME = "kalpanik-reminder.apk";
 /** @type {{ id: string; date: string; title: string; icon: string; body: string; action?: { label: string; type?: string; href?: string; download?: boolean } }[]} */
 export const ADMIN_ANNOUNCEMENTS = [
   {
+    id: "feature-apk-update-20260704",
+    date: "04-07-26",
+    title: "New Kalpanik Reminder app (APK)",
+    icon: "bi-android2",
+    body:
+      "Latest employee app is on the website. Ask staff to download and install Kalpanik Reminder from their dashboard (or use the button below) so they get the newest task and attachment support. Uninstall the old app first if install is blocked.",
+    action: {
+      labelKey: "notifications.downloadApk",
+      href: (import.meta.env.VITE_APK_DOWNLOAD_URL || "").trim() || "/downloads/sugandh-reminder.apk",
+      download: true,
+    },
+  },
+  {
     id: "feature-attendance-live-location-20260704",
     date: "04-07-26",
     title: "Attendance & live location",
