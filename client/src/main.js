@@ -265,6 +265,19 @@ const EMP_SUBMISSION_PDF_MAX_BYTES = 5 * 1024 * 1024;
 const EMP_SUBMISSION_PDF_MAX_MB = 5;
 const EMP_SUBMISSION_MAX_IMAGES = 10;
 const PROGRESS_UPDATE_TEXT_MAX = 2000;
+const MAX_ASSIGNMENT_ATTACHMENTS = 30;
+/** @type {{ id: string, file: File, kind: string, previewUrl?: string }[]} */
+let modalPendingAssignmentAttachments = [];
+/** @type {string[]} */
+let modalRemovedAssignmentAttachmentIds = [];
+/** @type {{ id: string, kind: string, url: string, originalName?: string | null }[]} */
+let modalExistingAssignmentAttachments = [];
+/** @type {MediaRecorder | null} */
+let taskModalVoiceRecorder = null;
+/** @type {MediaStream | null} */
+let taskModalVoiceStream = null;
+/** @type {BlobPart[]} */
+let taskModalVoiceChunks = [];
 function empSubmissionRequiredMsg() {
   return tr("validation.submissionRequired");
 }
@@ -370,11 +383,277 @@ function validateEmpSubmissionFileSet(files) {
 
 function proofResourceKind(mime, proofUrl) {
   if (mime === "application/pdf" || /\.pdf(?:\?|$)/i.test(proofUrl)) return "pdf";
+  if (mime.startsWith("audio/") || /\.(webm|m4a|mp3|ogg|wav|aac)(?:\?|$)/i.test(proofUrl)) return "audio";
   if (mime.startsWith("video/") || /\.(mp4|m4v|webm|mov|mkv|avi|3gp|3g2|ogv|mpeg|mpg)(?:\?|$)/i.test(proofUrl)) {
     return "video";
   }
   if (mime.startsWith("image/")) return "image";
   return null;
+}
+
+function assignmentAttachmentKindFromFile(file) {
+  const mime = (file.type || "").toLowerCase();
+  if (mime.startsWith("audio/")) return "voice";
+  if (mime === "application/pdf") return "pdf";
+  if (mime.startsWith("video/")) return "video";
+  if (/^image\/(jpeg|png|gif|webp)$/.test(mime)) return "image";
+  return null;
+}
+
+function resetModalAssignmentAttachments() {
+  for (const item of modalPendingAssignmentAttachments) {
+    if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+  }
+  modalPendingAssignmentAttachments = [];
+  modalRemovedAssignmentAttachmentIds = [];
+  modalExistingAssignmentAttachments = [];
+  stopTaskModalVoiceRecording(false);
+  const input = document.getElementById("modal-assignment-file-input");
+  if (input) input.value = "";
+  renderModalAssignmentAttachmentList();
+}
+
+function setModalExistingAssignmentAttachments(task) {
+  resetModalAssignmentAttachments();
+  modalExistingAssignmentAttachments = (task?.assignmentAttachments ?? []).map((a) => ({ ...a }));
+  renderModalAssignmentAttachmentList();
+}
+
+function renderModalAssignmentAttachmentList() {
+  const host = document.getElementById("modal-assignment-list");
+  if (!host) return;
+  const total =
+    modalExistingAssignmentAttachments.filter((a) => !modalRemovedAssignmentAttachmentIds.includes(a.id)).length +
+    modalPendingAssignmentAttachments.length;
+  const items = [
+    ...modalExistingAssignmentAttachments
+      .filter((a) => !modalRemovedAssignmentAttachmentIds.includes(a.id))
+      .map((a) => ({
+        key: `existing-${a.id}`,
+        label: a.originalName || attachmentKindLabel(a.kind),
+        kind: a.kind,
+        remove: () => {
+          modalRemovedAssignmentAttachmentIds.push(a.id);
+          renderModalAssignmentAttachmentList();
+        },
+      })),
+    ...modalPendingAssignmentAttachments.map((a) => ({
+      key: `pending-${a.id}`,
+      label: a.file.name,
+      kind: a.kind,
+      remove: () => {
+        const idx = modalPendingAssignmentAttachments.findIndex((x) => x.id === a.id);
+        if (idx >= 0) {
+          const [removed] = modalPendingAssignmentAttachments.splice(idx, 1);
+          if (removed?.previewUrl) URL.revokeObjectURL(removed.previewUrl);
+        }
+        renderModalAssignmentAttachmentList();
+      },
+    })),
+  ];
+  if (!items.length) {
+    host.innerHTML = `<p class="admin-task-modal-attach-empty small text-muted mb-0">${tr("tasks.noAssignmentAttachments")}</p>`;
+    return;
+  }
+  host.innerHTML = items
+    .map(
+      (item) => `<div class="admin-task-modal-attach-item" data-attach-key="${escapeHtml(item.key)}">
+        <span class="admin-task-modal-attach-icon">${attachmentKindIconHtml(item.kind)}</span>
+        <span class="admin-task-modal-attach-name text-truncate">${escapeHtml(item.label)}</span>
+        <button type="button" class="admin-task-modal-attach-remove js-modal-attach-remove" data-attach-key="${escapeHtml(item.key)}" aria-label="${tr("common.remove")}">${adminMsIcon("close")}</button>
+      </div>`
+    )
+    .join("");
+  host.querySelectorAll(".js-modal-attach-remove").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const key = btn.getAttribute("data-attach-key");
+      const item = items.find((x) => x.key === key);
+      item?.remove();
+    });
+  });
+}
+
+function attachmentKindLabel(kind) {
+  if (kind === "voice") return tr("tasks.voiceNote");
+  if (kind === "pdf") return "PDF";
+  if (kind === "video") return tr("tasks.videoAttachment");
+  return tr("tasks.imageAttachment");
+}
+
+function attachmentKindIconHtml(kind) {
+  if (kind === "voice") return adminMsIcon("mic");
+  if (kind === "pdf") return adminMsIcon("picture_as_pdf");
+  if (kind === "video") return adminMsIcon("videocam");
+  return adminMsIcon("image");
+}
+
+function addModalPendingAssignmentFiles(fileList) {
+  const files = [...(fileList ?? [])];
+  const currentTotal =
+    modalExistingAssignmentAttachments.filter((a) => !modalRemovedAssignmentAttachmentIds.includes(a.id)).length +
+    modalPendingAssignmentAttachments.length;
+  if (currentTotal + files.length > MAX_ASSIGNMENT_ATTACHMENTS) {
+    showToast(tr("tasks.maxAssignmentAttachments", { max: MAX_ASSIGNMENT_ATTACHMENTS }), "warning");
+    return;
+  }
+  for (const file of files) {
+    const kind = assignmentAttachmentKindFromFile(file);
+    if (!kind) {
+      showToast(tr("tasks.unsupportedAssignmentFile"), "warning");
+      continue;
+    }
+    const previewUrl = kind === "image" ? URL.createObjectURL(file) : undefined;
+    modalPendingAssignmentAttachments.push({
+      id: `pending-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      file,
+      kind,
+      previewUrl,
+    });
+  }
+  renderModalAssignmentAttachmentList();
+}
+
+async function uploadModalAssignmentAttachments(taskId) {
+  for (const id of modalRemovedAssignmentAttachmentIds) {
+    await api(`/api/tasks/${taskId}/assignment-attachments/${id}`, { method: "DELETE" });
+  }
+  for (const item of modalPendingAssignmentAttachments) {
+    const fd = new FormData();
+    fd.append("file", item.file, item.file.name);
+    const res = await fetch(`/api/tasks/${taskId}/assignment-attachments`, {
+      method: "POST",
+      credentials: "include",
+      body: fd,
+    });
+    const text = await res.text();
+    if (!res.ok) {
+      let msg = text;
+      try {
+        msg = JSON.parse(text)?.error ?? msg;
+      } catch {
+        /* ignore */
+      }
+      throw new Error(msg || tr("tasks.assignmentUploadFailed"));
+    }
+  }
+}
+
+function stopTaskModalVoiceRecording(process = true) {
+  const btn = document.getElementById("modal-assignment-voice-btn");
+  if (taskModalVoiceRecorder && taskModalVoiceRecorder.state !== "inactive") {
+    taskModalVoiceRecorder.onstop = () => {
+      if (process && taskModalVoiceChunks.length) {
+        const mime = taskModalVoiceRecorder?.mimeType || "audio/webm";
+        const blob = new Blob(taskModalVoiceChunks, { type: mime });
+        const ext = mime.includes("webm") ? ".webm" : ".m4a";
+        const file = new File([blob], `voice-note${ext}`, { type: mime });
+        addModalPendingAssignmentFiles([file]);
+      }
+      taskModalVoiceChunks = [];
+      taskModalVoiceRecorder = null;
+      taskModalVoiceStream?.getTracks().forEach((t) => t.stop());
+      taskModalVoiceStream = null;
+      btn?.classList.remove("admin-task-modal-voice-btn--recording");
+      btn?.setAttribute("aria-pressed", "false");
+    };
+    taskModalVoiceRecorder.stop();
+    return;
+  }
+  taskModalVoiceStream?.getTracks().forEach((t) => t.stop());
+  taskModalVoiceStream = null;
+  taskModalVoiceRecorder = null;
+  taskModalVoiceChunks = [];
+  btn?.classList.remove("admin-task-modal-voice-btn--recording");
+  btn?.setAttribute("aria-pressed", "false");
+}
+
+async function toggleTaskModalVoiceRecording() {
+  const btn = document.getElementById("modal-assignment-voice-btn");
+  if (!btn) return;
+  if (taskModalVoiceRecorder && taskModalVoiceRecorder.state === "recording") {
+    stopTaskModalVoiceRecording(true);
+    return;
+  }
+  if (!navigator.mediaDevices?.getUserMedia) {
+    showToast(tr("tasks.voiceNotSupported"), "warning");
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    taskModalVoiceStream = stream;
+    taskModalVoiceChunks = [];
+    const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+      ? "audio/webm;codecs=opus"
+      : MediaRecorder.isTypeSupported("audio/webm")
+        ? "audio/webm"
+        : "audio/mp4";
+    const recorder = new MediaRecorder(stream, { mimeType: mime });
+    recorder.ondataavailable = (e) => {
+      if (e.data?.size) taskModalVoiceChunks.push(e.data);
+    };
+    recorder.start();
+    taskModalVoiceRecorder = recorder;
+    btn.classList.add("admin-task-modal-voice-btn--recording");
+    btn.setAttribute("aria-pressed", "true");
+  } catch {
+    showToast(tr("tasks.voicePermissionDenied"), "warning");
+  }
+}
+
+function wireModalAssignmentAttachments() {
+  document.getElementById("modal-assignment-file-input")?.addEventListener("change", (e) => {
+    addModalPendingAssignmentFiles(e.target.files);
+    e.target.value = "";
+  });
+  document.getElementById("modal-assignment-pick-btn")?.addEventListener("click", () => {
+    document.getElementById("modal-assignment-file-input")?.click();
+  });
+  document.getElementById("modal-assignment-voice-btn")?.addEventListener("click", () => {
+    void toggleTaskModalVoiceRecording();
+  });
+}
+
+function taskAssignmentAttachmentsBadgeHtml(task) {
+  const items = task.assignmentAttachments ?? [];
+  if (!items.length) return "";
+  const hasVoice = items.some((a) => a.kind === "voice");
+  const voiceIcon = hasVoice
+    ? `<span class="emp-task-attach-voice" title="${tr("tasks.voiceNote")}">${adminMsIcon("mic")}</span>`
+    : "";
+  return `<button type="button" class="emp-task-attach-btn js-emp-view-assignment-attachments" data-task-id="${escapeHtml(task.id)}" title="${tr("tasks.viewAttachments")}">
+    ${adminMsIcon("attach_file")}
+    <span>${tr("tasks.attachments")}</span>
+    ${voiceIcon}
+  </button>`;
+}
+
+async function openTaskAssignmentAttachmentsModal(task) {
+  const items = task.assignmentAttachments ?? [];
+  if (!items.length) return;
+  await openSubmissionDetailModal({
+    title: dt(task.title),
+    submissionText: null,
+    attachmentItems: items,
+  });
+}
+
+async function loadAttachmentResource(item) {
+  const url = item.url;
+  const res = await fetch(url, { credentials: "include" });
+  if (!res.ok) {
+    if (res.status === 401) throw new Error(tr("validation.signInForFiles"));
+    if (res.status === 403) throw new Error(tr("validation.noPermissionSubmission"));
+    if (res.status === 404) throw new Error(tr("validation.submissionNotFound"));
+    throw new Error(`Could not load file (${res.status}).`);
+  }
+  const blob = await res.blob();
+  const mime = (blob.type || item.mimeType || "").toLowerCase();
+  let kind = item.kind === "voice" ? "audio" : item.kind;
+  if (!kind || kind === "null") kind = proofResourceKind(mime, url);
+  if (!kind) throw new Error(tr("validation.unsupportedSubmissionFile"));
+  const blobUrl = URL.createObjectURL(blob);
+  proofBlobUrls.add(blobUrl);
+  return { url: blobUrl, kind, mime };
 }
 
 async function fetchProofResource(proofUrl) {
@@ -3284,6 +3563,20 @@ function taskModalHtml() {
               <span class="admin-task-modal-row-icon">${adminMsIcon("notes")}</span>
               <textarea class="admin-task-modal-textarea" id="modal-notes" rows="3" placeholder="${tr("modals.addDescription")}" aria-label="${tr("common.description")}"></textarea>
             </div>
+            <div class="admin-task-modal-section" id="modal-assignment-attachments-wrap">
+              <div class="admin-task-modal-row admin-task-modal-row--top">
+                <span class="admin-task-modal-row-icon">${adminMsIcon("attach_file")}</span>
+                <div class="admin-task-modal-attach-panel flex-grow-1">
+                  <p class="admin-task-modal-attach-label mb-2">${tr("tasks.assignmentAttachments")}</p>
+                  <div class="admin-task-modal-attach-actions mb-2">
+                    <input type="file" class="d-none" id="modal-assignment-file-input" accept="image/jpeg,image/png,image/gif,image/webp,video/*,application/pdf,audio/*" multiple />
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="modal-assignment-pick-btn">${adminMsIcon("upload_file")}<span>${tr("tasks.addFiles")}</span></button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary admin-task-modal-voice-btn" id="modal-assignment-voice-btn" aria-pressed="false">${adminMsIcon("mic")}<span>${tr("tasks.recordVoiceNote")}</span></button>
+                  </div>
+                  <div id="modal-assignment-list" class="admin-task-modal-attach-list"></div>
+                </div>
+              </div>
+            </div>
             <div class="admin-task-modal-row" id="modal-list-wrap">
               <span class="admin-task-modal-row-icon">${adminMsIcon("assignment")}</span>
               <div class="admin-task-modal-select-wrap flex-grow-1">
@@ -3354,6 +3647,7 @@ function submissionDetailModalHtml() {
                 <img id="submission-detail-img" src="" class="w-100" style="max-height: min(70vh, 720px); object-fit: contain;" alt="${tr("common.submissionImage")}" />
               </div>
               <video id="submission-detail-video" class="submission-detail-video w-100 rounded border bg-black d-none" style="max-height: min(70vh, 720px);" controls playsinline preload="metadata"></video>
+              <audio id="submission-detail-audio" class="submission-detail-audio w-100 d-none" controls></audio>
               <iframe id="submission-detail-pdf" class="w-100 rounded border d-none" style="height: min(70vh, 720px);" title="${tr("common.submissionPdf")}"></iframe>
             </div>
             <p id="submission-detail-empty" class="text-muted small mb-0 d-none">${tr("modals.noSubmissionContent")}</p>
@@ -4326,8 +4620,19 @@ function clearSubmissionDetailMedia() {
     pdf.removeAttribute("src");
     pdf.classList.add("d-none");
   }
+  const audio = document.getElementById("submission-detail-audio");
+  if (audio) {
+    if (audio.src?.startsWith("blob:")) {
+      URL.revokeObjectURL(audio.src);
+      proofBlobUrls.delete(audio.src);
+    }
+    audio.pause();
+    audio.removeAttribute("src");
+    audio.load();
+    audio.classList.add("d-none");
+  }
   if (gallery) {
-    gallery.querySelectorAll("img, video").forEach((node) => {
+    gallery.querySelectorAll("img, video, audio").forEach((node) => {
       if (node.src?.startsWith("blob:")) {
         URL.revokeObjectURL(node.src);
         proofBlobUrls.delete(node.src);
@@ -4360,7 +4665,16 @@ function appendSubmissionDetailGalleryItem(gallery, resource) {
   gallery.appendChild(node);
 }
 
-async function openSubmissionDetailModal({ title, submissionText, proofUrl, proofUrls }) {
+function appendSubmissionDetailGalleryAudio(gallery, resource) {
+  const node = document.createElement("audio");
+  node.src = resource.url;
+  node.controls = true;
+  node.preload = "metadata";
+  node.className = "submission-detail-gallery-audio w-100";
+  gallery.appendChild(node);
+}
+
+async function openSubmissionDetailModal({ title, submissionText, proofUrl, proofUrls, attachmentItems }) {
   const modalEl = document.getElementById("submissionDetailModal");
   const titleEl = document.getElementById("submissionDetailTitle");
   const textWrap = document.getElementById("submission-detail-text-wrap");
@@ -4372,13 +4686,16 @@ async function openSubmissionDetailModal({ title, submissionText, proofUrl, proo
   const img = document.getElementById("submission-detail-img");
   const video = document.getElementById("submission-detail-video");
   const pdf = document.getElementById("submission-detail-pdf");
+  const audio = document.getElementById("submission-detail-audio");
   const emptyEl = document.getElementById("submission-detail-empty");
-  if (!modalEl || !titleEl || !textWrap || !textEl || !fileWrap || !fileLabel || !imageFrame || !gallery || !img || !video || !pdf || !emptyEl) return;
+  if (!modalEl || !titleEl || !textWrap || !textEl || !fileWrap || !fileLabel || !imageFrame || !gallery || !img || !video || !pdf || !audio || !emptyEl) return;
 
   const text = (submissionText || "").trim();
   const hasText = text.length > 0;
-  const urls = (proofUrls?.length ? proofUrls : proofUrl ? [proofUrl] : []).filter(Boolean);
-  const hasFile = urls.length > 0;
+  const items = attachmentItems?.length
+    ? attachmentItems
+    : (proofUrls?.length ? proofUrls : proofUrl ? [proofUrl] : []).map((url) => ({ url, kind: null }));
+  const hasFile = items.length > 0;
 
   titleEl.textContent = title || tr("modals.submission");
   clearSubmissionDetailMedia();
@@ -4405,18 +4722,24 @@ async function openSubmissionDetailModal({ title, submissionText, proofUrl, proo
   if (!hasFile) return;
 
   try {
-    if (urls.length === 1) {
-      const resource = await fetchProofResource(urls[0]);
+    if (items.length === 1) {
+      const resource = attachmentItems?.length
+        ? await loadAttachmentResource(items[0])
+        : await fetchProofResource(items[0].url || items[0]);
       if (resource.kind === "pdf") {
         fileLabel.textContent = "PDF";
         pdf.src = resource.url;
         pdf.classList.remove("d-none");
       } else if (resource.kind === "video") {
-        fileLabel.textContent = "Video";
+        fileLabel.textContent = tr("tasks.videoAttachment");
         video.src = resource.url;
         video.classList.remove("d-none");
+      } else if (resource.kind === "audio") {
+        fileLabel.textContent = tr("tasks.voiceNote");
+        audio.src = resource.url;
+        audio.classList.remove("d-none");
       } else {
-        fileLabel.textContent = "Image";
+        fileLabel.textContent = tr("tasks.imageAttachment");
         imageFrame.classList.remove("d-none");
         img.src = resource.url;
         img.classList.remove("d-none");
@@ -4424,13 +4747,19 @@ async function openSubmissionDetailModal({ title, submissionText, proofUrl, proo
       return;
     }
 
-    fileLabel.textContent = `${urls.length} attachments`;
+    fileLabel.textContent = tr("tasks.attachmentCount", { count: items.length });
     gallery.classList.remove("d-none");
-    for (const url of urls) {
-      const resource = await fetchProofResource(url);
+    for (const item of items) {
+      const resource = attachmentItems?.length
+        ? await loadAttachmentResource(item)
+        : await fetchProofResource(item.url || item);
       if (resource.kind === "pdf") {
         pdf.src = resource.url;
         pdf.classList.remove("d-none");
+        continue;
+      }
+      if (resource.kind === "audio") {
+        appendSubmissionDetailGalleryAudio(gallery, resource);
         continue;
       }
       appendSubmissionDetailGalleryItem(gallery, resource);
@@ -5422,6 +5751,7 @@ function openOwnerCreateTaskModal() {
   if (panel?.classList.contains("show")) {
     bootstrap.Collapse.getOrCreateInstance(panel).hide();
   }
+  resetModalAssignmentAttachments();
 
   const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
   modal.show();
@@ -5826,6 +6156,7 @@ function openTaskModal(task) {
 
   fillModalAssigneeCheckboxes((task.assignees ?? []).map((a) => a.id));
   populateTaskModalListOptions(task.listId);
+  setModalExistingAssignmentAttachments(task);
 
   modal.show();
   updateModalSaveEnabled();
@@ -5834,6 +6165,13 @@ function openTaskModal(task) {
 function wireTaskModal() {
   const modalEl = document.getElementById("taskModal");
   wireModalAssigneePicker();
+  if (modalEl?.dataset.assignmentAttachWired !== "1") {
+    modalEl.dataset.assignmentAttachWired = "1";
+    wireModalAssignmentAttachments();
+    modalEl.addEventListener("hidden.bs.modal", () => {
+      stopTaskModalVoiceRecording(false);
+    });
+  }
   const saveHandler = async () => {
     const id = (document.getElementById("modal-task-id").value || "").trim();
     const listId = document.getElementById("modal-move-list").value;
@@ -5878,8 +6216,10 @@ function wireTaskModal() {
       durationMinutes: parseDurationMinutesFromModal(),
     };
     try {
+      let taskId = id;
       if (!id) {
-        await api(`/api/tasks/lists/${listId}`, { method: "POST", body: JSON.stringify(body) });
+        const created = await api(`/api/tasks/lists/${listId}`, { method: "POST", body: JSON.stringify(body) });
+        taskId = created?.task?.id ?? "";
         state.activeListId = listId;
       } else {
         await api(`/api/tasks/${id}`, { method: "PATCH", body: JSON.stringify(body) });
@@ -5890,8 +6230,15 @@ function wireTaskModal() {
           await loadLists();
         }
       }
+      if (
+        taskId &&
+        (modalPendingAssignmentAttachments.length > 0 || modalRemovedAssignmentAttachmentIds.length > 0)
+      ) {
+        await uploadModalAssignmentAttachments(taskId);
+      }
       await loadTasks(state.activeListId);
       bootstrap.Modal.getInstance(modalEl).hide();
+      resetModalAssignmentAttachments();
       renderOwnerChrome();
       showToast(id ? tr("toast.taskSaved") : tr("toast.taskCreated"), "success");
     } catch (err) {
@@ -5909,6 +6256,7 @@ function wireTaskModal() {
     try {
       await api(`/api/tasks/${id}`, { method: "DELETE" });
       bootstrap.Modal.getInstance(modalEl).hide();
+      resetModalAssignmentAttachments();
       await loadTasks(state.activeListId);
       renderOwnerChrome();
     } catch (err) {
@@ -7135,6 +7483,7 @@ function empTaskTableRows(tasks) {
       return `<tr class="owner-task-row emp-task-row${priorityClass} ${rowDone}" data-task-id="${task.id}">
         <td class="owner-task-cell owner-task-col--task emp-col-task align-middle">
           <span class="fw-semibold emp-task-title ${submitted ? "text-muted text-decoration-line-through" : ""}">${escapeHtml(dt(task.title))}</span>
+          ${taskAssignmentAttachmentsBadgeHtml(task)}
           ${assignedByLine}
           ${recurrenceLines}
           ${archivedNotesLine}
@@ -7431,6 +7780,14 @@ function renderEmployeeMain() {
       void openSubmissionDetailForAssignee(taskId, userId, { archived }).catch((err) => {
         showToast(err.message || tr("toast.couldNotLoadSubmission"), "danger");
       });
+    });
+  });
+
+  main.querySelectorAll(".js-emp-view-assignment-attachments").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const taskId = btn.getAttribute("data-task-id");
+      const task = state.empTasks.find((t) => t.id === taskId);
+      if (task) void openTaskAssignmentAttachmentsModal(task);
     });
   });
 }

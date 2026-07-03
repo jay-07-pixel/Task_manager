@@ -2513,11 +2513,22 @@ body {
   font-size: 0.9rem;
 }
 
+.team-chat-sidebar-toolbar {
+  flex-shrink: 0;
+}
+
+.team-chat-tabs-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0 0.85rem 0.45rem;
+}
+
 .team-chat-tabs {
   display: flex;
   gap: 0.35rem;
-  padding: 0 0.85rem 0.65rem;
-  flex-shrink: 0;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .team-chat-tab {
@@ -2544,13 +2555,22 @@ body {
 }
 
 .team-chat-thread-type-tabs {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: nowrap;
   gap: 0.35rem;
-  padding: 0 0.85rem 0.65rem;
+  padding: 0 0.85rem 0.55rem;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 .team-chat-thread-type-tab {
+  flex: 1 1 0;
+  min-width: 0;
   border: 1px solid var(--bs-border-color);
   border-radius: 999px;
   padding: 0.28rem 0.6rem;
@@ -2559,6 +2579,7 @@ body {
   background: var(--bs-body-bg);
   color: var(--bs-secondary-color);
   transition: all 0.15s ease;
+  white-space: nowrap;
 }
 
 .team-chat-thread-type-tab:hover {
@@ -2703,13 +2724,21 @@ body {
 }
 
 .team-chat-create-group-wrap {
-  padding: 0 0.85rem 0.65rem;
   flex-shrink: 0;
 }
 
 .team-chat-create-group-btn {
   border-radius: 999px;
   font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  white-space: nowrap;
+}
+
+.team-chat-create-group-btn-icon {
+  flex-shrink: 0;
 }
 
 .team-chat-group-member-picks,
@@ -3837,28 +3866,49 @@ body.team-chat-media-lightbox-open {
     padding: 0.5rem 0.65rem 0.35rem;
   }
 
+  .team-chat-tabs-row {
+    padding: 0 0.65rem 0.35rem;
+    gap: 0.35rem;
+  }
+
   .team-chat-tabs {
-    padding: 0 0.65rem 0.5rem;
-    gap: 0.25rem;
+    gap: 0.2rem;
+    padding: 0.2rem;
+    border-radius: 0.625rem;
+    background: var(--bs-body-bg);
+    border: 1px solid var(--bs-border-color);
   }
 
   .team-chat-tab {
     font-size: 0.78rem;
-    padding: 0.4rem 0.55rem;
+    padding: 0.38rem 0.45rem;
+    border-radius: 0.45rem;
   }
 
-  .team-chat-create-group-wrap {
-    padding: 0 0.65rem 0.5rem;
+  .team-chat-tab:not(.team-chat-tab--active) {
+    background: transparent;
+  }
+
+  .team-chat-create-group-btn {
+    width: 2.35rem;
+    height: 2.35rem;
+    padding: 0;
+    border-radius: 0.625rem !important;
+
+    .team-chat-create-group-btn-label {
+      display: none;
+    }
   }
 
   .team-chat-thread-type-tabs {
-    padding: 0 0.65rem 0.5rem;
-    gap: 0.25rem;
+    padding: 0 0.65rem 0.4rem;
+    gap: 0.3rem;
   }
 
   .team-chat-thread-type-tab {
-    font-size: 0.7rem;
-    padding: 0.32rem 0.4rem;
+    flex: 1 1 0;
+    font-size: 0.68rem;
+    padding: 0.3rem 0.35rem;
   }
 
   .team-chat-thread-item,

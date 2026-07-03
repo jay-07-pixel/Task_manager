@@ -25,13 +25,16 @@ import { adminUserWhere } from "../lib/adminUsers.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const uploadsRoot = path.join(__dirname, "..", "..", "uploads", "completion-proofs");
+const assignmentAttachmentsRoot = path.join(__dirname, "..", "..", "uploads", "task-assignment-attachments");
 fs.mkdirSync(uploadsRoot, { recursive: true });
+fs.mkdirSync(assignmentAttachmentsRoot, { recursive: true });
 
 const router = Router();
 
 const SUBMISSION_TEXT_MAX = 2000;
 const SUBMISSION_REQUIRED_MSG = "Please provide submission text or upload an image, video, or PDF.";
 const MAX_SUBMISSION_PROOFS = 10;
+const MAX_ASSIGNMENT_ATTACHMENTS = 30;
 const TASK_SUBMISSION_PDF_MAX_BYTES = 5 * 1024 * 1024;
 const PROGRESS_UPDATE_TEXT_MAX = 2000;
 
@@ -121,6 +124,9 @@ function resolveAssigneeSubmissionView(row) {
 const EMPLOYEE_ASSIGNMENTS_LIST_TITLE = "Employee assignments";
 
 const taskAssigneeInclude = {
+  assignmentAttachments: {
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+  },
   assignments: {
     include: {
       user: { select: { id: true, displayName: true, email: true } },
@@ -447,8 +453,90 @@ function proofContentType(storedName) {
     ".ogv": "video/ogg",
     ".mpeg": "video/mpeg",
     ".mpg": "video/mpeg",
+    ".m4a": "audio/mp4",
+    ".mp3": "audio/mpeg",
+    ".ogg": "audio/ogg",
+    ".wav": "audio/wav",
+    ".aac": "audio/aac",
   };
   return map[ext] || "application/octet-stream";
+}
+
+function assignmentAttachmentKind(mimetype, originalname) {
+  const mime = (mimetype || "").toLowerCase();
+  if (mime.startsWith("audio/")) return "voice";
+  if (mime === "application/pdf") return "pdf";
+  if (mime.startsWith("video/") || isVideoAttachment(mime, originalname)) return "video";
+  if (/^image\/(jpeg|png|gif|webp)$/.test(mime)) return "image";
+  return null;
+}
+
+function isAssignmentAttachmentAllowed(file) {
+  return !!assignmentAttachmentKind(file.mimetype, file.originalname);
+}
+
+function assignmentAttachmentAbsolutePath(storedName) {
+  if (!storedName || /[\\/]/.test(storedName)) return null;
+  const full = path.join(assignmentAttachmentsRoot, path.basename(storedName));
+  return fs.existsSync(full) ? full : null;
+}
+
+function serializeAssignmentAttachments(task) {
+  return (task.assignmentAttachments ?? []).map((a) => ({
+    id: a.id,
+    kind: a.kind,
+    mimeType: a.mimeType,
+    originalName: a.originalName ?? null,
+    url: `/api/tasks/${task.id}/assignment-attachments/${a.id}`,
+  }));
+}
+
+async function userCanAccessTaskAttachments(task, userId, role) {
+  if (task.list?.ownerId === userId) return true;
+  if (task.createdById === userId) return true;
+  if (role === "employee" && task.assignments?.some((a) => a.userId === userId)) return true;
+  return false;
+}
+
+const assignmentAttachmentUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => {
+      cb(null, assignmentAttachmentsRoot);
+    },
+    filename: (req, file, cb) => {
+      let ext = path.extname(file.originalname).toLowerCase();
+      const kind = assignmentAttachmentKind(file.mimetype, file.originalname);
+      if (!ext || ext === ".") {
+        if (kind === "pdf") ext = ".pdf";
+        else if (kind === "voice") ext = file.mimetype.includes("webm") ? ".webm" : ".m4a";
+        else if (kind === "video") ext = ".mp4";
+        else ext = ".jpg";
+      }
+      const uid = req.session?.userId || "anon";
+      cb(null, `${req.params.id}-${uid}-${randomUUID()}${ext}`);
+    },
+  }),
+  fileFilter: (_req, file, cb) => {
+    if (isAssignmentAttachmentAllowed(file)) {
+      cb(null, true);
+      return;
+    }
+    cb(new Error("Only images, videos, PDFs, or voice recordings are allowed"));
+  },
+});
+
+function handleAssignmentAttachmentUpload(req, res, next) {
+  assignmentAttachmentUpload.single("file")(req, res, (err) => {
+    if (!err) return next();
+    if (err.code === "LIMIT_UNEXPECTED_FILE") {
+      return res.status(400).json({ error: "Unexpected upload field — use file." });
+    }
+    const msg = err.message || "Upload failed";
+    if (/Only images|voice recordings|allowed/i.test(msg)) {
+      return res.status(400).json({ error: msg });
+    }
+    return next(err);
+  });
 }
 
 const PROOF_ALLOWED_EXTENSIONS = new Set([
@@ -804,6 +892,7 @@ export function serializeTask(t) {
     durationMinutes: t.durationMinutes ?? null,
     sortOrder: t.sortOrder,
     createdAt: t.createdAt?.toISOString?.() ?? t.createdAt ?? null,
+    assignmentAttachments: serializeAssignmentAttachments(t),
   };
 }
 
@@ -1046,6 +1135,117 @@ router.get("/lists/:listId", requireOwner, async (req, res) => {
 });
 
 /** Must be before /:id PATCH so "completion-proof" is not captured as id */
+router.get("/:id/assignment-attachments/:attachmentId", requireAuth, async (req, res) => {
+  const task = await prisma.task.findFirst({
+    where: { id: req.params.id },
+    include: { list: true, assignments: { select: { userId: true } } },
+  });
+  if (!task) return res.status(404).json({ error: "Task not found" });
+
+  const allowed = await userCanAccessTaskAttachments(task, req.session.userId, req.session.role);
+  if (!allowed) return res.status(403).json({ error: "Not allowed" });
+
+  const attachment = await prisma.taskAssignmentAttachment.findFirst({
+    where: { id: req.params.attachmentId, taskId: task.id },
+  });
+  if (!attachment) return res.status(404).json({ error: "Attachment not found" });
+
+  const full = assignmentAttachmentAbsolutePath(attachment.filePath);
+  if (!full || !fs.existsSync(full)) {
+    return res.status(404).json({ error: "File not found" });
+  }
+  res.type(attachment.mimeType || proofContentType(attachment.filePath));
+  res.sendFile(full);
+});
+
+router.post("/:id/assignment-attachments", requireAuth, handleAssignmentAttachmentUpload, async (req, res) => {
+  const task = await prisma.task.findFirst({
+    where: { id: req.params.id },
+    include: { list: true, assignments: { select: { userId: true } }, assignmentAttachments: true },
+  });
+  if (!task) return res.status(404).json({ error: "Task not found" });
+
+  const isOwner = task.list.ownerId === req.session.userId;
+  const isCreator = task.createdById === req.session.userId;
+  if (!isOwner && !isCreator) {
+    return res.status(403).json({ error: "Only an admin or task creator can add assignment attachments" });
+  }
+
+  const file = req.file;
+  if (!file) return res.status(400).json({ error: "No file uploaded" });
+
+  const kind = assignmentAttachmentKind(file.mimetype, file.originalname);
+  if (!kind) {
+    try {
+      fs.unlinkSync(file.path);
+    } catch {
+      /* ignore */
+    }
+    return res.status(400).json({ error: "Unsupported file type" });
+  }
+
+  const count = task.assignmentAttachments?.length ?? 0;
+  if (count >= MAX_ASSIGNMENT_ATTACHMENTS) {
+    try {
+      fs.unlinkSync(file.path);
+    } catch {
+      /* ignore */
+    }
+    return res.status(400).json({ error: `You can attach up to ${MAX_ASSIGNMENT_ATTACHMENTS} files per task.` });
+  }
+
+  const row = await prisma.taskAssignmentAttachment.create({
+    data: {
+      taskId: task.id,
+      filePath: file.filename,
+      mimeType: file.mimetype,
+      kind,
+      originalName: file.originalname?.slice(0, 255) || null,
+      sortOrder: count,
+    },
+  });
+
+  res.status(201).json({
+    attachment: {
+      id: row.id,
+      kind: row.kind,
+      mimeType: row.mimeType,
+      originalName: row.originalName,
+      url: `/api/tasks/${task.id}/assignment-attachments/${row.id}`,
+    },
+  });
+});
+
+router.delete("/:id/assignment-attachments/:attachmentId", requireAuth, async (req, res) => {
+  const task = await prisma.task.findFirst({
+    where: { id: req.params.id },
+    include: { list: true },
+  });
+  if (!task) return res.status(404).json({ error: "Task not found" });
+
+  const isOwner = task.list.ownerId === req.session.userId;
+  const isCreator = task.createdById === req.session.userId;
+  if (!isOwner && !isCreator) {
+    return res.status(403).json({ error: "Only an admin or task creator can remove assignment attachments" });
+  }
+
+  const attachment = await prisma.taskAssignmentAttachment.findFirst({
+    where: { id: req.params.attachmentId, taskId: task.id },
+  });
+  if (!attachment) return res.status(404).json({ error: "Attachment not found" });
+
+  const full = assignmentAttachmentAbsolutePath(attachment.filePath);
+  await prisma.taskAssignmentAttachment.delete({ where: { id: attachment.id } });
+  if (full && fs.existsSync(full)) {
+    try {
+      fs.unlinkSync(full);
+    } catch {
+      /* ignore */
+    }
+  }
+  res.json({ ok: true });
+});
+
 router.get("/:id/progress-updates", requireAuth, async (req, res) => {
   const task = await prisma.task.findFirst({
     where: { id: req.params.id },

@@ -399,3 +399,31 @@
     background: rgba(0, 83, 91, 0.35) !important;
   }
 }
+
+@media (max-width: 767.98px) {
+  .owner-shell.admin-mockup-ui {
+    .team-chat-tabs {
+      background: #fff;
+      border-color: rgba(190, 200, 202, 0.55);
+    }
+
+    .team-chat-tab {
+      border-radius: 0.45rem;
+    }
+
+    .team-chat-create-group-btn {
+      border-radius: 0.625rem !important;
+    }
+
+    .team-chat-thread-type-tab {
+      border-radius: 0.45rem;
+    }
+  }
+
+  [data-bs-theme="dark"] .owner-shell.admin-mockup-ui {
+    .team-chat-tabs {
+      background: #1e1e28;
+      border-color: #3a3a48;
+    }
+  }
+}

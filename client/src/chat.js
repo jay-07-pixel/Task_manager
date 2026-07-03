@@ -1375,21 +1375,26 @@ export function teamChatOffcanvasHtml() {
                 <input type="search" class="form-control form-control-sm border-0 shadow-none" id="team-chat-search" placeholder="${tr("chat.searchPlaceholder")}" autocomplete="off" />
               </div>
             </div>
-            <div class="team-chat-tabs" role="tablist" aria-label="${tr("chat.messageViews")}">
-              <button type="button" class="team-chat-tab team-chat-tab--active" data-chat-tab="chats" role="tab" aria-selected="true">${tr("chat.chats")}</button>
-              <button type="button" class="team-chat-tab" data-chat-tab="people" role="tab" aria-selected="false">${tr("chat.people")}</button>
-            </div>
-            <div class="team-chat-list-scroll" id="team-chat-pane-chats" role="tabpanel">
-              <div class="team-chat-create-group-wrap d-none" id="team-chat-create-group-wrap">
-                <button type="button" class="btn btn-sm btn-primary w-100 team-chat-create-group-btn" id="team-chat-create-group-btn">
-                  <i class="bi bi-people-fill me-1" aria-hidden="true"></i>${tr("chat.newGroup")}
-                </button>
+            <div class="team-chat-sidebar-toolbar">
+              <div class="team-chat-tabs-row">
+                <div class="team-chat-tabs" role="tablist" aria-label="${tr("chat.messageViews")}">
+                  <button type="button" class="team-chat-tab team-chat-tab--active" data-chat-tab="chats" role="tab" aria-selected="true">${tr("chat.chats")}</button>
+                  <button type="button" class="team-chat-tab" data-chat-tab="people" role="tab" aria-selected="false">${tr("chat.people")}</button>
+                </div>
+                <div class="team-chat-create-group-wrap d-none" id="team-chat-create-group-wrap">
+                  <button type="button" class="btn btn-sm btn-primary team-chat-create-group-btn" id="team-chat-create-group-btn" title="${tr("chat.newGroup")}" aria-label="${tr("chat.newGroup")}">
+                    <i class="bi bi-people-fill team-chat-create-group-btn-icon" aria-hidden="true"></i>
+                    <span class="team-chat-create-group-btn-label">${tr("chat.newGroup")}</span>
+                  </button>
+                </div>
               </div>
-              <div class="team-chat-thread-type-tabs" role="tablist" aria-label="${tr("chat.chatTypeFilters")}">
+              <div class="team-chat-thread-type-tabs" id="team-chat-thread-type-tabs" role="tablist" aria-label="${tr("chat.chatTypeFilters")}">
                 <button type="button" class="team-chat-thread-type-tab team-chat-thread-type-tab--active" data-chat-thread-type="all" aria-pressed="true">${tr("chat.all")}</button>
                 <button type="button" class="team-chat-thread-type-tab" data-chat-thread-type="group" aria-pressed="false">${tr("chat.groups")}</button>
                 <button type="button" class="team-chat-thread-type-tab" data-chat-thread-type="dm" aria-pressed="false">${tr("chat.oneToOne")}</button>
               </div>
+            </div>
+            <div class="team-chat-list-scroll" id="team-chat-pane-chats" role="tabpanel">
               <div id="team-chat-thread-list" aria-live="polite"></div>
             </div>
             <div class="team-chat-list-scroll d-none" id="team-chat-pane-people" role="tabpanel">
@@ -1572,7 +1577,7 @@ function filteredThreads() {
 
 function syncAdminGroupUi() {
   const wrap = document.getElementById("team-chat-create-group-wrap");
-  if (wrap) wrap.classList.toggle("d-none", !isAdminUser());
+  if (wrap) wrap.classList.toggle("d-none", !isAdminUser() || sidebarTab !== "chats");
 }
 
 function syncGroupManageUi() {
@@ -1771,6 +1776,8 @@ function setSidebarTab(tab) {
   });
   document.getElementById("team-chat-pane-chats")?.classList.toggle("d-none", sidebarTab !== "chats");
   document.getElementById("team-chat-pane-people")?.classList.toggle("d-none", sidebarTab !== "people");
+  document.getElementById("team-chat-thread-type-tabs")?.classList.toggle("d-none", sidebarTab !== "chats");
+  syncAdminGroupUi();
 }
 
 function setThreadTypeFilter(nextFilter) {

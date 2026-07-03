@@ -149,8 +149,25 @@ model Task {
   delegations            TaskDelegation[]
   progressUpdates        TaskProgressUpdate[]
   progressUpdateReads    TaskProgressUpdateRead[]
+  assignmentAttachments  TaskAssignmentAttachment[]
 
   @@index([listId])
+}
+
+model TaskAssignmentAttachment {
+  id           String   @id @default(uuid())
+  taskId       String   @map("task_id")
+  filePath     String   @map("file_path") @db.VarChar(512)
+  mimeType     String   @map("mime_type") @db.VarChar(128)
+  kind         String   @map("kind") @db.VarChar(16)
+  originalName String?  @map("original_name") @db.VarChar(255)
+  sortOrder    Int      @default(0) @map("sort_order")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+  @@map("task_assignment_attachment")
 }
 
 model TaskProgressUpdate {

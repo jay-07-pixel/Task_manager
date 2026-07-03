@@ -414,6 +414,23 @@
     "notificationsTurnedOn": "सूचनाएँ चालू कर दी गईं।",
     "notificationsTurnedOff": "सूचनाएँ बंद कर दी गईं।"
   },
+  "tasks": {
+    "assignmentAttachments": "नियुक्त कर्मचारियों के लिए संलग्नक",
+    "addFiles": "छवि, वीडियो या PDF जोड़ें",
+    "recordVoiceNote": "वॉइस नोट रिकॉर्ड करें",
+    "noAssignmentAttachments": "अभी कोई फ़ाइल संलग्न नहीं है।",
+    "attachments": "संलग्नक",
+    "viewAttachments": "संलग्नक देखें",
+    "voiceNote": "वॉइस नोट",
+    "imageAttachment": "छवि",
+    "videoAttachment": "वीडियो",
+    "attachmentCount": "{{count}} संलग्नक",
+    "maxAssignmentAttachments": "प्रति कार्य अधिकतम {{max}} फ़ाइलें संलग्न कर सकते हैं।",
+    "unsupportedAssignmentFile": "केवल छवि, वीडियो, PDF या वॉइस रिकॉर्डिंग की अनुमति है।",
+    "assignmentUploadFailed": "संलग्नक अपलोड नहीं हो सका।",
+    "voiceNotSupported": "यह ब्राउज़र वॉइस रिकॉर्डिंग का समर्थन नहीं करता।",
+    "voicePermissionDenied": "वॉइस नोट रिकॉर्ड करने के लिए माइक्रोफ़ोन की अनुमति दें।"
+  },
   "contact": {
     "menuLabel": "हमसे संपर्क करें",
     "title": "हमसे संपर्क करें",

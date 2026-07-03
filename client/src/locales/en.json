@@ -414,6 +414,23 @@
     "notificationsTurnedOn": "Notifications turned on.",
     "notificationsTurnedOff": "Notifications turned off."
   },
+  "tasks": {
+    "assignmentAttachments": "Attachments for assignees",
+    "addFiles": "Add image, video, or PDF",
+    "recordVoiceNote": "Record voice note",
+    "noAssignmentAttachments": "No files attached yet.",
+    "attachments": "Attachments",
+    "viewAttachments": "View attachments",
+    "voiceNote": "Voice note",
+    "imageAttachment": "Image",
+    "videoAttachment": "Video",
+    "attachmentCount": "{{count}} attachments",
+    "maxAssignmentAttachments": "You can attach up to {{max}} files per task.",
+    "unsupportedAssignmentFile": "Only images, videos, PDFs, or voice recordings are allowed.",
+    "assignmentUploadFailed": "Could not upload attachment.",
+    "voiceNotSupported": "Voice recording is not supported in this browser.",
+    "voicePermissionDenied": "Allow microphone access to record a voice note."
+  },
   "contact": {
     "menuLabel": "Contact us",
     "title": "Contact us",

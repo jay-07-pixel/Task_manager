@@ -2546,3 +2546,77 @@ body:has(.admin-task-modal.show) .modal-backdrop {
     }
   }
 }
+
+.admin-task-modal-attach-panel {
+  min-width: 0;
+}
+
+.admin-task-modal-attach-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--admin-on-surface-variant, #3e494a);
+  margin: 0;
+}
+
+.admin-task-modal-attach-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+}
+
+.admin-task-modal-voice-btn--recording {
+  color: #fff !important;
+  background: var(--admin-error, #ba1a1a) !important;
+  border-color: var(--admin-error, #ba1a1a) !important;
+}
+
+.admin-task-modal-attach-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.admin-task-modal-attach-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--admin-outline-variant, #bec8ca);
+  border-radius: 0.55rem;
+  background: var(--admin-surface-container-high, #e6e6ff);
+  min-width: 0;
+}
+
+.admin-task-modal-attach-icon .material-symbols-outlined {
+  font-size: 1.1rem;
+  color: var(--admin-primary-container, #006d77);
+}
+
+.admin-task-modal-attach-name {
+  flex: 1 1 auto;
+  font-size: 0.8125rem;
+}
+
+.admin-task-modal-attach-remove {
+  border: 0;
+  background: transparent;
+  color: var(--admin-on-surface-variant, #3e494a);
+  padding: 0.15rem;
+  line-height: 1;
+  border-radius: 999px;
+
+  &:hover {
+    background: rgba(186, 26, 26, 0.1);
+    color: var(--admin-error, #ba1a1a);
+  }
+}
+
+.submission-detail-gallery-audio {
+  margin-bottom: 0.5rem;
+}

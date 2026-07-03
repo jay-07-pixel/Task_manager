@@ -488,6 +488,32 @@ body:has(.admin-emp-modal.show) .modal-backdrop {
   word-break: break-word;
 }
 
+.owner-shell.admin-mockup-ui.emp-shell {
+  .emp-task-attach-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    margin-top: 0.35rem;
+    padding: 0.15rem 0.5rem;
+    border: 1px solid rgba(0, 109, 119, 0.35);
+    border-radius: 999px;
+    background: rgba(0, 109, 119, 0.08);
+    color: var(--admin-primary-container, #006d77);
+    font-size: 0.72rem;
+    font-weight: 600;
+    line-height: 1.3;
+
+    .material-symbols-outlined {
+      font-size: 0.95rem;
+    }
+  }
+
+  .emp-task-attach-voice .material-symbols-outlined {
+    font-size: 0.9rem;
+    color: var(--admin-error, #ba1a1a);
+  }
+}
+
 [data-bs-theme="dark"] {
   .admin-emp-modal-close:hover {
     background: color-mix(in srgb, var(--bs-primary) 18%, transparent);
