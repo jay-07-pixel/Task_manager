@@ -2620,3 +2620,94 @@ body:has(.admin-task-modal.show) .modal-backdrop {
 .submission-detail-gallery-audio {
   margin-bottom: 0.5rem;
 }
+
+/* Team & admin access modal — responsive on mobile */
+.team-admin-modal-dialog {
+  max-width: min(36rem, calc(100vw - 1rem));
+  width: calc(100% - 1rem);
+  margin: 0.5rem auto;
+}
+
+.team-admin-modal-body {
+  overflow-x: hidden;
+}
+
+.team-admin-list {
+  overflow: hidden;
+}
+
+.team-admin-row {
+  padding: 0.85rem 1rem;
+}
+
+.team-admin-row-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.75rem;
+  min-width: 0;
+
+  @media (min-width: 576px) {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+}
+
+.team-admin-user {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.team-admin-name {
+  word-break: break-word;
+}
+
+.team-admin-email {
+  word-break: break-all;
+}
+
+.team-admin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+
+  @media (max-width: 575.98px) {
+    width: 100%;
+
+    .btn {
+      flex: 1 1 calc(50% - 0.25rem);
+      min-width: 0;
+      white-space: normal;
+      text-align: center;
+    }
+
+    .team-admin-badge {
+      flex: 1 1 100%;
+      text-align: center;
+      padding: 0.45rem 0.75rem;
+    }
+  }
+}
+
+@media (max-width: 575.98px) {
+  .team-admin-modal-dialog {
+    width: calc(100% - 0.75rem);
+    max-height: calc(100vh - 0.75rem);
+    margin: 0.375rem auto;
+  }
+
+  #teamAdminModal .modal-header,
+  #teamAdminModal .modal-body,
+  #teamAdminModal .modal-footer {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .team-admin-row {
+    padding: 0.75rem;
+  }
+}

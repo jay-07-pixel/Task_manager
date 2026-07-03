@@ -67,6 +67,22 @@ function formatNotificationCopy(payload) {
     };
   }
 
+  if (msgType === "location_tracking_off") {
+    return {
+      title: payload.title || "Location tracking turned off",
+      body: payload.body || "An employee turned off live location tracking.",
+      data: { ...data, type: "location_tracking_off", url: data.url || "/?openAttendance=1" },
+    };
+  }
+
+  if (msgType === "location_tracking_on") {
+    return {
+      title: payload.title || "Location tracking back on",
+      body: payload.body || "An employee turned live location tracking back on.",
+      data: { ...data, type: "location_tracking_on", url: data.url || "/?openAttendance=1" },
+    };
+  }
+
   const taskTitle = data?.title || payload.taskTitle || "Your task";
   const slot = data?.slot || payload.slot;
 
@@ -87,24 +103,44 @@ function formatNotificationCopy(payload) {
   return { title, body, data: data || {} };
 }
 
+async function notifyOpenClients(message) {
+  const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+  for (const client of clients) {
+    client.postMessage(message);
+  }
+}
+
 async function showNotificationFromPayload(payload) {
   const { title, body, data } = formatNotificationCopy(payload);
   const isChat = data?.type === "chat_message";
   const isTaskSubmitted = data?.type === "task_submitted";
+  const isLocationEvent =
+    data?.type === "location_tracking_off" || data?.type === "location_tracking_on";
   const tag =
     payload.tag ||
     (isChat
       ? `taskmgr-chat-${data.conversationId || "message"}`
       : isTaskSubmitted
         ? `taskmgr-submit-${data.taskId || "task"}`
-        : `taskmgr-${data.taskId || "reminder"}-${data.slot || "alert"}`);
+        : isLocationEvent
+          ? `taskmgr-loc-${data.employeeId || "employee"}`
+          : `taskmgr-${data.taskId || "reminder"}-${data.slot || "alert"}`);
+
+  const locationUrl =
+    data?.url && String(data.url).includes("openAttendance")
+      ? data.url.startsWith("/")
+        ? data.url
+        : `/${data.url}`
+      : "/?openAttendance=1";
 
   const notifyUrl =
     isTaskSubmitted && data?.url
       ? data.url.startsWith("/")
         ? data.url
         : `/${data.url}`
-      : taskDashboardUrl(data);
+      : isLocationEvent
+        ? locationUrl
+        : taskDashboardUrl(data);
 
   const options = {
     body,
@@ -142,7 +178,15 @@ self.addEventListener("push", (event) => {
     /* use defaults */
   }
 
-  event.waitUntil(showNotificationFromPayload(payload));
+  event.waitUntil(
+    (async () => {
+      await showNotificationFromPayload(payload);
+      const data = payload.payload || payload;
+      if (data?.type === "location_tracking_off" || data?.type === "location_tracking_on") {
+        await notifyOpenClients({ type: "taskmgr-attendance-changed", detail: data });
+      }
+    })()
+  );
 });
 
 self.addEventListener("notificationclick", (event) => {
@@ -158,6 +202,11 @@ self.addEventListener("notificationclick", (event) => {
     return;
   }
   if (data.type === "location_tracking_off" && data.url) {
+    const path = data.url.startsWith("/") ? data.url : `/${data.url}`;
+    event.waitUntil(openAppUrl(path));
+    return;
+  }
+  if (data.type === "location_tracking_on" && data.url) {
     const path = data.url.startsWith("/") ? data.url : `/${data.url}`;
     event.waitUntil(openAppUrl(path));
     return;

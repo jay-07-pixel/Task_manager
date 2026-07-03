@@ -17,6 +17,26 @@ let status = null;
 let gateMode = "initial";
 
 const PING_INTERVAL_MS = 45_000;
+/** Reject Android "Approximate" / coarse location (often 500m–5km+). */
+const MAX_ACCEPTABLE_ACCURACY_M = 150;
+
+const PRECISE_GEO_OPTIONS = {
+  enableHighAccuracy: true,
+  maximumAge: 0,
+  timeout: 30_000,
+};
+
+const PRECISE_WATCH_OPTIONS = {
+  enableHighAccuracy: true,
+  maximumAge: 0,
+  timeout: 25_000,
+};
+
+function isPreciseLocation(coords) {
+  const acc = coords?.accuracy;
+  if (typeof acc !== "number" || Number.isNaN(acc)) return false;
+  return acc <= MAX_ACCEPTABLE_ACCURACY_M;
+}
 
 function escapeHtml(s) {
   const el = document.createElement("div");
@@ -103,6 +123,12 @@ async function sendPing(latitude, longitude, accuracy) {
 }
 
 function onPosition(pos) {
+  if (!isPreciseLocation(pos.coords)) {
+    stopWatching();
+    showGate(gateMode === "disabled" ? "disabled" : "initial");
+    showToastFn?.(tr("attendance.preciseLocationRequired"), "warning");
+    return;
+  }
   const { latitude, longitude, accuracy } = pos.coords;
   void sendPing(latitude, longitude, accuracy).catch(() => {});
 }
@@ -119,17 +145,9 @@ function onPositionError(err) {
 function startWatching() {
   if (!navigator.geolocation) return;
   stopWatching();
-  watchId = navigator.geolocation.watchPosition(onPosition, onPositionError, {
-    enableHighAccuracy: true,
-    maximumAge: 15_000,
-    timeout: 25_000,
-  });
+  watchId = navigator.geolocation.watchPosition(onPosition, onPositionError, PRECISE_WATCH_OPTIONS);
   pingTimer = window.setInterval(() => {
-    navigator.geolocation.getCurrentPosition(onPosition, () => {}, {
-      enableHighAccuracy: true,
-      maximumAge: 10_000,
-      timeout: 20_000,
-    });
+    navigator.geolocation.getCurrentPosition(onPosition, () => {}, PRECISE_WATCH_OPTIONS);
   }, PING_INTERVAL_MS);
 }
 
@@ -170,12 +188,13 @@ async function requestLocationAccess() {
   if (btn) btn.disabled = true;
   try {
     const pos = await new Promise((resolve, reject) => {
-      navigator.geolocation.getCurrentPosition(resolve, reject, {
-        enableHighAccuracy: true,
-        timeout: 30_000,
-        maximumAge: 0,
-      });
+      navigator.geolocation.getCurrentPosition(resolve, reject, PRECISE_GEO_OPTIONS);
     });
+    if (!isPreciseLocation(pos.coords)) {
+      showToastFn?.(tr("attendance.preciseLocationRequired"), "warning");
+      showGate(gateMode);
+      return;
+    }
     await apiFn("/api/attendance/consent", { method: "POST" });
     await sendPing(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
     status = await fetchAttendanceStatus();

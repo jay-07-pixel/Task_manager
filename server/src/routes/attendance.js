@@ -10,8 +10,12 @@ import {
   getRecentPings,
   recordPing,
 } from "../services/attendanceService.js";
-import { notifyAdminsLocationTrackingOff } from "../services/attendanceNotificationService.js";
+import {
+  notifyAdminsLocationTrackingOff,
+  notifyAdminsLocationTrackingOn,
+} from "../services/attendanceNotificationService.js";
 import { prisma } from "../lib/prisma.js";
+import { reverseGeocodeDetails } from "../services/reverseGeocodeService.js";
 
 const router = Router();
 
@@ -34,8 +38,20 @@ router.post("/consent", requireAuth, async (req, res) => {
   if (req.session.role !== "employee") {
     return res.status(403).json({ error: "Employees only" });
   }
-  await enableTrackingWithConsent(req.session.userId);
-  const status = await getEmployeeStatus(req.session.userId);
+  const userId = req.session.userId;
+  const resume = await enableTrackingWithConsent(userId);
+  if (resume.resumedTracking) {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { displayName: true },
+    });
+    void notifyAdminsLocationTrackingOn({
+      employeeId: userId,
+      employeeName: user?.displayName || "Employee",
+      resumedAt: resume.resumedAt,
+    }).catch((err) => console.error("[attendance]", err));
+  }
+  const status = await getEmployeeStatus(userId);
   res.json({ ok: true, ...status });
 });
 
@@ -68,7 +84,18 @@ router.patch("/tracking", requireAuth, async (req, res) => {
   }
   const userId = req.session.userId;
   if (parsed.data.enabled) {
-    await enableTrackingWithConsent(userId);
+    const resume = await enableTrackingWithConsent(userId);
+    if (resume.resumedTracking) {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { displayName: true },
+      });
+      void notifyAdminsLocationTrackingOn({
+        employeeId: userId,
+        employeeName: user?.displayName || "Employee",
+        resumedAt: resume.resumedAt,
+      }).catch((err) => console.error("[attendance]", err));
+    }
   } else {
     await disableTracking(userId, "user_disabled");
     const user = await prisma.user.findUnique({
@@ -99,7 +126,74 @@ router.get("/employees/:userId/history", requireOwner, async (req, res) => {
   if (!employee) return res.status(404).json({ error: "Employee not found" });
   const offPeriods = await getEmployeeOffHistory(userId);
   const recentPings = await getRecentPings(userId, { limit: 50 });
+
+  const geocodeJobs = [];
+  for (const period of offPeriods) {
+    if (period.offLocation) {
+      geocodeJobs.push({
+        id: `${period.id}:off`,
+        latitude: period.offLocation.latitude,
+        longitude: period.offLocation.longitude,
+      });
+    }
+    if (period.onLocation) {
+      geocodeJobs.push({
+        id: `${period.id}:on`,
+        latitude: period.onLocation.latitude,
+        longitude: period.onLocation.longitude,
+      });
+    }
+  }
+
+  const detailsById = new Map();
+  const pending = new Map();
+  for (const job of geocodeJobs) {
+    const key = `${Number(job.latitude).toFixed(5)},${Number(job.longitude).toFixed(5)}`;
+    if (pending.has(key)) {
+      pending.get(key).push(job.id);
+    } else {
+      pending.set(key, [job.id]);
+    }
+  }
+  for (const [key, ids] of pending) {
+    const [lat, lng] = key.split(",").map(Number);
+    const details = await reverseGeocodeDetails(lat, lng);
+    for (const id of ids) {
+      detailsById.set(id, details);
+    }
+    await new Promise((r) => setTimeout(r, 250));
+  }
+
+  for (const period of offPeriods) {
+    if (period.offLocation) {
+      const d = detailsById.get(`${period.id}:off`);
+      period.offLocation.placeName = d?.placeName ?? null;
+      period.offLocation.area = d?.area ?? null;
+      period.offLocation.city = d?.city ?? null;
+    }
+    if (period.onLocation) {
+      const d = detailsById.get(`${period.id}:on`);
+      period.onLocation.placeName = d?.placeName ?? null;
+      period.onLocation.area = d?.area ?? null;
+      period.onLocation.city = d?.city ?? null;
+    }
+  }
+
   res.json({ employee, offPeriods, recentPings });
+});
+
+router.get("/geocode", requireOwner, async (req, res) => {
+  const lat = Number(req.query.lat);
+  const lng = Number(req.query.lng);
+  if (Number.isNaN(lat) || Number.isNaN(lng)) {
+    return res.status(400).json({ error: "lat and lng required" });
+  }
+  const details = await reverseGeocodeDetails(lat, lng);
+  res.json({
+    placeName: details?.placeName ?? null,
+    area: details?.area ?? null,
+    city: details?.city ?? null,
+  });
 });
 
 export default router;

@@ -47,6 +47,10 @@ export async function getEmployeeStatus(userId) {
 }
 
 export async function enableTrackingWithConsent(userId) {
+  const hadOpenOff = await prisma.employeeLocationOffPeriod.findFirst({
+    where: { userId, endedAt: null },
+    orderBy: { startedAt: "desc" },
+  });
   await prisma.employeeLocationPreference.upsert({
     where: { userId },
     create: {
@@ -59,7 +63,13 @@ export async function enableTrackingWithConsent(userId) {
       trackingEnabled: true,
     },
   });
+  const resumedAt = new Date();
   await closeOpenOffPeriod(userId);
+  return {
+    resumedTracking: !!hadOpenOff,
+    offStartedAt: hadOpenOff?.startedAt ?? null,
+    resumedAt,
+  };
 }
 
 export async function closeOpenOffPeriod(userId) {
@@ -103,6 +113,9 @@ export async function recordPing(userId, { latitude, longitude, accuracy }) {
   ) {
     throw new Error("Invalid coordinates");
   }
+  if (typeof accuracy === "number" && !Number.isNaN(accuracy) && accuracy > 150) {
+    throw new Error("Precise location required — approximate location is not accepted");
+  }
   const pref = await getOrCreatePreference(userId);
   if (!pref.trackingEnabled) {
     throw new Error("Location tracking is disabled");
@@ -136,9 +149,8 @@ export async function getLiveEmployeesForAdmin() {
         take: 1,
       },
       locationOffPeriods: {
-        where: { endedAt: null },
         orderBy: { startedAt: "desc" },
-        take: 1,
+        take: 5,
       },
     },
     orderBy: { displayName: "asc" },
@@ -147,7 +159,8 @@ export async function getLiveEmployeesForAdmin() {
   return employees.map((emp) => {
     const pref = emp.locationPreference;
     const lastPing = emp.locationPings[0] ?? null;
-    const openOff = emp.locationOffPeriods[0] ?? null;
+    const openOff = emp.locationOffPeriods.find((p) => !p.endedAt) ?? null;
+    const lastClosedOff = emp.locationOffPeriods.find((p) => p.endedAt) ?? null;
     const trackingOn = !!pref?.trackingEnabled && !openOff;
     return {
       id: emp.id,
@@ -159,6 +172,7 @@ export async function getLiveEmployeesForAdmin() {
       isOff: !!openOff || !pref?.trackingEnabled,
       offSince: openOff?.startedAt.toISOString() ?? null,
       offReason: openOff?.reason ?? null,
+      trackingResumedAt: lastClosedOff?.endedAt?.toISOString() ?? null,
       lastPing: lastPing
         ? {
             latitude: lastPing.latitude,
@@ -178,15 +192,56 @@ export async function getEmployeeOffHistory(userId, { limit = 50 } = {}) {
     orderBy: { startedAt: "desc" },
     take: limit,
   });
-  return periods.map((p) => ({
-    id: p.id,
-    startedAt: p.startedAt.toISOString(),
-    endedAt: p.endedAt?.toISOString() ?? null,
-    reason: p.reason,
-    durationMs: p.endedAt
-      ? p.endedAt.getTime() - p.startedAt.getTime()
-      : Date.now() - p.startedAt.getTime(),
-  }));
+  const pings = await prisma.employeeLocationPing.findMany({
+    where: { userId },
+    orderBy: { recordedAt: "desc" },
+    take: 500,
+  });
+
+  return periods.map((p) => {
+    const offPing = nearestPingBefore(pings, p.startedAt);
+    const onPing = p.endedAt ? nearestPingAfter(pings, p.endedAt) : null;
+    return {
+      id: p.id,
+      startedAt: p.startedAt.toISOString(),
+      endedAt: p.endedAt?.toISOString() ?? null,
+      reason: p.reason,
+      durationMs: p.endedAt
+        ? p.endedAt.getTime() - p.startedAt.getTime()
+        : Date.now() - p.startedAt.getTime(),
+      offLocation: offPing
+        ? {
+            latitude: offPing.latitude,
+            longitude: offPing.longitude,
+            recordedAt: offPing.recordedAt.toISOString(),
+          }
+        : null,
+      onLocation: onPing
+        ? {
+            latitude: onPing.latitude,
+            longitude: onPing.longitude,
+            recordedAt: onPing.recordedAt.toISOString(),
+          }
+        : null,
+    };
+  });
+}
+
+function nearestPingBefore(pingsDesc, isoTime) {
+  const t = new Date(isoTime).getTime();
+  for (const p of pingsDesc) {
+    if (new Date(p.recordedAt).getTime() <= t) return p;
+  }
+  return pingsDesc.length ? pingsDesc[pingsDesc.length - 1] : null;
+}
+
+function nearestPingAfter(pingsDesc, isoTime) {
+  const t = new Date(isoTime).getTime();
+  for (let i = pingsDesc.length - 1; i >= 0; i -= 1) {
+    const p = pingsDesc[i];
+    if (new Date(p.recordedAt).getTime() >= t) return p;
+  }
+  return null;
 }
 
 export async function getRecentPings(userId, { limit = 100 } = {}) {

@@ -790,8 +790,8 @@
     "title": "Live attendance",
     "adminIntro": "See each employee’s live location on the map. When someone turns tracking off, you are notified and off-time is recorded below.",
     "gateTitle": "Share your location to continue",
-    "gateMessage": "Your live location will be tracked continuously while you use this app. You must allow location access to view tasks and other features.",
-    "gateHint": "Location is required for attendance. You can turn tracking off later in Settings, but your admin will be notified.",
+    "gateMessage": "Your live location will be tracked continuously while you use this app. You must allow precise (exact) location access to view tasks and other features.",
+    "gateHint": "When your browser asks, choose Precise / exact location only — Approximate is not accepted. You can turn tracking off later in Settings, but your admin will be notified.",
     "gateDisabledTitle": "Location tracking is off",
     "gateDisabledMessage": "Turn live location tracking back on to access your tasks. Your admin was notified when you turned it off.",
     "gateDisabledHint": "Open Settings to turn tracking on, or use the button below.",
@@ -799,7 +799,8 @@
     "turnTrackingOn": "Turn tracking on",
     "waitingForLocation": "Allow location access using the prompt above to view your tasks.",
     "trackingStarted": "Live location tracking is on.",
-    "permissionDenied": "Location permission denied. Allow location in your browser to continue.",
+    "permissionDenied": "Location permission denied. Allow precise location in your browser to continue.",
+    "preciseLocationRequired": "Precise (exact) location is required. When Chrome asks, select Precise — not Approximate — then try again.",
     "notSupported": "This browser does not support location services.",
     "liveLocationTracking": "Live location tracking",
     "settingsHint": "When off, your admin is notified and you cannot access tasks until tracking is on again.",
@@ -817,6 +818,14 @@
     "stillOff": "Still off",
     "noOffPeriods": "No off periods recorded.",
     "noEmployees": "No employees yet.",
-    "liveMap": "Employee live locations map"
+    "liveMap": "Employee live locations map",
+    "turnedOffAt": "Turned off at {{time}}",
+    "turnedBackOnAt": "Turned back on at {{time}}",
+    "liveAt": "Live · updated {{time}}",
+    "adminNotifyOff": "{{name}} turned off live location tracking.",
+    "adminNotifyOn": "{{name}} turned live location tracking back on.",
+    "locationUnknown": "Location not available",
+    "resolvingLocation": "Resolving location…",
+    "loadingLocation": "Loading…"
   }
 }

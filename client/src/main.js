@@ -50,6 +50,7 @@ import {
   destroyAdminAttendance,
   stopAttendancePoll,
   ownerAttendanceChromeHeaderHtml,
+  handleAttendanceLiveEvent,
 } from "./adminAttendance.js";
 import {
   compareCompletedTasksRecentFirst,
@@ -1801,6 +1802,19 @@ function wireChatNotifyHandlers() {
 
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.addEventListener("message", (event) => {
+      if (event.data?.type === "taskmgr-attendance-changed" && state.user?.role === "owner") {
+        const detail = event.data.detail || {};
+        const name = detail.employeeName || "Employee";
+        if (detail.type === "location_tracking_off") {
+          showToast(tr("attendance.adminNotifyOff", { name }), "warning");
+        } else if (detail.type === "location_tracking_on") {
+          showToast(tr("attendance.adminNotifyOn", { name }), "success");
+        }
+        if (state.ownerView === "attendance") {
+          handleAttendanceLiveEvent(detail);
+        }
+        return;
+      }
       if (event.data?.type === "taskmgr-navigate" && state.user) {
         const url = event.data.url || "";
         const chatMatch = url.match(/openChat=([^&]+)/);
@@ -4284,13 +4298,13 @@ function wireContactUsModal() {
 function teamAdminModalHtml() {
   return `
     <div class="modal fade" id="teamAdminModal" tabindex="-1" aria-labelledby="teamAdminModalTitle" aria-hidden="true">
-      <div class="modal-dialog modal-dialog-scrollable">
+      <div class="modal-dialog modal-dialog-scrollable modal-dialog-centered team-admin-modal-dialog">
         <div class="modal-content">
           <div class="modal-header">
             <h2 class="modal-title h5 mb-0" id="teamAdminModalTitle">${tr("modals.teamAdminTitle")}</h2>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="${tr("common.close")}"></button>
           </div>
-          <div class="modal-body">
+          <div class="modal-body team-admin-modal-body">
             <p class="small text-muted mb-3">${tr("modals.teamAdminIntro")}</p>
             <div id="team-admin-list"></div>
           </div>
@@ -4321,26 +4335,28 @@ async function refreshTeamAdminList() {
           let action;
           if (isAdmin) {
             if (isSelf) {
-              action = `<span class="badge rounded-pill owner-role-badge flex-shrink-0">${tr("owner.adminYou")}</span>`;
+              action = `<span class="badge rounded-pill owner-role-badge team-admin-badge">${tr("owner.adminYou")}</span>`;
             } else {
-              action = `<button type="button" class="btn btn-sm btn-outline-danger flex-shrink-0 team-revoke-btn" data-user-id="${u.id}" data-user-name="${escapeHtml(
+              action = `<button type="button" class="btn btn-sm btn-outline-danger team-revoke-btn" data-user-id="${u.id}" data-user-name="${escapeHtml(
                 u.displayName
               )}">${tr("owner.revokeAdmin")}</button>`;
             }
           } else {
-            action = `<button type="button" class="btn btn-sm btn-primary flex-shrink-0 team-promote-btn" data-user-id="${u.id}" data-user-name="${escapeHtml(
+            action = `<button type="button" class="btn btn-sm btn-primary team-promote-btn" data-user-id="${u.id}" data-user-name="${escapeHtml(
               u.displayName
             )}">${tr("owner.makeAdmin")}</button>`;
           }
-          return `<div class="list-group-item d-flex justify-content-between align-items-center gap-2">
-            <div class="min-w-0">
-              <div class="fw-medium text-truncate">${escapeHtml(dt(u.displayName))}</div>
-              <div class="small text-muted text-truncate">${escapeHtml(u.email)}</div>
-              <div class="small text-muted">${tr("profile.salary")}: ₹${Number(u.salary ?? 15000).toLocaleString()}</div>
-            </div>
-            <div class="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center gap-1 flex-shrink-0">
-              <button type="button" class="btn btn-sm btn-outline-secondary team-profile-btn" data-user-id="${u.id}">${tr("profile.editProfile")}</button>
-              ${action}
+          return `<div class="list-group-item team-admin-row">
+            <div class="team-admin-row-inner">
+              <div class="team-admin-user min-w-0">
+                <div class="fw-medium team-admin-name">${escapeHtml(dt(u.displayName))}</div>
+                <div class="small text-muted team-admin-email">${escapeHtml(u.email)}</div>
+                <div class="small text-muted">${tr("profile.salary")}: ₹${Number(u.salary ?? 15000).toLocaleString()}</div>
+              </div>
+              <div class="team-admin-actions">
+                <button type="button" class="btn btn-sm btn-outline-secondary team-profile-btn" data-user-id="${u.id}">${tr("profile.editProfile")}</button>
+                ${action}
+              </div>
             </div>
           </div>`;
         })
