@@ -9,6 +9,32 @@ const APK_FILENAME = "kalpanik-reminder.apk";
 /** @type {{ id: string; date: string; title: string; icon: string; body: string; action?: { label: string; type?: string; href?: string; download?: boolean } }[]} */
 export const ADMIN_ANNOUNCEMENTS = [
   {
+    id: "feature-attendance-live-location-20260704",
+    date: "04-07-26",
+    title: "Attendance & live location",
+    icon: "bi-geo-alt-fill",
+    body:
+      "Employees must share precise live location to use tasks. They can turn tracking off in Settings (you get a Chrome alert; tasks stay blocked until they turn it on). Open Attendance in the sidebar for the live map, Live/Off status, area + city, off/on times, and history. Click an employee to focus the map, or use Refresh anytime.",
+    action: { labelKey: "notifications.openAttendance", type: "open-attendance" },
+  },
+  {
+    id: "feature-task-voice-attachments-20260704",
+    date: "04-07-26",
+    title: "Task attachments & voice notes",
+    icon: "bi-mic-fill",
+    body:
+      "When creating or editing a task, attach images, videos, PDFs, and voice notes for assignees. Recording shows start/stop with a timer. You can play voice notes while assigning and after save. Employees can open and listen to attachments on their tasks.",
+  },
+  {
+    id: "feature-owner-dashboard-filters-20260704",
+    date: "04-07-26",
+    title: "Owner dashboard updates",
+    icon: "bi-bar-chart-fill",
+    body:
+      "Monthly work capacity: change month to update the graph; task breakdown filters by employee (pick one to view). Employee performance list can switch between Late submissions and Pending. Progress updates and Chat (30 days) cards were removed from Reports.",
+    action: { labelKey: "notifications.openOwnerDashboard", type: "open-owner-dashboard" },
+  },
+  {
     id: "feature-translation-voice-owner-dash-20260620",
     date: "20-06-26",
     title: "Translation, voice chat & Owner dashboard",
@@ -143,6 +169,8 @@ function announcementItemHtml(item, userId) {
     actionHtml = `<button type="button" class="btn btn-sm btn-outline-primary js-admin-notif-action" data-action="open-chat" data-announcement-id="${escapeHtml(item.id)}">${escapeHtml(tr(action.labelKey || "notifications.openMessages"))}</button>`;
   } else if (action?.type === "open-owner-dashboard") {
     actionHtml = `<button type="button" class="btn btn-sm btn-outline-primary js-admin-notif-action" data-action="open-owner-dashboard" data-announcement-id="${escapeHtml(item.id)}">${escapeHtml(tr(action.labelKey || "notifications.openOwnerDashboard"))}</button>`;
+  } else if (action?.type === "open-attendance") {
+    actionHtml = `<button type="button" class="btn btn-sm btn-outline-primary js-admin-notif-action" data-action="open-attendance" data-announcement-id="${escapeHtml(item.id)}">${escapeHtml(tr(action.labelKey || "notifications.openAttendance"))}</button>`;
   } else if (action?.href) {
     const dl = action.download ? ` download="${APK_FILENAME}"` : "";
     actionHtml = `<a class="btn btn-sm btn-outline-primary js-admin-notif-action" href="${escapeHtml(action.href)}"${dl} data-announcement-id="${escapeHtml(item.id)}">${escapeHtml(tr(action.labelKey || "notifications.downloadApk"))}</a>`;
@@ -251,6 +279,9 @@ export function wireAdminNotifications(userId, root = document) {
         } else if (actionEl.getAttribute("data-action") === "open-owner-dashboard") {
           bootstrap.Offcanvas.getInstance(offcanvasEl)?.hide();
           window.dispatchEvent(new CustomEvent("taskmgr:open-owner-dashboard"));
+        } else if (actionEl.getAttribute("data-action") === "open-attendance") {
+          bootstrap.Offcanvas.getInstance(offcanvasEl)?.hide();
+          window.dispatchEvent(new CustomEvent("taskmgr:open-attendance"));
         }
       });
     });

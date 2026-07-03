@@ -7094,6 +7094,13 @@ function wireOwnerDashboardAnnouncementListener() {
     renderOwnerMain();
     dismissAdminMobileNav();
   });
+  window.addEventListener("taskmgr:open-attendance", () => {
+    if (state.user?.role !== "owner") return;
+    state.ownerView = "attendance";
+    renderListContentOnly();
+    renderOwnerMain();
+    dismissAdminMobileNav();
+  });
 }
 
 function renderOwnerChrome() {

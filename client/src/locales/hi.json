@@ -775,6 +775,7 @@
     "unread": "सूचनाएँ, {{count}} अपठित",
     "openMessages": "संदेश खोलें",
     "openOwnerDashboard": "ओनर डैशबोर्ड खोलें",
+    "openAttendance": "उपस्थिति खोलें",
     "downloadApk": "APK डाउनलोड करें"
   },
   "errors": {

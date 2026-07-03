@@ -775,6 +775,7 @@
     "unread": "Notifications, {{count}} unread",
     "openMessages": "Open Messages",
     "openOwnerDashboard": "Open Owner dashboard",
+    "openAttendance": "Open Attendance",
     "downloadApk": "Download APK"
   },
   "errors": {

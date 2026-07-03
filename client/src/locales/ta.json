@@ -775,6 +775,7 @@
     "unread": "அறிவிப்புகள், {{count}} படிக்காதவை",
     "openMessages": "செய்திகளைத் திற",
     "openOwnerDashboard": "உரிமையாளர் டாஷ்போர்டைத் திற",
+    "openAttendance": "வருகையைத் திற",
     "downloadApk": "APK பதிவிறக்கு"
   },
   "errors": {
