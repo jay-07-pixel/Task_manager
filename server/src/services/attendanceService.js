@@ -156,7 +156,7 @@ export async function getLiveEmployeesForAdmin() {
     orderBy: { displayName: "asc" },
   });
 
-  return employees.map((emp) => {
+  const rows = employees.map((emp) => {
     const pref = emp.locationPreference;
     const lastPing = emp.locationPings[0] ?? null;
     const openOff = emp.locationOffPeriods.find((p) => !p.endedAt) ?? null;
@@ -184,6 +184,18 @@ export async function getLiveEmployeesForAdmin() {
         : null,
     };
   });
+
+  // Live employees first, then by name
+  rows.sort((a, b) => {
+    const aLive = a.trackingOn && !a.isOff ? 0 : 1;
+    const bLive = b.trackingOn && !b.isOff ? 0 : 1;
+    if (aLive !== bLive) return aLive - bLive;
+    return String(a.displayName || "").localeCompare(String(b.displayName || ""), undefined, {
+      sensitivity: "base",
+    });
+  });
+
+  return rows;
 }
 
 export async function getEmployeeOffHistory(userId, { limit = 50 } = {}) {

@@ -446,7 +446,7 @@ async function focusEmployeeOnMap(emp) {
 async function selectEmployeeOnMap(employeeId, { fromMarker = false } = {}) {
   if (!employeeId) return;
   selectedEmployeeId = employeeId;
-  const employees = liveData?.employees ?? [];
+  const employees = sortEmployeesLiveFirst(liveData?.employees ?? []);
   const emp = employees.find((e) => e.id === employeeId) ?? null;
 
   const listHost = document.getElementById("admin-attendance-emp-list");
@@ -478,6 +478,17 @@ function employeeMetaHtml(emp) {
     return tr("attendance.liveAt", { time: formatDateTime(emp.lastPing.recordedAt) });
   }
   return tr("attendance.noLocationYet");
+}
+
+function sortEmployeesLiveFirst(employees) {
+  return [...(employees ?? [])].sort((a, b) => {
+    const aLive = a.trackingOn && !a.isOff ? 0 : 1;
+    const bLive = b.trackingOn && !b.isOff ? 0 : 1;
+    if (aLive !== bLive) return aLive - bLive;
+    return String(a.displayName || "").localeCompare(String(b.displayName || ""), undefined, {
+      sensitivity: "base",
+    });
+  });
 }
 
 function employeeRowHtml(emp) {
@@ -580,7 +591,7 @@ function wireEmployeeListHandlers(root) {
 }
 
 function updateAttendanceDomInPlace(data) {
-  const employees = data.employees ?? [];
+  const employees = sortEmployeesLiveFirst(data.employees ?? []);
   const listHost = document.getElementById("admin-attendance-emp-list");
   if (listHost) {
     listHost.innerHTML = employees.length
@@ -627,7 +638,7 @@ function updateLastRefreshedLabel() {
 function renderAttendancePage() {
   const main = document.getElementById("main-column");
   if (!main) return;
-  const employees = liveData?.employees ?? [];
+  const employees = sortEmployeesLiveFirst(liveData?.employees ?? []);
   if (!selectedEmployeeId && employees.length) {
     selectedEmployeeId = employees.find((e) => e.trackingOn && e.lastPing)?.id ?? employees[0].id;
   }
