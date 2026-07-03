@@ -367,9 +367,73 @@
     border: 1px solid var(--admin-outline-variant);
   }
 
+  .owner-dash-section-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 0.85rem 1rem;
+  }
+
   .owner-dash-filter--month {
-    min-width: 11.5rem;
+    min-width: 12.5rem;
     align-self: flex-end;
+    padding: 0.55rem 0.7rem;
+    border-radius: 0.75rem;
+    border: 1px solid color-mix(in srgb, var(--admin-primary, #006d77) 28%, var(--admin-outline-variant, #bec8ca));
+    background: color-mix(in srgb, var(--admin-primary, #006d77) 8%, var(--admin-surface-container-high, #e6e6ff));
+    box-shadow: 0 1px 2px color-mix(in srgb, var(--admin-primary, #006d77) 10%, transparent);
+  }
+
+  .owner-dash-filter--month .owner-dash-filter-label {
+    color: var(--admin-primary, #006d77);
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .owner-dash-filter--month .owner-dash-filter-icon {
+    color: var(--admin-primary, #006d77);
+    opacity: 1;
+  }
+
+  .owner-dash-filter--month .owner-dash-select,
+  .owner-dash-filter--month .js-budget-month {
+    min-width: 11rem;
+    border-radius: 0.55rem;
+    border: 1px solid color-mix(in srgb, var(--admin-primary, #006d77) 35%, var(--admin-outline-variant, #bec8ca));
+    background-color: var(--admin-surface, #fff);
+    color: var(--admin-on-surface, #181a2e);
+    font-weight: 600;
+    font-size: 0.9rem;
+    padding: 0.4rem 0.55rem;
+    color-scheme: light;
+    accent-color: var(--admin-primary, #006d77);
+
+    &:focus,
+    &:focus-visible {
+      border-color: var(--admin-primary, #006d77);
+      box-shadow: 0 0 0 0.2rem color-mix(in srgb, var(--admin-primary, #006d77) 22%, transparent);
+      outline: none;
+    }
+
+    &:disabled {
+      opacity: 0.7;
+      cursor: wait;
+    }
+  }
+
+  [data-bs-theme="dark"] .owner-dash-filter--month .owner-dash-select,
+  [data-bs-theme="dark"] .owner-dash-filter--month .js-budget-month {
+    color-scheme: dark;
+    background-color: var(--admin-surface-container-high, #2a2d45);
+  }
+
+  .owner-dash-budget-card--loading {
+    opacity: 0.72;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
   }
 
   .owner-dash-section-head {
@@ -877,10 +941,45 @@
     background: color-mix(in srgb, var(--admin-error) 6%, transparent);
   }
 
+  .owner-dash-budget-breakdown-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 0.75rem 1rem;
+  }
+
   .owner-dash-budget-breakdown-title {
     font-size: 0.85rem;
     font-weight: 600;
     color: var(--admin-on-surface-variant);
+  }
+
+  .owner-dash-filter--breakdown-employee {
+    min-width: 12rem;
+  }
+
+  .owner-dash-filter--breakdown-employee .owner-dash-filter-label {
+    color: var(--admin-primary, #006d77);
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .owner-dash-filter--breakdown-employee .owner-dash-select--employee {
+    min-width: 11.5rem;
+    border-color: color-mix(in srgb, var(--admin-primary, #006d77) 35%, var(--admin-outline-variant));
+    background-color: color-mix(in srgb, var(--admin-primary, #006d77) 8%, var(--admin-surface-container-high));
+    color: var(--admin-on-surface);
+    font-weight: 600;
+
+    &:focus,
+    &:focus-visible {
+      border-color: var(--admin-primary, #006d77);
+      box-shadow: 0 0 0 0.2rem color-mix(in srgb, var(--admin-primary, #006d77) 22%, transparent);
+      outline: none;
+    }
   }
 
   .admin-report-chart-wrap--budget {

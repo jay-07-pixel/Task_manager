@@ -32,6 +32,9 @@ let reportViewMode = "full";
 /** @type {string} YYYY-MM for owner budget filter */
 let ownerBudgetMonthFilter = "";
 
+/** @type {string} employee id for task breakdown filter ("" = all) */
+let ownerBudgetBreakdownEmployeeId = "";
+
 const PERIOD_BUCKET_COUNTS = { daily: 14, weekly: 12, monthly: 6 };
 
 /** @type {number | null} */
@@ -503,31 +506,6 @@ function monthlyMinuteBudgetSectionHtml(data) {
         .join("")
     : `<tr><td colspan="5" class="text-muted small py-3">${escapeHtmlFn(tr("reports.noEmployeesWithTasks"))}</td></tr>`;
 
-  const taskRows = employees.flatMap((emp) =>
-    emp.tasks.map((task) => {
-      const recur = recurrenceLabel(task.recurrence);
-      const occ =
-        task.occurrencesPerMonth > 1
-          ? tr("owner.monthlyCapacityOccurrences", { count: task.occurrencesPerMonth })
-          : "";
-      return `<tr>
-        <td class="owner-dash-budget-employee">
-          ${personAvatarHtml(emp.name, "employee")}
-          <span>${escapeHtmlFn(dt(emp.name))}</span>
-        </td>
-        <td>${escapeHtmlFn(dt(task.title))}</td>
-        <td class="text-muted small">${escapeHtmlFn(dt(task.listTitle))}</td>
-        <td class="tabular-nums text-nowrap">${escapeHtmlFn(formatBudgetMinutes(task.durationMinutes))}</td>
-        <td class="text-nowrap small">${escapeHtmlFn(recur)}${occ ? ` <span class="text-muted">(${escapeHtmlFn(occ)})</span>` : ""}</td>
-        <td class="tabular-nums text-nowrap fw-semibold">${escapeHtmlFn(formatBudgetMinutes(task.monthlyMinutes))}</td>
-      </tr>`;
-    })
-  );
-
-  const taskTableBody = taskRows.length
-    ? taskRows.join("")
-    : `<tr><td colspan="6" class="text-muted small py-3">${escapeHtmlFn(tr("owner.monthlyCapacityNoTasks"))}</td></tr>`;
-
   const chartBlock =
     employees.length > 0
       ? `<div class="admin-report-chart-wrap admin-report-chart-wrap--tall admin-report-chart-wrap--budget">
@@ -539,11 +517,12 @@ function monthlyMinuteBudgetSectionHtml(data) {
     ? `<div class="owner-dash-budget-mobile-list d-md-none">${employees.map((emp) => employeeBudgetSummaryCardHtml(emp, monthlyBudgetMinutes)).join("")}</div>`
     : `<p class="text-muted small py-2 mb-0 d-md-none">${escapeHtmlFn(tr("reports.noEmployeesWithTasks"))}</p>`;
 
-  const taskMobile = taskRows.length
-    ? `<div class="owner-dash-budget-mobile-list d-md-none">${employees
-        .flatMap((emp) => emp.tasks.map((task) => taskBudgetBreakdownCardHtml(emp, task)))
-        .join("")}</div>`
-    : `<p class="text-muted small py-2 mb-0 d-md-none">${escapeHtmlFn(tr("owner.monthlyCapacityNoTasks"))}</p>`;
+  if (
+    ownerBudgetBreakdownEmployeeId &&
+    !employees.some((emp) => emp.id === ownerBudgetBreakdownEmployeeId)
+  ) {
+    ownerBudgetBreakdownEmployeeId = "";
+  }
 
   return `<section class="admin-report-card admin-report-card--wide owner-dash-budget-card">
     <header class="owner-dash-section-header mb-3">
@@ -575,7 +554,72 @@ function monthlyMinuteBudgetSectionHtml(data) {
         <tbody>${summaryRows}</tbody>
       </table>
     </div>
-    <h3 class="owner-dash-budget-breakdown-title mt-4 mb-2">${escapeHtmlFn(tr("owner.monthlyCapacityTaskBreakdown"))}</h3>
+    ${budgetTaskBreakdownSectionHtml(employees)}
+  </section>`;
+}
+
+function budgetTaskBreakdownRowsHtml(employees) {
+  const filtered = ownerBudgetBreakdownEmployeeId
+    ? employees.filter((emp) => emp.id === ownerBudgetBreakdownEmployeeId)
+    : employees;
+
+  const taskRows = filtered.flatMap((emp) =>
+    emp.tasks.map((task) => {
+      const recur = recurrenceLabel(task.recurrence);
+      const occ =
+        task.occurrencesPerMonth > 1
+          ? tr("owner.monthlyCapacityOccurrences", { count: task.occurrencesPerMonth })
+          : "";
+      return `<tr>
+        <td class="owner-dash-budget-employee">
+          ${personAvatarHtml(emp.name, "employee")}
+          <span>${escapeHtmlFn(dt(emp.name))}</span>
+        </td>
+        <td>${escapeHtmlFn(dt(task.title))}</td>
+        <td class="text-muted small">${escapeHtmlFn(dt(task.listTitle))}</td>
+        <td class="tabular-nums text-nowrap">${escapeHtmlFn(formatBudgetMinutes(task.durationMinutes))}</td>
+        <td class="text-nowrap small">${escapeHtmlFn(recur)}${occ ? ` <span class="text-muted">(${escapeHtmlFn(occ)})</span>` : ""}</td>
+        <td class="tabular-nums text-nowrap fw-semibold">${escapeHtmlFn(formatBudgetMinutes(task.monthlyMinutes))}</td>
+      </tr>`;
+    })
+  );
+
+  const taskTableBody = taskRows.length
+    ? taskRows.join("")
+    : `<tr><td colspan="6" class="text-muted small py-3">${escapeHtmlFn(tr("owner.monthlyCapacityNoTasks"))}</td></tr>`;
+
+  const taskMobile = taskRows.length
+    ? `<div class="owner-dash-budget-mobile-list d-md-none owner-dash-budget-breakdown-mobile">${filtered
+        .flatMap((emp) => emp.tasks.map((task) => taskBudgetBreakdownCardHtml(emp, task)))
+        .join("")}</div>`
+    : `<p class="text-muted small py-2 mb-0 d-md-none owner-dash-budget-breakdown-mobile">${escapeHtmlFn(tr("owner.monthlyCapacityNoTasks"))}</p>`;
+
+  return { taskTableBody, taskMobile };
+}
+
+function budgetTaskBreakdownSectionHtml(employees) {
+  const options = [
+    `<option value="">${escapeHtmlFn(tr("owner.monthlyCapacityAllEmployees"))}</option>`,
+    ...employees.map(
+      (emp) =>
+        `<option value="${escapeHtmlFn(emp.id)}"${emp.id === ownerBudgetBreakdownEmployeeId ? " selected" : ""}>${escapeHtmlFn(dt(emp.name))}</option>`
+    ),
+  ].join("");
+
+  const { taskTableBody, taskMobile } = budgetTaskBreakdownRowsHtml(employees);
+
+  return `<div class="owner-dash-budget-breakdown" id="owner-dash-budget-breakdown">
+    <div class="owner-dash-budget-breakdown-head mt-4 mb-2">
+      <h3 class="owner-dash-budget-breakdown-title mb-0">${escapeHtmlFn(tr("owner.monthlyCapacityTaskBreakdown"))}</h3>
+      <label class="admin-report-filter owner-dash-filter owner-dash-filter--breakdown-employee">
+        <span class="admin-report-filter-label owner-dash-filter-label">${adminMsIconFn("person", "owner-dash-filter-icon")}<span>${escapeHtmlFn(
+          tr("owner.monthlyCapacitySelectEmployee")
+        )}</span></span>
+        <select class="form-select form-select-sm owner-dash-select owner-dash-select--employee js-budget-breakdown-employee" aria-label="${escapeHtmlFn(
+          tr("owner.monthlyCapacitySelectEmployee")
+        )}">${options}</select>
+      </label>
+    </div>
     ${taskMobile}
     <div class="table-responsive owner-dash-budget-table-wrap d-none d-md-block">
       <table class="table table-sm admin-report-table owner-dash-budget-table mb-0">
@@ -589,10 +633,10 @@ function monthlyMinuteBudgetSectionHtml(data) {
             <th class="text-nowrap">${escapeHtmlFn(tr("owner.monthlyCapacityMonthlyCost"))}</th>
           </tr>
         </thead>
-        <tbody>${taskTableBody}</tbody>
+        <tbody class="js-budget-breakdown-tbody">${taskTableBody}</tbody>
       </table>
     </div>
-  </section>`;
+  </div>`;
 }
 
 function renderMonthlyBudgetChart() {
@@ -923,8 +967,6 @@ function reportPageHtml(data) {
         ${kpiCard(tr("reports.overdue"), o.overdue, "event_busy", o.overdue > 0 ? "warn" : "")}
         ${kpiCard(tr("reports.submissions"), o.totalSubmissions, "upload_file")}
         ${kpiCard(tr("reports.employees"), o.employeeCount, "groups")}
-        ${kpiCard(tr("reports.progressUpdates"), o.progressUpdates, "forum")}
-        ${kpiCard(tr("reports.chat30Days"), o.chatMessages30d, "chat")}
         ${kpiCard(tr("reports.yourLists"), o.listCount, "folder")}
       </div>
 
@@ -1243,16 +1285,96 @@ function wireEmployeePerfFilters(main) {
 
 function wireMonthlyBudgetFilters(main) {
   const monthInput = main.querySelector(".js-budget-month");
-  if (!(monthInput instanceof HTMLInputElement) || monthInput.dataset.wiredBudgetMonth === "1") return;
-  monthInput.dataset.wiredBudgetMonth = "1";
-  monthInput.addEventListener("change", () => {
-    const next = parseBudgetMonthInput(monthInput.value);
-    if (!next) return;
-    const nextKey = budgetMonthInputValue(next.year, next.month);
-    if (nextKey === ownerBudgetMonthFilter) return;
-    ownerBudgetMonthFilter = nextKey;
-    void refreshOwnerDashboard({ force: true });
-  });
+  if (monthInput instanceof HTMLInputElement && monthInput.dataset.wiredBudgetMonth !== "1") {
+    monthInput.dataset.wiredBudgetMonth = "1";
+    const onMonthPicked = () => {
+      const next = parseBudgetMonthInput(monthInput.value);
+      if (!next) return;
+      const nextKey = budgetMonthInputValue(next.year, next.month);
+      if (nextKey === ownerBudgetMonthFilter) return;
+      ownerBudgetBreakdownEmployeeId = "";
+      void loadMonthlyBudgetForSelectedMonth(main, nextKey);
+    };
+    monthInput.addEventListener("change", onMonthPicked);
+    monthInput.addEventListener("input", onMonthPicked);
+  }
+
+  const employeeSelect = main.querySelector(".js-budget-breakdown-employee");
+  if (employeeSelect instanceof HTMLSelectElement && employeeSelect.dataset.wiredBreakdownEmp !== "1") {
+    employeeSelect.dataset.wiredBreakdownEmp = "1";
+    employeeSelect.addEventListener("change", () => {
+      ownerBudgetBreakdownEmployeeId = employeeSelect.value || "";
+      refreshBudgetTaskBreakdownSection(main);
+    });
+  }
+}
+
+function refreshBudgetTaskBreakdownSection(main) {
+  const employees = reportData?.monthlyMinuteBudget?.employees ?? [];
+  const host = main?.querySelector("#owner-dash-budget-breakdown");
+  if (!host) return;
+  const replacement = document.createElement("div");
+  replacement.innerHTML = budgetTaskBreakdownSectionHtml(employees);
+  const next = replacement.firstElementChild;
+  if (!next) return;
+  host.replaceWith(next);
+  wireMonthlyBudgetFilters(main);
+}
+
+async function loadMonthlyBudgetForSelectedMonth(main, monthKey) {
+  if (!apiFn || !main) return;
+  const month = parseBudgetMonthInput(monthKey);
+  if (!month) return;
+
+  const previousKey = ownerBudgetMonthFilter;
+  ownerBudgetMonthFilter = monthKey;
+
+  const card = main.querySelector(".owner-dash-budget-card");
+  const monthInput = main.querySelector(".js-budget-month");
+  if (monthInput instanceof HTMLInputElement) monthInput.disabled = true;
+  card?.classList.add("owner-dash-budget-card--loading");
+
+  try {
+    const q = `?year=${encodeURIComponent(String(month.year))}&month=${encodeURIComponent(String(month.month))}`;
+    const summary = await apiFn(`/api/reports/owner-dashboard/summary${q}`);
+    if (!reportData) reportData = {};
+    reportData.monthlyMinuteBudget = summary.monthlyMinuteBudget;
+    reportData.employeeOptions = summary.employeeOptions ?? reportData.employeeOptions;
+    reportData.generatedAt = summary.generatedAt ?? reportData.generatedAt;
+
+    const budget = reportData.monthlyMinuteBudget;
+    if (budget?.budgetYear && budget?.budgetMonth) {
+      ownerBudgetMonthFilter = budgetMonthInputValue(budget.budgetYear, budget.budgetMonth);
+    }
+
+    const replacement = document.createElement("div");
+    replacement.innerHTML = monthlyMinuteBudgetSectionHtml(reportData);
+    const newCard = replacement.querySelector(".owner-dash-budget-card");
+    if (card && newCard) {
+      card.replaceWith(newCard);
+      wireMonthlyBudgetFilters(main);
+    } else if (!card && newCard) {
+      const charts = main.querySelector(".admin-reports-charts--owner-dashboard");
+      if (charts) {
+        const trial = charts.querySelector(".owner-dash-trial-card");
+        if (trial?.nextSibling) charts.insertBefore(newCard, trial.nextSibling);
+        else charts.insertBefore(newCard, charts.firstChild);
+        wireMonthlyBudgetFilters(main);
+      }
+    }
+    requestAnimationFrame(() => renderMonthlyBudgetChart());
+  } catch (err) {
+    console.error("[owner-dashboard] month budget load failed", err);
+    ownerBudgetMonthFilter = previousKey;
+    const liveInput = main.querySelector(".js-budget-month");
+    if (liveInput instanceof HTMLInputElement) {
+      liveInput.value = previousKey || liveInput.value;
+    }
+  } finally {
+    const liveInput = main.querySelector(".js-budget-month");
+    if (liveInput instanceof HTMLInputElement) liveInput.disabled = false;
+    main.querySelector(".owner-dash-budget-card")?.classList.remove("owner-dash-budget-card--loading");
+  }
 }
 
 async function loadEmployeePerformance(main) {
@@ -1440,6 +1562,7 @@ export function clearAdminReportsCache() {
   employeePerfData = null;
   employeePerfFilters = { employeeId: "", period: "daily" };
   ownerBudgetMonthFilter = "";
+  ownerBudgetBreakdownEmployeeId = "";
   reportViewMode = "full";
   destroyAdminReportsCharts();
 }

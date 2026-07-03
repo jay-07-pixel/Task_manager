@@ -247,6 +247,8 @@
     "monthlyCapacityEmployees": "Employees",
     "monthlyCapacityOverBudgetCount": "Over budget",
     "monthlyCapacityTaskBreakdown": "Task breakdown",
+    "monthlyCapacitySelectEmployee": "Select employee",
+    "monthlyCapacityAllEmployees": "All employees",
     "monthlyCapacityNoTasks": "No active tasks with duration are assigned this month.",
     "monthlyCapacitySelectMonth": "Select month",
     "monthlyCapacityOccurrences": "×{{count}}/month",

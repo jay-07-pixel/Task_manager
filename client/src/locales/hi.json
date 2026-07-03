@@ -247,6 +247,8 @@
     "monthlyCapacityEmployees": "कर्मचारी",
     "monthlyCapacityOverBudgetCount": "बजट से अधिक",
     "monthlyCapacityTaskBreakdown": "कार्य विवरण",
+    "monthlyCapacitySelectEmployee": "कर्मचारी चुनें",
+    "monthlyCapacityAllEmployees": "सभी कर्मचारी",
     "monthlyCapacityNoTasks": "इस महीने अवधि वाले कोई सक्रिय कार्य नियत नहीं हैं।",
     "monthlyCapacitySelectMonth": "महीना चुनें",
     "monthlyCapacityOccurrences": "×{{count}}/माह",
