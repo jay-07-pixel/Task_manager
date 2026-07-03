@@ -1,5 +1,9 @@
 import { tr } from "./i18n/index.js";
 import {
+  attendanceSettingsToggleHtml,
+  wireAttendanceSettingsToggle,
+} from "./attendance.js";
+import {
   isPushSupported,
   isPushSubscribed,
   preparePushInfrastructure,
@@ -173,6 +177,10 @@ function employeeSettingsRowsHtml() {
     );
   }
 
+  if (user?.role === "employee") {
+    rows.push(attendanceSettingsToggleHtml());
+  }
+
   return rows.join("");
 }
 
@@ -296,6 +304,9 @@ function wireSettingsPage(main, role) {
   });
 
   wireNotificationsToggle(main);
+  if (role === "employee") {
+    wireAttendanceSettingsToggle(main);
+  }
 }
 
 function openSettingsView(role) {

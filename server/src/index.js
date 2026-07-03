@@ -19,6 +19,7 @@ import chatRoutes from "./routes/chat.js";
 import reportsRoutes from "./routes/reports.js";
 import translateRoutes from "./routes/translate.js";
 import companyRoutes from "./routes/company.js";
+import attendanceRoutes from "./routes/attendance.js";
 import { prisma } from "./lib/prisma.js";
 import { initPush } from "./lib/push.js";
 import { initFcm } from "./lib/fcm.js";
@@ -91,6 +92,7 @@ app.use("/api/chat", chatRoutes);
 app.use("/api/reports", reportsRoutes);
 app.use("/api/translate", translateRoutes);
 app.use("/api/company", companyRoutes);
+app.use("/api/attendance", attendanceRoutes);
 
 app.get("/api/health", async (_req, res) => {
   try {

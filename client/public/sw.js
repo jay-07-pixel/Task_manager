@@ -157,6 +157,11 @@ self.addEventListener("notificationclick", (event) => {
     event.waitUntil(openAppUrl(path));
     return;
   }
+  if (data.type === "location_tracking_off" && data.url) {
+    const path = data.url.startsWith("/") ? data.url : `/${data.url}`;
+    event.waitUntil(openAppUrl(path));
+    return;
+  }
   event.waitUntil(openTaskDashboard(data));
 });
 

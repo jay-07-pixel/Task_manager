@@ -39,6 +39,19 @@ import {
   onSettingsThemeChange,
 } from "./adminSettings.js";
 import {
+  initAttendance,
+  ensureEmployeeLocationAccess,
+  stopAttendanceTracking,
+} from "./attendance.js";
+import {
+  initAdminAttendance,
+  ownerAttendanceNavItemHtml,
+  openOwnerAttendanceView,
+  destroyAdminAttendance,
+  stopAttendancePoll,
+  ownerAttendanceChromeHeaderHtml,
+} from "./adminAttendance.js";
+import {
   compareCompletedTasksRecentFirst,
   compareTasksByRecurrenceThenCreated,
   sortTasksByRecurrenceThenCreated,
@@ -1745,6 +1758,9 @@ async function logout() {
   stopOwnerAutoSync();
   stopEmployeeReminders();
   stopChatPolling();
+  stopAttendanceTracking();
+  stopAttendancePoll();
+  destroyAdminAttendance();
   sessionStorage.removeItem(OWNER_TRIAL_POPUP_KEY);
   try {
     await api("/api/auth/logout", { method: "POST" });
@@ -1790,6 +1806,13 @@ function wireChatNotifyHandlers() {
         const chatMatch = url.match(/openChat=([^&]+)/);
         if (chatMatch?.[1]) {
           void openChatFromDeepLink(decodeURIComponent(chatMatch[1]));
+          return;
+        }
+        if (url.includes("openAttendance=1") && state.user.role === "owner") {
+          window.history.replaceState({}, "", window.location.pathname);
+          state.ownerView = "attendance";
+          renderListContentOnly();
+          renderOwnerMain();
           return;
         }
         const taskMatch = url.match(/openTask=([^&]+)/);
@@ -1942,6 +1965,15 @@ async function focusOwnerTaskFromNotify(notify) {
 async function handleOwnerNotifyDeepLink() {
   const notify = getOwnerNotifyParams();
   if (notify) await focusOwnerTaskFromNotify(notify);
+}
+
+function handleOpenAttendanceDeepLink() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("openAttendance") !== "1" || state.user?.role !== "owner") return;
+  window.history.replaceState({}, "", window.location.pathname);
+  state.ownerView = "attendance";
+  renderListContentOnly();
+  renderOwnerMain();
 }
 
 function wireEmployeeNotifyHandlers() {
@@ -2716,6 +2748,7 @@ function leftNavInner() {
         <div class="js-emp-assign-list-host owner-emp-assign-nav"></div>
         ${teamChatSidebarNavItemHtml()}
         ${ownerReportsNavItemHtml(state.ownerView === "reports")}
+        ${ownerAttendanceNavItemHtml(state.ownerView === "attendance")}
       </nav>
       <div class="admin-your-lists-section">
         <div class="admin-your-lists-head">
@@ -6088,8 +6121,12 @@ function renderListContentOnly() {
   document.querySelectorAll(".js-owner-reports-nav").forEach((btn) => {
     btn.classList.toggle("admin-sidebar-nav-item--active", state.ownerView === "reports");
   });
+  document.querySelectorAll(".js-owner-attendance-nav").forEach((btn) => {
+    btn.classList.toggle("admin-sidebar-nav-item--active", state.ownerView === "attendance");
+  });
   bindListNavHandlers();
   wireOwnerReportsNav();
+  wireOwnerAttendanceNav();
 }
 
 function renderListGroup() {
@@ -6401,6 +6438,9 @@ function findTaskById(id) {
 function renderOwnerMain() {
   const main = document.getElementById("main-column");
   if (!main) return;
+  if (state.ownerView !== "attendance") {
+    destroyAdminAttendance();
+  }
   if (state.ownerView === "owner-dashboard") {
     destroyTaskSortables();
     openOwnerDashboardView();
@@ -6414,6 +6454,11 @@ function renderOwnerMain() {
   if (state.ownerView === "settings") {
     destroyTaskSortables();
     openOwnerSettingsView();
+    return;
+  }
+  if (state.ownerView === "attendance") {
+    destroyTaskSortables();
+    openOwnerAttendanceView();
     return;
   }
   const list = state.lists.find((l) => l.id === state.activeListId);
@@ -6761,6 +6806,7 @@ function employeeSettingsChromeHeaderHtml() {
 function ownerReportsChromeHeaderDynamic() {
   if (state.ownerView === "owner-dashboard") return ownerDashboardChromeHeaderHtml();
   if (state.ownerView === "settings") return ownerSettingsChromeHeaderHtml();
+  if (state.ownerView === "attendance") return ownerAttendanceChromeHeaderHtml();
   return ownerReportsChromeHeaderHtml();
 }
 
@@ -6792,6 +6838,19 @@ function wireOwnerDashboardOpen(root = document) {
   });
 }
 
+function wireOwnerAttendanceNav() {
+  document.querySelectorAll(".js-owner-attendance-nav").forEach((btn) => {
+    if (btn.dataset.attendanceWired === "1") return;
+    btn.dataset.attendanceWired = "1";
+    btn.addEventListener("click", () => {
+      state.ownerView = "attendance";
+      renderListContentOnly();
+      renderOwnerMain();
+      dismissAdminMobileNav();
+    });
+  });
+}
+
 function wireOwnerReportsNav() {
   document.querySelectorAll(".js-owner-reports-nav").forEach((btn) => {
     if (btn.dataset.reportsWired === "1") return;
@@ -6809,7 +6868,7 @@ function wireChromeNav() {
   document.querySelectorAll(".js-logout").forEach((b) => b.addEventListener("click", logout));
   document.getElementById("leftNavOffcanvas")?.addEventListener("click", (e) => {
     const actionable = e.target.closest(
-      "[data-list-id], .js-owner-create-task, .admin-sidebar-nav-item, .team-chat-sidebar-nav-item, .js-owner-reports-nav"
+      "[data-list-id], .js-owner-create-task, .admin-sidebar-nav-item, .team-chat-sidebar-nav-item, .js-owner-reports-nav, .js-owner-attendance-nav"
     );
     if (!actionable || e.target.closest(".grip-handle, .js-new-list, .js-list-delete")) return;
     dismissAdminMobileNav();
@@ -6835,7 +6894,12 @@ function wireChromeNav() {
   );
   document.querySelectorAll(".js-owner-create-task").forEach((btn) => {
     btn.addEventListener("click", () => {
-      if (state.ownerView === "reports" || state.ownerView === "owner-dashboard" || state.ownerView === "settings") {
+      if (
+        state.ownerView === "reports" ||
+        state.ownerView === "owner-dashboard" ||
+        state.ownerView === "settings" ||
+        state.ownerView === "attendance"
+      ) {
         state.ownerView = "dashboard";
         renderListContentOnly();
       }
@@ -6848,6 +6912,7 @@ function wireChromeNav() {
     });
   });
   wireOwnerReportsNav();
+  wireOwnerAttendanceNav();
 }
 
 function wireOwnerDashboardAnnouncementListener() {
@@ -6916,6 +6981,13 @@ function renderOwnerChrome() {
     getUser: () => state.user,
     showToast,
     kalpanikWebsiteUrl: KALPANIK_WEBSITE_URL,
+  });
+  initAdminAttendance({
+    api,
+    escapeHtml,
+    adminMsIcon,
+    ownerChromeHeader: ownerAttendanceChromeHeaderHtml,
+    wireOwnerChromeHeader: wireOwnerReportsChromeHeader,
   });
   renderListGroup();
   renderOwnerMain();
@@ -7839,6 +7911,13 @@ function renderEmployeeChrome() {
     showToast,
     kalpanikWebsiteUrl: KALPANIK_WEBSITE_URL,
   });
+  initAttendance({
+    api,
+    showToast,
+    onAccessGranted: () => {
+      void loadEmployeeDashboard().then(() => renderEmployeeMain());
+    },
+  });
   renderEmpListContentOnly();
   wireSubmissionDetailModal();
   wireEmpSubmissionModal();
@@ -7877,9 +7956,18 @@ async function render() {
     }
     await loadEmployeeDashboard();
     renderEmployeeChrome();
-    startEmployeeReminderSystem();
-    void prepareEmployeePushOnLogin();
-    await handleEmployeeNotifyDeepLink();
+    const locationOk = await ensureEmployeeLocationAccess(state.user.role);
+    if (locationOk) {
+      renderEmployeeMain();
+      startEmployeeReminderSystem();
+      void prepareEmployeePushOnLogin();
+      await handleEmployeeNotifyDeepLink();
+    } else {
+      const empMain = document.getElementById("emp-main-column");
+      if (empMain) {
+        empMain.innerHTML = `<div class="admin-main-scroll d-flex flex-column"><p class="text-muted p-4 mb-0">${escapeHtml(tr("attendance.waitingForLocation"))}</p></div>`;
+      }
+    }
     const pendingNotify = sessionStorage.getItem("taskmgr-pending-notify");
     if (pendingNotify) {
       sessionStorage.removeItem("taskmgr-pending-notify");
@@ -7903,6 +7991,7 @@ async function render() {
   renderOwnerChrome();
   maybeShowOwnerTrialMessageModal();
   wireChatNotifyHandlers();
+  handleOpenAttendanceDeepLink();
   await handleOwnerNotifyDeepLink();
   const pendingOwnerNotify = sessionStorage.getItem("taskmgr-pending-owner-notify");
   if (pendingOwnerNotify) {

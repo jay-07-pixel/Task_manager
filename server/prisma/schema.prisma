@@ -57,6 +57,9 @@ model User {
   chatGroupsCreated         ChatGroup[]        @relation("ChatGroupCreatedBy")
   chatGroupMemberships      ChatGroupMember[]
   chatGroupMessagesSent     ChatGroupMessage[]
+  locationPreference        EmployeeLocationPreference?
+  locationPings             EmployeeLocationPing[]
+  locationOffPeriods        EmployeeLocationOffPeriod[]
 }
 
 model TaskList {
@@ -228,6 +231,44 @@ model EmployeeDevice {
   @@index([userId])
   @@index([fcmToken])
   @@map("employee_device")
+}
+
+model EmployeeLocationPreference {
+  userId          String    @id @map("user_id")
+  consentAt       DateTime? @map("consent_at")
+  trackingEnabled Boolean   @default(false) @map("tracking_enabled")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("employee_location_preference")
+}
+
+model EmployeeLocationPing {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  latitude   Float
+  longitude  Float
+  accuracy   Float?
+  recordedAt DateTime @default(now()) @map("recorded_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, recordedAt])
+  @@map("employee_location_ping")
+}
+
+model EmployeeLocationOffPeriod {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  startedAt DateTime  @default(now()) @map("started_at")
+  endedAt   DateTime? @map("ended_at")
+  reason    String    @db.VarChar(32)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, startedAt])
+  @@map("employee_location_off_period")
 }
 
 model ReminderSent {
