@@ -293,29 +293,31 @@ async function buildMarkerPopup(emp, ping) {
   return `<div class="admin-attendance-popup"><strong>${label}</strong><br>${time}${placeLine}${staleLine}</div>`;
 }
 
-function updateMapMarkers(employees) {
+function updateMapMarkers(employees, { fitAll = false } = {}) {
   if (!mapInstance) return;
 
   if (mapProvider === "google" && window.google?.maps) {
     const bounds = new window.google.maps.LatLngBounds();
     let count = 0;
-    const liveIds = new Set();
+    const presentIds = new Set();
     for (const emp of employees) {
       const ping = emp.lastPing;
-      if (!ping || emp.isOff) {
+      if (!ping) {
         if (markers[emp.id]) {
           markers[emp.id].setMap(null);
           delete markers[emp.id];
         }
         continue;
       }
-      liveIds.add(emp.id);
+      presentIds.add(emp.id);
       const position = { lat: ping.latitude, lng: ping.longitude };
       bounds.extend(position);
       count += 1;
       if (markers[emp.id]) {
         markers[emp.id].setPosition(position);
         markers[emp.id].setIcon(googleMarkerIcon(emp));
+        markers[emp.id]._emp = emp;
+        markers[emp.id]._ping = ping;
       } else {
         const marker = new window.google.maps.Marker({
           map: mapInstance,
@@ -323,48 +325,54 @@ function updateMapMarkers(employees) {
           icon: googleMarkerIcon(emp),
           title: emp.displayName,
         });
+        marker._emp = emp;
+        marker._ping = ping;
         marker.addListener("click", () => {
-          void buildMarkerPopup(emp, ping).then((html) => {
-            infoWindow?.setContent(html);
-            infoWindow?.open({ map: mapInstance, anchor: marker });
-          });
+          void selectEmployeeOnMap(emp.id, { fromMarker: true });
         });
         markers[emp.id] = marker;
       }
       void buildMarkerPopup(emp, ping).then((html) => {
-        markers[emp.id]._popupHtml = html;
+        if (markers[emp.id]) markers[emp.id]._popupHtml = html;
       });
     }
     for (const id of Object.keys(markers)) {
-      if (!liveIds.has(id)) {
+      if (!presentIds.has(id)) {
         markers[id].setMap(null);
         delete markers[id];
       }
     }
-    if (count === 1) {
-      mapInstance.setCenter(bounds.getCenter());
-      mapInstance.setZoom(17);
-    } else if (count > 1) {
-      mapInstance.fitBounds(bounds, 48);
+    if (fitAll) {
+      if (count === 1) {
+        mapInstance.setCenter(bounds.getCenter());
+        mapInstance.setZoom(17);
+      } else if (count > 1) {
+        mapInstance.fitBounds(bounds, 48);
+      }
     }
     return;
   }
 
   if (!window.L) return;
   const bounds = [];
+  const presentIds = new Set();
   for (const emp of employees) {
     const ping = emp.lastPing;
-    if (!ping || emp.isOff) {
+    if (!ping) {
       if (markers[emp.id]) {
         mapInstance.removeLayer(markers[emp.id]);
         delete markers[emp.id];
       }
       continue;
     }
+    presentIds.add(emp.id);
     const latlng = [ping.latitude, ping.longitude];
     bounds.push(latlng);
     if (markers[emp.id]) {
       markers[emp.id].setLatLng(latlng);
+      markers[emp.id].setIcon(employeeMarkerIcon(emp));
+      markers[emp.id]._emp = emp;
+      markers[emp.id]._ping = ping;
       void buildMarkerPopup(emp, ping).then((popup) => {
         markers[emp.id]?.setPopupContent(popup);
       });
@@ -372,17 +380,89 @@ function updateMapMarkers(employees) {
       const marker = window.L.marker(latlng, { icon: employeeMarkerIcon(emp) })
         .addTo(mapInstance)
         .bindPopup(tr("attendance.loadingLocation"));
+      marker._emp = emp;
+      marker._ping = ping;
+      marker.on("click", () => {
+        void selectEmployeeOnMap(emp.id, { fromMarker: true });
+      });
       markers[emp.id] = marker;
       void buildMarkerPopup(emp, ping).then((popup) => {
         marker.setPopupContent(popup);
       });
     }
   }
-  if (bounds.length === 1) {
-    mapInstance.setView(bounds[0], 16);
-  } else if (bounds.length > 1) {
-    mapInstance.fitBounds(bounds, { padding: [48, 48], maxZoom: 16 });
+  for (const id of Object.keys(markers)) {
+    if (!presentIds.has(id)) {
+      mapInstance.removeLayer(markers[id]);
+      delete markers[id];
+    }
   }
+  if (fitAll) {
+    if (bounds.length === 1) {
+      mapInstance.setView(bounds[0], 16);
+    } else if (bounds.length > 1) {
+      mapInstance.fitBounds(bounds, { padding: [48, 48], maxZoom: 16 });
+    }
+  }
+}
+
+async function focusEmployeeOnMap(emp) {
+  if (!mapInstance || !emp?.lastPing) return false;
+  const ping = emp.lastPing;
+  const lat = ping.latitude;
+  const lng = ping.longitude;
+
+  if (mapProvider === "google" && window.google?.maps) {
+    mapInstance.panTo({ lat, lng });
+    mapInstance.setZoom(17);
+    let marker = markers[emp.id];
+    if (!marker) {
+      updateMapMarkers(liveData?.employees ?? [], { fitAll: false });
+      marker = markers[emp.id];
+    }
+    if (marker && infoWindow) {
+      const html = marker._popupHtml || (await buildMarkerPopup(emp, ping));
+      infoWindow.setContent(html);
+      infoWindow.open({ map: mapInstance, anchor: marker });
+    }
+    return true;
+  }
+
+  if (window.L) {
+    mapInstance.setView([lat, lng], 17, { animate: true });
+    let marker = markers[emp.id];
+    if (!marker) {
+      updateMapMarkers(liveData?.employees ?? [], { fitAll: false });
+      marker = markers[emp.id];
+    }
+    marker?.openPopup();
+    return true;
+  }
+  return false;
+}
+
+async function selectEmployeeOnMap(employeeId, { fromMarker = false } = {}) {
+  if (!employeeId) return;
+  selectedEmployeeId = employeeId;
+  const employees = liveData?.employees ?? [];
+  const emp = employees.find((e) => e.id === employeeId) ?? null;
+
+  const listHost = document.getElementById("admin-attendance-emp-list");
+  if (listHost && employees.length) {
+    listHost.innerHTML = employees.map(employeeRowHtml).join("");
+    wireEmployeeListHandlers(listHost);
+  }
+
+  await refreshDetailForSelection(employees);
+
+  if (!emp?.lastPing) return;
+
+  ensureMap();
+  updateMapMarkers(employees, { fitAll: false });
+  await focusEmployeeOnMap(emp);
+
+  const mapWrap = document.querySelector(".admin-attendance-map-wrap");
+  mapWrap?.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
 function employeeMetaHtml(emp) {
@@ -491,8 +571,8 @@ function wireEmployeeListHandlers(root) {
     if (btn.dataset.wired === "1") return;
     btn.dataset.wired = "1";
     btn.addEventListener("click", () => {
-      selectedEmployeeId = btn.getAttribute("data-employee-id");
-      void refreshAdminAttendance({ keepSelection: true });
+      const id = btn.getAttribute("data-employee-id");
+      void selectEmployeeOnMap(id);
     });
   });
 }
@@ -578,14 +658,14 @@ export async function refreshAdminAttendance({ keepSelection = false } = {}) {
   if (pageExists && keepSelection) {
     updateAttendanceDomInPlace(data);
     ensureMap();
-    updateMapMarkers(data.employees ?? []);
+    updateMapMarkers(data.employees ?? [], { fitAll: false });
     await refreshDetailForSelection(data.employees ?? []);
     return;
   }
 
   renderAttendancePage();
   ensureMap();
-  updateMapMarkers(data.employees ?? []);
+  updateMapMarkers(data.employees ?? [], { fitAll: !selectedEmployeeId });
   if (provider === "leaflet") {
     setTimeout(() => mapInstance?.invalidateSize?.(), 100);
   } else if (provider === "google" && mapInstance) {
@@ -594,20 +674,8 @@ export async function refreshAdminAttendance({ keepSelection = false } = {}) {
   if (selectedEmployeeId) {
     await refreshDetailForSelection(data.employees ?? []);
     const emp = (data.employees ?? []).find((e) => e.id === selectedEmployeeId);
-    if (emp?.lastPing && mapInstance && !emp.isOff) {
-      if (provider === "google") {
-        mapInstance.setCenter({ lat: emp.lastPing.latitude, lng: emp.lastPing.longitude });
-        mapInstance.setZoom(17);
-        const marker = markers[emp.id];
-        if (marker && infoWindow) {
-          const html = marker._popupHtml || (await buildMarkerPopup(emp, emp.lastPing));
-          infoWindow.setContent(html);
-          infoWindow.open({ map: mapInstance, anchor: marker });
-        }
-      } else {
-        mapInstance.setView([emp.lastPing.latitude, emp.lastPing.longitude], 16);
-        markers[emp.id]?.openPopup();
-      }
+    if (emp?.lastPing) {
+      await focusEmployeeOnMap(emp);
     }
   } else {
     renderDetailPanel(null);
