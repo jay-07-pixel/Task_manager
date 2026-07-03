@@ -1157,7 +1157,17 @@ router.get("/:id/assignment-attachments/:attachmentId", requireAuth, async (req,
   if (!full || !fs.existsSync(full)) {
     return res.status(404).json({ error: "File not found" });
   }
-  res.type(attachment.mimeType || proofContentType(attachment.filePath));
+  let mime = (attachment.mimeType || proofContentType(attachment.filePath) || "").split(";")[0].trim();
+  if (attachment.kind === "voice" && !mime.startsWith("audio/")) {
+    mime = attachment.filePath?.endsWith(".m4a") || attachment.filePath?.endsWith(".mp4")
+      ? "audio/mp4"
+      : attachment.filePath?.endsWith(".ogg")
+        ? "audio/ogg"
+        : "audio/webm";
+  }
+  res.setHeader("Content-Type", mime || "application/octet-stream");
+  res.setHeader("Content-Disposition", `inline; filename="${path.basename(full)}"`);
+  res.setHeader("Cache-Control", "private, max-age=60");
   res.sendFile(full);
 });
 
