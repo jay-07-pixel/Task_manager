@@ -293,6 +293,10 @@ let taskModalVoiceRecorder = null;
 let taskModalVoiceStream = null;
 /** @type {BlobPart[]} */
 let taskModalVoiceChunks = [];
+/** @type {number | null} */
+let taskModalVoiceTimer = null;
+/** @type {number} */
+let taskModalVoiceStartedAt = 0;
 function empSubmissionRequiredMsg() {
   return tr("validation.submissionRequired");
 }
@@ -437,9 +441,6 @@ function setModalExistingAssignmentAttachments(task) {
 function renderModalAssignmentAttachmentList() {
   const host = document.getElementById("modal-assignment-list");
   if (!host) return;
-  const total =
-    modalExistingAssignmentAttachments.filter((a) => !modalRemovedAssignmentAttachmentIds.includes(a.id)).length +
-    modalPendingAssignmentAttachments.length;
   const items = [
     ...modalExistingAssignmentAttachments
       .filter((a) => !modalRemovedAssignmentAttachmentIds.includes(a.id))
@@ -447,6 +448,7 @@ function renderModalAssignmentAttachmentList() {
         key: `existing-${a.id}`,
         label: a.originalName || attachmentKindLabel(a.kind),
         kind: a.kind,
+        playUrl: a.kind === "voice" || a.kind === "audio" ? a.url : null,
         remove: () => {
           modalRemovedAssignmentAttachmentIds.push(a.id);
           renderModalAssignmentAttachmentList();
@@ -454,8 +456,9 @@ function renderModalAssignmentAttachmentList() {
       })),
     ...modalPendingAssignmentAttachments.map((a) => ({
       key: `pending-${a.id}`,
-      label: a.file.name,
+      label: a.kind === "voice" ? tr("tasks.voiceNote") : a.file.name,
       kind: a.kind,
+      playUrl: a.kind === "voice" ? a.previewUrl : null,
       remove: () => {
         const idx = modalPendingAssignmentAttachments.findIndex((x) => x.id === a.id);
         if (idx >= 0) {
@@ -471,13 +474,20 @@ function renderModalAssignmentAttachmentList() {
     return;
   }
   host.innerHTML = items
-    .map(
-      (item) => `<div class="admin-task-modal-attach-item" data-attach-key="${escapeHtml(item.key)}">
-        <span class="admin-task-modal-attach-icon">${attachmentKindIconHtml(item.kind)}</span>
-        <span class="admin-task-modal-attach-name text-truncate">${escapeHtml(item.label)}</span>
-        <button type="button" class="admin-task-modal-attach-remove js-modal-attach-remove" data-attach-key="${escapeHtml(item.key)}" aria-label="${tr("common.remove")}">${adminMsIcon("close")}</button>
-      </div>`
-    )
+    .map((item) => {
+      const player =
+        item.playUrl
+          ? `<audio class="admin-task-modal-attach-audio" controls preload="metadata" src="${escapeHtml(item.playUrl)}"></audio>`
+          : "";
+      return `<div class="admin-task-modal-attach-item${item.playUrl ? " admin-task-modal-attach-item--voice" : ""}" data-attach-key="${escapeHtml(item.key)}">
+        <div class="admin-task-modal-attach-item-top">
+          <span class="admin-task-modal-attach-icon">${attachmentKindIconHtml(item.kind)}</span>
+          <span class="admin-task-modal-attach-name text-truncate">${escapeHtml(item.label)}</span>
+          <button type="button" class="admin-task-modal-attach-remove js-modal-attach-remove" data-attach-key="${escapeHtml(item.key)}" aria-label="${tr("common.remove")}">${adminMsIcon("close")}</button>
+        </div>
+        ${player}
+      </div>`;
+    })
     .join("");
   host.querySelectorAll(".js-modal-attach-remove").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -517,7 +527,8 @@ function addModalPendingAssignmentFiles(fileList) {
       showToast(tr("tasks.unsupportedAssignmentFile"), "warning");
       continue;
     }
-    const previewUrl = kind === "image" ? URL.createObjectURL(file) : undefined;
+    const previewUrl =
+      kind === "image" || kind === "voice" ? URL.createObjectURL(file) : undefined;
     modalPendingAssignmentAttachments.push({
       id: `pending-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       file,
@@ -553,23 +564,72 @@ async function uploadModalAssignmentAttachments(taskId) {
   }
 }
 
+function formatVoiceRecordingElapsed(ms) {
+  const totalSec = Math.max(0, Math.floor(ms / 1000));
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function updateTaskModalVoiceButtonUi(recording) {
+  const btn = document.getElementById("modal-assignment-voice-btn");
+  const status = document.getElementById("modal-assignment-voice-status");
+  const label = btn?.querySelector("span:last-child");
+  if (!btn) return;
+  if (recording) {
+    const elapsed = formatVoiceRecordingElapsed(Date.now() - taskModalVoiceStartedAt);
+    btn.classList.add("admin-task-modal-voice-btn--recording");
+    btn.setAttribute("aria-pressed", "true");
+    if (label) label.textContent = tr("tasks.stopRecording", { time: elapsed });
+    if (status) {
+      status.classList.remove("d-none");
+      status.textContent = tr("tasks.recordingInProgress", { time: elapsed });
+    }
+  } else {
+    btn.classList.remove("admin-task-modal-voice-btn--recording");
+    btn.setAttribute("aria-pressed", "false");
+    if (label) label.textContent = tr("tasks.recordVoiceNote");
+    if (status) {
+      status.classList.add("d-none");
+      status.textContent = "";
+    }
+  }
+}
+
+function clearTaskModalVoiceTimer() {
+  if (taskModalVoiceTimer != null) {
+    window.clearInterval(taskModalVoiceTimer);
+    taskModalVoiceTimer = null;
+  }
+}
+
 function stopTaskModalVoiceRecording(process = true) {
   const btn = document.getElementById("modal-assignment-voice-btn");
+  clearTaskModalVoiceTimer();
   if (taskModalVoiceRecorder && taskModalVoiceRecorder.state !== "inactive") {
     taskModalVoiceRecorder.onstop = () => {
+      let saved = false;
       if (process && taskModalVoiceChunks.length) {
         const mime = taskModalVoiceRecorder?.mimeType || "audio/webm";
         const blob = new Blob(taskModalVoiceChunks, { type: mime });
-        const ext = mime.includes("webm") ? ".webm" : ".m4a";
-        const file = new File([blob], `voice-note${ext}`, { type: mime });
-        addModalPendingAssignmentFiles([file]);
+        if (blob.size > 0) {
+          const ext = mime.includes("webm") ? ".webm" : mime.includes("mp4") ? ".m4a" : ".webm";
+          const file = new File([blob], `voice-note${ext}`, { type: mime });
+          addModalPendingAssignmentFiles([file]);
+          saved = true;
+        }
       }
       taskModalVoiceChunks = [];
       taskModalVoiceRecorder = null;
       taskModalVoiceStream?.getTracks().forEach((t) => t.stop());
       taskModalVoiceStream = null;
-      btn?.classList.remove("admin-task-modal-voice-btn--recording");
-      btn?.setAttribute("aria-pressed", "false");
+      updateTaskModalVoiceButtonUi(false);
+      if (process) {
+        showToast(
+          saved ? tr("tasks.recordingStopped") : tr("tasks.recordingTooShort"),
+          saved ? "success" : "warning"
+        );
+      }
     };
     taskModalVoiceRecorder.stop();
     return;
@@ -578,8 +638,7 @@ function stopTaskModalVoiceRecording(process = true) {
   taskModalVoiceStream = null;
   taskModalVoiceRecorder = null;
   taskModalVoiceChunks = [];
-  btn?.classList.remove("admin-task-modal-voice-btn--recording");
-  btn?.setAttribute("aria-pressed", "false");
+  updateTaskModalVoiceButtonUi(false);
 }
 
 async function toggleTaskModalVoiceRecording() {
@@ -601,17 +660,27 @@ async function toggleTaskModalVoiceRecording() {
       ? "audio/webm;codecs=opus"
       : MediaRecorder.isTypeSupported("audio/webm")
         ? "audio/webm"
-        : "audio/mp4";
-    const recorder = new MediaRecorder(stream, { mimeType: mime });
+        : MediaRecorder.isTypeSupported("audio/mp4")
+          ? "audio/mp4"
+          : "";
+    const recorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
     recorder.ondataavailable = (e) => {
       if (e.data?.size) taskModalVoiceChunks.push(e.data);
     };
-    recorder.start();
+    recorder.start(250);
     taskModalVoiceRecorder = recorder;
-    btn.classList.add("admin-task-modal-voice-btn--recording");
-    btn.setAttribute("aria-pressed", "true");
+    taskModalVoiceStartedAt = Date.now();
+    updateTaskModalVoiceButtonUi(true);
+    clearTaskModalVoiceTimer();
+    taskModalVoiceTimer = window.setInterval(() => {
+      if (taskModalVoiceRecorder?.state === "recording") {
+        updateTaskModalVoiceButtonUi(true);
+      }
+    }, 500);
+    showToast(tr("tasks.recordingStarted"), "info");
   } catch {
     showToast(tr("tasks.voicePermissionDenied"), "warning");
+    updateTaskModalVoiceButtonUi(false);
   }
 }
 
@@ -3626,6 +3695,7 @@ function taskModalHtml() {
                     <button type="button" class="btn btn-sm btn-outline-primary" id="modal-assignment-pick-btn">${adminMsIcon("upload_file")}<span>${tr("tasks.addFiles")}</span></button>
                     <button type="button" class="btn btn-sm btn-outline-secondary admin-task-modal-voice-btn" id="modal-assignment-voice-btn" aria-pressed="false">${adminMsIcon("mic")}<span>${tr("tasks.recordVoiceNote")}</span></button>
                   </div>
+                  <p class="admin-task-modal-voice-status small d-none mb-2" id="modal-assignment-voice-status" role="status" aria-live="polite"></p>
                   <div id="modal-assignment-list" class="admin-task-modal-attach-list"></div>
                 </div>
               </div>
@@ -4721,12 +4791,19 @@ function appendSubmissionDetailGalleryItem(gallery, resource) {
 }
 
 function appendSubmissionDetailGalleryAudio(gallery, resource) {
+  const wrap = document.createElement("div");
+  wrap.className = "submission-detail-gallery-audio-wrap";
+  const label = document.createElement("p");
+  label.className = "submission-detail-gallery-audio-label small mb-1";
+  label.textContent = tr("tasks.voiceNote");
   const node = document.createElement("audio");
   node.src = resource.url;
   node.controls = true;
   node.preload = "metadata";
   node.className = "submission-detail-gallery-audio w-100";
-  gallery.appendChild(node);
+  wrap.appendChild(label);
+  wrap.appendChild(node);
+  gallery.appendChild(wrap);
 }
 
 async function openSubmissionDetailModal({ title, submissionText, proofUrl, proofUrls, attachmentItems }) {
@@ -4792,6 +4869,7 @@ async function openSubmissionDetailModal({ title, submissionText, proofUrl, proo
       } else if (resource.kind === "audio") {
         fileLabel.textContent = tr("tasks.voiceNote");
         audio.src = resource.url;
+        audio.controls = true;
         audio.classList.remove("d-none");
       } else {
         fileLabel.textContent = tr("tasks.imageAttachment");

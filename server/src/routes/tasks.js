@@ -22,7 +22,7 @@ import {
   compareHighPriorityFirst,
 } from "../lib/taskRecurrenceSort.js";
 import { notifyAdminsTaskSubmitted } from "../services/taskCompletionNotificationService.js";
-import { adminUserWhere } from "../lib/adminUsers.js";
+import { adminUserWhere, userHasAdminAccess } from "../lib/adminUsers.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const uploadsRoot = path.join(__dirname, "..", "..", "uploads", "completion-proofs");
@@ -496,6 +496,14 @@ async function userCanAccessTaskAttachments(task, userId, role) {
   if (task.list?.ownerId === userId) return true;
   if (task.createdById === userId) return true;
   if (role === "employee" && task.assignments?.some((a) => a.userId === userId)) return true;
+  // Any team admin (owner session) can view/listen to assignment attachments
+  if (role === "owner") {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { isAdmin: true, role: true },
+    });
+    if (userHasAdminAccess(user)) return true;
+  }
   return false;
 }
 
