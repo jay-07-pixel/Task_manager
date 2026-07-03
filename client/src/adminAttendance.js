@@ -24,8 +24,17 @@ let selectedEmployeeId = null;
 /** @type {any} */
 let mapInstance = null;
 
+/** @type {"google" | "leaflet" | null} */
+let mapProvider = null;
+
+/** @type {string | null} */
+let googleMapsApiKey = null;
+
 /** @type {Record<string, any>} */
 let markers = {};
+
+/** @type {any} */
+let infoWindow = null;
 
 /** @type {number | null} */
 let pollTimer = null;
@@ -35,7 +44,7 @@ let visibilityHandler = null;
 
 const POLL_MS = 5_000;
 
-/** @type {Map<string, string | null>} */
+/** @type {Map<string, any>} */
 const placeNameCache = new Map();
 
 export function initAdminAttendance({
@@ -77,6 +86,42 @@ function formatDateTime(iso) {
   return d.toLocaleString(dateLocale(), { dateStyle: "medium", timeStyle: "short" });
 }
 
+async function loadMapsConfig() {
+  if (!apiFn) return { provider: "leaflet", apiKey: null };
+  if (mapProvider) return { provider: mapProvider, apiKey: googleMapsApiKey };
+  try {
+    const cfg = await apiFn("/api/attendance/maps-config");
+    googleMapsApiKey = cfg?.apiKey || null;
+    mapProvider = googleMapsApiKey ? "google" : "leaflet";
+  } catch {
+    mapProvider = "leaflet";
+    googleMapsApiKey = null;
+  }
+  return { provider: mapProvider, apiKey: googleMapsApiKey };
+}
+
+async function loadGoogleMaps(apiKey) {
+  if (window.google?.maps) return window.google.maps;
+  await new Promise((resolve, reject) => {
+    const existing = document.querySelector('script[data-google-maps="1"]');
+    if (existing) {
+      existing.addEventListener("load", () => resolve(undefined));
+      existing.addEventListener("error", reject);
+      if (window.google?.maps) resolve(undefined);
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&v=weekly`;
+    script.async = true;
+    script.defer = true;
+    script.dataset.googleMaps = "1";
+    script.onload = () => resolve(undefined);
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+  return window.google.maps;
+}
+
 async function loadLeaflet() {
   if (window.L) return window.L;
   await new Promise((resolve, reject) => {
@@ -103,17 +148,63 @@ async function loadLeaflet() {
   return window.L;
 }
 
+async function ensureMapLibrary() {
+  const cfg = await loadMapsConfig();
+  if (cfg.provider === "google" && cfg.apiKey) {
+    try {
+      await loadGoogleMaps(cfg.apiKey);
+      mapProvider = "google";
+      return "google";
+    } catch (err) {
+      console.warn("[attendance] Google Maps failed, falling back to Leaflet", err);
+      mapProvider = "leaflet";
+    }
+  }
+  await loadLeaflet();
+  mapProvider = "leaflet";
+  return "leaflet";
+}
+
 function destroyMap() {
-  if (mapInstance) {
+  if (mapProvider === "google" && mapInstance) {
+    for (const id of Object.keys(markers)) {
+      markers[id].setMap(null);
+    }
+    mapInstance = null;
+  } else if (mapInstance) {
     mapInstance.remove();
     mapInstance = null;
   }
   markers = {};
+  infoWindow = null;
 }
 
 function ensureMap() {
   const host = document.getElementById("admin-attendance-map");
-  if (!host || !window.L) return;
+  if (!host) return;
+
+  if (mapProvider === "google" && window.google?.maps) {
+    if (mapInstance && host.dataset.mapReady === "1") return;
+    destroyMap();
+    mapInstance = new window.google.maps.Map(host, {
+      center: { lat: 20.5937, lng: 78.9629 },
+      zoom: 5,
+      mapTypeControl: false,
+      streetViewControl: false,
+      fullscreenControl: true,
+      zoomControl: true,
+      clickableIcons: false,
+      styles: [
+        { featureType: "poi", stylers: [{ visibility: "simplified" }] },
+        { featureType: "transit", stylers: [{ visibility: "off" }] },
+      ],
+    });
+    infoWindow = new window.google.maps.InfoWindow();
+    host.dataset.mapReady = "1";
+    return;
+  }
+
+  if (!window.L) return;
   if (mapInstance) {
     if (mapInstance.getContainer() !== host) {
       destroyMap();
@@ -131,6 +222,7 @@ function ensureMap() {
     subdomains: "abcd",
     maxZoom: 20,
   }).addTo(mapInstance);
+  host.dataset.mapReady = "1";
 }
 
 function employeeMarkerIcon(emp) {
@@ -145,22 +237,47 @@ function employeeMarkerIcon(emp) {
   });
 }
 
-async function resolvePlaceName(lat, lng) {
+function googleMarkerIcon(emp) {
+  const live = emp.trackingOn && !emp.isOff;
+  const color = live ? "#0d7a3a" : "#b42318";
+  const initial = (emp.displayName || "?").trim().charAt(0).toUpperCase() || "?";
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="48" viewBox="0 0 40 48">
+    <path fill="${color}" stroke="#fff" stroke-width="2" d="M20 2C11.7 2 5 8.7 5 17c0 11.2 15 29 15 29s15-17.8 15-29C35 8.7 28.3 2 20 2z"/>
+    <circle cx="20" cy="17" r="8" fill="#fff"/>
+    <text x="20" y="21" text-anchor="middle" font-size="11" font-family="Arial,sans-serif" font-weight="700" fill="${color}">${initial}</text>
+  </svg>`;
+  return {
+    url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`,
+    scaledSize: new window.google.maps.Size(40, 48),
+    anchor: new window.google.maps.Point(20, 48),
+  };
+}
+
+async function resolvePlaceDetails(lat, lng) {
   if (!apiFn || typeof lat !== "number" || typeof lng !== "number") return null;
   const key = `${lat.toFixed(5)},${lng.toFixed(5)}`;
   if (placeNameCache.has(key)) return placeNameCache.get(key);
   try {
     const data = await apiFn(`/api/attendance/geocode?lat=${encodeURIComponent(lat)}&lng=${encodeURIComponent(lng)}`);
-    const label =
-      data?.area && data?.city && data.area !== data.city
-        ? `${data.area}, ${data.city}`
-        : data?.placeName ?? null;
-    placeNameCache.set(key, label);
-    return label;
+    const details = {
+      area: data?.area ?? null,
+      city: data?.city ?? null,
+      placeName:
+        data?.area && data?.city && data.area !== data.city
+          ? `${data.area}, ${data.city}`
+          : data?.placeName ?? null,
+    };
+    placeNameCache.set(key, details);
+    return details;
   } catch {
     placeNameCache.set(key, null);
     return null;
   }
+}
+
+async function resolvePlaceName(lat, lng) {
+  const details = await resolvePlaceDetails(lat, lng);
+  return details?.placeName ?? null;
 }
 
 async function buildMarkerPopup(emp, ping) {
@@ -173,11 +290,67 @@ async function buildMarkerPopup(emp, ping) {
   const staleLine = ping.stale
     ? `<br><em>${escapeHtmlFn?.(tr("attendance.staleLocation")) ?? "Stale"}</em>`
     : "";
-  return `<strong>${label}</strong><br>${time}${placeLine}${staleLine}`;
+  return `<div class="admin-attendance-popup"><strong>${label}</strong><br>${time}${placeLine}${staleLine}</div>`;
 }
 
 function updateMapMarkers(employees) {
-  if (!mapInstance || !window.L) return;
+  if (!mapInstance) return;
+
+  if (mapProvider === "google" && window.google?.maps) {
+    const bounds = new window.google.maps.LatLngBounds();
+    let count = 0;
+    const liveIds = new Set();
+    for (const emp of employees) {
+      const ping = emp.lastPing;
+      if (!ping || emp.isOff) {
+        if (markers[emp.id]) {
+          markers[emp.id].setMap(null);
+          delete markers[emp.id];
+        }
+        continue;
+      }
+      liveIds.add(emp.id);
+      const position = { lat: ping.latitude, lng: ping.longitude };
+      bounds.extend(position);
+      count += 1;
+      if (markers[emp.id]) {
+        markers[emp.id].setPosition(position);
+        markers[emp.id].setIcon(googleMarkerIcon(emp));
+      } else {
+        const marker = new window.google.maps.Marker({
+          map: mapInstance,
+          position,
+          icon: googleMarkerIcon(emp),
+          title: emp.displayName,
+        });
+        marker.addListener("click", () => {
+          void buildMarkerPopup(emp, ping).then((html) => {
+            infoWindow?.setContent(html);
+            infoWindow?.open({ map: mapInstance, anchor: marker });
+          });
+        });
+        markers[emp.id] = marker;
+      }
+      void buildMarkerPopup(emp, ping).then((html) => {
+        markers[emp.id]._popupHtml = html;
+      });
+    }
+    for (const id of Object.keys(markers)) {
+      if (!liveIds.has(id)) {
+        markers[id].setMap(null);
+        delete markers[id];
+      }
+    }
+    if (count === 1) {
+      mapInstance.setCenter(bounds.getCenter());
+      mapInstance.setZoom(17);
+    } else if (count > 1) {
+      mapInstance.fitBounds(bounds, 48);
+    }
+    return;
+  }
+
+  if (!window.L) return;
   const bounds = [];
   for (const emp of employees) {
     const ping = emp.lastPing;
@@ -269,18 +442,26 @@ function offPeriodRowHtml(p) {
   </tr>`;
 }
 
-function currentStatusBannerHtml(emp) {
+function currentStatusBannerHtml(emp, placeDetails = null) {
   if (!emp) return "";
   const statusClass = emp.isOff ? "admin-attendance-live-status--off" : "admin-attendance-live-status--on";
   const label = emp.isOff ? tr("attendance.statusOff") : tr("attendance.statusLive");
   const detail = employeeMetaHtml(emp);
+  const placeLine = placeDetails?.placeName
+    ? `<span class="admin-attendance-live-status-place">${escapeHtmlFn?.(placeDetails.placeName) ?? placeDetails.placeName}</span>`
+    : placeDetails?.area || placeDetails?.city
+      ? `<span class="admin-attendance-live-status-place">${escapeHtmlFn?.(
+          [placeDetails.area, placeDetails.city].filter(Boolean).join(", ")
+        ) ?? ""}</span>`
+      : "";
   return `<div class="admin-attendance-live-status ${statusClass}" role="status">
     <span class="admin-attendance-live-status-label">${escapeHtmlFn?.(label) ?? label}</span>
     <span class="admin-attendance-live-status-detail">${escapeHtmlFn?.(detail) ?? detail}</span>
+    ${placeLine}
   </div>`;
 }
 
-function renderDetailPanel(history, liveEmp = null) {
+function renderDetailPanel(history, liveEmp = null, placeDetails = null) {
   const panel = document.getElementById("admin-attendance-detail");
   if (!panel) return;
   if (!history) {
@@ -288,7 +469,7 @@ function renderDetailPanel(history, liveEmp = null) {
     return;
   }
   const rows = (history.offPeriods ?? []).map(offPeriodRowHtml).join("");
-  const banner = currentStatusBannerHtml(liveEmp);
+  const banner = currentStatusBannerHtml(liveEmp, placeDetails);
   panel.innerHTML = `
     <h3 class="admin-attendance-detail-title">${escapeHtmlFn?.(history.employee.displayName) ?? ""}</h3>
     ${banner}
@@ -366,7 +547,18 @@ async function refreshDetailForSelection(employees) {
   }
   const history = await loadEmployeeHistory(selectedEmployeeId);
   const liveEmp = (employees ?? []).find((e) => e.id === selectedEmployeeId) ?? null;
-  renderDetailPanel(history, liveEmp);
+  let placeDetails = null;
+  if (liveEmp?.lastPing) {
+    placeDetails = await resolvePlaceDetails(liveEmp.lastPing.latitude, liveEmp.lastPing.longitude);
+  } else if (history?.offPeriods?.[0]?.offLocation) {
+    const loc = history.offPeriods[0].offLocation;
+    placeDetails = {
+      area: loc.area ?? null,
+      city: loc.city ?? null,
+      placeName: loc.placeName ?? null,
+    };
+  }
+  renderDetailPanel(history, liveEmp, placeDetails);
 }
 
 async function loadEmployeeHistory(userId) {
@@ -381,9 +573,10 @@ export async function refreshAdminAttendance({ keepSelection = false } = {}) {
   if (!keepSelection) selectedEmployeeId = null;
 
   const pageExists = document.querySelector(".admin-attendance-page");
+  const provider = await ensureMapLibrary();
+
   if (pageExists && keepSelection) {
     updateAttendanceDomInPlace(data);
-    await loadLeaflet();
     ensureMap();
     updateMapMarkers(data.employees ?? []);
     await refreshDetailForSelection(data.employees ?? []);
@@ -391,16 +584,30 @@ export async function refreshAdminAttendance({ keepSelection = false } = {}) {
   }
 
   renderAttendancePage();
-  await loadLeaflet();
   ensureMap();
   updateMapMarkers(data.employees ?? []);
-  setTimeout(() => mapInstance?.invalidateSize(), 100);
+  if (provider === "leaflet") {
+    setTimeout(() => mapInstance?.invalidateSize?.(), 100);
+  } else if (provider === "google" && mapInstance) {
+    setTimeout(() => window.google?.maps?.event?.trigger(mapInstance, "resize"), 100);
+  }
   if (selectedEmployeeId) {
     await refreshDetailForSelection(data.employees ?? []);
     const emp = (data.employees ?? []).find((e) => e.id === selectedEmployeeId);
     if (emp?.lastPing && mapInstance && !emp.isOff) {
-      mapInstance.setView([emp.lastPing.latitude, emp.lastPing.longitude], 16);
-      markers[emp.id]?.openPopup();
+      if (provider === "google") {
+        mapInstance.setCenter({ lat: emp.lastPing.latitude, lng: emp.lastPing.longitude });
+        mapInstance.setZoom(17);
+        const marker = markers[emp.id];
+        if (marker && infoWindow) {
+          const html = marker._popupHtml || (await buildMarkerPopup(emp, emp.lastPing));
+          infoWindow.setContent(html);
+          infoWindow.open({ map: mapInstance, anchor: marker });
+        }
+      } else {
+        mapInstance.setView([emp.lastPing.latitude, emp.lastPing.longitude], 16);
+        markers[emp.id]?.openPopup();
+      }
     }
   } else {
     renderDetailPanel(null);

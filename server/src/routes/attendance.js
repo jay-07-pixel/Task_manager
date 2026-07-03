@@ -15,7 +15,11 @@ import {
   notifyAdminsLocationTrackingOn,
 } from "../services/attendanceNotificationService.js";
 import { prisma } from "../lib/prisma.js";
-import { reverseGeocodeDetails } from "../services/reverseGeocodeService.js";
+import {
+  getGoogleMapsBrowserKey,
+  isGoogleMapsConfigured,
+  reverseGeocodeDetails,
+} from "../services/reverseGeocodeService.js";
 
 const router = Router();
 
@@ -155,13 +159,14 @@ router.get("/employees/:userId/history", requireOwner, async (req, res) => {
       pending.set(key, [job.id]);
     }
   }
+  const delayMs = isGoogleMapsConfigured() ? 50 : 250;
   for (const [key, ids] of pending) {
     const [lat, lng] = key.split(",").map(Number);
     const details = await reverseGeocodeDetails(lat, lng);
     for (const id of ids) {
       detailsById.set(id, details);
     }
-    await new Promise((r) => setTimeout(r, 250));
+    await new Promise((r) => setTimeout(r, delayMs));
   }
 
   for (const period of offPeriods) {
@@ -193,6 +198,14 @@ router.get("/geocode", requireOwner, async (req, res) => {
     placeName: details?.placeName ?? null,
     area: details?.area ?? null,
     city: details?.city ?? null,
+  });
+});
+
+router.get("/maps-config", requireOwner, async (_req, res) => {
+  const apiKey = getGoogleMapsBrowserKey();
+  res.json({
+    provider: apiKey ? "google" : "leaflet",
+    apiKey: apiKey || null,
   });
 });
 

@@ -344,3 +344,19 @@
 .admin-attendance-live-status-detail {
   color: var(--admin-on-surface-variant, #3e494a);
 }
+
+.admin-attendance-live-status-place {
+  flex: 1 1 100%;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--admin-on-surface, #181a2e);
+}
+
+.admin-attendance-popup {
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.admin-attendance-popup-place {
+  font-weight: 600;
+}
