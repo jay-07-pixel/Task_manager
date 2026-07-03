@@ -826,6 +826,8 @@
     "adminNotifyOn": "{{name}} turned live location tracking back on.",
     "locationUnknown": "Location not available",
     "resolvingLocation": "Resolving location…",
-    "loadingLocation": "Loading…"
+    "loadingLocation": "Loading…",
+    "refresh": "Refresh",
+    "lastRefreshed": "Updated {{time}}"
   }
 }

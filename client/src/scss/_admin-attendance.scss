@@ -68,10 +68,57 @@
   padding: 0 1.25rem 2rem;
 }
 
+.admin-attendance-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+
 .admin-attendance-intro {
   color: var(--admin-on-surface-variant, #3e494a);
   font-size: 0.9rem;
-  margin: 0 0 1rem;
+  margin: 0;
+  flex: 1 1 12rem;
+}
+
+.admin-attendance-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.admin-attendance-last-refreshed {
+  font-size: 0.78rem;
+  color: var(--admin-on-surface-variant, #3e494a);
+  white-space: nowrap;
+}
+
+.js-attendance-refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+
+  .material-symbols-outlined {
+    font-size: 1.1rem;
+  }
+
+  &.is-refreshing .material-symbols-outlined {
+    animation: admin-attendance-spin 0.8s linear infinite;
+  }
+}
+
+.admin-icon-btn.js-attendance-refresh.is-refreshing .material-symbols-outlined {
+  animation: admin-attendance-spin 0.8s linear infinite;
+}
+
+@keyframes admin-attendance-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .admin-attendance-layout {

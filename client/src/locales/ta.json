@@ -826,6 +826,8 @@
     "adminNotifyOn": "{{name}} நேரடி இருப்பிட கண்காணிப்பை மீண்டும் இயக்கினார்.",
     "locationUnknown": "இருப்பிடம் கிடைக்கவில்லை",
     "resolvingLocation": "இருப்பிடம் கண்டறியப்படுகிறது…",
-    "loadingLocation": "ஏற்றுகிறது…"
+    "loadingLocation": "ஏற்றுகிறது…",
+    "refresh": "புதுப்பி",
+    "lastRefreshed": "புதுப்பிக்கப்பட்டது {{time}}"
   }
 }

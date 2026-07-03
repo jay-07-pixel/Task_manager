@@ -826,6 +826,8 @@
     "adminNotifyOn": "{{name}} ने लाइव्ह स्थान ट्रॅकिंग पुन्हा चालू केले.",
     "locationUnknown": "स्थान उपलब्ध नाही",
     "resolvingLocation": "स्थान शोधले जात आहे…",
-    "loadingLocation": "लोड होत आहे…"
+    "loadingLocation": "लोड होत आहे…",
+    "refresh": "रीफ्रेश",
+    "lastRefreshed": "अपडेट {{time}}"
   }
 }

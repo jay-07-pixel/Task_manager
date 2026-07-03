@@ -588,6 +588,40 @@ function updateAttendanceDomInPlace(data) {
   }
 }
 
+function wireAttendanceRefreshButton(root = document) {
+  root.querySelectorAll(".js-attendance-refresh").forEach((btn) => {
+    if (btn.dataset.wired === "1") return;
+    btn.dataset.wired = "1";
+    btn.addEventListener("click", () => {
+      void manualRefreshAttendance(btn);
+    });
+  });
+}
+
+async function manualRefreshAttendance(btn) {
+  if (btn) {
+    btn.disabled = true;
+    btn.classList.add("is-refreshing");
+  }
+  try {
+    await refreshAdminAttendance({ keepSelection: true, forceFull: true });
+    updateLastRefreshedLabel();
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.classList.remove("is-refreshing");
+    }
+  }
+}
+
+function updateLastRefreshedLabel() {
+  const el = document.getElementById("admin-attendance-last-refreshed");
+  if (!el) return;
+  const now = new Date();
+  const time = now.toLocaleTimeString(dateLocale(), { hour: "numeric", minute: "2-digit", second: "2-digit" });
+  el.textContent = tr("attendance.lastRefreshed", { time });
+}
+
 function renderAttendancePage() {
   const main = document.getElementById("main-column");
   if (!main) return;
@@ -598,7 +632,16 @@ function renderAttendancePage() {
   main.innerHTML = `<div class="admin-main-scroll d-flex flex-column">
     ${ownerChromeHeaderFn?.() ?? ""}
     <div class="admin-attendance-page">
-      <p class="admin-attendance-intro">${escapeHtmlFn?.(tr("attendance.adminIntro")) ?? ""}</p>
+      <div class="admin-attendance-toolbar">
+        <p class="admin-attendance-intro mb-0">${escapeHtmlFn?.(tr("attendance.adminIntro")) ?? ""}</p>
+        <div class="admin-attendance-toolbar-actions">
+          <span class="admin-attendance-last-refreshed" id="admin-attendance-last-refreshed"></span>
+          <button type="button" class="btn btn-sm btn-outline-primary js-attendance-refresh">
+            ${adminMsIconFn?.("refresh") ?? ""}
+            <span>${escapeHtmlFn?.(tr("attendance.refresh")) ?? "Refresh"}</span>
+          </button>
+        </div>
+      </div>
       <div class="admin-attendance-layout">
         <aside class="admin-attendance-sidebar" id="admin-attendance-emp-list">
           ${employees.length ? employees.map(employeeRowHtml).join("") : `<p class="text-muted small">${escapeHtmlFn?.(tr("attendance.noEmployees")) ?? ""}</p>`}
@@ -618,6 +661,8 @@ function renderAttendancePage() {
   </div>`;
   wireOwnerChromeHeaderFn?.(main);
   wireEmployeeListHandlers(main);
+  wireAttendanceRefreshButton(main);
+  updateLastRefreshedLabel();
 }
 
 async function refreshDetailForSelection(employees) {
@@ -646,7 +691,7 @@ async function loadEmployeeHistory(userId) {
   return apiFn(`/api/attendance/employees/${userId}/history`);
 }
 
-export async function refreshAdminAttendance({ keepSelection = false } = {}) {
+export async function refreshAdminAttendance({ keepSelection = false, forceFull = false } = {}) {
   if (!apiFn) return;
   const data = await apiFn("/api/attendance/live");
   liveData = data;
@@ -660,6 +705,11 @@ export async function refreshAdminAttendance({ keepSelection = false } = {}) {
     ensureMap();
     updateMapMarkers(data.employees ?? [], { fitAll: false });
     await refreshDetailForSelection(data.employees ?? []);
+    updateLastRefreshedLabel();
+    if (forceFull && selectedEmployeeId) {
+      const emp = (data.employees ?? []).find((e) => e.id === selectedEmployeeId);
+      if (emp?.lastPing) await focusEmployeeOnMap(emp);
+    }
     return;
   }
 
@@ -734,6 +784,11 @@ export function ownerAttendanceChromeHeaderHtml() {
     <div>
       <p class="admin-dash-eyebrow">${tr("nav.adminDashboard")}</p>
       <h1 class="admin-dash-title">${tr("attendance.title")}</h1>
+    </div>
+    <div class="admin-dash-utilities">
+      <button type="button" class="admin-icon-btn js-attendance-refresh" aria-label="${tr("attendance.refresh")}" title="${tr("attendance.refresh")}">
+        ${adminMsIconFn?.("refresh") ?? ""}
+      </button>
     </div>
   </header>`;
 }
