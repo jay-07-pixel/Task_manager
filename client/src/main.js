@@ -438,18 +438,54 @@ function setModalExistingAssignmentAttachments(task) {
   renderModalAssignmentAttachmentList();
 }
 
+/** Playback louder than browser default (HTML volume max is 1; gain boosts further). */
+const VOICE_NOTE_PLAYBACK_GAIN = 3.5;
+
+/** @type {AudioContext | null} */
+let voiceNoteAudioCtx = null;
+
+function getVoiceNoteAudioContext() {
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return null;
+  if (!voiceNoteAudioCtx || voiceNoteAudioCtx.state === "closed") {
+    voiceNoteAudioCtx = new AC();
+  }
+  return voiceNoteAudioCtx;
+}
+
 function prepareAssignmentAudioEl(audio) {
   if (!(audio instanceof HTMLAudioElement)) return;
   audio.muted = false;
   audio.volume = 1;
   audio.setAttribute("playsinline", "");
   audio.setAttribute("controlslist", "nodownload");
+
   const unlock = () => {
     audio.muted = false;
     audio.volume = 1;
+    const ctx = getVoiceNoteAudioContext();
+    if (ctx?.state === "suspended") void ctx.resume();
   };
-  audio.addEventListener("play", unlock);
-  audio.addEventListener("loadeddata", unlock);
+
+  if (!audio.dataset.voiceBoostWired) {
+    audio.dataset.voiceBoostWired = "1";
+    audio.addEventListener("play", unlock);
+    audio.addEventListener("loadeddata", unlock);
+  }
+
+  if (audio.dataset.voiceBoostConnected === "1") return;
+  try {
+    const ctx = getVoiceNoteAudioContext();
+    if (!ctx) return;
+    const source = ctx.createMediaElementSource(audio);
+    const gain = ctx.createGain();
+    gain.gain.value = VOICE_NOTE_PLAYBACK_GAIN;
+    source.connect(gain);
+    gain.connect(ctx.destination);
+    audio.dataset.voiceBoostConnected = "1";
+  } catch (err) {
+    console.warn("[voice] playback boost unavailable", err);
+  }
 }
 
 async function resolveAssignmentVoicePlayUrl(item) {
