@@ -16,6 +16,7 @@ import {
 import { requireAuth, requireOwner } from "../middleware/auth.js";
 import { isVideoAttachment } from "../lib/chatUpload.js";
 import {
+  compareCompletedTasksRecentFirst,
   compareTasksByRecurrenceThenCreated,
   sortTasksByRecurrenceThenCreated,
   compareHighPriorityFirst,
@@ -986,13 +987,7 @@ function sortOwnerListTasks(tasks) {
   const completed = tasks.filter((t) => t.completed);
   return [
     ...sortTasksByRecurrenceThenCreated(active),
-    ...completed.sort((a, b) => {
-      const prio = compareHighPriorityFirst(a, b);
-      if (prio !== 0) return prio;
-      const order = (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
-      if (order !== 0) return order;
-      return String(a.title || "").localeCompare(String(b.title || ""));
-    }),
+    ...completed.sort(compareCompletedTasksRecentFirst),
   ];
 }
 

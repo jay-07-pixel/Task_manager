@@ -71,3 +71,29 @@ export function compareTasksByRecurrenceThenCreated(a, b) {
 export function sortTasksByRecurrenceThenCreated(tasks) {
   return [...tasks].sort(compareTasksByRecurrenceThenCreated);
 }
+
+/** Latest submission/completion time for sorting completed tasks (ms; higher = more recent). */
+export function taskCompletedTimestampMs(task) {
+  const assignees = task?.assignees ?? task?.assignments ?? [];
+  let maxMs = 0;
+  for (const a of assignees) {
+    const at = a?.lastSubmittedAt;
+    if (!at) continue;
+    const ms = new Date(at).getTime();
+    if (!Number.isNaN(ms) && ms > maxMs) maxMs = ms;
+  }
+  if (maxMs > 0) return maxMs;
+  if (task?.completed && task?.updatedAt) {
+    const ms = new Date(task.updatedAt).getTime();
+    if (!Number.isNaN(ms) && ms > 0) return ms;
+  }
+  return taskCreatedMs(task);
+}
+
+export function compareCompletedTasksRecentFirst(a, b) {
+  const prio = compareHighPriorityFirst(a, b);
+  if (prio !== 0) return prio;
+  const byCompleted = taskCompletedTimestampMs(b) - taskCompletedTimestampMs(a);
+  if (byCompleted !== 0) return byCompleted;
+  return String(a?.title || "").localeCompare(String(b?.title || ""));
+}

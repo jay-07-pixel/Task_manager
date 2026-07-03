@@ -39,6 +39,7 @@ import {
   onSettingsThemeChange,
 } from "./adminSettings.js";
 import {
+  compareCompletedTasksRecentFirst,
   compareTasksByRecurrenceThenCreated,
   sortTasksByRecurrenceThenCreated,
   compareHighPriorityFirst,
@@ -618,13 +619,24 @@ function taskAssignmentAttachmentsBadgeHtml(task) {
   if (!items.length) return "";
   const hasVoice = items.some((a) => a.kind === "voice");
   const voiceIcon = hasVoice
-    ? `<span class="emp-task-attach-voice" title="${tr("tasks.voiceNote")}">${adminMsIcon("mic")}</span>`
+    ? `<span class="task-assignment-attach-voice" title="${tr("tasks.voiceNote")}">${adminMsIcon("mic")}</span>`
     : "";
-  return `<button type="button" class="emp-task-attach-btn js-emp-view-assignment-attachments" data-task-id="${escapeHtml(task.id)}" title="${tr("tasks.viewAttachments")}">
+  return `<button type="button" class="task-assignment-attach-btn js-view-assignment-attachments" data-task-id="${escapeHtml(task.id)}" title="${tr("tasks.viewAttachments")}">
     ${adminMsIcon("attach_file")}
     <span>${tr("tasks.attachments")}</span>
     ${voiceIcon}
   </button>`;
+}
+
+function bindAssignmentAttachmentViewers(root, findTask) {
+  root.querySelectorAll(".js-view-assignment-attachments").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const taskId = btn.getAttribute("data-task-id");
+      const task = findTask(taskId);
+      if (task) void openTaskAssignmentAttachmentsModal(task);
+    });
+  });
 }
 
 async function openTaskAssignmentAttachmentsModal(task) {
@@ -2561,13 +2573,7 @@ function ownerFilteredTasks() {
 
 function sortOwnerTasksForDisplay(tasks) {
   if (state.ownerTaskFilter === "completed") {
-    return [...tasks].sort((a, b) => {
-      const prio = compareHighPriorityFirst(a, b);
-      if (prio !== 0) return prio;
-      const order = (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
-      if (order !== 0) return order;
-      return String(a.title || "").localeCompare(String(b.title || ""));
-    });
+    return [...tasks].sort(compareCompletedTasksRecentFirst);
   }
   return sortTasksByRecurrenceThenCreated(tasks);
 }
@@ -6336,6 +6342,7 @@ function ownerTaskGroupTbody(task) {
           task.id
         }" aria-label="${tr("common.openTaskDetails")}">${escapeHtml(dt(task.title))}</button>
           ${taskCreatedMetaHtml(task.createdAt)}
+          ${taskAssignmentAttachmentsBadgeHtml(task)}
         </div>
       </td>
       <td class="owner-task-cell owner-task-col--deadline align-middle text-nowrap tabular-nums">${deadlineCell}</td>
@@ -6363,6 +6370,7 @@ function ownerTaskGroupTbody(task) {
               <h4 class="admin-expand-section-label">${tr("common.description")}</h4>
               ${task.durationMinutes ? `<p class="small text-muted mb-2"><strong>${tr("common.durationLabel")}:</strong> ${escapeHtml(formatTaskDuration(task.durationMinutes))}</p>` : ""}
               ${descriptionPanel}
+              ${(task.assignmentAttachments ?? []).length ? `<div class="admin-expand-attachments-row">${taskAssignmentAttachmentsBadgeHtml(task)}</div>` : ""}
             </div>
             <div class="admin-expand-section">
               <div class="admin-expand-section-head">
@@ -6563,6 +6571,7 @@ function renderOwnerMain() {
   });
 
   bindOwnerDescriptionPopups(main);
+  bindAssignmentAttachmentViewers(main, (taskId) => findTaskById(taskId));
 
   main.querySelectorAll(".owner-mark-done-open").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -7783,13 +7792,7 @@ function renderEmployeeMain() {
     });
   });
 
-  main.querySelectorAll(".js-emp-view-assignment-attachments").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const taskId = btn.getAttribute("data-task-id");
-      const task = state.empTasks.find((t) => t.id === taskId);
-      if (task) void openTaskAssignmentAttachmentsModal(task);
-    });
-  });
+  bindAssignmentAttachmentViewers(main, (taskId) => state.empTasks.find((t) => t.id === taskId));
 }
 
 function renderEmployeeChrome() {

@@ -488,8 +488,8 @@ body:has(.admin-emp-modal.show) .modal-backdrop {
   word-break: break-word;
 }
 
-.owner-shell.admin-mockup-ui.emp-shell {
-  .emp-task-attach-btn {
+.owner-shell.admin-mockup-ui {
+  .task-assignment-attach-btn {
     display: inline-flex;
     align-items: center;
     gap: 0.25rem;
@@ -508,9 +508,17 @@ body:has(.admin-emp-modal.show) .modal-backdrop {
     }
   }
 
-  .emp-task-attach-voice .material-symbols-outlined {
+  .task-assignment-attach-voice .material-symbols-outlined {
     font-size: 0.9rem;
     color: var(--admin-error, #ba1a1a);
+  }
+
+  .owner-task-title-wrap .task-assignment-attach-btn {
+    margin-top: 0.2rem;
+  }
+
+  .admin-expand-attachments-row {
+    margin-top: 0.65rem;
   }
 }
 
