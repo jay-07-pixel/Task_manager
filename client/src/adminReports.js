@@ -23,6 +23,9 @@ let employeePerfData = null;
 /** @type {{ employeeId: string, period: string }} */
 let employeePerfFilters = { employeeId: "", period: "daily" };
 
+/** @type {"late" | "pending"} */
+let employeePerfListFilter = "late";
+
 /** @type {boolean} */
 let employeePerfLoading = false;
 
@@ -310,15 +313,37 @@ function adminStatCell(value, label, modifier = "") {
   </div>`;
 }
 
-function lateSubmissionsTableHtml(items, showAdmin = false) {
-  if (!items) return "";
+function employeePerfDetailListHtml(showAdmin = false) {
+  const mode = employeePerfListFilter === "pending" ? "pending" : "late";
+  const items =
+    mode === "pending"
+      ? employeePerfData?.pendingSubmissions ?? []
+      : employeePerfData?.lateSubmissions ?? [];
+
+  const emptyMsg =
+    mode === "pending" ? tr("reports.noPendingSubmissions") : tr("reports.noLateSubmissions");
+
   const rows = items.length
     ? items
         .map((row) => {
-          const lateLabel = tr("reports.submittedLateByDays", { count: row.lateDays });
           const adminCell = showAdmin
             ? `<td class="text-nowrap">${adminPersonChipHtml(row.assignedBy?.name)}</td>`
             : "";
+          if (mode === "pending") {
+            const statusLabel =
+              row.overdueDays > 0
+                ? tr("reports.pendingOverdueByDays", { count: row.overdueDays })
+                : tr("reports.pendingStatus");
+            const statusCls = row.overdueDays > 0 ? "text-danger fw-semibold" : "text-muted";
+            return `<tr>
+              <td class="admin-report-late-task">${escapeHtmlFn(dt(row.title))}</td>
+              ${adminCell}
+              <td class="tabular-nums text-nowrap">${escapeHtmlFn(formatReportDateTime(row.dueAt))}</td>
+              <td class="tabular-nums text-nowrap text-muted">—</td>
+              <td class="admin-report-late-days ${statusCls} text-nowrap">${escapeHtmlFn(statusLabel)}</td>
+            </tr>`;
+          }
+          const lateLabel = tr("reports.submittedLateByDays", { count: row.lateDays });
           return `<tr>
             <td class="admin-report-late-task">${escapeHtmlFn(dt(row.title))}</td>
             ${adminCell}
@@ -328,14 +353,29 @@ function lateSubmissionsTableHtml(items, showAdmin = false) {
           </tr>`;
         })
         .join("")
-    : `<tr><td colspan="${showAdmin ? 5 : 4}" class="text-muted small py-3">${escapeHtmlFn(tr("reports.noLateSubmissions"))}</td></tr>`;
+    : `<tr><td colspan="${showAdmin ? 5 : 4}" class="text-muted small py-3">${escapeHtmlFn(emptyMsg)}</td></tr>`;
 
   const adminHeader = showAdmin
     ? `<th scope="col">${escapeHtmlFn(tr("reports.assignedByAdmin"))}</th>`
     : "";
 
-  return `<div class="admin-report-late-section mt-3">
-    <h3 class="admin-report-late-title h6 mb-2">${escapeHtmlFn(tr("reports.lateSubmissions"))}</h3>
+  const statusHeader =
+    mode === "pending" ? tr("reports.statusColumn") : tr("reports.daysLateColumn");
+
+  return `<div class="admin-report-late-section mt-3" id="employee-perf-detail-list">
+    <div class="admin-report-late-head mb-2">
+      <label class="admin-report-filter owner-dash-filter owner-dash-filter--perf-list">
+        <span class="admin-report-filter-label owner-dash-filter-label">${adminMsIconFn("list_alt", "owner-dash-filter-icon")}<span>${escapeHtmlFn(
+          tr("reports.detailList")
+        )}</span></span>
+        <select class="form-select form-select-sm owner-dash-select js-emp-perf-list-filter" aria-label="${escapeHtmlFn(
+          tr("reports.detailList")
+        )}">
+          <option value="late"${mode === "late" ? " selected" : ""}>${escapeHtmlFn(tr("reports.lateSubmissions"))}</option>
+          <option value="pending"${mode === "pending" ? " selected" : ""}>${escapeHtmlFn(tr("reports.pending"))}</option>
+        </select>
+      </label>
+    </div>
     <div class="table-responsive admin-report-late-table-wrap">
       <table class="table table-sm admin-report-late-table mb-0">
         <thead>
@@ -344,7 +384,7 @@ function lateSubmissionsTableHtml(items, showAdmin = false) {
             ${adminHeader}
             <th scope="col">${escapeHtmlFn(tr("reports.deadlineColumn"))}</th>
             <th scope="col">${escapeHtmlFn(tr("reports.submittedColumn"))}</th>
-            <th scope="col">${escapeHtmlFn(tr("reports.daysLateColumn"))}</th>
+            <th scope="col">${escapeHtmlFn(statusHeader)}</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -559,9 +599,15 @@ function monthlyMinuteBudgetSectionHtml(data) {
 }
 
 function budgetTaskBreakdownRowsHtml(employees) {
-  const filtered = ownerBudgetBreakdownEmployeeId
-    ? employees.filter((emp) => emp.id === ownerBudgetBreakdownEmployeeId)
-    : employees;
+  if (!ownerBudgetBreakdownEmployeeId) {
+    const emptyMsg = escapeHtmlFn(tr("owner.monthlyCapacityPickEmployee"));
+    return {
+      taskTableBody: `<tr><td colspan="6" class="text-muted small py-3">${emptyMsg}</td></tr>`,
+      taskMobile: `<p class="text-muted small py-2 mb-0 d-md-none owner-dash-budget-breakdown-mobile">${emptyMsg}</p>`,
+    };
+  }
+
+  const filtered = employees.filter((emp) => emp.id === ownerBudgetBreakdownEmployeeId);
 
   const taskRows = filtered.flatMap((emp) =>
     emp.tasks.map((task) => {
@@ -599,7 +645,7 @@ function budgetTaskBreakdownRowsHtml(employees) {
 
 function budgetTaskBreakdownSectionHtml(employees) {
   const options = [
-    `<option value="">${escapeHtmlFn(tr("owner.monthlyCapacityAllEmployees"))}</option>`,
+    `<option value=""${!ownerBudgetBreakdownEmployeeId ? " selected" : ""}>${escapeHtmlFn(tr("owner.monthlyCapacitySelectEmployee"))}</option>`,
     ...employees.map(
       (emp) =>
         `<option value="${escapeHtmlFn(emp.id)}"${emp.id === ownerBudgetBreakdownEmployeeId ? " selected" : ""}>${escapeHtmlFn(dt(emp.name))}</option>`
@@ -758,10 +804,7 @@ function employeePerfSectionHtml(data) {
 
   const lateTable =
     employees.length > 0 && !employeePerfLoading
-      ? lateSubmissionsTableHtml(
-          employeePerfData?.lateSubmissions ?? [],
-          reportViewMode === "owner-dashboard"
-        )
+      ? employeePerfDetailListHtml(reportViewMode === "owner-dashboard")
       : "";
 
   const byAdminBlock =
@@ -1270,17 +1313,45 @@ function wireReportsPage(main) {
 }
 
 function wireEmployeePerfFilters(main) {
-  main.querySelector(".js-report-employee")?.addEventListener("change", (e) => {
-    const target = /** @type {HTMLSelectElement} */ (e.target);
-    employeePerfFilters.employeeId = target.value;
-    void loadEmployeePerformance(main);
+  main.querySelectorAll(".js-report-employee").forEach((el) => {
+    if (!(el instanceof HTMLSelectElement) || el.dataset.wiredEmpPerf === "1") return;
+    el.dataset.wiredEmpPerf = "1";
+    el.addEventListener("change", () => {
+      employeePerfFilters.employeeId = el.value;
+      employeePerfListFilter = "late";
+      void loadEmployeePerformance(main);
+    });
   });
 
-  main.querySelector(".js-report-period")?.addEventListener("change", (e) => {
-    const target = /** @type {HTMLSelectElement} */ (e.target);
-    employeePerfFilters.period = target.value;
-    void loadEmployeePerformance(main);
+  main.querySelectorAll(".js-report-period").forEach((el) => {
+    if (!(el instanceof HTMLSelectElement) || el.dataset.wiredEmpPeriod === "1") return;
+    el.dataset.wiredEmpPeriod = "1";
+    el.addEventListener("change", () => {
+      employeePerfFilters.period = el.value;
+      employeePerfListFilter = "late";
+      void loadEmployeePerformance(main);
+    });
   });
+
+  main.querySelectorAll(".js-emp-perf-list-filter").forEach((el) => {
+    if (!(el instanceof HTMLSelectElement) || el.dataset.wiredEmpListFilter === "1") return;
+    el.dataset.wiredEmpListFilter = "1";
+    el.addEventListener("change", () => {
+      employeePerfListFilter = el.value === "pending" ? "pending" : "late";
+      refreshEmployeePerfDetailList(main);
+    });
+  });
+}
+
+function refreshEmployeePerfDetailList(main) {
+  const host = main?.querySelector("#employee-perf-detail-list");
+  if (!host) return;
+  const replacement = document.createElement("div");
+  replacement.innerHTML = employeePerfDetailListHtml(reportViewMode === "owner-dashboard");
+  const next = replacement.firstElementChild;
+  if (!next) return;
+  host.replaceWith(next);
+  wireEmployeePerfFilters(main);
 }
 
 function wireMonthlyBudgetFilters(main) {
@@ -1561,6 +1632,7 @@ export function clearAdminReportsCache() {
   reportData = null;
   employeePerfData = null;
   employeePerfFilters = { employeeId: "", period: "daily" };
+  employeePerfListFilter = "late";
   ownerBudgetMonthFilter = "";
   ownerBudgetBreakdownEmployeeId = "";
   reportViewMode = "full";

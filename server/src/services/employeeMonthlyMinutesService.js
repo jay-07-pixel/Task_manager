@@ -22,15 +22,16 @@ export async function computeEmployeeMonthlyUsedMinutes(userIds, opts = {}) {
 
   const tasks = await prisma.task.findMany({
     where: {
-      completed: false,
       ...(excludeTaskId ? { id: { not: excludeTaskId } } : {}),
       assignments: { some: { userId: { in: ids } } },
+      OR: [{ completed: false }, { recurrence: "none" }],
     },
     select: {
       durationMinutes: true,
       recurrence: true,
       recurrenceRule: true,
       dueAt: true,
+      createdAt: true,
       completed: true,
       assignments: { select: { userId: true } },
     },
@@ -118,10 +119,11 @@ export async function buildOrgMonthlyMinuteBudgetReport(ownerIds, opts = {}) {
   const [tasks, assignments] = await Promise.all([
     prisma.task.findMany({
       where: {
-        completed: false,
         list: { ownerId: { in: ids } },
         durationMinutes: { gt: 0 },
         assignments: { some: {} },
+        // Active recurring/open tasks, plus one-time tasks (may be completed but due in selected month)
+        OR: [{ completed: false }, { recurrence: "none" }],
       },
       select: {
         id: true,
@@ -130,6 +132,7 @@ export async function buildOrgMonthlyMinuteBudgetReport(ownerIds, opts = {}) {
         recurrence: true,
         recurrenceRule: true,
         dueAt: true,
+        createdAt: true,
         completed: true,
         list: { select: { title: true } },
         assignments: {

@@ -459,6 +459,33 @@ router.get("/employee-performance", async (req, res) => {
     }))
     .sort((a, b) => b.lateDays - a.lateDays || new Date(b.submittedAt) - new Date(a.submittedAt));
 
+  const now = new Date();
+  const pendingSubmissions = rows
+    .filter((row) => {
+      if (classifyAssigneeRow(row) !== "pending") return false;
+      return rowInPeriod(row, period, keySet);
+    })
+    .map((row) => {
+      const dueAt = row.task.dueAt;
+      let overdueDays = 0;
+      if (dueAt) {
+        const due = new Date(dueAt);
+        if (!Number.isNaN(due.getTime()) && now.getTime() > due.getTime()) {
+          overdueDays = Math.max(1, Math.ceil((now.getTime() - due.getTime()) / 86_400_000));
+        }
+      }
+      return {
+        taskId: row.task.id,
+        title: row.task.title,
+        dueAt,
+        submittedAt: null,
+        overdueDays,
+        assignedAt: assignmentDate(row),
+        assignedBy: adminAllocator(row),
+      };
+    })
+    .sort((a, b) => b.overdueDays - a.overdueDays || new Date(a.dueAt || 0) - new Date(b.dueAt || 0));
+
   res.json({
     employee: { id: employee.id, name: employee.displayName || "Employee" },
     period,
@@ -468,6 +495,7 @@ router.get("/employee-performance", async (req, res) => {
     totals,
     byAdmin,
     lateSubmissions,
+    pendingSubmissions,
     series: {
       allocated: series.map((b) => b.allocated),
       onTime: series.map((b) => b.onTime),

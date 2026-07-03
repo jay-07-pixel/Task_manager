@@ -26,27 +26,53 @@ export function currentYearMonthInAppTz(now = new Date()) {
 }
 
 /**
- * @param {Date | string | null | undefined} dueAt
- * @param {number} year
- * @param {number} month 1–12
+ * @param {Date | string | null | undefined} value
+ * @returns {{ year: number, month: number } | null}
  */
-function dueAtInYearMonth(dueAt, year, month) {
-  if (!dueAt) return false;
-  const d = dueAt instanceof Date ? dueAt : new Date(dueAt);
-  if (Number.isNaN(d.getTime())) return false;
+function yearMonthInAppTz(value) {
+  if (!value) return null;
+  const d = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
   const formatter = new Intl.DateTimeFormat("en-CA", {
     timeZone: appTimeZone(),
     year: "numeric",
     month: "2-digit",
   });
   const parts = formatter.formatToParts(d);
-  const y = Number(parts.find((p) => p.type === "year")?.value);
-  const m = Number(parts.find((p) => p.type === "month")?.value);
-  return y === year && m === month;
+  const year = Number(parts.find((p) => p.type === "year")?.value);
+  const month = Number(parts.find((p) => p.type === "month")?.value);
+  if (!year || !month) return null;
+  return { year, month };
 }
 
 /**
- * @param {{ recurrence?: string, recurrenceRule?: string | null, dueAt?: Date | string | null, completed?: boolean }} task
+ * @param {Date | string | null | undefined} dueAt
+ * @param {number} year
+ * @param {number} month 1–12
+ */
+function dueAtInYearMonth(dueAt, year, month) {
+  const ym = yearMonthInAppTz(dueAt);
+  if (!ym) return false;
+  return ym.year === year && ym.month === month;
+}
+
+/**
+ * Task is considered started by the end of the selected month when its due date
+ * (or created date) is on or before that month.
+ * @param {{ dueAt?: Date | string | null, createdAt?: Date | string | null }} task
+ * @param {number} year
+ * @param {number} month
+ */
+function taskStartedBySelectedMonth(task, year, month) {
+  const start = yearMonthInAppTz(task.dueAt) || yearMonthInAppTz(task.createdAt);
+  if (!start) return true;
+  if (start.year < year) return true;
+  if (start.year > year) return false;
+  return start.month <= month;
+}
+
+/**
+ * @param {{ recurrence?: string, recurrenceRule?: string | null, dueAt?: Date | string | null, createdAt?: Date | string | null, completed?: boolean }} task
  * @param {number} year
  * @param {number} month 1–12
  */
@@ -54,33 +80,43 @@ export function monthlyOccurrenceCount(task, year, month) {
   const recurrence = task.recurrence ?? "none";
 
   if (recurrence === "none") {
+    // One-time tasks only count in the month they are due.
+    if (task.dueAt) return dueAtInYearMonth(task.dueAt, year, month) ? 1 : 0;
+    // No due date: only count in the current calendar month while still open.
     if (task.completed) return 0;
-    return 1;
+    const cur = currentYearMonthInAppTz();
+    return year === cur.year && month === cur.month ? 1 : 0;
   }
 
+  // Recurring tasks that have not started yet do not apply to earlier months.
+  if (!taskStartedBySelectedMonth(task, year, month)) return 0;
+
+  // Completed recurring tasks are excluded (no completedAt to scope by month).
+  if (task.completed) return 0;
+
   if (recurrence === "daily") {
-    if (task.completed) return 0;
     return WORKING_DAYS_PER_MONTH;
   }
 
   if (recurrence === "weekly") {
-    if (task.completed) return 0;
     return WEEKS_PER_MONTH;
   }
 
   if (recurrence === "monthly") {
-    if (task.completed) return 0;
     return 1;
   }
 
   if (recurrence === "yearly") {
-    if (task.completed) return 0;
     if (task.dueAt && !dueAtInYearMonth(task.dueAt, year, month)) return 0;
+    // Yearly without due month: use created month as anniversary.
+    if (!task.dueAt) {
+      const start = yearMonthInAppTz(task.createdAt);
+      if (start && start.month !== month) return 0;
+    }
     return 1;
   }
 
   if (recurrence === "custom") {
-    if (task.completed) return 0;
     return customMonthlyOccurrenceCount(task, year, month);
   }
 
@@ -88,7 +124,7 @@ export function monthlyOccurrenceCount(task, year, month) {
 }
 
 /**
- * @param {{ recurrenceRule?: string | null, dueAt?: Date | string | null }} task
+ * @param {{ recurrenceRule?: string | null, dueAt?: Date | string | null, createdAt?: Date | string | null }} task
  * @param {number} year
  * @param {number} month
  */
@@ -106,7 +142,13 @@ function customMonthlyOccurrenceCount(task, year, month) {
     return Math.max(1, Math.floor(WEEKS_PER_MONTH / every));
   }
   if (unit === "month") {
-    return every <= 1 ? 1 : 0;
+    if (every <= 1) return 1;
+    const start = yearMonthInAppTz(task.dueAt) || yearMonthInAppTz(task.createdAt);
+    if (!start) return 0;
+    const startIdx = start.year * 12 + start.month;
+    const targetIdx = year * 12 + month;
+    if (targetIdx < startIdx) return 0;
+    return (targetIdx - startIdx) % every === 0 ? 1 : 0;
   }
   if (unit === "year") {
     return dueAtInYearMonth(task.dueAt, year, month) ? 1 : 0;
@@ -116,7 +158,7 @@ function customMonthlyOccurrenceCount(task, year, month) {
 }
 
 /**
- * @param {{ durationMinutes?: number | null, recurrence?: string, recurrenceRule?: string | null, dueAt?: Date | string | null, completed?: boolean }} task
+ * @param {{ durationMinutes?: number | null, recurrence?: string, recurrenceRule?: string | null, dueAt?: Date | string | null, createdAt?: Date | string | null, completed?: boolean }} task
  * @param {number} [year]
  * @param {number} [month]
  */

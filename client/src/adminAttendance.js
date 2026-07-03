@@ -62,10 +62,12 @@ export function initAdminAttendance({
 }
 
 export function ownerAttendanceNavItemHtml(active = false) {
-  return `<button type="button" class="admin-sidebar-nav-item js-owner-attendance-nav${active ? " admin-sidebar-nav-item--active" : ""}">
+  const activeClass = active ? " admin-sidebar-nav-item--active" : "";
+  const label = tr("attendance.navLabel");
+  return `<button type="button" class="admin-sidebar-nav-item js-owner-attendance-nav${activeClass}">
     <span class="admin-nav-item-left">
-      ${adminMsIconFn?.("location_on") ?? ""}
-      <span>${escapeHtmlFn?.(tr("attendance.navLabel")) ?? "Attendance"}</span>
+      <span class="material-symbols-outlined" aria-hidden="true">location_on</span>
+      <span>${escapeHtmlFn?.(label) ?? label}</span>
     </span>
   </button>`;
 }
