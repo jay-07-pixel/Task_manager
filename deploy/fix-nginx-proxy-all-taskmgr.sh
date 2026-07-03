@@ -4,8 +4,7 @@
 #
 # Usage: sudo bash deploy/fix-nginx-proxy-all-taskmgr.sh
 #
-# This script patches vhosts that proxy /api/ but use root/try_files for /.
-# It replaces the location / block to proxy everything to the app's PORT from .env.
+# Only patches vhosts that still use root /var/www/ for static files.
 set -euo pipefail
 
 if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
@@ -14,8 +13,6 @@ if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
 fi
 
 declare -A DOMAIN_DIR=(
-  [sugandhshoppee.kalpanik.in]=Task_manager
-  [safari.kalpanik.in]=Task_manager_safari
   [ss2n.kalpanik.in]=Task_manager_ss2n
   [acs.kalpanik.in]=Task_manager_acs
   [tacs.kalpanik.in]=Task_manager_tacs
@@ -50,6 +47,11 @@ for domain in "${!DOMAIN_DIR[@]}"; do
     continue
   fi
 
+  if ! grep -qE 'root[[:space:]]+/var/www/' "$vhost"; then
+    echo "Skip $domain — no /var/www root (already proxying?): $vhost"
+    continue
+  fi
+
   cp "$vhost" "${vhost}.bak.$(date +%Y%m%d%H%M%S)"
 
   python3 - "$vhost" "$port" <<'PY'
@@ -69,7 +71,18 @@ block = f"""
     }}
 """
 
-# Remove old location / { ... } that is NOT /api/
+# Drop static root — Node serves client/dist
+text = re.sub(r"^\s*root\s+/var/www/[^;]+;\s*\n", "", text, flags=re.MULTILINE)
+
+# Remove old location / { try_files ... } blocks (keep /api/ if present)
+text = re.sub(
+    r"\n\s*location / \{[^}]*try_files[^}]*\}\s*",
+    "\n",
+    text,
+    flags=re.DOTALL,
+)
+
+# Remove any remaining simple location / block before inserting proxy
 text = re.sub(
     r"\n\s*location / \{[^}]*\}\s*(?=\n\s*location|\n\s*\}|\Z)",
     "\n",
@@ -78,7 +91,6 @@ text = re.sub(
     flags=re.DOTALL,
 )
 
-# Insert before first location /api/ if present, else before closing server brace
 if re.search(r"\n\s*location /api/", text):
     text = re.sub(r"(\n\s*location /api/)", block + r"\1", text, count=1)
 else:
@@ -96,5 +108,5 @@ if [ "$patched" -eq 0 ]; then
 else
   nginx -t
   systemctl reload nginx
-  echo "nginx reloaded. Re-run: bash deploy/diagnose-site-bundles.sh"
+  echo "nginx reloaded. Re-run: bash ~/Task_manager/deploy/diagnose-site-bundles.sh"
 fi
