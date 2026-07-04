@@ -56,18 +56,53 @@ const POLL_MS = 5_000;
 /** @type {Map<string, any>} */
 const placeNameCache = new Map();
 
+/** @type {(() => boolean) | null} */
+let getLiveLocationRequiredFn = null;
+
+/** @type {(() => boolean) | null} */
+let getDailyAttendanceEnabledFn = null;
+
 export function initAdminAttendance({
   api,
   escapeHtml,
   adminMsIcon,
   ownerChromeHeader,
   wireOwnerChromeHeader,
+  getLiveLocationRequired,
+  getDailyAttendanceEnabled,
 }) {
   apiFn = api;
   escapeHtmlFn = escapeHtml;
   adminMsIconFn = adminMsIcon;
   ownerChromeHeaderFn = ownerChromeHeader ?? null;
   wireOwnerChromeHeaderFn = wireOwnerChromeHeader ?? null;
+  getLiveLocationRequiredFn = getLiveLocationRequired ?? null;
+  getDailyAttendanceEnabledFn = getDailyAttendanceEnabled ?? null;
+}
+
+function isLiveAttendanceEnabled() {
+  return getLiveLocationRequiredFn?.() !== false;
+}
+
+function isDailyCheckInEnabled() {
+  return getDailyAttendanceEnabledFn?.() === true;
+}
+
+function ensureValidAttendanceTab() {
+  if ((attendanceViewTab === "daily" || attendanceViewTab === "report") && !isDailyCheckInEnabled()) {
+    attendanceViewTab = isLiveAttendanceEnabled() ? "live" : "daily";
+  }
+  if (attendanceViewTab === "live" && !isLiveAttendanceEnabled() && isDailyCheckInEnabled()) {
+    attendanceViewTab = "daily";
+  }
+}
+
+export function ensureOwnerAttendanceLiveTab() {
+  attendanceViewTab = "live";
+}
+
+export function syncOwnerAttendanceTabAfterSettingsChange() {
+  ensureValidAttendanceTab();
 }
 
 export function ownerAttendanceNavItemHtml(active = false) {
@@ -646,11 +681,19 @@ function updateLastRefreshedLabel() {
 
 function attendanceTabsHtml() {
   const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
-  return `<div class="admin-attendance-tabs" role="tablist">
-    <button type="button" class="admin-attendance-tab${attendanceViewTab === "live" ? " admin-attendance-tab--active" : ""}" data-attendance-tab="live">${esc(tr("attendance.tabLive"))}</button>
-    <button type="button" class="admin-attendance-tab${attendanceViewTab === "daily" ? " admin-attendance-tab--active" : ""}" data-attendance-tab="daily">${esc(tr("attendance.tabDaily"))}</button>
-    <button type="button" class="admin-attendance-tab${attendanceViewTab === "report" ? " admin-attendance-tab--active" : ""}" data-attendance-tab="report">${esc(tr("attendance.tabReport"))}</button>
-  </div>`;
+  const tabs = [];
+  if (isLiveAttendanceEnabled()) {
+    tabs.push(
+      `<button type="button" class="admin-attendance-tab${attendanceViewTab === "live" ? " admin-attendance-tab--active" : ""}" data-attendance-tab="live">${esc(tr("attendance.tabLive"))}</button>`
+    );
+  }
+  if (isDailyCheckInEnabled()) {
+    tabs.push(
+      `<button type="button" class="admin-attendance-tab${attendanceViewTab === "daily" ? " admin-attendance-tab--active" : ""}" data-attendance-tab="daily">${esc(tr("attendance.tabDaily"))}</button>`,
+      `<button type="button" class="admin-attendance-tab${attendanceViewTab === "report" ? " admin-attendance-tab--active" : ""}" data-attendance-tab="report">${esc(tr("attendance.tabReport"))}</button>`
+    );
+  }
+  return `<div class="admin-attendance-tabs" role="tablist">${tabs.join("")}</div>`;
 }
 
 function wireAttendanceTabs(root) {
@@ -660,6 +703,8 @@ function wireAttendanceTabs(root) {
     btn.addEventListener("click", () => {
       const tab = btn.getAttribute("data-attendance-tab");
       if (tab !== "live" && tab !== "daily" && tab !== "report") return;
+      if (tab === "live" && !isLiveAttendanceEnabled()) return;
+      if ((tab === "daily" || tab === "report") && !isDailyCheckInEnabled()) return;
       if (attendanceViewTab === tab) return;
       attendanceViewTab = tab;
       if (tab === "live") {
@@ -1224,13 +1269,22 @@ async function loadEmployeeHistory(userId) {
 
 export async function refreshAdminAttendance({ keepSelection = false, forceFull = false } = {}) {
   if (!apiFn) return;
+  ensureValidAttendanceTab();
   if (attendanceViewTab === "daily") {
-    await renderDailyAttendancePage();
-    return;
+    if (!isDailyCheckInEnabled()) {
+      attendanceViewTab = isLiveAttendanceEnabled() ? "live" : "daily";
+    } else {
+      await renderDailyAttendancePage();
+      return;
+    }
   }
   if (attendanceViewTab === "report") {
-    await renderMonthlyReportPage();
-    return;
+    if (!isDailyCheckInEnabled()) {
+      attendanceViewTab = isLiveAttendanceEnabled() ? "live" : "daily";
+    } else {
+      await renderMonthlyReportPage();
+      return;
+    }
   }
   const data = await apiFn("/api/attendance/live");
   liveData = data;
@@ -1281,15 +1335,24 @@ export function handleAttendanceLiveEvent(detail) {
 export function openOwnerAttendanceView() {
   destroyMap();
   stopAttendancePoll();
-  if (attendanceViewTab === "daily") {
+  ensureValidAttendanceTab();
+  if (attendanceViewTab === "daily" && isDailyCheckInEnabled()) {
     void renderDailyAttendancePage();
     return;
   }
-  if (attendanceViewTab === "report") {
+  if (attendanceViewTab === "report" && isDailyCheckInEnabled()) {
     void renderMonthlyReportPage();
     return;
   }
-  void refreshAdminAttendance().then(() => startAttendancePoll());
+  if (isLiveAttendanceEnabled()) {
+    attendanceViewTab = "live";
+    void refreshAdminAttendance().then(() => startAttendancePoll());
+    return;
+  }
+  if (isDailyCheckInEnabled()) {
+    attendanceViewTab = "daily";
+    void renderDailyAttendancePage();
+  }
 }
 
 export function stopAttendancePoll() {

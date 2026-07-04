@@ -23,6 +23,7 @@ import {
 import {
   getCompanyAttendanceSettings,
   getDailyAttendanceSchedule,
+  isCompanyAttendanceEnabled,
   setCompanyAttendanceEnabled,
   setCompanyLiveLocationRequired,
   setDailyAttendanceSchedule,
@@ -403,6 +404,9 @@ router.post("/check-out", requireAuth, async (req, res) => {
 });
 
 router.get("/daily-report", requireOwner, async (req, res) => {
+  if (!(await isCompanyAttendanceEnabled())) {
+    return res.status(403).json({ error: "Daily check-in attendance is disabled for your company." });
+  }
   const date = typeof req.query.date === "string" ? req.query.date.trim() : "";
   try {
     const report = await getDailyAttendanceReport(date || undefined);
@@ -413,6 +417,9 @@ router.get("/daily-report", requireOwner, async (req, res) => {
 });
 
 router.get("/monthly-report", requireOwner, async (req, res) => {
+  if (!(await isCompanyAttendanceEnabled())) {
+    return res.status(403).json({ error: "Daily check-in attendance is disabled for your company." });
+  }
   const now = new Date();
   const year = Number.parseInt(String(req.query.year ?? now.getFullYear()), 10);
   const month = Number.parseInt(String(req.query.month ?? now.getMonth() + 1), 10);

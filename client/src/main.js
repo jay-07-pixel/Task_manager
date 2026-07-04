@@ -89,6 +89,8 @@ import {
   stopAttendancePoll,
   ownerAttendanceChromeHeaderHtml,
   handleAttendanceLiveEvent,
+  ensureOwnerAttendanceLiveTab,
+  syncOwnerAttendanceTabAfterSettingsChange,
 } from "./adminAttendance.js";
 import {
   compareCompletedTasksRecentFirst,
@@ -2201,12 +2203,16 @@ async function handleOwnerNotifyDeepLink() {
   if (notify) await focusOwnerTaskFromNotify(notify);
 }
 
+function ownerAttendanceNavVisible() {
+  return state.user?.liveLocationRequired !== false || state.user?.attendanceEnabled === true;
+}
+
 function handleOpenAttendanceDeepLink() {
   const params = new URLSearchParams(window.location.search);
   if (params.get("openAttendance") !== "1" || state.user?.role !== "owner") return;
   window.history.replaceState({}, "", window.location.pathname);
-  if (state.user?.attendanceEnabled !== true) {
-    showToast(tr("attendance.attendanceFeatureOff"), "warning");
+  if (!ownerAttendanceNavVisible()) {
+    showToast(tr("attendance.attendanceNavOff"), "warning");
     return;
   }
   state.ownerView = "attendance";
@@ -2217,12 +2223,18 @@ function handleOpenAttendanceDeepLink() {
 function handleCompanyAttendanceChanged(enabled) {
   if (state.user) state.user.attendanceEnabled = enabled;
   stopAttendanceCheckInReminder();
-  if (!enabled && state.ownerView === "attendance") {
-    state.ownerView = "dashboard";
-    destroyAdminAttendance();
-  }
   if (!enabled && state.empView === "attendance") {
     state.empView = "dashboard";
+  }
+  if (!enabled && state.ownerView === "attendance") {
+    if (state.user?.liveLocationRequired !== false) {
+      ensureOwnerAttendanceLiveTab();
+    } else {
+      state.ownerView = "dashboard";
+      destroyAdminAttendance();
+    }
+  } else {
+    syncOwnerAttendanceTabAfterSettingsChange();
   }
   if (state.user?.role === "owner") {
     renderListContentOnly();
@@ -3057,7 +3069,7 @@ function leftNavInner() {
         <div class="js-emp-assign-list-host owner-emp-assign-nav"></div>
         ${teamChatSidebarNavItemHtml()}
         ${ownerReportsNavItemHtml(state.ownerView === "reports")}
-        ${state.user?.attendanceEnabled === true ? ownerAttendanceNavItemHtml(state.ownerView === "attendance") : ""}
+        ${ownerAttendanceNavVisible() ? ownerAttendanceNavItemHtml(state.ownerView === "attendance") : ""}
       </nav>
       <div class="admin-your-lists-section">
         <div class="admin-your-lists-head">
@@ -6927,7 +6939,7 @@ function renderOwnerMain() {
     return;
   }
   if (state.ownerView === "attendance") {
-    if (state.user?.attendanceEnabled !== true) {
+    if (!ownerAttendanceNavVisible()) {
       state.ownerView = "dashboard";
       renderListContentOnly();
     } else {
@@ -7473,8 +7485,8 @@ function wireOwnerDashboardAnnouncementListener() {
   });
   window.addEventListener("taskmgr:open-attendance", () => {
     if (state.user?.role !== "owner") return;
-    if (state.user?.attendanceEnabled !== true) {
-      showToast(tr("attendance.attendanceFeatureOff"), "warning");
+    if (!ownerAttendanceNavVisible()) {
+      showToast(tr("attendance.attendanceNavOff"), "warning");
       return;
     }
     state.ownerView = "attendance";
@@ -7566,7 +7578,12 @@ function renderOwnerChrome() {
     onCompanyLiveLocationChanged: (enabled) => {
       if (state.user) state.user.liveLocationRequired = enabled;
       if (!enabled && state.ownerView === "attendance") {
-        state.ownerView = "dashboard";
+        if (state.user?.attendanceEnabled === true) {
+          syncOwnerAttendanceTabAfterSettingsChange();
+        } else {
+          state.ownerView = "dashboard";
+          destroyAdminAttendance();
+        }
       }
       renderListContentOnly();
       if (state.ownerView === "dashboard") renderOwnerMain();
@@ -7574,6 +7591,7 @@ function renderOwnerChrome() {
       else if (state.ownerView === "company-profile") openOwnerCompanyProfileView();
       else if (state.ownerView === "manage-employees") openOwnerManageEmployeesView();
       else if (state.ownerView === "manage-locations") openOwnerManageLocationsView();
+      else if (state.ownerView === "attendance") openOwnerAttendanceView();
     },
     onCompanyAttendanceChanged: handleCompanyAttendanceChanged,
   });
@@ -7614,6 +7632,8 @@ function renderOwnerChrome() {
     adminMsIcon,
     ownerChromeHeader: ownerAttendanceChromeHeaderHtml,
     wireOwnerChromeHeader: wireOwnerReportsChromeHeader,
+    getLiveLocationRequired: () => state.user?.liveLocationRequired !== false,
+    getDailyAttendanceEnabled: () => state.user?.attendanceEnabled === true,
   });
   renderListGroup();
   renderOwnerMain();
