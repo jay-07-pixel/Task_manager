@@ -2062,7 +2062,11 @@ async function focusEmployeeTaskFromNotify(notify) {
 
   const slotLabel = notify.slot?.startsWith("followup")
     ? tr("employee.reminderOverdue")
-    : tr("employee.reminderDueSoon");
+    : notify.slot?.startsWith("before")
+      ? tr("employee.reminderDueSoonCustom", {
+          count: parseInt(String(notify.slot).replace(/^before/, ""), 10) || 10,
+        })
+      : tr("employee.reminderDueSoon");
   const title = notify.title || task?.title || "Your task";
 
   requestAnimationFrame(() => {
@@ -2639,6 +2643,29 @@ function fillModalDurationFields(task) {
   }
   unitEl.value = "minutes";
   valueEl.value = String(minutes);
+}
+
+function parseReminderBeforeMinutesFromModal() {
+  if (!document.getElementById("modal-due")?.value?.trim()) return null;
+  const raw = document.getElementById("modal-reminder-before")?.value ?? "";
+  if (raw === "") return null;
+  const n = parseInt(raw, 10);
+  if (!Number.isFinite(n) || n < 0) return null;
+  return n;
+}
+
+function fillModalReminderFields(task) {
+  const sel = document.getElementById("modal-reminder-before");
+  if (!sel) return;
+  const m = task?.reminderBeforeMinutes;
+  sel.value = m == null ? "" : String(m);
+  syncModalReminderRowVisibility();
+}
+
+function syncModalReminderRowVisibility() {
+  const row = document.getElementById("modal-reminder-wrap");
+  const hasDue = !!(document.getElementById("modal-due")?.value?.trim());
+  row?.classList.toggle("d-none", !hasDue);
 }
 
 function taskDurationMetaHtml(minutes) {
@@ -3435,6 +3462,7 @@ function fillModalDueFields(task) {
   }
   toggleModalTimeRow();
   refreshModalRepeatLabels();
+  syncModalReminderRowVisibility();
 }
 
 function toggleModalTimeRow() {
@@ -3764,6 +3792,30 @@ function taskModalHtml() {
                       </select>
                       <span class="admin-task-modal-select-chevron">${adminMsIcon("expand_more")}</span>
                     </div>
+                  </div>
+                </div>
+              </div>
+              <div class="admin-task-modal-row admin-task-modal-row--reminder d-none" id="modal-reminder-wrap">
+                <span class="admin-task-modal-row-icon">${adminMsIcon("notifications_active")}</span>
+                <div class="admin-task-modal-row-content">
+                  <label class="admin-task-modal-field-label" for="modal-reminder-before">
+                    ${tr("modals.reminderBefore")} <span class="text-muted fw-normal">${tr("common.optional")}</span>
+                  </label>
+                  <p class="admin-task-modal-field-hint small text-muted mb-2">${tr("modals.reminderBeforeHint")}</p>
+                  <div class="admin-task-modal-select-wrap">
+                    <select class="admin-task-modal-select" id="modal-reminder-before" aria-label="${tr("modals.reminderBefore")}">
+                      <option value="">${tr("modals.reminderDefault10")}</option>
+                      <option value="0">${tr("modals.reminderNone")}</option>
+                      <option value="5">${tr("modals.reminderMinutesBefore", { count: 5 })}</option>
+                      <option value="10">${tr("modals.reminderMinutesBefore", { count: 10 })}</option>
+                      <option value="15">${tr("modals.reminderMinutesBefore", { count: 15 })}</option>
+                      <option value="30">${tr("modals.reminderMinutesBefore", { count: 30 })}</option>
+                      <option value="60">${tr("modals.reminderHoursBefore", { count: 1 })}</option>
+                      <option value="120">${tr("modals.reminderHoursBefore", { count: 2 })}</option>
+                      <option value="360">${tr("modals.reminderHoursBefore", { count: 6 })}</option>
+                      <option value="1440">${tr("modals.reminderDaysBefore", { count: 1 })}</option>
+                    </select>
+                    <span class="admin-task-modal-select-chevron">${adminMsIcon("expand_more")}</span>
                   </div>
                 </div>
               </div>
@@ -6060,6 +6112,7 @@ function openOwnerCreateTaskModal() {
   pendingCustomRecurrence = null;
   fillModalDueFields({ allDay: false, recurrence: "none", dueAt: null });
   fillModalDurationFields(null);
+  fillModalReminderFields({ reminderBeforeMinutes: null });
   syncModalCustomRepeatUi();
   document.getElementById("modal-schedule-wrap")?.classList.remove("d-none");
   document.getElementById("modal-list-wrap")?.classList.remove("d-none");
@@ -6472,6 +6525,7 @@ function openTaskModal(task) {
       : null;
   fillModalDueFields(task);
   fillModalDurationFields(task);
+  fillModalReminderFields(task);
   syncModalCustomRepeatUi();
   document.getElementById("modal-schedule-wrap").classList.remove("d-none");
   document.getElementById("modal-list-wrap").classList.remove("d-none");
@@ -6539,6 +6593,7 @@ function wireTaskModal() {
       assigneeIds: getSelectedAssigneeIdsFromModal(),
       highPriority: document.getElementById("modal-high-priority")?.checked ?? false,
       durationMinutes: parseDurationMinutesFromModal(),
+      reminderBeforeMinutes: dueAt ? parseReminderBeforeMinutesFromModal() : null,
     };
     try {
       let taskId = id;
@@ -6590,7 +6645,10 @@ function wireTaskModal() {
   });
 
   document.getElementById("modal-title").addEventListener("input", updateModalSaveEnabled);
-  document.getElementById("modal-due")?.addEventListener("change", refreshModalRepeatLabels);
+  document.getElementById("modal-due")?.addEventListener("change", () => {
+    refreshModalRepeatLabels();
+    syncModalReminderRowVisibility();
+  });
   document.getElementById("modal-all-day").addEventListener("change", () => {
     toggleModalTimeRow();
     refreshModalRepeatLabels();

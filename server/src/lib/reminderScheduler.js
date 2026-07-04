@@ -3,14 +3,11 @@ import { formatDueTime } from "./formatDueTime.js";
 import { isFcmConfigured } from "./fcm.js";
 import { isPushConfigured, sendPushToSubscription } from "./push.js";
 import { sendFcmTaskReminder } from "../services/fcmReminderService.js";
-
-const REMINDER_BEFORE_MS = 10 * 60 * 1000;
-/** Missed-task follow-ups after due time (one send per slot via ReminderSent dedup). */
-const FOLLOWUP_1H_AFTER_DUE_MS = 60 * 60 * 1000;
-const FOLLOWUP_6H_AFTER_DUE_MS = 6 * 60 * 60 * 1000;
-const FOLLOWUP_24H_AFTER_DUE_MS = 24 * 60 * 60 * 1000;
-/** Stop missed reminders after the 24h slot (+1h grace for scheduler tick). */
-const FOLLOWUP_STOP_AFTER_DUE_MS = 25 * 60 * 60 * 1000;
+import {
+  formatBeforeDueReminderTitle,
+  minutesFromBeforeSlot,
+  reminderSlotForDue,
+} from "./reminderTiming.js";
 
 const CHANNEL_WEB = "web_push";
 const CHANNEL_FCM = "fcm";
@@ -33,35 +30,7 @@ function alarmPath(taskId, title, dueAt, slot) {
   return `/?${p.toString()}`;
 }
 
-/**
- * @param {Date} dueAt
- * @param {number} nowMs
- * @returns {"before10" | "followup1h" | "followup6h" | "followup24h" | null}
- */
-export function reminderSlotForDue(dueAt, nowMs = Date.now()) {
-  const due = dueAt.getTime();
-  if (!Number.isFinite(due)) return null;
-
-  const msUntilDue = due - nowMs;
-  if (msUntilDue > 0 && msUntilDue <= REMINDER_BEFORE_MS) {
-    return "before10";
-  }
-
-  const msAfterDue = nowMs - due;
-  if (msAfterDue < 0) return null;
-
-  if (msAfterDue >= FOLLOWUP_24H_AFTER_DUE_MS && msAfterDue < FOLLOWUP_STOP_AFTER_DUE_MS) {
-    return "followup24h";
-  }
-  if (msAfterDue >= FOLLOWUP_6H_AFTER_DUE_MS && msAfterDue < FOLLOWUP_24H_AFTER_DUE_MS) {
-    return "followup6h";
-  }
-  if (msAfterDue >= FOLLOWUP_1H_AFTER_DUE_MS && msAfterDue < FOLLOWUP_6H_AFTER_DUE_MS) {
-    return "followup1h";
-  }
-
-  return null;
-}
+export { reminderSlotForDue } from "./reminderTiming.js";
 
 function reminderSentKey(taskId, userId, dueAt, slot, channel) {
   return { taskId, userId, dueAt, slot, channel };
@@ -249,9 +218,10 @@ async function sendFcmReminder(row, slot) {
 }
 
 function webPushCopyForSlot(row, slot) {
-  if (slot === "before10") {
+  const beforeMinutes = minutesFromBeforeSlot(slot);
+  if (beforeMinutes != null) {
     return {
-      title: "Task due in 10 minutes",
+      title: formatBeforeDueReminderTitle(beforeMinutes),
       body: `${row.task.title}\nTap to open the alarm screen.`,
     };
   }
@@ -297,7 +267,16 @@ export async function runReminderTick() {
       },
     },
     include: {
-      task: { select: { id: true, title: true, dueAt: true, allDay: true, dueTimeZone: true } },
+      task: {
+        select: {
+          id: true,
+          title: true,
+          dueAt: true,
+          allDay: true,
+          dueTimeZone: true,
+          reminderBeforeMinutes: true,
+        },
+      },
     },
   });
 
@@ -310,7 +289,7 @@ export async function runReminderTick() {
     const due = dueAt.getTime();
     if (!Number.isFinite(due)) continue;
 
-    const slot = reminderSlotForDue(dueAt, now);
+    const slot = reminderSlotForDue(dueAt, now, row.task.reminderBeforeMinutes);
     if (!slot) continue;
 
     dbg("row", {
@@ -319,6 +298,7 @@ export async function runReminderTick() {
       title: row.task.title,
       dueAt: dueAt.toISOString(),
       slot,
+      reminderBeforeMinutes: row.task.reminderBeforeMinutes,
     });
 
     if (fcmOn) {

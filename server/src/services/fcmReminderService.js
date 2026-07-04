@@ -1,4 +1,5 @@
 import { formatDueTime } from "../lib/formatDueTime.js";
+import { minutesFromBeforeSlot } from "../lib/reminderTiming.js";
 import { sendFcmDataMessage } from "../lib/fcm.js";
 import { getEmployeeDevicesForUser } from "./fcmPushService.js";
 
@@ -10,7 +11,8 @@ const INVALID_TOKEN_CODES = new Set([
 
 function bodyForSlot(slot, title, dueLabel) {
   const dueSuffix = dueLabel ? ` — ${dueLabel}` : "";
-  if (slot === "before10") {
+  const beforeMinutes = minutesFromBeforeSlot(slot);
+  if (beforeMinutes != null) {
     return `${title}${dueSuffix}`;
   }
   if (slot === "followup1h") {

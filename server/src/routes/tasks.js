@@ -234,6 +234,7 @@ async function spawnNextRecurringTask(completedTask, nextRecurrenceRuleJson = nu
     starred: completedTask.starred,
     highPriority: completedTask.highPriority,
     durationMinutes: completedTask.durationMinutes,
+    reminderBeforeMinutes: completedTask.reminderBeforeMinutes,
     assignments: assigneeCreates.length ? { create: assigneeCreates } : undefined,
   };
 
@@ -899,6 +900,7 @@ export function serializeTask(t) {
     starred: t.starred,
     highPriority: !!t.highPriority,
     durationMinutes: t.durationMinutes ?? null,
+    reminderBeforeMinutes: t.reminderBeforeMinutes ?? null,
     sortOrder: t.sortOrder,
     createdAt: t.createdAt?.toISOString?.() ?? t.createdAt ?? null,
     assignmentAttachments: serializeAssignmentAttachments(t),
@@ -1761,12 +1763,18 @@ const durationMinutesSchema = z.union([
   z.null(),
 ]);
 
+const reminderBeforeMinutesSchema = z.union([
+  z.number().int().min(0).max(10080),
+  z.null(),
+]);
+
 const createTaskSchema = z.object({
   title: z.string().min(1).max(500),
   notes: z.string().max(20000).optional(),
   starred: z.boolean().optional(),
   highPriority: z.boolean().optional(),
   durationMinutes: durationMinutesSchema.optional(),
+  reminderBeforeMinutes: reminderBeforeMinutesSchema.optional(),
   dueAt: z.union([z.string().min(1), z.literal(""), z.null()]).optional(),
   dueTimeZone: z.string().min(1).max(64).optional().nullable(),
   allDay: z.boolean().optional(),
@@ -1817,6 +1825,11 @@ router.post("/lists/:listId", requireOwner, async (req, res) => {
     starred: parsed.data.starred ?? false,
     highPriority: parsed.data.highPriority ?? false,
     durationMinutes: parsed.data.durationMinutes ?? null,
+    reminderBeforeMinutes: dueAt
+      ? parsed.data.reminderBeforeMinutes !== undefined
+        ? parsed.data.reminderBeforeMinutes
+        : null
+      : null,
     dueAt,
     dueTimeZone,
     allDay: parsed.data.allDay ?? false,
@@ -1847,6 +1860,7 @@ const patchTaskSchema = z.object({
   starred: z.boolean().optional(),
   highPriority: z.boolean().optional(),
   durationMinutes: durationMinutesSchema.optional(),
+  reminderBeforeMinutes: reminderBeforeMinutesSchema.optional(),
   dueAt: z.union([z.string().min(1), z.null()]).optional(),
   dueTimeZone: z.string().min(1).max(64).optional().nullable(),
   allDay: z.boolean().optional(),
@@ -1920,11 +1934,17 @@ router.patch("/:id", requireAuth, async (req, res) => {
     if (parsed.data.durationMinutes !== undefined) {
       data.durationMinutes = parsed.data.durationMinutes;
     }
+    if (parsed.data.reminderBeforeMinutes !== undefined) {
+      data.reminderBeforeMinutes = parsed.data.reminderBeforeMinutes;
+    }
     if (parsed.data.dueAt !== undefined) {
       data.dueAt = parsed.data.dueAt ? new Date(parsed.data.dueAt) : null;
       data.dueTimeZone = parsed.data.dueAt
         ? parsed.data.dueTimeZone?.trim() || null
         : null;
+      if (!parsed.data.dueAt) {
+        data.reminderBeforeMinutes = null;
+      }
     } else if (parsed.data.dueTimeZone !== undefined) {
       data.dueTimeZone = parsed.data.dueTimeZone?.trim() || null;
     }

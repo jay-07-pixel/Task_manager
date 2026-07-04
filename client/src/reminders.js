@@ -9,15 +9,14 @@ import {
   warmupPushInfrastructure,
 } from "./sw-register.js";
 
-/** @typedef {{ id: string, title: string, dueAt: string | null, assignees?: { id: string, assigneeDone?: boolean }[] }} ReminderTask */
+/** @typedef {{ id: string, title: string, dueAt: string | null, reminderBeforeMinutes?: number | null, assignees?: { id: string, assigneeDone?: boolean }[] }} ReminderTask */
 
-const REMINDER_BEFORE_MS = 10 * 60 * 1000;
-/** Second reminder if still not submitted — 1 hour after the first (10 min before due). */
-const FOLLOWUP_AFTER_FIRST_MS = 60 * 60 * 1000;
+const DEFAULT_REMINDER_BEFORE_MS = 10 * 60 * 1000;
+/** Second reminder if still not submitted — 1 hour after due time. */
+const FOLLOWUP_AFTER_DUE_MS = 60 * 60 * 1000;
 const CHECK_INTERVAL_MS = 15 * 1000;
 /** When server push is active, poll tasks less often (reminders come from server). */
 const CHECK_INTERVAL_PUSH_MS = 60 * 1000;
-const SLOT_BEFORE = "before10";
 const SLOT_FOLLOWUP = "followup1h";
 const STORAGE_KEY = "taskmgr-reminders-fired";
 const AUTO_STOP_MS = 45 * 1000;
@@ -83,6 +82,24 @@ function isReminderFired(task, slot) {
   return loadFiredKeys().has(reminderKey(task, slot));
 }
 
+function reminderBeforeMsForTask(task) {
+  const m = task?.reminderBeforeMinutes;
+  if (m === 0) return null;
+  if (m == null) return DEFAULT_REMINDER_BEFORE_MS;
+  return m * 60 * 1000;
+}
+
+function beforeSlotForTask(task) {
+  const m = task?.reminderBeforeMinutes;
+  if (m === 0) return null;
+  const minutes = m == null ? 10 : m;
+  return `before${minutes}`;
+}
+
+function isBeforeSlot(slot) {
+  return typeof slot === "string" && slot.startsWith("before");
+}
+
 function reminderKey(task, slot) {
   const dueMs = new Date(task.dueAt).getTime();
   const duePart = Number.isFinite(dueMs) ? String(dueMs) : String(task.dueAt);
@@ -113,7 +130,7 @@ function focusEmployeeTaskReminder(task, slot) {
         taskId: task.id,
         title: task.title,
         dueAt: task.dueAt,
-        slot: slot || SLOT_BEFORE,
+        slot: slot || "before10",
       },
     })
   );
@@ -161,21 +178,22 @@ function dueReminderToFire(task, now, fired) {
   const due = new Date(task.dueAt).getTime();
   if (!Number.isFinite(due)) return null;
 
-  const firstAt = due - REMINDER_BEFORE_MS;
-  const followupAt = firstAt + FOLLOWUP_AFTER_FIRST_MS;
+  const beforeMs = reminderBeforeMsForTask(task);
+  const beforeSlot = beforeSlotForTask(task);
   const msUntil = due - now;
 
-  if (now >= firstAt && msUntil > 0 && msUntil <= REMINDER_BEFORE_MS) {
-    if (fired.has(reminderKey(task, SLOT_BEFORE))) return null;
+  if (beforeMs != null && beforeSlot && now >= due - beforeMs && msUntil > 0 && msUntil <= beforeMs) {
+    if (fired.has(reminderKey(task, beforeSlot))) return null;
     const minutesLeft = Math.max(1, Math.ceil(msUntil / 60_000));
     return {
-      slot: SLOT_BEFORE,
+      slot: beforeSlot,
       eyebrow: tr("reminders.dueInAbout", { count: minutesLeft }),
       toast: tr("reminders.dueToast", { title: task.title, count: minutesLeft }),
       notify: tr("reminders.dueNotify", { count: minutesLeft, when: formatDueTime(task.dueAt) }),
     };
   }
 
+  const followupAt = due + FOLLOWUP_AFTER_DUE_MS;
   if (now >= followupAt) {
     if (fired.has(reminderKey(task, SLOT_FOLLOWUP))) return null;
     const overdueMin = Math.max(1, Math.ceil((now - due) / 60_000));
@@ -217,7 +235,8 @@ export function handlePushReminderMessage(payload, showToast) {
     title: payload.title || tr("employee.reminders.fallbackTaskTitle"),
     dueAt: payload.dueAt || null,
   };
-  const slot = payload.slot === "followup1h" ? SLOT_FOLLOWUP : SLOT_BEFORE;
+  const slot = payload.slot?.startsWith("followup") ? SLOT_FOLLOWUP : payload.slot || "before10";
+  if (isBeforeSlot(slot) === false && slot !== SLOT_FOLLOWUP) return;
   if (isReminderFired(task, slot)) return;
 
   markReminderFired(task, slot);
