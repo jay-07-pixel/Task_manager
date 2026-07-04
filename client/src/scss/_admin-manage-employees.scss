@@ -1,10 +1,20 @@
 .manage-employees-page .manage-employee-row {
   cursor: default;
+  align-items: flex-start;
   justify-content: space-between;
+
+  @media (max-width: 767.98px) {
+    flex-wrap: wrap;
+    gap: 0.65rem;
+  }
 
   &:hover {
     background: var(--admin-surface-container, #f3f3ff);
     border-color: var(--admin-outline-variant, #bec8ca);
+  }
+
+  .admin-settings-row-label {
+    min-width: 0;
   }
 }
 
@@ -14,12 +24,19 @@
   gap: 0.75rem;
   flex: 1;
   min-width: 0;
+
+  @media (max-width: 767.98px) {
+    flex: 1 1 100%;
+    width: 100%;
+  }
 }
 
 .manage-employee-name {
   display: block;
   font-weight: 600;
   color: var(--admin-on-surface, #181a2e);
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .manage-employee-email {
@@ -27,6 +44,8 @@
   font-size: 0.8125rem;
   color: var(--admin-on-surface-variant, #3e494a);
   margin-top: 0.1rem;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .manage-employee-badge {
@@ -55,40 +74,22 @@
 .manage-employee-view-btn {
   flex-shrink: 0;
   font-weight: 600;
-}
+  align-self: center;
+  border: 1px solid #00535b !important;
+  background: #ffffff !important;
+  color: #00535b !important;
+  font-size: 0.8125rem !important;
+  padding: 0.45rem 0.85rem !important;
+  border-radius: 0.5rem !important;
+  box-shadow: 0 1px 3px rgba(24, 26, 46, 0.08) !important;
 
-.manage-employee-documents {
-  border: 1px solid var(--bs-border-color);
-  border-radius: 0.65rem;
-  background: var(--bs-tertiary-bg);
-  padding: 0.85rem 1rem;
-}
-
-.manage-employee-doc-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.35rem 1rem;
-  padding: 0.35rem 0;
-
-  & + & {
-    border-top: 1px solid var(--bs-border-color-translucent, var(--bs-border-color));
+  &:hover {
+    background: #e6f4f5 !important;
   }
-}
 
-.manage-employee-doc-label {
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--bs-body-color);
-}
-
-.manage-employee-doc-link {
-  font-size: 0.8125rem;
-  font-weight: 600;
-}
-
-.manage-employee-doc-empty {
-  font-size: 0.8125rem;
-  color: var(--bs-secondary-color);
+  @media (max-width: 767.98px) {
+    flex: 1 1 100%;
+    width: 100%;
+    align-self: stretch;
+  }
 }

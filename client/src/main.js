@@ -4266,15 +4266,15 @@ function ownerTrialStatusChipHtml() {
 
 function myProfileModalHtml() {
   return `
-    <div class="modal fade" id="myProfileModal" tabindex="-1" aria-labelledby="myProfileModalTitle" aria-hidden="true">
-      <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
-        <div class="modal-content">
-          <form id="my-profile-form">
-            <div class="modal-header">
+    <div class="modal fade profile-modal" id="myProfileModal" tabindex="-1" aria-labelledby="myProfileModalTitle" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered profile-modal-dialog">
+        <div class="modal-content profile-modal-card">
+          <form id="my-profile-form" class="profile-modal-form">
+            <div class="modal-header profile-modal-header">
               <h2 class="modal-title h5 mb-0" id="myProfileModalTitle">${tr("profile.myProfile")}</h2>
               <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="${tr("common.close")}"></button>
             </div>
-            <div class="modal-body">
+            <div class="modal-body profile-modal-body">
               <p class="small text-muted mb-3" id="my-profile-intro">${tr("profile.personalDetailsIntro")}</p>
               <div class="mb-3">
                 <label class="form-label" for="my-profile-display-name">${tr("profile.fullName")}</label>
@@ -4299,9 +4299,9 @@ function myProfileModalHtml() {
               ${profileDocumentsSectionHtml()}
               <p class="small text-muted mt-3 mb-0" id="my-profile-member-since"></p>
             </div>
-            <div class="modal-footer">
-              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">${tr("common.cancel")}</button>
-              <button type="submit" class="btn btn-primary" id="my-profile-save">${tr("common.save")}</button>
+            <div class="modal-footer profile-modal-footer">
+              <button type="button" class="profile-modal-btn-cancel" data-bs-dismiss="modal">${tr("common.cancel")}</button>
+              <button type="submit" class="profile-modal-btn-save" id="my-profile-save">${tr("common.save")}</button>
             </div>
           </form>
         </div>

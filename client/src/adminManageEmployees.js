@@ -57,44 +57,44 @@ function employeeRoleLabel(profile) {
 function docViewRow(label, file, emptyText) {
   const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
   if (file?.url) {
-    return `<div class="manage-employee-doc-row">
-      <span class="manage-employee-doc-label">${esc(label)}</span>
-      <a class="manage-employee-doc-link" href="${esc(file.url)}" target="_blank" rel="noopener noreferrer">${esc(file.originalName || tr("profile.viewDocument"))}</a>
+    return `<div class="profile-doc-row">
+      <span class="profile-doc-row-label">${esc(label)}</span>
+      <a class="profile-doc-view-link" href="${esc(file.url)}" target="_blank" rel="noopener noreferrer">${esc(file.originalName || tr("profile.viewDocument"))}</a>
     </div>`;
   }
-  return `<div class="manage-employee-doc-row">
-    <span class="manage-employee-doc-label">${esc(label)}</span>
-    <span class="manage-employee-doc-empty">${esc(emptyText)}</span>
+  return `<div class="profile-doc-row">
+    <span class="profile-doc-row-label">${esc(label)}</span>
+    <span class="profile-doc-row-empty">${esc(emptyText)}</span>
   </div>`;
 }
 
 export function employeeProfileModalHtml() {
   return `
-    <div class="modal fade" id="employeeProfileModal" tabindex="-1" aria-labelledby="employeeProfileModalTitle" aria-hidden="true">
-      <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
-        <div class="modal-content">
-          <form id="employee-profile-form">
-            <div class="modal-header">
+    <div class="modal fade profile-modal" id="employeeProfileModal" tabindex="-1" aria-labelledby="employeeProfileModalTitle" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered profile-modal-dialog">
+        <div class="modal-content profile-modal-card">
+          <form id="employee-profile-form" class="profile-modal-form">
+            <div class="modal-header profile-modal-header">
               <h2 class="modal-title h5 mb-0" id="employeeProfileModalTitle">${tr("profile.employeeProfile")}</h2>
               <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="${tr("common.close")}"></button>
             </div>
-            <div class="modal-body">
+            <div class="modal-body profile-modal-body">
               <p class="small text-muted mb-3" id="employee-profile-intro">${tr("profile.adminViewEmployeeIntro")}</p>
               <div class="mb-3">
                 <label class="form-label">${tr("profile.fullName")}</label>
-                <input type="text" class="form-control bg-body-secondary" id="employee-profile-name" readonly disabled />
+                <input type="text" class="form-control" id="employee-profile-name" readonly disabled />
               </div>
               <div class="mb-3">
                 <label class="form-label">${tr("common.email")}</label>
-                <input type="email" class="form-control bg-body-secondary" id="employee-profile-email" readonly disabled />
+                <input type="email" class="form-control" id="employee-profile-email" readonly disabled />
               </div>
               <div class="mb-3">
                 <label class="form-label">${tr("common.phone")}</label>
-                <input type="tel" class="form-control bg-body-secondary" id="employee-profile-phone" readonly disabled />
+                <input type="tel" class="form-control" id="employee-profile-phone" readonly disabled />
               </div>
               <div class="mb-3">
                 <label class="form-label">${tr("profile.roleLabel")}</label>
-                <input type="text" class="form-control bg-body-secondary" id="employee-profile-role" readonly disabled />
+                <input type="text" class="form-control" id="employee-profile-role" readonly disabled />
               </div>
               <div class="mb-3">
                 <label class="form-label" for="employee-profile-salary">${tr("profile.salary")}</label>
@@ -103,16 +103,19 @@ export function employeeProfileModalHtml() {
                   <input type="number" class="form-control" id="employee-profile-salary" min="0" step="1" required />
                 </div>
               </div>
-              <div class="manage-employee-documents mb-3">
-                <h3 class="h6 fw-semibold mb-2">${tr("profile.profileDocuments")}</h3>
+              <div class="profile-documents-card mb-3" id="employee-profile-documents-card">
+                <div class="profile-documents-card-head">
+                  <h3 class="profile-documents-title h6 mb-0">${tr("profile.profileDocuments")}</h3>
+                  <span class="profile-documents-status profile-documents-status--incomplete" id="employee-profile-documents-status">${tr("profile.sectionIncompleteTitle")}</span>
+                </div>
+                <p class="small text-muted mb-2">${tr("profile.profileDocumentsIntro")}</p>
                 <div id="employee-profile-doc-rows"></div>
-                <p class="small mb-0 mt-2" id="employee-profile-doc-status"></p>
               </div>
               <p class="small text-muted mb-0" id="employee-profile-member-since"></p>
             </div>
-            <div class="modal-footer">
-              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">${tr("common.cancel")}</button>
-              <button type="submit" class="btn btn-primary" id="employee-profile-save">${tr("common.save")}</button>
+            <div class="modal-footer profile-modal-footer">
+              <button type="button" class="profile-modal-btn-cancel" data-bs-dismiss="modal">${tr("common.cancel")}</button>
+              <button type="submit" class="profile-modal-btn-save" id="employee-profile-save">${tr("common.save")}</button>
             </div>
           </form>
         </div>
@@ -138,14 +141,14 @@ function fillEmployeeProfileModal(profile) {
     ].join("");
   }
 
-  const statusEl = document.getElementById("employee-profile-doc-status");
+  const statusEl = document.getElementById("employee-profile-documents-status");
+  const cardEl = document.getElementById("employee-profile-documents-card");
   if (statusEl) {
-    statusEl.textContent = profile.profileDocumentsComplete
-      ? tr("profile.documentsComplete")
-      : tr("profile.sectionIncompleteTitle");
-    statusEl.className = profile.profileDocumentsComplete
-      ? "small mb-0 mt-2 text-success"
-      : "small mb-0 mt-2 text-danger";
+    const complete = Boolean(profile.profileDocumentsComplete);
+    statusEl.textContent = complete ? tr("profile.documentsComplete") : tr("profile.sectionIncompleteTitle");
+    statusEl.classList.toggle("profile-documents-status--complete", complete);
+    statusEl.classList.toggle("profile-documents-status--incomplete", !complete);
+    cardEl?.classList.toggle("profile-documents-card--incomplete", !complete);
   }
 
   const since = formatMemberSince(profile.createdAt);
