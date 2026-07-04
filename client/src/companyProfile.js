@@ -61,6 +61,9 @@ let showToastFn = null;
 
 let gstCertificateOnFile = false;
 
+/** @type {((profile: any) => void) | null} */
+let onCompanyProfileChangedFn = null;
+
 export function initCompanyProfile({
   api,
   escapeHtml,
@@ -68,6 +71,7 @@ export function initCompanyProfile({
   ownerChromeHeader,
   wireOwnerChromeHeader,
   showToast,
+  onCompanyProfileChanged,
 }) {
   apiFn = api;
   escapeHtmlFn = escapeHtml;
@@ -75,6 +79,7 @@ export function initCompanyProfile({
   ownerChromeHeaderFn = ownerChromeHeader ?? null;
   wireOwnerChromeHeaderFn = wireOwnerChromeHeader ?? null;
   showToastFn = showToast ?? null;
+  onCompanyProfileChangedFn = onCompanyProfileChanged ?? null;
 }
 
 function stateOptionsHtml(selected = "") {
@@ -94,20 +99,6 @@ function stateOptionsHtml(selected = "") {
 
 function requiredLabel(label) {
   return `${label}<span class="admin-company-profile-required" aria-hidden="true">*</span>`;
-}
-
-function incompleteDialogHtml() {
-  const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
-  return `<div id="company-profile-incomplete-dialog" class="admin-company-profile-dialog d-none" role="alertdialog" aria-modal="true" aria-labelledby="company-profile-incomplete-title">
-    <div class="admin-company-profile-dialog-backdrop" data-company-profile-dialog-close></div>
-    <div class="admin-company-profile-dialog-panel">
-      <h3 class="admin-company-profile-dialog-title" id="company-profile-incomplete-title">${esc(tr("profile.sectionIncompleteTitle"))}</h3>
-      <p class="admin-company-profile-dialog-message" id="company-profile-incomplete-msg"></p>
-      <div class="admin-company-profile-dialog-actions">
-        <button type="button" class="admin-task-modal-btn-save" id="company-profile-incomplete-ok">${esc(tr("common.close"))}</button>
-      </div>
-    </div>
-  </div>`;
 }
 
 function companyProfilePageHtml() {
@@ -200,7 +191,6 @@ function companyProfilePageHtml() {
           <button type="submit" class="admin-task-modal-btn-save" id="company-profile-save">${esc(tr("common.save"))}</button>
         </div>
       </form>
-      ${incompleteDialogHtml()}
     </div>
   </div>`;
 }
@@ -226,7 +216,12 @@ export function fillCompanyProfileForm(profile) {
   set("contact2-email", p.contactPerson2Email);
   set("contact2-phone", p.contactPerson2Phone);
   updateGstCertificateUi(p.gstCertificate);
-  clearIncompleteSectionHighlights();
+  updateIncompleteCardHighlights();
+  notifyCompanyProfileChanged(p);
+}
+
+function notifyCompanyProfileChanged(profile) {
+  onCompanyProfileChangedFn?.(profile);
 }
 
 function hasGstCertificateOnFile() {
@@ -299,35 +294,18 @@ function getIncompleteSections(body) {
   return sections;
 }
 
-function clearIncompleteSectionHighlights() {
-  document.querySelectorAll(".admin-company-profile-card--incomplete").forEach((card) => {
-    card.classList.remove("admin-company-profile-card--incomplete");
-  });
-}
-
-function hideIncompleteDialog() {
-  document.getElementById("company-profile-incomplete-dialog")?.classList.add("d-none");
-}
-
-function showIncompleteDialog(sections) {
-  const dialog = document.getElementById("company-profile-incomplete-dialog");
-  const msg = document.getElementById("company-profile-incomplete-msg");
-  if (!dialog || !msg || sections.length === 0) return;
-
+function updateIncompleteCardHighlights() {
+  const sections = getIncompleteSections(readCompanyProfileFormBody());
   clearIncompleteSectionHighlights();
   for (const section of sections) {
     document.getElementById(section.id)?.closest(".admin-company-profile-card")?.classList.add("admin-company-profile-card--incomplete");
   }
+}
 
-  msg.textContent =
-    sections.length === 1
-      ? tr("profile.sectionIncompleteMessage", { section: sections[0].title })
-      : tr("profile.sectionsIncompleteMessage", {
-          sections: sections.map((s) => s.title).join(", "),
-        });
-
-  dialog.classList.remove("d-none");
-  document.getElementById(sections[0].id)?.scrollIntoView({ behavior: "smooth", block: "center" });
+function clearIncompleteSectionHighlights() {
+  document.querySelectorAll(".admin-company-profile-card--incomplete").forEach((card) => {
+    card.classList.remove("admin-company-profile-card--incomplete");
+  });
 }
 
 function validateCompanyProfileBody(body) {
@@ -348,12 +326,6 @@ export async function saveCompanyProfileFromForm() {
   if (!apiFn) throw new Error(tr("profile.couldNotSave"));
   const body = readCompanyProfileFormBody();
 
-  const incompleteSections = getIncompleteSections(body);
-  if (incompleteSections.length > 0) {
-    showIncompleteDialog(incompleteSections);
-    throw new Error(tr("profile.sectionIncompleteTitle"));
-  }
-
   const err = validateCompanyProfileBody(body);
   if (err) {
     showToastFn?.(err, "warning");
@@ -366,24 +338,6 @@ export async function saveCompanyProfileFromForm() {
   });
   fillCompanyProfileForm(profile);
   return profile;
-}
-
-function wireIncompleteDialog(main) {
-  const dialog = main.querySelector("#company-profile-incomplete-dialog");
-  if (!dialog || dialog.dataset.wired === "1") return;
-  dialog.dataset.wired = "1";
-
-  const close = () => hideIncompleteDialog();
-  dialog.querySelector("#company-profile-incomplete-ok")?.addEventListener("click", close);
-  dialog.querySelector("[data-company-profile-dialog-close]")?.addEventListener("click", close);
-}
-
-if (typeof document !== "undefined") {
-  document.addEventListener("keydown", (e) => {
-    if (e.key !== "Escape") return;
-    const dialog = document.getElementById("company-profile-incomplete-dialog");
-    if (dialog && !dialog.classList.contains("d-none")) hideIncompleteDialog();
-  });
 }
 
 function wireCompanyProfileGstUpload(root) {
@@ -446,8 +400,6 @@ function wireCompanyProfilePage(main) {
   const form = main.querySelector("#company-profile-form");
   if (!form) return;
 
-  wireIncompleteDialog(main);
-
   form.addEventListener("submit", (e) => {
     e.preventDefault();
     const saveBtn = main.querySelector("#company-profile-save");
@@ -457,7 +409,6 @@ function wireCompanyProfilePage(main) {
         showToastFn?.(tr("profile.companyProfileSaved"), "success");
       })
       .catch((err) => {
-        if (err.message === tr("profile.sectionIncompleteTitle")) return;
         const validationErr = validateCompanyProfileBody(readCompanyProfileFormBody());
         if (validationErr) return;
         showToastFn?.(err.message || tr("profile.couldNotSave"), "danger");
@@ -469,7 +420,7 @@ function wireCompanyProfilePage(main) {
 
   form.querySelectorAll("input, textarea, select").forEach((el) => {
     el.addEventListener("input", () => {
-      el.closest(".admin-company-profile-card")?.classList.remove("admin-company-profile-card--incomplete");
+      updateIncompleteCardHighlights();
     });
   });
 

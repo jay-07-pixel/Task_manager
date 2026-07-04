@@ -44,6 +44,7 @@ import {
   openOwnerSettingsView,
   openEmployeeSettingsView,
   onSettingsThemeChange,
+  refreshCompanyProfileSettingsBadge,
 } from "./adminSettings.js";
 import {
   initAttendance,
@@ -7461,6 +7462,12 @@ function renderOwnerChrome() {
     ownerChromeHeader: ownerCompanyProfileChromeHeaderHtml,
     wireOwnerChromeHeader: wireOwnerReportsChromeHeader,
     showToast,
+    onCompanyProfileChanged: (profile) => {
+      if (state.user?.isOwner) {
+        state.user.companyProfileComplete = profile.companyProfileComplete;
+      }
+      refreshCompanyProfileSettingsBadge(!profile.companyProfileComplete);
+    },
   });
   initAdminAttendance({
     api,

@@ -2,6 +2,24 @@ import { prisma } from "./prisma.js";
 import { syncCompanyTrialSettings } from "./companyTrial.js";
 
 /** @param {import("@prisma/client").CompanySettings} row */
+export function isCompanyProfileComplete(row) {
+  const text = (v) => String(v ?? "").trim();
+  return Boolean(
+    text(row.companyName) &&
+      text(row.companyAddress) &&
+      text(row.companyState) &&
+      text(row.gstNumber) &&
+      row.gstCertificatePath &&
+      text(row.directorName) &&
+      text(row.directorEmail) &&
+      text(row.directorPhone) &&
+      text(row.contactPerson2Name) &&
+      text(row.contactPerson2Email) &&
+      text(row.contactPerson2Phone)
+  );
+}
+
+/** @param {import("@prisma/client").CompanySettings} row */
 export function serializeCompanyProfile(row) {
   const hasCertificate = Boolean(row.gstCertificatePath);
   return {
@@ -23,6 +41,7 @@ export function serializeCompanyProfile(row) {
     contactPerson2Name: row.contactPerson2Name ?? "",
     contactPerson2Email: row.contactPerson2Email ?? "",
     contactPerson2Phone: row.contactPerson2Phone ?? "",
+    companyProfileComplete: isCompanyProfileComplete(row),
     updatedAt: row.updatedAt?.toISOString?.() ?? null,
   };
 }

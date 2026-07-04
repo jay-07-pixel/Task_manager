@@ -95,6 +95,16 @@ function settingsRowHtml({ icon, label, extraClass = "", attrs = "", tag = "butt
   return `<button type="button" class="admin-settings-row ${extraClass}" ${attrs}>${inner}</button>`;
 }
 
+function companyProfileSettingsRowHtml() {
+  const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
+  return `<button type="button" class="admin-settings-row js-open-company-profile" data-company-profile-row="1">
+    ${adminMsIconFn?.("business") ?? ""}
+    <span class="admin-settings-row-label">${esc(tr("profile.myCompanyDetails"))}</span>
+    <span class="admin-settings-row-status admin-settings-row-status--incomplete d-none" data-company-profile-status>${esc(tr("profile.sectionIncompleteTitle"))}</span>
+    ${adminMsIconFn?.("chevron_right", "admin-settings-row-chevron") ?? ""}
+  </button>`;
+}
+
 function ownerSettingsRowsHtml() {
   const isDark = document.documentElement.getAttribute("data-bs-theme") === "dark";
   const rows = [
@@ -106,13 +116,7 @@ function ownerSettingsRowsHtml() {
   ];
 
   if (getUserFn?.()?.isOwner) {
-    rows.push(
-      settingsRowHtml({
-        icon: "business",
-        label: tr("profile.myCompanyDetails"),
-        extraClass: "js-open-company-profile",
-      })
-    );
+    rows.push(companyProfileSettingsRowHtml());
   }
 
   rows.push(
@@ -347,6 +351,30 @@ function wireSettingsPage(main, role) {
   if (role === "employee") {
     wireAttendanceSettingsToggle(main);
   }
+  if (role === "owner") {
+    void refreshCompanyProfileSettingsBadge();
+  }
+}
+
+export function refreshCompanyProfileSettingsBadge(incomplete = null) {
+  const row = document.querySelector("[data-company-profile-row]");
+  const badge = row?.querySelector("[data-company-profile-status]");
+  if (!row || !badge) return;
+
+  const apply = (isIncomplete) => {
+    badge.classList.toggle("d-none", !isIncomplete);
+    row.classList.toggle("admin-settings-row--incomplete", isIncomplete);
+  };
+
+  if (incomplete === null) {
+    if (!getUserFn?.()?.isOwner || !apiFn) return;
+    void apiFn("/api/company/profile")
+      .then(({ profile }) => apply(!profile.companyProfileComplete))
+      .catch(() => {});
+    return;
+  }
+
+  apply(incomplete);
 }
 
 function openSettingsView(role) {
