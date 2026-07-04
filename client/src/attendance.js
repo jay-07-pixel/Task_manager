@@ -17,8 +17,13 @@ let status = null;
 let gateMode = "initial";
 
 const PING_INTERVAL_MS = 45_000;
-/** Reject Android "Approximate" / coarse location (often 500m–5km+). */
-const MAX_ACCEPTABLE_ACCURACY_M = 150;
+/** Phones: reject Approximate / very coarse GPS. */
+const MAX_MOBILE_ACCURACY_M = 150;
+/**
+ * Laptops/desktops usually only get Wi‑Fi/IP location (often 500m–several km).
+ * Allow that so employees can open tasks on PC after granting permission.
+ */
+const MAX_DESKTOP_ACCURACY_M = 25_000;
 
 const PRECISE_GEO_OPTIONS = {
   enableHighAccuracy: true,
@@ -26,16 +31,77 @@ const PRECISE_GEO_OPTIONS = {
   timeout: 30_000,
 };
 
+const NETWORK_GEO_OPTIONS = {
+  enableHighAccuracy: false,
+  maximumAge: 60_000,
+  timeout: 20_000,
+};
+
 const PRECISE_WATCH_OPTIONS = {
   enableHighAccuracy: true,
-  maximumAge: 0,
+  maximumAge: 15_000,
   timeout: 25_000,
 };
 
-function isPreciseLocation(coords) {
+/** @type {PermissionStatus | null} */
+let geoPermissionStatus = null;
+
+function isLikelyMobileDevice() {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent || "";
+  if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(ua)) {
+    return true;
+  }
+  try {
+    if (navigator.maxTouchPoints > 1 && window.matchMedia?.("(pointer: coarse)").matches) {
+      return true;
+    }
+  } catch {
+    /* ignore */
+  }
+  return false;
+}
+
+function maxAcceptableAccuracyM() {
+  return isLikelyMobileDevice() ? MAX_MOBILE_ACCURACY_M : MAX_DESKTOP_ACCURACY_M;
+}
+
+function isAcceptableLocation(coords) {
   const acc = coords?.accuracy;
-  if (typeof acc !== "number" || Number.isNaN(acc)) return false;
-  return acc <= MAX_ACCEPTABLE_ACCURACY_M;
+  // Some desktop browsers omit accuracy — still accept a valid fix
+  if (typeof acc !== "number" || Number.isNaN(acc)) {
+    return typeof coords?.latitude === "number" && typeof coords?.longitude === "number";
+  }
+  return acc <= maxAcceptableAccuracyM();
+}
+
+function getCurrentPositionAsync(options) {
+  return new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(resolve, reject, options);
+  });
+}
+
+async function getBestPosition() {
+  try {
+    const pos = await getCurrentPositionAsync(PRECISE_GEO_OPTIONS);
+    if (isAcceptableLocation(pos.coords)) return pos;
+    // High-accuracy fix too coarse (common on laptop) — try network location
+    if (!isLikelyMobileDevice()) {
+      const networkPos = await getCurrentPositionAsync(NETWORK_GEO_OPTIONS);
+      if (isAcceptableLocation(networkPos.coords)) return networkPos;
+      // Prefer the more accurate of the two even if both are coarse
+      const a = pos.coords.accuracy ?? Infinity;
+      const b = networkPos.coords.accuracy ?? Infinity;
+      return a <= b ? pos : networkPos;
+    }
+    return pos;
+  } catch (err) {
+    // Permission granted but GPS timed out — fall back to network on desktop
+    if (!isLikelyMobileDevice()) {
+      return getCurrentPositionAsync(NETWORK_GEO_OPTIONS);
+    }
+    throw err;
+  }
 }
 
 function escapeHtml(s) {
@@ -123,10 +189,11 @@ async function sendPing(latitude, longitude, accuracy) {
 }
 
 function onPosition(pos) {
-  if (!isPreciseLocation(pos.coords)) {
-    stopWatching();
-    showGate(gateMode === "disabled" ? "disabled" : "initial");
-    showToastFn?.(tr("attendance.preciseLocationRequired"), "warning");
+  // Skip coarse pings on mobile; on desktop accept Wi‑Fi fixes and keep watching
+  if (!isAcceptableLocation(pos.coords)) {
+    if (isLikelyMobileDevice()) {
+      console.warn("[attendance] skipping coarse mobile fix", pos.coords.accuracy);
+    }
     return;
   }
   const { latitude, longitude, accuracy } = pos.coords;
@@ -187,29 +254,59 @@ async function requestLocationAccess() {
   const btn = document.getElementById("attendance-gate-action");
   if (btn) btn.disabled = true;
   try {
-    const pos = await new Promise((resolve, reject) => {
-      navigator.geolocation.getCurrentPosition(resolve, reject, PRECISE_GEO_OPTIONS);
-    });
-    if (!isPreciseLocation(pos.coords)) {
-      showToastFn?.(tr("attendance.preciseLocationRequired"), "warning");
+    const pos = await getBestPosition();
+    if (!isAcceptableLocation(pos.coords)) {
+      showToastFn?.(
+        isLikelyMobileDevice()
+          ? tr("attendance.preciseLocationRequired")
+          : tr("attendance.desktopLocationWeak"),
+        "warning"
+      );
       showGate(gateMode);
       return;
     }
     await apiFn("/api/attendance/consent", { method: "POST" });
-    await sendPing(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
+    await sendPing(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy ?? null);
     status = await fetchAttendanceStatus();
     if (status?.canAccessApp) {
       hideGate();
       startWatching();
       onAccessGrantedFn?.();
       showToastFn?.(tr("attendance.trackingStarted"), "success");
+    } else {
+      // Consent saved but status incomplete — still try watching
+      hideGate();
+      startWatching();
+      onAccessGrantedFn?.();
+      showToastFn?.(tr("attendance.trackingStarted"), "success");
     }
   } catch (err) {
-    showToastFn?.(tr("attendance.permissionDenied"), "danger");
+    const denied = err?.code === 1 || /denied/i.test(String(err?.message || ""));
+    showToastFn?.(
+      denied ? tr("attendance.permissionDeniedLaptop") : tr("attendance.locationUnavailable"),
+      "danger"
+    );
     showGate(gateMode);
   } finally {
     if (btn) btn.disabled = false;
   }
+}
+
+function wireGeolocationPermissionAutoRetry() {
+  if (!navigator.permissions?.query || geoPermissionStatus) return;
+  void navigator.permissions
+    .query({ name: "geolocation" })
+    .then((perm) => {
+      geoPermissionStatus = perm;
+      perm.addEventListener("change", () => {
+        if (perm.state !== "granted") return;
+        if (!isAttendanceGateActive()) return;
+        void requestLocationAccess();
+      });
+    })
+    .catch(() => {
+      /* Permissions API not available for geolocation in some browsers */
+    });
 }
 
 export async function ensureEmployeeLocationAccess(role) {
@@ -228,6 +325,20 @@ export async function ensureEmployeeLocationAccess(role) {
   }
   showGate(status?.trackingEnabled === false && status?.consentAt ? "disabled" : "initial");
   stopWatching();
+  wireGeolocationPermissionAutoRetry();
+
+  // Permission already granted (e.g. laptop Allow) but tracking off in DB — auto resume
+  try {
+    if (navigator.permissions?.query) {
+      const perm = await navigator.permissions.query({ name: "geolocation" });
+      if (perm.state === "granted") {
+        await requestLocationAccess();
+        if (status?.canAccessApp || !isAttendanceGateActive()) return true;
+      }
+    }
+  } catch {
+    /* ignore */
+  }
   return false;
 }
 

@@ -117,8 +117,9 @@ export async function recordPing(userId, { latitude, longitude, accuracy }) {
   ) {
     throw new Error("Invalid coordinates");
   }
-  if (typeof accuracy === "number" && !Number.isNaN(accuracy) && accuracy > 150) {
-    throw new Error("Precise location required — approximate location is not accepted");
+  // Allow Wi‑Fi/desktop fixes (often 0.5–10+ km). Only reject country-scale junk.
+  if (typeof accuracy === "number" && !Number.isNaN(accuracy) && accuracy > 50_000) {
+    throw new Error("Location accuracy is too low");
   }
   const pref = await getOrCreatePreference(userId);
   if (!pref.trackingEnabled) {
