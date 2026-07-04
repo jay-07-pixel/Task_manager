@@ -411,11 +411,12 @@ model EmailVerification {
 }
 
 model CompanySettings {
-  id             String   @id @default("default")
-  trialStartDate DateTime @map("trial_start_date")
-  trialEndDate   DateTime @map("trial_end_date")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  id                   String   @id @default("default")
+  trialStartDate       DateTime @map("trial_start_date")
+  trialEndDate         DateTime @map("trial_end_date")
+  liveLocationRequired Boolean  @default(true) @map("live_location_required")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
 
   @@map("company_settings")
 }

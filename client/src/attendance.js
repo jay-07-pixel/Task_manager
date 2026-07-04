@@ -215,6 +215,12 @@ async function requestLocationAccess() {
 export async function ensureEmployeeLocationAccess(role) {
   if (role !== "employee") return true;
   await fetchAttendanceStatus();
+  // Company-level switch: when admin turns attendance off, location is not mandatory
+  if (status?.companyLiveLocationRequired === false) {
+    hideGate();
+    stopWatching();
+    return true;
+  }
   if (status?.canAccessApp) {
     hideGate();
     startWatching();
@@ -223,6 +229,10 @@ export async function ensureEmployeeLocationAccess(role) {
   showGate(status?.trackingEnabled === false && status?.consentAt ? "disabled" : "initial");
   stopWatching();
   return false;
+}
+
+export function isCompanyLiveLocationRequired() {
+  return status?.companyLiveLocationRequired !== false;
 }
 
 export async function setLocationTrackingEnabled(enabled) {
@@ -259,6 +269,13 @@ export async function refreshAttendanceSettingsToggle(root) {
   const toggle = root?.querySelector(".js-attendance-tracking-toggle");
   if (!toggle) return;
   await fetchAttendanceStatus();
+  if (status?.companyLiveLocationRequired === false) {
+    const row = toggle.closest(".admin-settings-row") || toggle.parentElement;
+    const hint = root?.querySelector(".js-attendance-employee-hint");
+    row?.classList.add("d-none");
+    hint?.classList.add("d-none");
+    return;
+  }
   toggle.checked = !!status?.trackingEnabled;
 }
 
@@ -273,7 +290,71 @@ export function attendanceSettingsToggleHtml() {
       <span class="admin-settings-switch-track" aria-hidden="true"></span>
     </label>
   </div>
-  <p class="admin-settings-hint">${escapeHtml(tr("attendance.settingsHint"))}</p>`;
+  <p class="admin-settings-hint js-attendance-employee-hint">${escapeHtml(tr("attendance.settingsHint"))}</p>`;
+}
+
+export function companyLiveLocationSettingsToggleHtml() {
+  return `<div class="admin-settings-row admin-settings-row--toggle">
+    <span class="admin-settings-row-left">
+      <span class="material-symbols-outlined" aria-hidden="true">location_on</span>
+      <span class="admin-settings-row-label">${escapeHtml(tr("attendance.manageLiveLocation"))}</span>
+    </span>
+    <label class="admin-settings-switch">
+      <input type="checkbox" class="admin-settings-switch-input js-company-live-location-toggle" aria-label="${escapeHtml(tr("attendance.manageLiveLocation"))}" />
+      <span class="admin-settings-switch-track" aria-hidden="true"></span>
+    </label>
+  </div>
+  <p class="admin-settings-hint">${escapeHtml(tr("attendance.manageLiveLocationHint"))}</p>`;
+}
+
+export async function refreshCompanyLiveLocationToggle(root) {
+  const toggle = root?.querySelector(".js-company-live-location-toggle");
+  if (!toggle || !apiFn) return;
+  try {
+    const settings = await apiFn("/api/attendance/company-settings");
+    toggle.checked = settings?.liveLocationRequired !== false;
+  } catch {
+    toggle.checked = true;
+  }
+}
+
+export function wireCompanyLiveLocationToggle(root, { onChanged } = {}) {
+  const toggle = root?.querySelector(".js-company-live-location-toggle");
+  if (!toggle || toggle.dataset.wired === "1") return;
+  toggle.dataset.wired = "1";
+  void refreshCompanyLiveLocationToggle(root);
+  toggle.addEventListener("change", () => {
+    const wantOn = toggle.checked;
+    if (!wantOn) {
+      const ok = window.confirm(
+        `${tr("attendance.companyDisableConfirmTitle")}\n\n${tr("attendance.companyDisableConfirmMessage")}`
+      );
+      if (!ok) {
+        toggle.checked = true;
+        return;
+      }
+    }
+    toggle.disabled = true;
+    void apiFn("/api/attendance/company-settings", {
+      method: "PATCH",
+      body: JSON.stringify({ liveLocationRequired: wantOn }),
+    })
+      .then((settings) => {
+        toggle.checked = settings?.liveLocationRequired !== false;
+        showToastFn?.(
+          wantOn ? tr("attendance.companyEnabledToast") : tr("attendance.companyDisabledToast"),
+          "success"
+        );
+        onChanged?.(toggle.checked);
+      })
+      .catch((err) => {
+        toggle.checked = !wantOn;
+        showToastFn?.(err?.message || tr("errors.requestFailed"), "danger");
+      })
+      .finally(() => {
+        toggle.disabled = false;
+      });
+  });
 }
 
 export function wireAttendanceSettingsToggle(root) {

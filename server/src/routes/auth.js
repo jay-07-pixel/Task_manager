@@ -21,10 +21,11 @@ import {
 } from "../lib/otp.js";
 import { adminUserWhere, userHasAdminAccess } from "../lib/adminUsers.js";
 import { getCompanyTrialStatus, TRIAL_EXPIRED_MESSAGE } from "../lib/companyTrial.js";
+import { getCompanyAttendanceSettings } from "../services/companyAttendanceSettings.js";
 
 const router = Router();
 
-function serializeSessionUser(user, activeRole) {
+function serializeSessionUser(user, activeRole, company = null) {
   const isAdmin = userHasAdminAccess(user);
   return {
     id: user.id,
@@ -33,7 +34,13 @@ function serializeSessionUser(user, activeRole) {
     phone: user.phone,
     isAdmin,
     role: activeRole,
+    liveLocationRequired: company?.liveLocationRequired !== false,
   };
+}
+
+async function sessionUserPayload(user, activeRole) {
+  const company = await getCompanyAttendanceSettings();
+  return serializeSessionUser(user, activeRole, company);
 }
 
 function resolveActiveRole(user, viewAs) {
@@ -331,7 +338,7 @@ router.post("/register", async (req, res) => {
   const activeRole = resolveActiveRole(user, bootstrapAdmin ? "owner" : "employee");
   req.session.userId = user.id;
   req.session.role = activeRole;
-  res.status(201).json({ user: serializeSessionUser(user, activeRole) });
+  res.status(201).json({ user: await sessionUserPayload(user, activeRole) });
 });
 
 const loginSchema = z.object({
@@ -355,7 +362,7 @@ router.post("/login", async (req, res) => {
     const activeRole = resolveActiveRole(user, viewAs);
     req.session.userId = user.id;
     req.session.role = activeRole;
-    res.json({ user: serializeSessionUser(user, activeRole) });
+    res.json({ user: await sessionUserPayload(user, activeRole) });
   } catch (err) {
     console.error("[auth/login]", err);
     res.status(500).json({ error: friendlyAuthError(err) });
@@ -625,7 +632,7 @@ router.post("/switch-role", requireAuth, async (req, res) => {
   }
 
   req.session.role = nextRole;
-  res.json({ user: serializeSessionUser(user, nextRole) });
+  res.json({ user: await sessionUserPayload(user, nextRole) });
 });
 
 router.get("/me", requireAuth, async (req, res) => {
@@ -640,7 +647,7 @@ router.get("/me", requireAuth, async (req, res) => {
   if (req.session.role !== activeRole) {
     req.session.role = activeRole;
   }
-  res.json({ user: serializeSessionUser(user, activeRole) });
+  res.json({ user: await sessionUserPayload(user, activeRole) });
 });
 
 export default router;

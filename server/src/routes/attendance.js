@@ -20,6 +20,10 @@ import {
   isGoogleMapsConfigured,
   reverseGeocodeDetails,
 } from "../services/reverseGeocodeService.js";
+import {
+  getCompanyAttendanceSettings,
+  setCompanyLiveLocationRequired,
+} from "../services/companyAttendanceSettings.js";
 
 const router = Router();
 
@@ -33,9 +37,27 @@ const trackingSchema = z.object({
   enabled: z.boolean(),
 });
 
+const companySettingsSchema = z.object({
+  liveLocationRequired: z.boolean(),
+});
+
 router.get("/status", requireAuth, async (req, res) => {
   const status = await getEmployeeStatus(req.session.userId);
   res.json(status);
+});
+
+router.get("/company-settings", requireAuth, async (_req, res) => {
+  const settings = await getCompanyAttendanceSettings();
+  res.json(settings);
+});
+
+router.patch("/company-settings", requireOwner, async (req, res) => {
+  const parsed = companySettingsSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: parsed.error.flatten() });
+  }
+  const settings = await setCompanyLiveLocationRequired(parsed.data.liveLocationRequired);
+  res.json({ ok: true, ...settings });
 });
 
 router.post("/consent", requireAuth, async (req, res) => {

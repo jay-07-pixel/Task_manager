@@ -2162,6 +2162,10 @@ function handleOpenAttendanceDeepLink() {
   const params = new URLSearchParams(window.location.search);
   if (params.get("openAttendance") !== "1" || state.user?.role !== "owner") return;
   window.history.replaceState({}, "", window.location.pathname);
+  if (state.user?.liveLocationRequired === false) {
+    showToast(tr("attendance.companyFeatureOff"), "warning");
+    return;
+  }
   state.ownerView = "attendance";
   renderListContentOnly();
   renderOwnerMain();
@@ -2939,7 +2943,7 @@ function leftNavInner() {
         <div class="js-emp-assign-list-host owner-emp-assign-nav"></div>
         ${teamChatSidebarNavItemHtml()}
         ${ownerReportsNavItemHtml(state.ownerView === "reports")}
-        ${ownerAttendanceNavItemHtml(state.ownerView === "attendance")}
+        ${state.user?.liveLocationRequired !== false ? ownerAttendanceNavItemHtml(state.ownerView === "attendance") : ""}
       </nav>
       <div class="admin-your-lists-section">
         <div class="admin-your-lists-head">
@@ -6662,9 +6666,14 @@ function renderOwnerMain() {
     return;
   }
   if (state.ownerView === "attendance") {
-    destroyTaskSortables();
-    openOwnerAttendanceView();
-    return;
+    if (state.user?.liveLocationRequired === false) {
+      state.ownerView = "dashboard";
+      renderListContentOnly();
+    } else {
+      destroyTaskSortables();
+      openOwnerAttendanceView();
+      return;
+    }
   }
   const list = state.lists.find((l) => l.id === state.activeListId);
   const listId = state.activeListId;
@@ -7132,6 +7141,10 @@ function wireOwnerDashboardAnnouncementListener() {
   });
   window.addEventListener("taskmgr:open-attendance", () => {
     if (state.user?.role !== "owner") return;
+    if (state.user?.liveLocationRequired === false) {
+      showToast(tr("attendance.companyFeatureOff"), "warning");
+      return;
+    }
     state.ownerView = "attendance";
     renderListContentOnly();
     renderOwnerMain();
@@ -7193,6 +7206,15 @@ function renderOwnerChrome() {
     getUser: () => state.user,
     showToast,
     kalpanikWebsiteUrl: KALPANIK_WEBSITE_URL,
+    onCompanyLiveLocationChanged: (enabled) => {
+      if (state.user) state.user.liveLocationRequired = enabled;
+      if (!enabled && state.ownerView === "attendance") {
+        state.ownerView = "dashboard";
+      }
+      renderListContentOnly();
+      if (state.ownerView === "dashboard") renderOwnerMain();
+      else if (state.ownerView === "settings") openOwnerSettingsView();
+    },
   });
   initAdminAttendance({
     api,

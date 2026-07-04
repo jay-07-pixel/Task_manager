@@ -1,4 +1,5 @@
 import { prisma } from "../lib/prisma.js";
+import { isCompanyLiveLocationRequired } from "./companyAttendanceSettings.js";
 
 const STALE_PING_MS = 5 * 60 * 1000;
 
@@ -13,6 +14,7 @@ export async function getOrCreatePreference(userId) {
 }
 
 export async function getEmployeeStatus(userId) {
+  const companyLiveLocationRequired = await isCompanyLiveLocationRequired();
   const pref = await getOrCreatePreference(userId);
   const lastPing = await prisma.employeeLocationPing.findFirst({
     where: { userId },
@@ -22,9 +24,11 @@ export async function getEmployeeStatus(userId) {
     where: { userId, endedAt: null },
     orderBy: { startedAt: "desc" },
   });
-  const canAccessApp =
+  const trackingOk =
     pref.trackingEnabled && !!pref.consentAt && !!lastPing && !openOff;
+  const canAccessApp = !companyLiveLocationRequired || trackingOk;
   return {
+    companyLiveLocationRequired,
     consentAt: pref.consentAt?.toISOString() ?? null,
     trackingEnabled: pref.trackingEnabled,
     lastPing: lastPing

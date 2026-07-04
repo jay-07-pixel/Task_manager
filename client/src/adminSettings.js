@@ -2,6 +2,8 @@ import { tr } from "./i18n/index.js";
 import {
   attendanceSettingsToggleHtml,
   wireAttendanceSettingsToggle,
+  companyLiveLocationSettingsToggleHtml,
+  wireCompanyLiveLocationToggle,
 } from "./attendance.js";
 import {
   isPushSupported,
@@ -45,6 +47,9 @@ let getUserFn = null;
 /** @type {((msg: string, variant?: string) => void) | null} */
 let showToastFn = null;
 
+/** @type {((enabled: boolean) => void) | null} */
+let onCompanyLiveLocationChangedFn = null;
+
 let visitUrl = "https://kalpanik.in/";
 
 export function initAdminSettings({
@@ -60,6 +65,7 @@ export function initAdminSettings({
   getUser,
   showToast,
   kalpanikWebsiteUrl,
+  onCompanyLiveLocationChanged,
 }) {
   apiFn = api;
   escapeHtmlFn = escapeHtml;
@@ -72,6 +78,7 @@ export function initAdminSettings({
   onToggleThemeFn = onToggleTheme ?? null;
   getUserFn = getUser ?? null;
   showToastFn = showToast ?? null;
+  onCompanyLiveLocationChangedFn = onCompanyLiveLocationChanged ?? null;
   if (kalpanikWebsiteUrl) visitUrl = kalpanikWebsiteUrl;
 }
 
@@ -116,6 +123,8 @@ function ownerSettingsRowsHtml() {
       attrs: 'data-view-role="employee"',
     }),
   ];
+
+  rows.push(companyLiveLocationSettingsToggleHtml());
 
   if (isPushSupported()) {
     rows.push(`<div class="admin-settings-row admin-settings-row--toggle">
@@ -177,7 +186,7 @@ function employeeSettingsRowsHtml() {
     );
   }
 
-  if (user?.role === "employee") {
+  if (user?.role === "employee" && user?.liveLocationRequired !== false) {
     rows.push(attendanceSettingsToggleHtml());
   }
 
@@ -304,6 +313,11 @@ function wireSettingsPage(main, role) {
   });
 
   wireNotificationsToggle(main);
+  if (role === "owner") {
+    wireCompanyLiveLocationToggle(main, {
+      onChanged: (enabled) => onCompanyLiveLocationChangedFn?.(enabled),
+    });
+  }
   if (role === "employee") {
     wireAttendanceSettingsToggle(main);
   }
