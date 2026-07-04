@@ -23,7 +23,7 @@ export async function isCompanyLiveLocationRequired() {
 
 /**
  * Whether check-in / check-out attendance is enabled for employees.
- * Defaults to true when the setting row is missing or the column is unset.
+ * Opt-in: only on when explicitly set to true.
  */
 export async function isCompanyAttendanceEnabled() {
   try {
@@ -31,10 +31,10 @@ export async function isCompanyAttendanceEnabled() {
       where: { id: COMPANY_SETTINGS_ID },
       select: { attendanceEnabled: true },
     });
-    if (!row) return true;
-    return row.attendanceEnabled !== false;
+    if (!row) return false;
+    return row.attendanceEnabled === true;
   } catch {
-    return true;
+    return false;
   }
 }
 

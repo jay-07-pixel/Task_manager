@@ -36,7 +36,7 @@ function serializeSessionUser(user, activeRole, company = null) {
     isOwner: Boolean(user.isOwner),
     role: activeRole,
     liveLocationRequired: company?.liveLocationRequired !== false,
-    attendanceEnabled: company?.attendanceEnabled !== false,
+    attendanceEnabled: company?.attendanceEnabled === true,
   };
 }
 

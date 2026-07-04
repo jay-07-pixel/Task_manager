@@ -464,7 +464,7 @@ model CompanySettings {
   trialStartDate       DateTime @map("trial_start_date")
   trialEndDate         DateTime @map("trial_end_date")
   liveLocationRequired Boolean  @default(true) @map("live_location_required")
-  attendanceEnabled    Boolean  @default(true) @map("attendance_enabled")
+  attendanceEnabled    Boolean  @default(false) @map("attendance_enabled")
   dailyCheckInTime     String?  @map("daily_check_in_time") @db.VarChar(5)
   dailyCheckOutTime    String?  @map("daily_check_out_time") @db.VarChar(5)
   companyName          String?  @map("company_name") @db.VarChar(200)

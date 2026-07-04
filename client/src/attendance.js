@@ -425,7 +425,7 @@ export function companyAttendanceEnabledToggleHtml() {
       <span class="admin-settings-row-label">${escapeHtml(tr("attendance.manageAttendance"))}</span>
     </span>
     <label class="admin-settings-switch">
-      <input type="checkbox" class="admin-settings-switch-input js-company-attendance-toggle" checked aria-label="${escapeHtml(tr("attendance.manageAttendance"))}" />
+      <input type="checkbox" class="admin-settings-switch-input js-company-attendance-toggle" aria-label="${escapeHtml(tr("attendance.manageAttendance"))}" />
       <span class="admin-settings-switch-track" aria-hidden="true"></span>
     </label>
   </div>
@@ -449,13 +449,13 @@ export async function refreshCompanyLiveLocationToggle(root, api = apiFn) {
 export async function refreshCompanyAttendanceEnabledToggle(root, api = apiFn) {
   const toggle = root?.querySelector(".js-company-attendance-toggle");
   if (!toggle) return;
-  toggle.checked = true;
+  toggle.checked = false;
   if (!api) return;
   try {
     const settings = await api("/api/attendance/company-settings");
-    toggle.checked = settings?.attendanceEnabled !== false;
+    toggle.checked = settings?.attendanceEnabled === true;
   } catch {
-    toggle.checked = true;
+    toggle.checked = false;
   }
 }
 
@@ -534,7 +534,7 @@ export function wireCompanyAttendanceEnabledToggle(root, { onChanged, api, showT
       body: JSON.stringify({ attendanceEnabled: wantOn }),
     })
       .then((settings) => {
-        toggle.checked = settings?.attendanceEnabled !== false;
+        toggle.checked = settings?.attendanceEnabled === true;
         toast?.(
           wantOn ? tr("attendance.attendanceEnabledToast") : tr("attendance.attendanceDisabledToast"),
           "success"

@@ -2205,7 +2205,7 @@ function handleOpenAttendanceDeepLink() {
   const params = new URLSearchParams(window.location.search);
   if (params.get("openAttendance") !== "1" || state.user?.role !== "owner") return;
   window.history.replaceState({}, "", window.location.pathname);
-  if (state.user?.attendanceEnabled === false) {
+  if (state.user?.attendanceEnabled !== true) {
     showToast(tr("attendance.attendanceFeatureOff"), "warning");
     return;
   }
@@ -3057,7 +3057,7 @@ function leftNavInner() {
         <div class="js-emp-assign-list-host owner-emp-assign-nav"></div>
         ${teamChatSidebarNavItemHtml()}
         ${ownerReportsNavItemHtml(state.ownerView === "reports")}
-        ${state.user?.attendanceEnabled !== false ? ownerAttendanceNavItemHtml(state.ownerView === "attendance") : ""}
+        ${state.user?.attendanceEnabled === true ? ownerAttendanceNavItemHtml(state.ownerView === "attendance") : ""}
       </nav>
       <div class="admin-your-lists-section">
         <div class="admin-your-lists-head">
@@ -6927,7 +6927,7 @@ function renderOwnerMain() {
     return;
   }
   if (state.ownerView === "attendance") {
-    if (state.user?.attendanceEnabled === false) {
+    if (state.user?.attendanceEnabled !== true) {
       state.ownerView = "dashboard";
       renderListContentOnly();
     } else {
@@ -7473,7 +7473,7 @@ function wireOwnerDashboardAnnouncementListener() {
   });
   window.addEventListener("taskmgr:open-attendance", () => {
     if (state.user?.role !== "owner") return;
-    if (state.user?.attendanceEnabled === false) {
+    if (state.user?.attendanceEnabled !== true) {
       showToast(tr("attendance.attendanceFeatureOff"), "warning");
       return;
     }
@@ -8317,7 +8317,7 @@ function renderEmpListContentOnly() {
     onDashboard && state.empFilter === "assigned-by-me"
   );
   const attendanceHtml =
-    state.user?.attendanceEnabled !== false
+    state.user?.attendanceEnabled === true
       ? empNavAttendanceButtonHtml(state.empView === "attendance")
       : "";
   const html = myWorkHtml + assignedHtml + attendanceHtml;
@@ -8405,7 +8405,7 @@ function renderEmployeeMain() {
   }
 
   if (state.empView === "attendance") {
-    if (state.user?.attendanceEnabled === false) {
+    if (state.user?.attendanceEnabled !== true) {
       state.empView = "dashboard";
       renderEmployeeMain();
       return;
@@ -8665,7 +8665,7 @@ async function render() {
     if (locationOk) {
       renderEmployeeMain();
       startEmployeeReminderSystem();
-      if (state.user?.attendanceEnabled !== false) {
+      if (state.user?.attendanceEnabled === true) {
         startAttendanceCheckInReminder();
       }
       void prepareEmployeePushOnLogin();
