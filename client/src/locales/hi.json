@@ -865,6 +865,16 @@
     "openAttendance": "उपस्थिति खोलें",
     "downloadApk": "APK डाउनलोड करें"
   },
+  "legal": {
+    "modalTitle": "गोपनीयता नीति और नियम",
+    "settingsRow": "गोपनीयता नीति और नियम",
+    "readFullDocument": "पूरा दस्तावेज़ पढ़ें",
+    "openInNewTab": "नए टैब में खोलें",
+    "understandClose": "मैं समझ गया/गई",
+    "effectiveDate": "प्रभावी तिथि",
+    "operator": "ऑपरेटर",
+    "support": "सहायता"
+  },
   "errors": {
     "network": "नेटवर्क त्रुटि: सर्वर तक नहीं पहुँच सके। API चल रहा है पुष्टि करें (npm run dev) पोर्ट 3000।",
     "apiNotResponding": "API प्रतिक्रिया नहीं दे रहा (क्रैश हो सकता है — टर्मिनल जाँचें और पुनः आरंभ करें)।",
@@ -943,6 +953,13 @@
     "lastRefreshed": "अपडेट {{time}}",
     "manageLocations": "स्थान प्रबंधित करें",
     "manageLocationsIntro": "कार्यालय या साइट स्थान नाम, निर्देशांक और त्रिज्या के साथ जोड़ें। ये सभी कर्मचारियों के चेक-इन/चेक-आउट पर लागू होते हैं।",
+    "manageAttendance": "कर्मचारी उपस्थिति (चेक-इन / चेक-आउट)",
+    "manageAttendanceHint": "चालू होने पर कर्मचारी कार्य स्थान से चेक-इन और चेक-आउट कर सकते हैं। बंद होने पर उपस्थिति सभी के लिए छिपी और अक्षम रहेगी।",
+    "attendanceDisableConfirmTitle": "कर्मचारी उपस्थिति बंद करें?",
+    "attendanceDisableConfirmMessage": "जब तक आप इसे फिर चालू नहीं करते, कर्मचारियों को चेक-इन, चेक-आउट या उपस्थिति रिमाइंडर नहीं दिखेंगे।",
+    "attendanceEnabledToast": "कर्मचारी उपस्थिति चालू है।",
+    "attendanceDisabledToast": "आपकी कंपनी के लिए कर्मचारी उपस्थिति बंद है।",
+    "attendanceFeatureOff": "सेटिंग्स में कर्मचारी उपस्थिति बंद है।",
     "addLocation": "स्थान जोड़ें",
     "editLocation": "स्थान संपादित करें",
     "locationName": "स्थान का नाम",
@@ -973,6 +990,7 @@
     "checkOutSuccess": "सफलतापूर्वक चेक-आउट।",
     "tabLive": "लाइव उपस्थिति",
     "tabDaily": "दैनिक उपस्थिति",
+    "tabReport": "रिपोर्ट",
     "dailyReportIntro": "चयनित तिथि के लिए कर्मचारी चेक-इन और चेक-आउट समय देखें।",
     "dailySummaryPresent": "उपस्थित / कुल",
     "dailySummaryAbsent": "अनुपस्थित",
@@ -1002,6 +1020,23 @@
     "timingOnTime": "समय पर",
     "checkInLateToast": "चेक-इन हो गया — आज आप देर से आए।",
     "checkOutEarlyToast": "चेक-आउट हो गया — आज आप जल्दी गए।",
-    "dayCompleteMessage": "आज की उपस्थिति पूरी हो गई। चेक-इन और चेक-आउट दोनों हो चुके हैं।"
+    "dayCompleteMessage": "आज की उपस्थिति पूरी हो गई। चेक-इन और चेक-आउट दोनों हो चुके हैं।",
+    "todayStatusTitle": "आज की उपस्थिति",
+    "historyTitle": "उपस्थिति इतिहास",
+    "historyEmpty": "अभी कोई पिछली उपस्थिति नहीं।",
+    "monthlyReportIntro": "प्रत्येक कर्मचारी के लिए मासिक उपस्थिति सारांश। कार्य दिवसों में रविवार शामिल नहीं।",
+    "monthlyReportMonthLabel": "रिपोर्ट महीना",
+    "monthlyReportMonthPicker": "महीना चुनें",
+    "monthlyWorkingDaysLabel": "कार्य दिवस",
+    "monthlyTotalPresentLabel": "कुल उपस्थित",
+    "monthlyTotalAbsentLabel": "कुल अनुपस्थित",
+    "monthlyPresentColumn": "उपस्थित",
+    "monthlyAbsentColumn": "अनुपस्थित",
+    "monthlyWorkingDaysColumn": "कार्य दिवस",
+    "monthlyMinutesColumn": "काम के मिनट",
+    "monthlyMinutesZero": "0 मिनट",
+    "monthlyMinutesHours": "{{hours}} घंटे {{minutes}} मिनट",
+    "monthlyPresentShort": "{{count}} उपस्थित",
+    "monthlyReportInvalidMonth": "कृपया एक वैध महीना चुनें।"
   }
 }

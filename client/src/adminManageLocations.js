@@ -1,5 +1,9 @@
 import * as bootstrap from "bootstrap";
 import { tr } from "./i18n/index.js";
+import {
+  companyAttendanceEnabledToggleHtml,
+  wireCompanyAttendanceEnabledToggle,
+} from "./attendance.js";
 
 /** @type {((path: string, opts?: RequestInit) => Promise<any>) | null} */
 let apiFn = null;
@@ -19,6 +23,9 @@ let wireOwnerChromeHeaderFn = null;
 /** @type {((msg: string, variant?: string) => void) | null} */
 let showToastFn = null;
 
+/** @type {((enabled: boolean) => void) | null} */
+let onCompanyAttendanceChangedFn = null;
+
 /** @type {string | null} */
 let editingLocationId = null;
 
@@ -29,6 +36,7 @@ export function initManageLocations({
   ownerChromeHeader,
   wireOwnerChromeHeader,
   showToast,
+  onCompanyAttendanceChanged,
 }) {
   apiFn = api;
   escapeHtmlFn = escapeHtml;
@@ -36,6 +44,7 @@ export function initManageLocations({
   ownerChromeHeaderFn = ownerChromeHeader ?? null;
   wireOwnerChromeHeaderFn = wireOwnerChromeHeader ?? null;
   showToastFn = showToast ?? null;
+  onCompanyAttendanceChangedFn = onCompanyAttendanceChanged ?? null;
 }
 
 export function manageLocationModalHtml() {
@@ -197,6 +206,13 @@ function manageLocationsPageHtml() {
     ${ownerChromeHeaderFn?.() ?? ""}
     <div class="admin-settings-page manage-locations-page">
       <p class="admin-settings-intro">${esc(tr("attendance.manageLocationsIntro"))}</p>
+      <section class="card border-0 shadow-sm mb-4 manage-locations-attendance-card">
+        <div class="card-body py-3">
+          <nav class="admin-settings-list manage-locations-attendance-toggle" aria-label="${esc(tr("attendance.manageAttendance"))}">
+            ${companyAttendanceEnabledToggleHtml()}
+          </nav>
+        </div>
+      </section>
       <section class="manage-locations-schedule card border-0 shadow-sm mb-4">
         <div class="card-body">
           <h3 class="h6 mb-1">${esc(tr("attendance.dailyScheduleTitle"))}</h3>
@@ -283,6 +299,11 @@ export function openOwnerManageLocationsView() {
   if (!main) return;
   main.innerHTML = manageLocationsPageHtml();
   wireOwnerChromeHeaderFn?.(main);
+  wireCompanyAttendanceEnabledToggle(main, {
+    api: apiFn,
+    showToast: showToastFn,
+    onChanged: (enabled) => onCompanyAttendanceChangedFn?.(enabled),
+  });
   wireDailyScheduleForm();
   document.getElementById("manage-locations-add-btn")?.addEventListener("click", () => openLocationModal());
   void loadDailyScheduleForm();

@@ -6,6 +6,113 @@
   background: var(--admin-surface-container, #f3f3ff);
 }
 
+.emp-sidebar-attendance-host {
+  margin: 0 0.75rem 0.85rem;
+}
+
+.attendance-checkin-sidebar {
+  padding: 0.85rem 0.9rem;
+  border: 1px solid var(--admin-outline-variant, #bec8ca);
+  border-radius: 12px;
+  background: var(--admin-surface-container-lowest, #fff);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.attendance-checkin-sidebar-today {
+  padding-bottom: 0.75rem;
+  margin-bottom: 0.75rem;
+  border-bottom: 1px solid rgba(190, 200, 202, 0.45);
+}
+
+.attendance-checkin-sidebar-history {
+  max-height: 14rem;
+  overflow-y: auto;
+}
+
+.attendance-history-title {
+  margin: 0 0 0.55rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--admin-on-surface-variant, #3e494a);
+}
+
+.attendance-history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.attendance-history-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.45rem 0.55rem;
+  border-radius: 0.5rem;
+  background: var(--admin-surface-container, #f3f3ff);
+
+  &--absent {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+}
+
+.attendance-history-date {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--admin-on-surface, #181a2e);
+}
+
+.attendance-history-line {
+  font-size: 0.6875rem;
+  color: var(--admin-on-surface-variant, #3e494a);
+
+  > span:first-child {
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+  }
+}
+
+.attendance-history-absent {
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--admin-error, #ba1a1a);
+  background: rgba(186, 26, 26, 0.1);
+  padding: 0.12rem 0.4rem;
+  border-radius: 999px;
+}
+
+.attendance-checkin-sidebar .attendance-checkin-card-title {
+  font-size: 0.8125rem;
+}
+
+.attendance-checkin-sidebar .attendance-checkin-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+
+  .profile-modal-btn-save,
+  .profile-modal-btn-cancel {
+    width: 100%;
+    text-align: center;
+    padding: 0.45rem 0.65rem;
+    font-size: 0.8125rem;
+  }
+}
+
+.admin-mobile-nav-body .emp-sidebar-attendance-host {
+  margin-top: 0.5rem;
+}
+
 .attendance-checkin-card-head {
   display: flex;
   align-items: center;
@@ -408,4 +515,94 @@
   gap: 0.75rem;
   padding: 0 1.25rem;
   margin-bottom: 0.5rem;
+}
+
+.admin-attendance-page--monthly .admin-attendance-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.admin-attendance-monthly-kpi-grid {
+  @media (min-width: 768px) {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    max-width: none;
+  }
+}
+
+.admin-attendance-monthly-kpi--month .admin-attendance-daily-kpi-icon {
+  background: rgba(0, 83, 91, 0.1);
+  color: var(--admin-primary, #00535b);
+}
+
+.admin-attendance-monthly-kpi--working .admin-attendance-daily-kpi-icon {
+  background: rgba(59, 91, 219, 0.1);
+  color: #3b5bdb;
+}
+
+.admin-attendance-monthly-kpi--working .admin-attendance-daily-kpi-value {
+  color: #3b5bdb;
+}
+
+.admin-attendance-monthly-kpi-month {
+  font-size: 1rem !important;
+  font-weight: 700 !important;
+  line-height: 1.25;
+  text-align: right;
+  color: var(--admin-primary, #00535b) !important;
+}
+
+.admin-attendance-monthly-present {
+  color: #1b7a3d;
+  font-weight: 600;
+}
+
+.admin-attendance-monthly-absent {
+  color: var(--admin-error, #ba1a1a);
+  font-weight: 600;
+}
+
+.admin-attendance-monthly-salary {
+  font-weight: 700;
+  color: var(--admin-on-surface, #181a2e);
+}
+
+.admin-attendance-monthly-table {
+  thead th {
+    text-align: inherit;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .admin-attendance-page--monthly .admin-attendance-toolbar-actions {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .admin-attendance-page--monthly .admin-attendance-date-input {
+    flex: 1 1 auto;
+    max-width: none;
+  }
+}
+
+.manage-locations-attendance-card {
+  .admin-settings-list {
+    margin: 0;
+  }
+
+  .admin-settings-row--toggle {
+    border: 0;
+    background: transparent;
+    padding: 0;
+    box-shadow: none;
+  }
+
+  .admin-settings-hint {
+    margin-top: 0.65rem;
+  }
 }

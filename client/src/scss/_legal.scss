@@ -1,0 +1,117 @@
+.legal-modal-dialog {
+  max-width: min(42rem, calc(100vw - 1.5rem));
+}
+
+.legal-modal-body {
+  max-height: min(70vh, 36rem);
+  overflow-y: auto;
+  padding-top: 0.5rem;
+}
+
+.legal-modal-footer {
+  flex-wrap: wrap;
+  gap: 0.5rem;
+
+  .profile-modal-btn-cancel,
+  .profile-modal-btn-save {
+    flex: 1 1 auto;
+    min-width: 9rem;
+    text-align: center;
+    text-decoration: none;
+  }
+}
+
+.legal-doc-title {
+  margin: 0 0 0.25rem;
+  font-size: 1.125rem;
+  font-weight: 800;
+  color: var(--admin-on-surface, #181a2e);
+}
+
+.legal-doc-subtitle {
+  margin: 0 0 0.85rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--admin-primary, #00535b);
+}
+
+.legal-doc-meta {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0 0 1rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: 0.65rem;
+  background: var(--admin-surface-container, #f3f3ff);
+  border: 1px solid var(--admin-outline-variant, #bec8ca);
+
+  div {
+    display: grid;
+    grid-template-columns: minmax(5.5rem, 34%) 1fr;
+    gap: 0.35rem 0.75rem;
+    align-items: start;
+  }
+
+  dt {
+    margin: 0;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--admin-on-surface-variant, #3e494a);
+  }
+
+  dd {
+    margin: 0;
+    font-size: 0.8125rem;
+    color: var(--admin-on-surface, #181a2e);
+    word-break: break-word;
+  }
+}
+
+.legal-doc-section + .legal-doc-section {
+  margin-top: 1.15rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(190, 200, 202, 0.55);
+}
+
+.legal-doc-section-title {
+  margin: 0 0 0.55rem;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--admin-on-surface, #181a2e);
+}
+
+.legal-doc-paragraph {
+  margin: 0 0 0.65rem;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--admin-on-surface-variant, #3e494a);
+}
+
+.legal-doc-list {
+  margin: 0;
+  padding-left: 1.15rem;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--admin-on-surface-variant, #3e494a);
+
+  li + li {
+    margin-top: 0.45rem;
+  }
+}
+
+@media (max-width: 575.98px) {
+  .legal-doc-meta div {
+    grid-template-columns: 1fr;
+    gap: 0.15rem;
+  }
+
+  .legal-modal-footer {
+    flex-direction: column;
+
+    .profile-modal-btn-cancel,
+    .profile-modal-btn-save {
+      width: 100%;
+    }
+  }
+}

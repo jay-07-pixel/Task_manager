@@ -865,6 +865,16 @@
     "openAttendance": "வருகையைத் திற",
     "downloadApk": "APK பதிவிறக்கு"
   },
+  "legal": {
+    "modalTitle": "தனியுரிமைக் கொள்கை & விதிமுறைகள்",
+    "settingsRow": "தனியுரிமைக் கொள்கை & விதிமுறைகள்",
+    "readFullDocument": "முழு ஆவணத்தைப் படிக்கவும்",
+    "openInNewTab": "புதிய தாவலில் திற",
+    "understandClose": "புரிந்தது",
+    "effectiveDate": "நடைமுறை தேதி",
+    "operator": "இயக்குநர்",
+    "support": "ஆதரவு"
+  },
   "errors": {
     "network": "வலையமைப்பு பிழை: சர்வரை அணுக முடியவில்லை. API port 3000 இல் இயங்குகிறதா உறுதிசெய்க (npm run dev).",
     "apiNotResponding": "API பதிலளிக்கவில்லை (அது முடங்கியிருக்கலாம் — dev terminal ஐ பார்க்கவும் மற்றும் தேவையெனில் மறுதொடக்கம் செய்யவும்).",
@@ -943,6 +953,13 @@
     "lastRefreshed": "புதுப்பிக்கப்பட்டது {{time}}",
     "manageLocations": "இருப்பிடம் நிர்வகி",
     "manageLocationsIntro": "அலுவலகம் அல்லது தள இருப்பிடங்களை பெயர், ஆயங்கள் மற்றும் ஆரத்துடன் சேர்க்கவும். இவை அனைத்து ஊழியர்களின் செக்-இன்/செக்-அவுட்டுக்கும் பொருந்தும்.",
+    "manageAttendance": "ஊழியர் வருகை (செக்-இன் / செக்-அவுட்)",
+    "manageAttendanceHint": "இயக்கப்பட்டால் ஊழியர்கள் பணியிடத்திலிருந்து செக்-இன்/செக்-அவுட் செய்யலாம். அணைக்கப்பட்டால் வருகை அனைவருக்கும் மறைக்கப்பட்டு முடக்கப்படும்.",
+    "attendanceDisableConfirmTitle": "ஊழியர் வருகையை அணைக்கவா?",
+    "attendanceDisableConfirmMessage": "நீங்கள் மீண்டும் இயக்கும் வரை ஊழியர்களுக்கு செக்-இன், செக்-அவுட் அல்லது நினைவூட்டல்கள் தெரியாது.",
+    "attendanceEnabledToast": "ஊழியர் வருகை இயக்கப்பட்டது.",
+    "attendanceDisabledToast": "உங்கள் நிறுவனத்தில் ஊழியர் வருகை அணைக்கப்பட்டுள்ளது.",
+    "attendanceFeatureOff": "அமைப்புகளில் ஊழியர் வருகை அணைக்கப்பட்டுள்ளது.",
     "addLocation": "இருப்பிடம் சேர்",
     "editLocation": "இருப்பிடம் திருத்து",
     "locationName": "இருப்பிட பெயர்",
@@ -973,6 +990,7 @@
     "checkOutSuccess": "வெற்றிகரமாக செக்-அவுட்.",
     "tabLive": "நேரடி வருகை",
     "tabDaily": "தினசரி வருகை",
+    "tabReport": "அறிக்கை",
     "dailyReportIntro": "தேர்ந்தெடுத்த தேதிக்கான ஊழியர் செக்-இன்/செக்-அவுட் நேரங்களைப் பாருங்கள்.",
     "dailySummaryPresent": "வந்துள்ளவர் / மொத்தம்",
     "dailySummaryAbsent": "வரவில்லை",
@@ -1002,6 +1020,23 @@
     "timingOnTime": "சரியான நேரம்",
     "checkInLateToast": "செக்-இன் செய்துள்ளீர்கள் — இன்று தாமதமாக வந்துள்ளீர்கள்.",
     "checkOutEarlyToast": "செக்-அவுட் செய்துள்ளீர்கள் — இன்று முன்கூட்டியே சென்றுள்ளீர்கள்.",
-    "dayCompleteMessage": "இன்றைய வருகை முடிந்தது. செக்-இன் மற்றும் செக்-அவுட் இரண்டும் முடிந்துவிட்டன."
+    "dayCompleteMessage": "இன்றைய வருகை முடிந்தது. செக்-இன் மற்றும் செக்-அவுட் இரண்டும் முடிந்துவிட்டன.",
+    "todayStatusTitle": "இன்றைய வருகை",
+    "historyTitle": "வருகை வரலாறு",
+    "historyEmpty": "முந்தைய வருகை இன்னும் இல்லை.",
+    "monthlyReportIntro": "ஒவ்வொரு ஊழியருக்கும் மாதாந்திர வருகை சுருக்கம். வேலை நாட்களில் ஞாயிறு தவிர்க்கப்படும்.",
+    "monthlyReportMonthLabel": "அறிக்கை மாதம்",
+    "monthlyReportMonthPicker": "மாதம் தேர்ந்தெடு",
+    "monthlyWorkingDaysLabel": "வேலை நாட்கள்",
+    "monthlyTotalPresentLabel": "மொத்த வருகை",
+    "monthlyTotalAbsentLabel": "மொத்த வரவில்லை",
+    "monthlyPresentColumn": "வந்துள்ளார்",
+    "monthlyAbsentColumn": "வரவில்லை",
+    "monthlyWorkingDaysColumn": "வேலை நாட்கள்",
+    "monthlyMinutesColumn": "வேலை நிமிடங்கள்",
+    "monthlyMinutesZero": "0 நிமி",
+    "monthlyMinutesHours": "{{hours}} மணி {{minutes}} நிமி",
+    "monthlyPresentShort": "{{count}} வருகை",
+    "monthlyReportInvalidMonth": "சரியான மாதத்தைத் தேர்ந்தெடுக்கவும்."
   }
 }

@@ -418,6 +418,20 @@ export function companyLiveLocationSettingsToggleHtml() {
   <p class="admin-settings-hint">${escapeHtml(tr("attendance.manageLiveLocationHint"))}</p>`;
 }
 
+export function companyAttendanceEnabledToggleHtml() {
+  return `<div class="admin-settings-row admin-settings-row--toggle">
+    <span class="admin-settings-row-left">
+      <span class="material-symbols-outlined" aria-hidden="true">how_to_reg</span>
+      <span class="admin-settings-row-label">${escapeHtml(tr("attendance.manageAttendance"))}</span>
+    </span>
+    <label class="admin-settings-switch">
+      <input type="checkbox" class="admin-settings-switch-input js-company-attendance-toggle" checked aria-label="${escapeHtml(tr("attendance.manageAttendance"))}" />
+      <span class="admin-settings-switch-track" aria-hidden="true"></span>
+    </label>
+  </div>
+  <p class="admin-settings-hint js-company-attendance-hint">${escapeHtml(tr("attendance.manageAttendanceHint"))}</p>`;
+}
+
 export async function refreshCompanyLiveLocationToggle(root, api = apiFn) {
   const toggle = root?.querySelector(".js-company-live-location-toggle");
   if (!toggle) return;
@@ -427,6 +441,19 @@ export async function refreshCompanyLiveLocationToggle(root, api = apiFn) {
   try {
     const settings = await api("/api/attendance/company-settings");
     toggle.checked = settings?.liveLocationRequired !== false;
+  } catch {
+    toggle.checked = true;
+  }
+}
+
+export async function refreshCompanyAttendanceEnabledToggle(root, api = apiFn) {
+  const toggle = root?.querySelector(".js-company-attendance-toggle");
+  if (!toggle) return;
+  toggle.checked = true;
+  if (!api) return;
+  try {
+    const settings = await api("/api/attendance/company-settings");
+    toggle.checked = settings?.attendanceEnabled !== false;
   } catch {
     toggle.checked = true;
   }
@@ -464,6 +491,52 @@ export function wireCompanyLiveLocationToggle(root, { onChanged, api, showToast 
         toggle.checked = settings?.liveLocationRequired !== false;
         toast?.(
           wantOn ? tr("attendance.companyEnabledToast") : tr("attendance.companyDisabledToast"),
+          "success"
+        );
+        onChanged?.(toggle.checked);
+      })
+      .catch((err) => {
+        toggle.checked = !wantOn;
+        toast?.(err?.message || tr("errors.requestFailed"), "danger");
+      })
+      .finally(() => {
+        toggle.disabled = false;
+      });
+  });
+}
+
+export function wireCompanyAttendanceEnabledToggle(root, { onChanged, api, showToast } = {}) {
+  const request = api || apiFn;
+  const toast = showToast || showToastFn;
+  const toggle = root?.querySelector(".js-company-attendance-toggle");
+  if (!toggle || toggle.dataset.wired === "1") return;
+  toggle.dataset.wired = "1";
+  void refreshCompanyAttendanceEnabledToggle(root, request);
+  toggle.addEventListener("change", () => {
+    const wantOn = toggle.checked;
+    if (!request) {
+      toggle.checked = !wantOn;
+      toast?.(tr("errors.requestFailed"), "danger");
+      return;
+    }
+    if (!wantOn) {
+      const ok = window.confirm(
+        `${tr("attendance.attendanceDisableConfirmTitle")}\n\n${tr("attendance.attendanceDisableConfirmMessage")}`
+      );
+      if (!ok) {
+        toggle.checked = true;
+        return;
+      }
+    }
+    toggle.disabled = true;
+    void request("/api/attendance/company-settings", {
+      method: "PATCH",
+      body: JSON.stringify({ attendanceEnabled: wantOn }),
+    })
+      .then((settings) => {
+        toggle.checked = settings?.attendanceEnabled !== false;
+        toast?.(
+          wantOn ? tr("attendance.attendanceEnabledToast") : tr("attendance.attendanceDisabledToast"),
           "success"
         );
         onChanged?.(toggle.checked);

@@ -23,6 +23,7 @@ import {
 import {
   getCompanyAttendanceSettings,
   getDailyAttendanceSchedule,
+  setCompanyAttendanceEnabled,
   setCompanyLiveLocationRequired,
   setDailyAttendanceSchedule,
 } from "../services/companyAttendanceSettings.js";
@@ -35,6 +36,8 @@ import {
 import {
   getCheckStatus,
   getDailyAttendanceReport,
+  getMonthlyAttendanceReport,
+  getMyAttendanceHistory,
   performCheck,
 } from "../services/attendanceCheckService.js";
 
@@ -51,7 +54,8 @@ const trackingSchema = z.object({
 });
 
 const companySettingsSchema = z.object({
-  liveLocationRequired: z.boolean(),
+  liveLocationRequired: z.boolean().optional(),
+  attendanceEnabled: z.boolean().optional(),
 });
 
 const workLocationSchema = z.object({
@@ -89,7 +93,25 @@ router.patch("/company-settings", requireOwner, async (req, res) => {
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.flatten() });
   }
-  const settings = await setCompanyLiveLocationRequired(parsed.data.liveLocationRequired);
+  if (
+    parsed.data.liveLocationRequired === undefined &&
+    parsed.data.attendanceEnabled === undefined
+  ) {
+    return res.status(400).json({ error: "No settings to update." });
+  }
+  let settings = await getCompanyAttendanceSettings();
+  if (parsed.data.liveLocationRequired !== undefined) {
+    settings = {
+      ...settings,
+      ...(await setCompanyLiveLocationRequired(parsed.data.liveLocationRequired)),
+    };
+  }
+  if (parsed.data.attendanceEnabled !== undefined) {
+    settings = {
+      ...settings,
+      ...(await setCompanyAttendanceEnabled(parsed.data.attendanceEnabled)),
+    };
+  }
   res.json({ ok: true, ...settings });
 });
 
@@ -327,6 +349,17 @@ router.get("/check-status", requireAuth, async (req, res) => {
   res.json(status);
 });
 
+router.get("/my-history", requireAuth, async (req, res) => {
+  if (req.session.role !== "employee") {
+    return res.status(403).json({ error: "Employees only" });
+  }
+  const days = Number.parseInt(String(req.query.days ?? ""), 10);
+  const history = await getMyAttendanceHistory(req.session.userId, {
+    days: Number.isFinite(days) ? days : 14,
+  });
+  res.json(history);
+});
+
 router.post("/check-in", requireAuth, async (req, res) => {
   if (req.session.role !== "employee") {
     return res.status(403).json({ error: "Employees only" });
@@ -376,6 +409,18 @@ router.get("/daily-report", requireOwner, async (req, res) => {
     res.json(report);
   } catch (err) {
     res.status(400).json({ error: err.message || "Invalid date." });
+  }
+});
+
+router.get("/monthly-report", requireOwner, async (req, res) => {
+  const now = new Date();
+  const year = Number.parseInt(String(req.query.year ?? now.getFullYear()), 10);
+  const month = Number.parseInt(String(req.query.month ?? now.getMonth() + 1), 10);
+  try {
+    const report = await getMonthlyAttendanceReport(year, month);
+    res.json(report);
+  } catch (err) {
+    res.status(400).json({ error: err.message || "Invalid month." });
   }
 });
 

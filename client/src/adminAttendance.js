@@ -39,11 +39,14 @@ let infoWindow = null;
 /** @type {number | null} */
 let pollTimer = null;
 
-/** @type {"live" | "daily"} */
+/** @type {"live" | "daily" | "report"} */
 let attendanceViewTab = "live";
 
 /** @type {string | null} */
 let dailyReportDate = null;
+
+/** @type {string | null} */
+let monthlyReportMonth = null;
 
 /** @type {(() => void) | null} */
 let visibilityHandler = null;
@@ -646,6 +649,7 @@ function attendanceTabsHtml() {
   return `<div class="admin-attendance-tabs" role="tablist">
     <button type="button" class="admin-attendance-tab${attendanceViewTab === "live" ? " admin-attendance-tab--active" : ""}" data-attendance-tab="live">${esc(tr("attendance.tabLive"))}</button>
     <button type="button" class="admin-attendance-tab${attendanceViewTab === "daily" ? " admin-attendance-tab--active" : ""}" data-attendance-tab="daily">${esc(tr("attendance.tabDaily"))}</button>
+    <button type="button" class="admin-attendance-tab${attendanceViewTab === "report" ? " admin-attendance-tab--active" : ""}" data-attendance-tab="report">${esc(tr("attendance.tabReport"))}</button>
   </div>`;
 }
 
@@ -655,7 +659,7 @@ function wireAttendanceTabs(root) {
     btn.dataset.wired = "1";
     btn.addEventListener("click", () => {
       const tab = btn.getAttribute("data-attendance-tab");
-      if (tab !== "live" && tab !== "daily") return;
+      if (tab !== "live" && tab !== "daily" && tab !== "report") return;
       if (attendanceViewTab === tab) return;
       attendanceViewTab = tab;
       if (tab === "live") {
@@ -664,7 +668,11 @@ function wireAttendanceTabs(root) {
       } else {
         stopAttendancePoll();
         destroyMap();
-        void renderDailyAttendancePage();
+        if (tab === "daily") {
+          void renderDailyAttendancePage();
+        } else {
+          void renderMonthlyReportPage();
+        }
       }
     });
   });
@@ -904,6 +912,245 @@ async function loadDailyReport() {
   }
 }
 
+function currentMonthValue() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function parseMonthValue(value) {
+  const m = String(value ?? "").match(/^(\d{4})-(\d{2})$/);
+  if (!m) return null;
+  const year = Number(m[1]);
+  const month = Number(m[2]);
+  if (month < 1 || month > 12) return null;
+  return { year, month };
+}
+
+function formatMonthLabel(year, month) {
+  const date = new Date(year, month - 1, 1);
+  return date.toLocaleDateString(dateLocale(), { month: "long", year: "numeric" });
+}
+
+function formatSalaryAmount(amount) {
+  const value = Number(amount ?? 15000);
+  return `₹${value.toLocaleString(dateLocale())}`;
+}
+
+function formatTotalMinutes(minutes) {
+  const total = Number(minutes ?? 0);
+  if (total <= 0) return tr("attendance.monthlyMinutesZero");
+  const hours = Math.floor(total / 60);
+  const mins = total % 60;
+  if (hours > 0) {
+    return tr("attendance.monthlyMinutesHours", { hours, minutes: mins });
+  }
+  return tr("attendance.workingMinutes", { minutes: total });
+}
+
+function monthlyReportStats(rows, workingDays) {
+  const total = rows.length;
+  const presentSum = rows.reduce((sum, row) => sum + (row.present ?? 0), 0);
+  const absentSum = rows.reduce((sum, row) => sum + (row.absent ?? 0), 0);
+  return { total, presentSum, absentSum, workingDays };
+}
+
+function monthlySummaryHtml(stats, monthLabel) {
+  const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
+  return `<div class="admin-attendance-daily-kpi-grid admin-attendance-monthly-kpi-grid">
+    <div class="admin-attendance-daily-kpi admin-attendance-monthly-kpi admin-attendance-monthly-kpi--month">
+      <div class="admin-attendance-daily-kpi-body">
+        <span class="admin-attendance-daily-kpi-icon" aria-hidden="true">${adminMsIconFn?.("calendar_month") ?? ""}</span>
+        <span class="admin-attendance-daily-kpi-value admin-attendance-monthly-kpi-month">${esc(monthLabel)}</span>
+      </div>
+      <span class="admin-attendance-daily-kpi-label">${esc(tr("attendance.monthlyReportMonthLabel"))}</span>
+    </div>
+    <div class="admin-attendance-daily-kpi admin-attendance-monthly-kpi admin-attendance-monthly-kpi--working">
+      <div class="admin-attendance-daily-kpi-body">
+        <span class="admin-attendance-daily-kpi-icon" aria-hidden="true">${adminMsIconFn?.("event_available") ?? ""}</span>
+        <span class="admin-attendance-daily-kpi-value tabular-nums">${stats.workingDays ?? 0}</span>
+      </div>
+      <span class="admin-attendance-daily-kpi-label">${esc(tr("attendance.monthlyWorkingDaysLabel"))}</span>
+    </div>
+    <div class="admin-attendance-daily-kpi admin-attendance-daily-kpi--present admin-attendance-monthly-kpi">
+      <div class="admin-attendance-daily-kpi-body">
+        <span class="admin-attendance-daily-kpi-icon" aria-hidden="true">${adminMsIconFn?.("how_to_reg") ?? ""}</span>
+        <span class="admin-attendance-daily-kpi-value tabular-nums">${stats.presentSum ?? 0}</span>
+      </div>
+      <span class="admin-attendance-daily-kpi-label">${esc(tr("attendance.monthlyTotalPresentLabel"))}</span>
+    </div>
+    <div class="admin-attendance-daily-kpi admin-attendance-daily-kpi--absent admin-attendance-monthly-kpi">
+      <div class="admin-attendance-daily-kpi-body">
+        <span class="admin-attendance-daily-kpi-icon" aria-hidden="true">${adminMsIconFn?.("person_off") ?? ""}</span>
+        <span class="admin-attendance-daily-kpi-value tabular-nums">${stats.absentSum ?? 0}</span>
+      </div>
+      <span class="admin-attendance-daily-kpi-label">${esc(tr("attendance.monthlyTotalAbsentLabel"))}</span>
+    </div>
+  </div>`;
+}
+
+function monthlyReportRowHtml(row) {
+  const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
+  const minutes = formatTotalMinutes(row.totalMinutes);
+  const salary = formatSalaryAmount(row.salary);
+  return `<tr>
+    <td class="admin-attendance-daily-employee">${esc(row.displayName)}</td>
+    <td class="text-center tabular-nums admin-attendance-monthly-present">${row.present ?? 0}</td>
+    <td class="text-center tabular-nums admin-attendance-monthly-absent">${row.absent ?? 0}</td>
+    <td class="text-center tabular-nums">${row.workingDays ?? 0}</td>
+    <td class="text-end fw-semibold tabular-nums admin-attendance-daily-working">${esc(minutes)}</td>
+    <td class="text-end tabular-nums admin-attendance-monthly-salary">${esc(salary)}</td>
+  </tr>`;
+}
+
+function monthlyReportMobileCardHtml(row) {
+  const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
+  const minutes = formatTotalMinutes(row.totalMinutes);
+  const salary = formatSalaryAmount(row.salary);
+  return `<article class="admin-attendance-daily-card admin-attendance-monthly-card">
+    <div class="admin-attendance-daily-card-head">
+      <h3 class="admin-attendance-daily-card-name">${esc(row.displayName)}</h3>
+      <span class="admin-attendance-daily-badge admin-attendance-daily-badge--present">${esc(tr("attendance.monthlyPresentShort", { count: row.present ?? 0 }))}</span>
+    </div>
+    <dl class="admin-attendance-daily-card-details">
+      <div class="admin-attendance-daily-card-row">
+        <dt>${esc(tr("attendance.monthlyPresentColumn"))}</dt>
+        <dd class="tabular-nums fw-semibold admin-attendance-monthly-present">${row.present ?? 0}</dd>
+      </div>
+      <div class="admin-attendance-daily-card-row">
+        <dt>${esc(tr("attendance.monthlyAbsentColumn"))}</dt>
+        <dd class="tabular-nums fw-semibold admin-attendance-monthly-absent">${row.absent ?? 0}</dd>
+      </div>
+      <div class="admin-attendance-daily-card-row">
+        <dt>${esc(tr("attendance.monthlyWorkingDaysColumn"))}</dt>
+        <dd class="tabular-nums">${row.workingDays ?? 0}</dd>
+      </div>
+      <div class="admin-attendance-daily-card-row">
+        <dt>${esc(tr("attendance.monthlyMinutesColumn"))}</dt>
+        <dd class="tabular-nums fw-semibold">${esc(minutes)}</dd>
+      </div>
+      <div class="admin-attendance-daily-card-row">
+        <dt>${esc(tr("profile.salary"))}</dt>
+        <dd class="tabular-nums fw-semibold admin-attendance-monthly-salary">${esc(salary)}</dd>
+      </div>
+    </dl>
+  </article>`;
+}
+
+function renderMonthlyReportContent(rows, meta) {
+  const summaryEl = document.getElementById("admin-attendance-monthly-summary");
+  const body = document.getElementById("admin-attendance-monthly-body");
+  const cardsEl = document.getElementById("admin-attendance-monthly-cards");
+  const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
+
+  const stats = monthlyReportStats(rows, meta.workingDays);
+  const monthLabel = formatMonthLabel(meta.year, meta.month);
+  if (summaryEl) {
+    summaryEl.innerHTML = monthlySummaryHtml(stats, monthLabel);
+  }
+
+  if (!rows.length) {
+    const empty = `<p class="admin-attendance-daily-empty">${esc(tr("attendance.noEmployees"))}</p>`;
+    if (body) body.innerHTML = `<tr><td colspan="6" class="text-muted">${esc(tr("attendance.noEmployees"))}</td></tr>`;
+    if (cardsEl) cardsEl.innerHTML = empty;
+    return;
+  }
+
+  if (body) body.innerHTML = rows.map((row) => monthlyReportRowHtml(row)).join("");
+  if (cardsEl) cardsEl.innerHTML = rows.map((row) => monthlyReportMobileCardHtml(row)).join("");
+}
+
+async function renderMonthlyReportPage() {
+  const main = document.getElementById("main-column");
+  if (!main || !apiFn) return;
+  if (!monthlyReportMonth) {
+    monthlyReportMonth = currentMonthValue();
+  }
+  main.innerHTML = `<div class="admin-main-scroll d-flex flex-column">
+    ${ownerChromeHeaderFn?.() ?? ""}
+    <div class="admin-attendance-page admin-attendance-page--monthly">
+      <div class="admin-attendance-daily-panel admin-attendance-monthly-panel">
+        <div class="admin-attendance-toolbar admin-attendance-daily-toolbar">
+          ${attendanceTabsHtml()}
+          <div class="admin-attendance-toolbar-actions">
+            <input type="month" class="form-control form-control-sm admin-attendance-date-input" id="admin-attendance-monthly-picker" value="${monthlyReportMonth}" aria-label="${escapeHtmlFn?.(tr("attendance.monthlyReportMonthPicker")) ?? "Month"}" />
+            <button type="button" class="btn btn-sm btn-outline-primary js-attendance-monthly-refresh">
+              ${adminMsIconFn?.("refresh") ?? ""}
+              <span>${escapeHtmlFn?.(tr("attendance.refresh")) ?? "Refresh"}</span>
+            </button>
+          </div>
+        </div>
+        <p class="admin-attendance-intro admin-attendance-daily-intro">${escapeHtmlFn?.(tr("attendance.monthlyReportIntro")) ?? ""}</p>
+        <div id="admin-attendance-monthly-summary" class="admin-attendance-daily-summary">
+          ${monthlySummaryHtml({ total: 0, presentSum: 0, absentSum: 0, workingDays: 0 }, "")}
+        </div>
+        <div class="admin-attendance-daily-table-wrap d-none d-md-block">
+          <table class="table table-hover align-middle mb-0 admin-attendance-daily-table admin-attendance-monthly-table">
+            <thead>
+              <tr>
+                <th>${escapeHtmlFn?.(tr("common.employee")) ?? "Employee"}</th>
+                <th class="text-center">${escapeHtmlFn?.(tr("attendance.monthlyPresentColumn")) ?? "Present"}</th>
+                <th class="text-center">${escapeHtmlFn?.(tr("attendance.monthlyAbsentColumn")) ?? "Absent"}</th>
+                <th class="text-center">${escapeHtmlFn?.(tr("attendance.monthlyWorkingDaysColumn")) ?? "Working days"}</th>
+                <th class="text-end">${escapeHtmlFn?.(tr("attendance.monthlyMinutesColumn")) ?? "Minutes worked"}</th>
+                <th class="text-end">${escapeHtmlFn?.(tr("profile.salary")) ?? "Salary"}</th>
+              </tr>
+            </thead>
+            <tbody id="admin-attendance-monthly-body">
+              <tr><td colspan="6" class="text-muted">${escapeHtmlFn?.(tr("common.loading")) ?? ""}</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div id="admin-attendance-monthly-cards" class="admin-attendance-daily-cards d-md-none">
+          <p class="admin-attendance-daily-empty text-muted">${escapeHtmlFn?.(tr("common.loading")) ?? ""}</p>
+        </div>
+      </div>
+    </div>
+  </div>`;
+  wireOwnerChromeHeaderFn?.(main);
+  wireAttendanceTabs(main);
+  main.querySelector("#admin-attendance-monthly-picker")?.addEventListener("change", (e) => {
+    monthlyReportMonth = e.target.value;
+    void loadMonthlyReport();
+  });
+  main.querySelector(".js-attendance-monthly-refresh")?.addEventListener("click", () => {
+    void loadMonthlyReport();
+  });
+  await loadMonthlyReport();
+}
+
+async function loadMonthlyReport() {
+  const body = document.getElementById("admin-attendance-monthly-body");
+  const cardsEl = document.getElementById("admin-attendance-monthly-cards");
+  if (!apiFn) return;
+
+  const loading = escapeHtmlFn?.(tr("common.loading")) ?? "";
+  if (body) body.innerHTML = `<tr><td colspan="6" class="text-muted">${loading}</td></tr>`;
+  if (cardsEl) cardsEl.innerHTML = `<p class="admin-attendance-daily-empty text-muted">${loading}</p>`;
+
+  try {
+    const monthValue = monthlyReportMonth || currentMonthValue();
+    const parsed = parseMonthValue(monthValue);
+    if (!parsed) throw new Error(tr("attendance.monthlyReportInvalidMonth"));
+    const report = await apiFn(
+      `/api/attendance/monthly-report?year=${parsed.year}&month=${parsed.month}`
+    );
+    const rows = [...(report.employees ?? [])].sort((a, b) => {
+      const presentDiff = (b.present ?? 0) - (a.present ?? 0);
+      if (presentDiff !== 0) return presentDiff;
+      return String(a.displayName ?? "").localeCompare(String(b.displayName ?? ""), undefined, { sensitivity: "base" });
+    });
+    renderMonthlyReportContent(rows, {
+      year: report.year ?? parsed.year,
+      month: report.month ?? parsed.month,
+      workingDays: report.workingDays ?? 0,
+    });
+  } catch (err) {
+    const msg = escapeHtmlFn?.(err.message) ?? err.message;
+    if (body) body.innerHTML = `<tr><td colspan="6" class="text-danger">${msg}</td></tr>`;
+    if (cardsEl) cardsEl.innerHTML = `<p class="admin-attendance-daily-empty text-danger">${msg}</p>`;
+  }
+}
+
 function renderAttendancePage() {
   const main = document.getElementById("main-column");
   if (!main) return;
@@ -981,6 +1228,10 @@ export async function refreshAdminAttendance({ keepSelection = false, forceFull 
     await renderDailyAttendancePage();
     return;
   }
+  if (attendanceViewTab === "report") {
+    await renderMonthlyReportPage();
+    return;
+  }
   const data = await apiFn("/api/attendance/live");
   liveData = data;
   if (!keepSelection) selectedEmployeeId = null;
@@ -1032,6 +1283,10 @@ export function openOwnerAttendanceView() {
   stopAttendancePoll();
   if (attendanceViewTab === "daily") {
     void renderDailyAttendancePage();
+    return;
+  }
+  if (attendanceViewTab === "report") {
+    void renderMonthlyReportPage();
     return;
   }
   void refreshAdminAttendance().then(() => startAttendancePoll());

@@ -21,10 +21,28 @@ export async function isCompanyLiveLocationRequired() {
   }
 }
 
+/**
+ * Whether check-in / check-out attendance is enabled for employees.
+ * Defaults to true when the setting row is missing or the column is unset.
+ */
+export async function isCompanyAttendanceEnabled() {
+  try {
+    const row = await prisma.companySettings.findUnique({
+      where: { id: COMPANY_SETTINGS_ID },
+      select: { attendanceEnabled: true },
+    });
+    if (!row) return true;
+    return row.attendanceEnabled !== false;
+  } catch {
+    return true;
+  }
+}
+
 export async function getCompanyAttendanceSettings() {
   const liveLocationRequired = await isCompanyLiveLocationRequired();
+  const attendanceEnabled = await isCompanyAttendanceEnabled();
   const schedule = await getDailyAttendanceSchedule();
-  return { liveLocationRequired, ...schedule };
+  return { liveLocationRequired, attendanceEnabled, ...schedule };
 }
 
 export async function getDailyAttendanceSchedule() {
@@ -95,6 +113,22 @@ export async function setCompanyLiveLocationRequired(liveLocationRequired) {
   });
   return {
     liveLocationRequired: updated.liveLocationRequired,
+    updatedAt: updated.updatedAt.toISOString(),
+  };
+}
+
+/**
+ * @param {boolean} attendanceEnabled
+ */
+export async function setCompanyAttendanceEnabled(attendanceEnabled) {
+  await syncCompanyTrialSettings();
+  const updated = await prisma.companySettings.update({
+    where: { id: COMPANY_SETTINGS_ID },
+    data: { attendanceEnabled: !!attendanceEnabled },
+    select: { attendanceEnabled: true, updatedAt: true },
+  });
+  return {
+    attendanceEnabled: updated.attendanceEnabled,
     updatedAt: updated.updatedAt.toISOString(),
   };
 }

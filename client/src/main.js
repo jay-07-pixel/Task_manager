@@ -40,7 +40,8 @@ import {
   refreshChatForLanguageChange,
   rerenderChatTranslatedContent,
 } from "./chat.js";
-import { adminNotificationsBellHtml, adminNotifOffcanvasHtml, wireAdminNotifications } from "./adminAnnouncements.js";
+import { adminNotificationsBellHtml, adminNotifOffcanvasHtml, wireAdminNotifications, maybePromptLegalAnnouncement } from "./adminAnnouncements.js";
+import { legalModalHtml, wireLegalModal } from "./legal/legalModal.js";
 import {
   initAdminReports,
   ownerReportsNavItemHtml,
@@ -68,7 +69,9 @@ import {
 import {
   initAttendanceCheckIn,
   attendanceCheckInCardHtml,
+  attendanceCheckInSidebarHtml,
   wireAttendanceCheckInCard,
+  refreshAttendanceCheckInCard,
   performAttendanceCheck,
 } from "./attendanceCheckIn.js";
 import {
@@ -2202,13 +2205,35 @@ function handleOpenAttendanceDeepLink() {
   const params = new URLSearchParams(window.location.search);
   if (params.get("openAttendance") !== "1" || state.user?.role !== "owner") return;
   window.history.replaceState({}, "", window.location.pathname);
-  if (state.user?.liveLocationRequired === false) {
-    showToast(tr("attendance.companyFeatureOff"), "warning");
+  if (state.user?.attendanceEnabled === false) {
+    showToast(tr("attendance.attendanceFeatureOff"), "warning");
     return;
   }
   state.ownerView = "attendance";
   renderListContentOnly();
   renderOwnerMain();
+}
+
+function handleCompanyAttendanceChanged(enabled) {
+  if (state.user) state.user.attendanceEnabled = enabled;
+  stopAttendanceCheckInReminder();
+  if (!enabled && state.ownerView === "attendance") {
+    state.ownerView = "dashboard";
+    destroyAdminAttendance();
+  }
+  if (state.user?.role === "owner") {
+    renderListContentOnly();
+    if (state.ownerView === "dashboard") renderOwnerMain();
+    else if (state.ownerView === "settings") openOwnerSettingsView();
+    else if (state.ownerView === "company-profile") openOwnerCompanyProfileView();
+    else if (state.ownerView === "manage-employees") openOwnerManageEmployeesView();
+    else if (state.ownerView === "manage-locations") openOwnerManageLocationsView();
+    else if (state.ownerView === "attendance") openOwnerAttendanceView();
+  } else if (state.user?.role === "employee") {
+    renderEmployeeChrome();
+    renderEmployeeMain();
+    if (enabled) startAttendanceCheckInReminder();
+  }
 }
 
 function wireEmployeeNotifyHandlers() {
@@ -3028,7 +3053,7 @@ function leftNavInner() {
         <div class="js-emp-assign-list-host owner-emp-assign-nav"></div>
         ${teamChatSidebarNavItemHtml()}
         ${ownerReportsNavItemHtml(state.ownerView === "reports")}
-        ${state.user?.liveLocationRequired !== false ? ownerAttendanceNavItemHtml(state.ownerView === "attendance") : ""}
+        ${state.user?.attendanceEnabled !== false ? ownerAttendanceNavItemHtml(state.ownerView === "attendance") : ""}
       </nav>
       <div class="admin-your-lists-section">
         <div class="admin-your-lists-head">
@@ -6898,7 +6923,7 @@ function renderOwnerMain() {
     return;
   }
   if (state.ownerView === "attendance") {
-    if (state.user?.liveLocationRequired === false) {
+    if (state.user?.attendanceEnabled === false) {
       state.ownerView = "dashboard";
       renderListContentOnly();
     } else {
@@ -7019,7 +7044,7 @@ function renderOwnerMain() {
       <div class="admin-dash-utilities">
         ${languageSelectorHtml({ compact: true })}
         ${ownerTrialTopBannerHtml()}
-        ${adminNotificationsBellHtml(state.user?.id)}
+        ${adminNotificationsBellHtml(state.user?.id, state.user)}
         <button type="button" class="admin-icon-btn js-owner-refresh-tasks" aria-label="${tr("owner.refreshTasks")}" ${!list ? "disabled" : ""}>
           ${adminMsIcon("refresh")}
         </button>
@@ -7033,7 +7058,7 @@ function renderOwnerMain() {
     </div>
   `;
 
-  wireAdminNotifications(state.user?.id, main);
+  wireAdminNotifications(state.user?.id, main, state.user);
   ensureAdminHeaderProfileMenuDocListener();
   wireAdminHeaderProfileMenu(main);
   wireOwnerDashboardOpen(main);
@@ -7180,7 +7205,7 @@ function ownerReportsChromeHeaderHtml() {
       <div class="admin-dash-utilities">
         ${languageSelectorHtml({ compact: true })}
         ${ownerTrialTopBannerHtml()}
-        ${adminNotificationsBellHtml(state.user?.id)}
+        ${adminNotificationsBellHtml(state.user?.id, state.user)}
         ${ownerAdminHeaderProfileHtml()}
       </div>
     </header>`;
@@ -7199,7 +7224,7 @@ function ownerDashboardChromeHeaderHtml() {
       <div class="admin-dash-utilities">
         ${languageSelectorHtml({ compact: true })}
         ${ownerTrialTopBannerHtml()}
-        ${adminNotificationsBellHtml(state.user?.id)}
+        ${adminNotificationsBellHtml(state.user?.id, state.user)}
         ${ownerAdminHeaderProfileHtml()}
       </div>
     </header>`;
@@ -7228,7 +7253,7 @@ function ownerCompanyProfileChromeHeaderHtml() {
       <div class="admin-dash-utilities">
         ${languageSelectorHtml({ compact: true })}
         ${ownerTrialTopBannerHtml()}
-        ${adminNotificationsBellHtml(state.user?.id)}
+        ${adminNotificationsBellHtml(state.user?.id, state.user)}
         ${ownerAdminHeaderProfileHtml()}
       </div>
     </header>`;
@@ -7247,7 +7272,7 @@ function ownerManageEmployeesChromeHeaderHtml() {
       <div class="admin-dash-utilities">
         ${languageSelectorHtml({ compact: true })}
         ${ownerTrialTopBannerHtml()}
-        ${adminNotificationsBellHtml(state.user?.id)}
+        ${adminNotificationsBellHtml(state.user?.id, state.user)}
         ${ownerAdminHeaderProfileHtml()}
       </div>
     </header>`;
@@ -7266,7 +7291,7 @@ function ownerManageLocationsChromeHeaderHtml() {
       <div class="admin-dash-utilities">
         ${languageSelectorHtml({ compact: true })}
         ${ownerTrialTopBannerHtml()}
-        ${adminNotificationsBellHtml(state.user?.id)}
+        ${adminNotificationsBellHtml(state.user?.id, state.user)}
         ${ownerAdminHeaderProfileHtml()}
       </div>
     </header>`;
@@ -7285,7 +7310,7 @@ function ownerSettingsChromeHeaderHtml() {
       <div class="admin-dash-utilities">
         ${languageSelectorHtml({ compact: true })}
         ${ownerTrialTopBannerHtml()}
-        ${adminNotificationsBellHtml(state.user?.id)}
+        ${adminNotificationsBellHtml(state.user?.id, state.user)}
         ${ownerAdminHeaderProfileHtml()}
       </div>
     </header>`;
@@ -7324,7 +7349,7 @@ function wireEmployeeSettingsChromeHeader(main) {
 }
 
 function wireOwnerReportsChromeHeader(main) {
-  wireAdminNotifications(state.user?.id, main);
+  wireAdminNotifications(state.user?.id, main, state.user);
   ensureAdminHeaderProfileMenuDocListener();
   wireAdminHeaderProfileMenu(main);
   wireLanguageSelector(main);
@@ -7444,8 +7469,8 @@ function wireOwnerDashboardAnnouncementListener() {
   });
   window.addEventListener("taskmgr:open-attendance", () => {
     if (state.user?.role !== "owner") return;
-    if (state.user?.liveLocationRequired === false) {
-      showToast(tr("attendance.companyFeatureOff"), "warning");
+    if (state.user?.attendanceEnabled === false) {
+      showToast(tr("attendance.attendanceFeatureOff"), "warning");
       return;
     }
     state.ownerView = "attendance";
@@ -7484,7 +7509,8 @@ function renderOwnerChrome() {
       ${employeeProfileModalHtml()}
       ${manageLocationModalHtml()}
       ${contactUsModalHtml()}
-      ${adminNotifOffcanvasHtml(state.user?.id)}
+      ${adminNotifOffcanvasHtml(state.user?.id, state.user)}
+      ${legalModalHtml()}
       ${teamChatOffcanvasHtml()}
     </div>`;
 
@@ -7545,6 +7571,7 @@ function renderOwnerChrome() {
       else if (state.ownerView === "manage-employees") openOwnerManageEmployeesView();
       else if (state.ownerView === "manage-locations") openOwnerManageLocationsView();
     },
+    onCompanyAttendanceChanged: handleCompanyAttendanceChanged,
   });
   initCompanyProfile({
     api,
@@ -7575,6 +7602,7 @@ function renderOwnerChrome() {
     ownerChromeHeader: ownerManageLocationsChromeHeaderHtml,
     wireOwnerChromeHeader: wireOwnerReportsChromeHeader,
     showToast,
+    onCompanyAttendanceChanged: handleCompanyAttendanceChanged,
   });
   initAdminAttendance({
     api,
@@ -7585,7 +7613,7 @@ function renderOwnerChrome() {
   });
   renderListGroup();
   renderOwnerMain();
-  wireAdminNotifications(state.user?.id);
+  wireAdminNotifications(state.user?.id, document, state.user);
   wireTaskModal();
   wireCustomRecurrenceModal();
   wireListNameModal();
@@ -7597,6 +7625,7 @@ function renderOwnerChrome() {
   wireEmployeeProfileModal();
   wireManageLocationModal();
   wireContactUsModal();
+  wireLegalModal();
   wireThemeIconToggles();
   initTeamChat(chatInitDeps());
   startOwnerAutoSync();
@@ -8243,6 +8272,9 @@ function empLeftNavInner() {
         ${adminMsIcon("add")}
         ${tr("nav.createAndAssign")}
       </button>
+      <div class="emp-sidebar-attendance-host">
+        ${state.user?.attendanceEnabled !== false ? attendanceCheckInSidebarHtml() : ""}
+      </div>
       <nav class="admin-sidebar-nav" aria-label="${tr("nav.myWork")}">
         <div class="js-emp-nav-host"></div>
         ${teamChatSidebarNavItemHtml()}
@@ -8293,6 +8325,9 @@ function bindEmpNavHandlers() {
 }
 
 function wireEmpChromeNav() {
+  document.getElementById("empNavOffcanvas")?.addEventListener("shown.bs.offcanvas", () => {
+    void refreshAttendanceCheckInCard();
+  });
   document.getElementById("empNavOffcanvas")?.addEventListener("click", (e) => {
     const actionable = e.target.closest("[data-emp-filter], .js-emp-create-task, .js-open-team-chat");
     if (actionable) dismissEmpMobileNav();
@@ -8379,13 +8414,13 @@ function renderEmployeeMain() {
         </div>
         <div class="admin-dash-utilities">
           ${languageSelectorHtml({ compact: true })}
+          ${adminNotificationsBellHtml(state.user?.id, state.user)}
           <button type="button" class="admin-icon-btn js-emp-refresh" aria-label="${tr("owner.refreshTasks")}">
             ${adminMsIcon("refresh")}
           </button>
           ${employeeAdminHeaderProfileHtml()}
         </div>
       </header>
-      ${attendanceCheckInCardHtml()}
       ${kpiRow}
       ${tableSection}
     </div>
@@ -8395,8 +8430,6 @@ function renderEmployeeMain() {
   wireAdminHeaderProfileMenu(main);
   wireEmpEnablePush(main);
   wireLanguageSelector(main);
-
-  void wireAttendanceCheckInCard();
 
   main.querySelectorAll("[data-emp-filter-kpi]").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -8491,6 +8524,8 @@ function renderEmployeeChrome() {
       ${myProfileModalHtml()}
       ${contactUsModalHtml()}
       ${attendanceCheckInReminderModalHtml()}
+      ${adminNotifOffcanvasHtml(state.user?.id, state.user)}
+      ${legalModalHtml()}
       ${teamChatOffcanvasHtml()}
     </div>`;
 
@@ -8530,8 +8565,11 @@ function renderEmployeeChrome() {
   wireMyProfileModal();
   wireEmployeeProfileModal();
   wireContactUsModal();
+  wireLegalModal();
+  void wireAttendanceCheckInCard();
   initTeamChat(chatInitDeps());
   renderEmployeeMain();
+  wireAdminNotifications(state.user?.id, document, state.user);
   wireChatNotifyHandlers();
   handleOpenChatDeepLink();
 }
@@ -8564,7 +8602,9 @@ async function render() {
     if (locationOk) {
       renderEmployeeMain();
       startEmployeeReminderSystem();
-      startAttendanceCheckInReminder();
+      if (state.user?.attendanceEnabled !== false) {
+        startAttendanceCheckInReminder();
+      }
       void prepareEmployeePushOnLogin();
       await handleEmployeeNotifyDeepLink();
     } else {
@@ -8587,6 +8627,7 @@ async function render() {
         for (const reg of regs) void reg.update();
       });
     }
+    maybePromptLegalAnnouncement(state.user);
     return;
   }
   await refreshCompanyTrial();
@@ -8595,6 +8636,7 @@ async function render() {
   await loadTasks(state.activeListId);
   renderOwnerChrome();
   maybeShowOwnerTrialMessageModal();
+  maybePromptLegalAnnouncement(state.user);
   wireChatNotifyHandlers();
   handleOpenAttendanceDeepLink();
   await handleOwnerNotifyDeepLink();

@@ -15,11 +15,21 @@ export function normalizeTimeHHmm(value) {
   return `${String(parsed.hours).padStart(2, "0")}:${String(parsed.minutes).padStart(2, "0")}`;
 }
 
-/** @param {{ hours: number, minutes: number }} time */
-export function getTodayAtTime(time, baseDate = new Date()) {
-  const d = new Date(baseDate);
-  d.setHours(time.hours, time.minutes, 0, 0);
-  return d;
+export function getCompanyTimeZone() {
+  return process.env.COMPANY_TIMEZONE || "Asia/Kolkata";
+}
+
+/** @param {Date} date @param {string} [timeZone] */
+function minutesSinceLocalMidnight(date, timeZone = getCompanyTimeZone()) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+  const hours = Number(parts.find((p) => p.type === "hour")?.value ?? 0);
+  const minutes = Number(parts.find((p) => p.type === "minute")?.value ?? 0);
+  return hours * 60 + minutes;
 }
 
 /**
@@ -31,8 +41,10 @@ export function evaluateCheckInTiming(recordedAt, checkInTime) {
   const parsed = parseTimeHHmm(checkInTime);
   if (!parsed) return null;
   const at = recordedAt instanceof Date ? recordedAt : new Date(recordedAt);
-  const deadline = getTodayAtTime(parsed, at);
-  return at.getTime() > deadline.getTime() ? "late" : "on_time";
+  if (Number.isNaN(at.getTime())) return null;
+  const recordedMins = minutesSinceLocalMidnight(at);
+  const deadlineMins = parsed.hours * 60 + parsed.minutes;
+  return recordedMins > deadlineMins ? "late" : "on_time";
 }
 
 /**
@@ -44,6 +56,8 @@ export function evaluateCheckOutTiming(recordedAt, checkOutTime) {
   const parsed = parseTimeHHmm(checkOutTime);
   if (!parsed) return null;
   const at = recordedAt instanceof Date ? recordedAt : new Date(recordedAt);
-  const target = getTodayAtTime(parsed, at);
-  return at.getTime() < target.getTime() ? "early" : "on_time";
+  if (Number.isNaN(at.getTime())) return null;
+  const recordedMins = minutesSinceLocalMidnight(at);
+  const targetMins = parsed.hours * 60 + parsed.minutes;
+  return recordedMins < targetMins ? "early" : "on_time";
 }

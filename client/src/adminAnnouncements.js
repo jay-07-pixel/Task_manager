@@ -1,13 +1,28 @@
 import * as bootstrap from "bootstrap";
 import { openTeamChat } from "./chat.js";
+import { openLegalModal } from "./legal/legalModal.js";
+import { LEGAL_ANNOUNCEMENT_ID } from "./legal/privacyTermsContent.js";
 import { tr } from "./i18n/index.js";
 
-const STORAGE_KEY = "taskmgr-owner-announcements-read";
+const STORAGE_KEY = "taskmgr-announcements-read";
+const LEGACY_STORAGE_KEY = "taskmgr-owner-announcements-read";
 const OFFCANVAS_ID = "adminNotifOffcanvas";
 const APK_FILENAME = "kalpanik-reminder.apk";
 
-/** @type {{ id: string; date: string; title: string; icon: string; body: string; action?: { label: string; type?: string; href?: string; download?: boolean } }[]} */
+/** @typedef {{ id: string; date: string; title: string; icon: string; body: string; audience?: "all" | "owner"; action?: { labelKey?: string; type?: string; href?: string; download?: boolean } }} Announcement */
+
+/** @type {Announcement[]} */
 export const ADMIN_ANNOUNCEMENTS = [
+  {
+    id: LEGAL_ANNOUNCEMENT_ID,
+    date: "03-06-26",
+    title: "Privacy Policy & Terms & Conditions",
+    icon: "bi-shield-check",
+    audience: "all",
+    body:
+      "Kalpanik Task Manager and Kalpanik Reminder are governed by our Privacy Policy and Terms & Conditions (effective 3 June 2026). Please read them to understand how we handle data, location, and your responsibilities when using the platform.",
+    action: { labelKey: "legal.readFullDocument", type: "open-legal" },
+  },
   {
     id: "feature-apk-update-20260704",
     date: "04-07-26",
@@ -119,10 +134,23 @@ function escapeHtml(s) {
     .replace(/"/g, "&quot;");
 }
 
+/** @param {any} user */
+function announcementsForUser(user) {
+  const privileged = user?.role === "owner" || user?.isOwner || user?.isAdmin;
+  return ADMIN_ANNOUNCEMENTS.filter((item) => item.audience === "all" || privileged);
+}
+
 /** @returns {Record<string, string[]>} */
 function readStore() {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    let raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) {
+      const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
+      if (legacy) {
+        localStorage.setItem(STORAGE_KEY, legacy);
+        raw = legacy;
+      }
+    }
     if (!raw) return {};
     const parsed = JSON.parse(raw);
     return parsed && typeof parsed === "object" ? parsed : {};
@@ -143,17 +171,19 @@ function getReadIds(userId) {
   return Array.isArray(ids) ? ids : [];
 }
 
-/** @param {string | undefined | null} userId */
-export function getAdminUnreadCount(userId) {
+/** @param {string | undefined | null} userId @param {any} [user] */
+export function getAdminUnreadCount(userId, user = null) {
   const read = new Set(getReadIds(userId));
-  return ADMIN_ANNOUNCEMENTS.filter((a) => !read.has(a.id)).length;
+  return announcementsForUser(user).filter((a) => !read.has(a.id)).length;
 }
 
-/** @param {string | undefined | null} userId */
-function markAllRead(userId) {
+/** @param {string | undefined | null} userId @param {any} [user] */
+function markAllRead(userId, user = null) {
   if (!userId) return;
   const store = readStore();
-  store[userId] = ADMIN_ANNOUNCEMENTS.map((a) => a.id);
+  const set = new Set(getReadIds(userId));
+  for (const item of announcementsForUser(user)) set.add(item.id);
+  store[userId] = [...set];
   writeStore(store);
 }
 
@@ -184,6 +214,8 @@ function announcementItemHtml(item, userId) {
     actionHtml = `<button type="button" class="btn btn-sm btn-outline-primary js-admin-notif-action" data-action="open-owner-dashboard" data-announcement-id="${escapeHtml(item.id)}">${escapeHtml(tr(action.labelKey || "notifications.openOwnerDashboard"))}</button>`;
   } else if (action?.type === "open-attendance") {
     actionHtml = `<button type="button" class="btn btn-sm btn-outline-primary js-admin-notif-action" data-action="open-attendance" data-announcement-id="${escapeHtml(item.id)}">${escapeHtml(tr(action.labelKey || "notifications.openAttendance"))}</button>`;
+  } else if (action?.type === "open-legal") {
+    actionHtml = `<button type="button" class="btn btn-sm btn-outline-primary js-admin-notif-action" data-action="open-legal" data-announcement-id="${escapeHtml(item.id)}">${escapeHtml(tr(action.labelKey || "legal.readFullDocument"))}</button>`;
   } else if (action?.href) {
     const dl = action.download ? ` download="${APK_FILENAME}"` : "";
     actionHtml = `<a class="btn btn-sm btn-outline-primary js-admin-notif-action" href="${escapeHtml(action.href)}"${dl} data-announcement-id="${escapeHtml(item.id)}">${escapeHtml(tr(action.labelKey || "notifications.downloadApk"))}</a>`;
@@ -203,16 +235,17 @@ function announcementItemHtml(item, userId) {
     </li>`;
 }
 
-function notificationsListInnerHtml(userId) {
-  if (!ADMIN_ANNOUNCEMENTS.length) {
+function notificationsListInnerHtml(userId, user = null) {
+  const items = announcementsForUser(user);
+  if (!items.length) {
     return `<p class="admin-notif-empty small text-muted mb-0">${escapeHtml(tr("notifications.empty"))}</p>`;
   }
-  return `<ul class="list-unstyled mb-0 admin-notif-list">${ADMIN_ANNOUNCEMENTS.map((a) => announcementItemHtml(a, userId)).join("")}</ul>`;
+  return `<ul class="list-unstyled mb-0 admin-notif-list">${items.map((a) => announcementItemHtml(a, userId)).join("")}</ul>`;
 }
 
 /** Bell button only — panel opens in offcanvas on click. */
-export function adminNotificationsBellHtml(userId) {
-  const unread = getAdminUnreadCount(userId);
+export function adminNotificationsBellHtml(userId, user = null) {
+  const unread = getAdminUnreadCount(userId, user);
   return `
     <button
       type="button"
@@ -227,9 +260,9 @@ export function adminNotificationsBellHtml(userId) {
     </button>`;
 }
 
-/** Render once in owner shell — hidden until bell is tapped. */
-export function adminNotifOffcanvasHtml(userId) {
-  const unread = getAdminUnreadCount(userId);
+/** Render once in shell — hidden until bell is tapped. */
+export function adminNotifOffcanvasHtml(userId, user = null) {
+  const unread = getAdminUnreadCount(userId, user);
   return `
     <div class="offcanvas offcanvas-end admin-notif-offcanvas" tabindex="-1" id="${OFFCANVAS_ID}" aria-labelledby="${OFFCANVAS_ID}Label">
       <div class="offcanvas-header admin-notif-offcanvas-head border-bottom">
@@ -243,13 +276,13 @@ export function adminNotifOffcanvasHtml(userId) {
         </div>
       </div>
       <div class="offcanvas-body admin-notif-offcanvas-body p-0">
-        ${notificationsListInnerHtml(userId)}
+        ${notificationsListInnerHtml(userId, user)}
       </div>
     </div>`;
 }
 
-function refreshBadges(userId) {
-  const unread = getAdminUnreadCount(userId);
+function refreshBadges(userId, user = null) {
+  const unread = getAdminUnreadCount(userId, user);
   document.querySelectorAll(".js-admin-notif-badge").forEach((el) => {
     if (unread) {
       el.textContent = unread > 9 ? "9+" : String(unread);
@@ -272,20 +305,20 @@ function refreshBadges(userId) {
   });
 }
 
-/** @param {string | undefined | null} userId @param {ParentNode} [root] */
-export function wireAdminNotifications(userId, root = document) {
+/** @param {string | undefined | null} userId @param {ParentNode} [root] @param {any} [user] */
+export function wireAdminNotifications(userId, root = document, user = null) {
   const offcanvasEl = root.querySelector(`#${OFFCANVAS_ID}`) || document.getElementById(OFFCANVAS_ID);
   if (offcanvasEl && offcanvasEl.dataset.wired !== "1") {
     offcanvasEl.dataset.wired = "1";
     offcanvasEl.addEventListener("shown.bs.offcanvas", () => {
-      markAllRead(userId);
-      refreshBadges(userId);
+      markAllRead(userId, user);
+      refreshBadges(userId, user);
     });
     offcanvasEl.querySelectorAll(".js-admin-notif-action").forEach((actionEl) => {
       actionEl.addEventListener("click", () => {
         const id = actionEl.getAttribute("data-announcement-id");
         if (id) markOneRead(userId, id);
-        refreshBadges(userId);
+        refreshBadges(userId, user);
         if (actionEl.getAttribute("data-action") === "open-chat") {
           bootstrap.Offcanvas.getInstance(offcanvasEl)?.hide();
           openTeamChat();
@@ -295,8 +328,28 @@ export function wireAdminNotifications(userId, root = document) {
         } else if (actionEl.getAttribute("data-action") === "open-attendance") {
           bootstrap.Offcanvas.getInstance(offcanvasEl)?.hide();
           window.dispatchEvent(new CustomEvent("taskmgr:open-attendance"));
+        } else if (actionEl.getAttribute("data-action") === "open-legal") {
+          bootstrap.Offcanvas.getInstance(offcanvasEl)?.hide();
+          openLegalModal();
         }
       });
     });
   }
+}
+
+/** @param {any} user */
+export function maybePromptLegalAnnouncement(user) {
+  if (!user?.id) return;
+  const visible = announcementsForUser(user).some((item) => item.id === LEGAL_ANNOUNCEMENT_ID);
+  if (!visible) return;
+  const read = new Set(getReadIds(user.id));
+  if (read.has(LEGAL_ANNOUNCEMENT_ID)) return;
+  window.setTimeout(() => {
+    openLegalModal({
+      onClose: () => {
+        markOneRead(user.id, LEGAL_ANNOUNCEMENT_ID);
+        refreshBadges(user.id, user);
+      },
+    });
+  }, 700);
 }

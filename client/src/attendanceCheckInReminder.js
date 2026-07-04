@@ -100,7 +100,7 @@ async function tickReminder() {
 
   try {
     const status = await apiFn("/api/attendance/check-status");
-    if (!status.locationsCount) return;
+    if (status.attendanceEnabled === false || !status.locationsCount) return;
 
     const nowMs = Date.now();
 

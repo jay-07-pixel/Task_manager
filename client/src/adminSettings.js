@@ -4,7 +4,10 @@ import {
   wireAttendanceSettingsToggle,
   companyLiveLocationSettingsToggleHtml,
   wireCompanyLiveLocationToggle,
+  companyAttendanceEnabledToggleHtml,
+  wireCompanyAttendanceEnabledToggle,
 } from "./attendance.js";
+import { openLegalModal } from "./legal/legalModal.js";
 import {
   isPushSupported,
   isPushSubscribed,
@@ -50,6 +53,9 @@ let showToastFn = null;
 /** @type {((enabled: boolean) => void) | null} */
 let onCompanyLiveLocationChangedFn = null;
 
+/** @type {((enabled: boolean) => void) | null} */
+let onCompanyAttendanceChangedFn = null;
+
 let visitUrl = "https://kalpanik.in/";
 
 /** @type {(() => void) | null} */
@@ -78,6 +84,7 @@ export function initAdminSettings({
   showToast,
   kalpanikWebsiteUrl,
   onCompanyLiveLocationChanged,
+  onCompanyAttendanceChanged,
 }) {
   apiFn = api;
   escapeHtmlFn = escapeHtml;
@@ -94,6 +101,7 @@ export function initAdminSettings({
   getUserFn = getUser ?? null;
   showToastFn = showToast ?? null;
   onCompanyLiveLocationChangedFn = onCompanyLiveLocationChanged ?? null;
+  onCompanyAttendanceChangedFn = onCompanyAttendanceChanged ?? null;
   if (kalpanikWebsiteUrl) visitUrl = kalpanikWebsiteUrl;
 }
 
@@ -147,6 +155,11 @@ function ownerSettingsRowsHtml() {
       attrs: `href="${escapeHtmlFn?.(visitUrl) ?? visitUrl}" target="_blank" rel="noopener noreferrer"`,
     }),
     settingsRowHtml({
+      icon: "policy",
+      label: tr("legal.settingsRow"),
+      extraClass: "js-open-legal",
+    }),
+    settingsRowHtml({
       icon: "admin_panel_settings",
       label: tr("owner.manageAdmin"),
       extraClass: "js-admin-manage-admin",
@@ -162,6 +175,7 @@ function ownerSettingsRowsHtml() {
       label: tr("attendance.manageLocations"),
       extraClass: "js-open-manage-locations",
     }),
+    companyAttendanceEnabledToggleHtml(),
     settingsRowHtml({
       icon: "person",
       label: tr("owner.switchToUserView"),
@@ -204,6 +218,11 @@ function employeeSettingsRowsHtml() {
       extraClass: "admin-settings-row--link",
       tag: "a",
       attrs: `href="${escapeHtmlFn?.(visitUrl) ?? visitUrl}" target="_blank" rel="noopener noreferrer"`,
+    }),
+    settingsRowHtml({
+      icon: "policy",
+      label: tr("legal.settingsRow"),
+      extraClass: "js-open-legal",
     }),
   ];
 
@@ -372,12 +391,23 @@ function wireSettingsPage(main, role) {
     btn.addEventListener("click", () => onOpenManageLocationsFn?.());
   });
 
+  main.querySelectorAll(".js-open-legal").forEach((btn) => {
+    if (btn.dataset.wired === "1") return;
+    btn.dataset.wired = "1";
+    btn.addEventListener("click", () => openLegalModal());
+  });
+
   wireNotificationsToggle(main);
   if (role === "owner") {
     wireCompanyLiveLocationToggle(main, {
       api: apiFn,
       showToast: showToastFn,
       onChanged: (enabled) => onCompanyLiveLocationChangedFn?.(enabled),
+    });
+    wireCompanyAttendanceEnabledToggle(main, {
+      api: apiFn,
+      showToast: showToastFn,
+      onChanged: (enabled) => onCompanyAttendanceChangedFn?.(enabled),
     });
   }
   if (role === "employee") {

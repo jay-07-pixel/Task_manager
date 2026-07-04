@@ -1,7 +1,10 @@
 import { prisma } from "../lib/prisma.js";
 import { findNearestWorkLocation, validateCoordinates } from "../lib/geofence.js";
 import { getActiveWorkLocations } from "./workLocationService.js";
-import { getDailyAttendanceSchedule } from "./companyAttendanceSettings.js";
+import {
+  getDailyAttendanceSchedule,
+  isCompanyAttendanceEnabled,
+} from "./companyAttendanceSettings.js";
 import {
   evaluateCheckInTiming,
   evaluateCheckOutTiming,
@@ -23,7 +26,15 @@ function startOfDayLocal(dateStr) {
   return { start, end };
 }
 
-function serializeCheck(row) {
+function serializeCheck(row, schedule = null) {
+  let timingStatus = row.timingStatus ?? null;
+  if (schedule) {
+    if (row.type === "check_in" && schedule.checkInTime) {
+      timingStatus = evaluateCheckInTiming(row.recordedAt, schedule.checkInTime);
+    } else if (row.type === "check_out" && schedule.checkOutTime) {
+      timingStatus = evaluateCheckOutTiming(row.recordedAt, schedule.checkOutTime);
+    }
+  }
   return {
     id: row.id,
     type: row.type,
@@ -31,7 +42,7 @@ function serializeCheck(row) {
     longitude: row.longitude,
     distanceMeters: Math.round(row.distanceMeters),
     withinRadius: row.withinRadius,
-    timingStatus: row.timingStatus ?? null,
+    timingStatus,
     recordedAt: row.recordedAt.toISOString(),
     locationName: row.workLocation?.name ?? null,
     workLocationId: row.workLocationId,
@@ -74,18 +85,18 @@ async function getChecksForDay(userId, dayStart, dayEnd) {
   });
 }
 
-function summarizeDayChecks(checks) {
+function summarizeDayChecks(checks, schedule = null) {
   const checkInRow = checks.find((c) => c.type === "check_in") ?? null;
   const checkOutRow = checks.find((c) => c.type === "check_out") ?? null;
   return {
     isCheckedIn: Boolean(checkInRow && !checkOutRow),
-    checkIn: checkInRow ? serializeCheck(checkInRow) : null,
-    checkOut: checkOutRow ? serializeCheck(checkOutRow) : null,
+    checkIn: checkInRow ? serializeCheck(checkInRow, schedule) : null,
+    checkOut: checkOutRow ? serializeCheck(checkOutRow, schedule) : null,
   };
 }
 
-function deriveTodayStatus(checks) {
-  const summary = summarizeDayChecks(checks);
+function deriveTodayStatus(checks, schedule = null) {
+  const summary = summarizeDayChecks(checks, schedule);
   const hasCheckIn = Boolean(summary.checkIn);
   const hasCheckOut = Boolean(summary.checkOut);
   return {
@@ -99,9 +110,27 @@ function deriveTodayStatus(checks) {
 }
 
 export async function getCheckStatus(userId, { latitude, longitude } = {}) {
+  const attendanceEnabled = await isCompanyAttendanceEnabled();
+  if (!attendanceEnabled) {
+    return {
+      attendanceEnabled: false,
+      date: startOfDayLocal().start.toISOString().slice(0, 10),
+      locationsCount: 0,
+      schedule: await getDailyAttendanceSchedule(),
+      isCheckedIn: false,
+      dayComplete: false,
+      canCheckIn: false,
+      canCheckOut: false,
+      lastCheckIn: null,
+      lastCheckOut: null,
+      proximity: null,
+    };
+  }
+
   const { start, end } = startOfDayLocal();
   const checks = await getChecksForDay(userId, start, end);
-  const today = deriveTodayStatus(checks);
+  const schedule = await getDailyAttendanceSchedule();
+  const today = deriveTodayStatus(checks, schedule);
 
   let proximity = null;
   if (latitude != null && longitude != null) {
@@ -109,9 +138,9 @@ export async function getCheckStatus(userId, { latitude, longitude } = {}) {
   }
 
   const locations = await getActiveWorkLocations();
-  const schedule = await getDailyAttendanceSchedule();
 
   return {
+    attendanceEnabled: true,
     date: start.toISOString().slice(0, 10),
     locationsCount: locations.length,
     schedule,
@@ -121,6 +150,10 @@ export async function getCheckStatus(userId, { latitude, longitude } = {}) {
 }
 
 export async function performCheck(userId, type, latitude, longitude) {
+  if (!(await isCompanyAttendanceEnabled())) {
+    throw new Error("Attendance is turned off for your company.");
+  }
+
   const proximity = await evaluateProximity(latitude, longitude);
   if (!proximity.locationsConfigured) {
     throw new Error("No work locations configured. Ask your admin to add locations in Settings.");
@@ -170,13 +203,14 @@ export async function performCheck(userId, type, latitude, longitude) {
   });
 
   return {
-    check: serializeCheck(row),
+    check: serializeCheck(row, schedule),
     status: await getCheckStatus(userId),
   };
 }
 
 export async function getDailyAttendanceReport(dateStr) {
   const { start, end } = startOfDayLocal(dateStr);
+  const schedule = await getDailyAttendanceSchedule();
 
   const employees = await prisma.user.findMany({
     where: { role: "employee" },
@@ -200,7 +234,7 @@ export async function getDailyAttendanceReport(dateStr) {
     date: start.toISOString().slice(0, 10),
     employees: employees.map((emp) => {
       const userChecks = byUser.get(emp.id) ?? [];
-      const summary = summarizeDayChecks(userChecks);
+      const summary = summarizeDayChecks(userChecks, schedule);
       return {
         userId: emp.id,
         displayName: emp.displayName,
@@ -208,8 +242,136 @@ export async function getDailyAttendanceReport(dateStr) {
         checkIn: summary.checkIn,
         checkOut: summary.checkOut,
         isCheckedIn: summary.isCheckedIn,
-        allChecks: userChecks.map(serializeCheck),
+        allChecks: userChecks.map((c) => serializeCheck(c, schedule)),
       };
     }),
   };
+}
+
+function dateKeyFromDate(date) {
+  const d = new Date(date);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function isSundayDateKey(dateKey) {
+  const { start } = startOfDayLocal(dateKey);
+  return start.getDay() === 0;
+}
+
+function listWorkingDayKeysInMonth(year, month) {
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const keys = [];
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const dateKey = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    if (!isSundayDateKey(dateKey)) keys.push(dateKey);
+  }
+  return keys;
+}
+
+function minutesFromDaySummary(summary, dateKey) {
+  if (!summary.checkIn?.recordedAt) return 0;
+  const start = new Date(summary.checkIn.recordedAt);
+  let end = summary.checkOut?.recordedAt ? new Date(summary.checkOut.recordedAt) : null;
+  if (!end && summary.isCheckedIn) {
+    const todayKey = dateKeyFromDate(new Date());
+    if (dateKey === todayKey) end = new Date();
+  }
+  if (!end || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return 0;
+  const minutes = Math.round((end.getTime() - start.getTime()) / 60000);
+  return minutes >= 0 ? minutes : 0;
+}
+
+export async function getMonthlyAttendanceReport(year, month) {
+  if (!Number.isInteger(year) || year < 2000 || year > 2100) {
+    throw new Error("Invalid year.");
+  }
+  if (!Number.isInteger(month) || month < 1 || month > 12) {
+    throw new Error("Invalid month.");
+  }
+
+  const schedule = await getDailyAttendanceSchedule();
+  const workingDayKeys = listWorkingDayKeysInMonth(year, month);
+  const workingDays = workingDayKeys.length;
+
+  const firstKey = `${year}-${String(month).padStart(2, "0")}-01`;
+  const lastDay = new Date(year, month, 0).getDate();
+  const lastKey = `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+  const { start } = startOfDayLocal(firstKey);
+  const { end } = startOfDayLocal(lastKey);
+
+  const employees = await prisma.user.findMany({
+    where: { role: "employee" },
+    select: { id: true, displayName: true, email: true, salary: true },
+    orderBy: { displayName: "asc" },
+  });
+
+  const checks = await prisma.attendanceCheck.findMany({
+    where: { recordedAt: { gte: start, lt: end } },
+    include: { workLocation: true },
+    orderBy: { recordedAt: "asc" },
+  });
+
+  const byUserDay = new Map();
+  for (const check of checks) {
+    const dayKey = dateKeyFromDate(check.recordedAt);
+    if (!byUserDay.has(check.userId)) byUserDay.set(check.userId, new Map());
+    const userDays = byUserDay.get(check.userId);
+    if (!userDays.has(dayKey)) userDays.set(dayKey, []);
+    userDays.get(dayKey).push(check);
+  }
+
+  return {
+    year,
+    month,
+    workingDays,
+    employees: employees.map((emp) => {
+      const userDays = byUserDay.get(emp.id) ?? new Map();
+      let present = 0;
+      let totalMinutes = 0;
+
+      for (const dayKey of workingDayKeys) {
+        const dayChecks = userDays.get(dayKey) ?? [];
+        const summary = summarizeDayChecks(dayChecks, schedule);
+        if (summary.checkIn) {
+          present += 1;
+          totalMinutes += minutesFromDaySummary(summary, dayKey);
+        }
+      }
+
+      return {
+        userId: emp.id,
+        displayName: emp.displayName,
+        email: emp.email,
+        salary: emp.salary ?? 15000,
+        present,
+        absent: workingDays - present,
+        workingDays,
+        totalMinutes,
+      };
+    }),
+  };
+}
+
+export async function getMyAttendanceHistory(userId, { days = 14 } = {}) {
+  const schedule = await getDailyAttendanceSchedule();
+  const { start: todayStart } = startOfDayLocal();
+  const safeDays = Math.min(30, Math.max(1, days));
+  const history = [];
+
+  for (let i = 1; i <= safeDays; i += 1) {
+    const d = new Date(todayStart);
+    d.setDate(d.getDate() - i);
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const { start, end } = startOfDayLocal(dateStr);
+    const checks = await getChecksForDay(userId, start, end);
+    const summary = summarizeDayChecks(checks, schedule);
+    history.push({
+      date: dateStr,
+      present: Boolean(summary.checkIn),
+      checkIn: summary.checkIn,
+      checkOut: summary.checkOut,
+    });
+  }
+
+  return { history };
 }
