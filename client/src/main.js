@@ -9,6 +9,12 @@ import {
   openEmployeeProfileModal,
   wireEmployeeProfileModal,
 } from "./adminManageEmployees.js";
+import {
+  initManageLocations,
+  openOwnerManageLocationsView,
+  manageLocationModalHtml,
+  wireManageLocationModal,
+} from "./adminManageLocations.js";
 import { initCompanyProfile, openOwnerCompanyProfileView } from "./companyProfile.js";
 import {
   profileDocumentsSectionHtml,
@@ -52,12 +58,18 @@ import {
   openEmployeeSettingsView,
   onSettingsThemeChange,
   refreshCompanyProfileSettingsBadge,
+  refreshMyProfileSettingsBadge,
 } from "./adminSettings.js";
 import {
   initAttendance,
   ensureEmployeeLocationAccess,
   stopAttendanceTracking,
 } from "./attendance.js";
+import {
+  initAttendanceCheckIn,
+  attendanceCheckInCardHtml,
+  wireAttendanceCheckInCard,
+} from "./attendanceCheckIn.js";
 import {
   initAdminAttendance,
   ownerAttendanceNavItemHtml,
@@ -2460,12 +2472,6 @@ function ownerAdminHeaderProfileHtml() {
         <span>${tr("owner.ownerDashboard")}</span>
       </button>`
     : "";
-  const companyProfileItem = state.user?.isOwner
-    ? `<button type="button" class="admin-header-profile-item js-open-company-profile" role="menuitem">
-        ${adminMsIcon("business")}
-        <span>${tr("profile.myCompanyDetails")}</span>
-      </button>`
-    : "";
   return `<div class="admin-header-profile-dropdown">
     <button
       type="button"
@@ -2479,7 +2485,6 @@ function ownerAdminHeaderProfileHtml() {
     </button>
     <div class="admin-header-profile-menu" role="menu">
       ${ownerDashItem}
-      ${companyProfileItem}
       ${adminHeaderContactUsItemHtml()}
       ${adminHeaderSettingsItemHtml()}
       <div class="admin-header-profile-divider" role="separator"></div>
@@ -4441,6 +4446,7 @@ async function saveMyProfile(e) {
         profileDocumentsComplete: profile.profileDocumentsComplete,
       };
       fillProfileDocumentsUi(profile);
+      refreshMyProfileSettingsBadge(!profile.profileDocumentsComplete);
     }
     bootstrap.Modal.getInstance(document.getElementById("myProfileModal"))?.hide();
     showToast(tr("profile.saved"), "success");
@@ -4468,6 +4474,7 @@ function wireMyProfileModal() {
       if (state.user) {
         state.user.profileDocumentsComplete = profile.profileDocumentsComplete;
       }
+      refreshMyProfileSettingsBadge(!profile.profileDocumentsComplete);
     },
   });
   document.getElementById("myProfileModal")?.addEventListener("hidden.bs.modal", () => {
@@ -6876,6 +6883,11 @@ function renderOwnerMain() {
     openOwnerManageEmployeesView();
     return;
   }
+  if (state.ownerView === "manage-locations") {
+    destroyTaskSortables();
+    openOwnerManageLocationsView();
+    return;
+  }
   if (state.ownerView === "attendance") {
     if (state.user?.liveLocationRequired === false) {
       state.ownerView = "dashboard";
@@ -7232,6 +7244,25 @@ function ownerManageEmployeesChromeHeaderHtml() {
     </header>`;
 }
 
+function ownerManageLocationsChromeHeaderHtml() {
+  const adminWelcomeName = state.user?.displayName
+    ? escapeHtml(dt(state.user.displayName))
+    : tr("common.admin");
+  return `<header class="admin-dash-header">
+      ${adminMobileNavToggleHtml()}
+      <div class="admin-dash-heading">
+        <h1 class="admin-dash-title">${tr("attendance.manageLocations")}</h1>
+        <p class="admin-dash-subtitle">${tr("common.welcome", { name: adminWelcomeName })}</p>
+      </div>
+      <div class="admin-dash-utilities">
+        ${languageSelectorHtml({ compact: true })}
+        ${ownerTrialTopBannerHtml()}
+        ${adminNotificationsBellHtml(state.user?.id)}
+        ${ownerAdminHeaderProfileHtml()}
+      </div>
+    </header>`;
+}
+
 function ownerSettingsChromeHeaderHtml() {
   const adminWelcomeName = state.user?.displayName
     ? escapeHtml(dt(state.user.displayName))
@@ -7271,6 +7302,7 @@ function ownerReportsChromeHeaderDynamic() {
   if (state.ownerView === "settings") return ownerSettingsChromeHeaderHtml();
   if (state.ownerView === "company-profile") return ownerCompanyProfileChromeHeaderHtml();
   if (state.ownerView === "manage-employees") return ownerManageEmployeesChromeHeaderHtml();
+  if (state.ownerView === "manage-locations") return ownerManageLocationsChromeHeaderHtml();
   if (state.ownerView === "attendance") return ownerAttendanceChromeHeaderHtml();
   return ownerReportsChromeHeaderHtml();
 }
@@ -7369,6 +7401,7 @@ function wireChromeNav() {
         state.ownerView === "settings" ||
         state.ownerView === "company-profile" ||
         state.ownerView === "manage-employees" ||
+        state.ownerView === "manage-locations" ||
         state.ownerView === "attendance"
       ) {
         state.ownerView = "dashboard";
@@ -7440,6 +7473,7 @@ function renderOwnerChrome() {
       ${teamAdminModalHtml()}
       ${myProfileModalHtml()}
       ${employeeProfileModalHtml()}
+      ${manageLocationModalHtml()}
       ${contactUsModalHtml()}
       ${adminNotifOffcanvasHtml(state.user?.id)}
       ${teamChatOffcanvasHtml()}
@@ -7480,6 +7514,12 @@ function renderOwnerChrome() {
       renderOwnerMain();
       dismissAdminMobileNav();
     },
+    onOpenManageLocations: () => {
+      state.ownerView = "manage-locations";
+      renderListContentOnly();
+      renderOwnerMain();
+      dismissAdminMobileNav();
+    },
     onToggleTheme: toggleAdminTheme,
     getUser: () => state.user,
     showToast,
@@ -7494,6 +7534,7 @@ function renderOwnerChrome() {
       else if (state.ownerView === "settings") openOwnerSettingsView();
       else if (state.ownerView === "company-profile") openOwnerCompanyProfileView();
       else if (state.ownerView === "manage-employees") openOwnerManageEmployeesView();
+      else if (state.ownerView === "manage-locations") openOwnerManageLocationsView();
     },
   });
   initCompanyProfile({
@@ -7518,6 +7559,14 @@ function renderOwnerChrome() {
     wireOwnerChromeHeader: wireOwnerReportsChromeHeader,
     showToast,
   });
+  initManageLocations({
+    api,
+    escapeHtml,
+    adminMsIcon,
+    ownerChromeHeader: ownerManageLocationsChromeHeaderHtml,
+    wireOwnerChromeHeader: wireOwnerReportsChromeHeader,
+    showToast,
+  });
   initAdminAttendance({
     api,
     escapeHtml,
@@ -7537,6 +7586,7 @@ function renderOwnerChrome() {
   wireTeamAdminModal();
   wireMyProfileModal();
   wireEmployeeProfileModal();
+  wireManageLocationModal();
   wireContactUsModal();
   wireThemeIconToggles();
   initTeamChat(chatInitDeps());
@@ -8326,6 +8376,7 @@ function renderEmployeeMain() {
           ${employeeAdminHeaderProfileHtml()}
         </div>
       </header>
+      ${attendanceCheckInCardHtml()}
       ${kpiRow}
       ${tableSection}
     </div>
@@ -8335,6 +8386,8 @@ function renderEmployeeMain() {
   wireAdminHeaderProfileMenu(main);
   wireEmpEnablePush(main);
   wireLanguageSelector(main);
+
+  void wireAttendanceCheckInCard();
 
   main.querySelectorAll("[data-emp-filter-kpi]").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -8455,6 +8508,7 @@ function renderEmployeeChrome() {
       void loadEmployeeDashboard().then(() => renderEmployeeMain());
     },
   });
+  initAttendanceCheckIn({ api, showToast });
   renderEmpListContentOnly();
   wireSubmissionDetailModal();
   wireEmpSubmissionModal();

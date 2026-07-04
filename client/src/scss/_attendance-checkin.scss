@@ -1,0 +1,138 @@
+.attendance-checkin-card {
+  margin: 0 1.25rem 1rem;
+  padding: 1rem 1.15rem;
+  border: 1px solid var(--admin-outline-variant, #bec8ca);
+  border-radius: 12px;
+  background: var(--admin-surface-container, #f3f3ff);
+}
+
+.attendance-checkin-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.35rem;
+}
+
+.attendance-checkin-card-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--admin-on-surface, #181a2e);
+}
+
+.attendance-checkin-status-badge {
+  flex-shrink: 0;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+
+  &--in {
+    color: #1b7a3d;
+    background: rgba(27, 122, 61, 0.12);
+    border: 1px solid rgba(27, 122, 61, 0.35);
+  }
+
+  &--out {
+    color: var(--admin-on-surface-variant, #3e494a);
+    background: rgba(62, 73, 74, 0.1);
+    border: 1px solid rgba(62, 73, 74, 0.2);
+  }
+}
+
+.attendance-checkin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+@media (max-width: 575.98px) {
+  .attendance-checkin-card {
+    margin-left: 1rem;
+    margin-right: 1rem;
+  }
+
+  .attendance-checkin-actions .profile-modal-btn-save,
+  .attendance-checkin-actions .profile-modal-btn-cancel {
+    flex: 1 1 calc(50% - 0.25rem);
+    text-align: center;
+  }
+}
+
+.admin-attendance-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.admin-attendance-tab {
+  border: 1px solid var(--admin-outline-variant, #bec8ca);
+  background: var(--admin-surface, #fbf8ff);
+  color: var(--admin-on-surface, #181a2e);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  cursor: pointer;
+
+  &--active {
+    background: linear-gradient(135deg, #00535b 0%, #006972 100%);
+    border-color: transparent;
+    color: #fff;
+  }
+}
+
+.admin-attendance-page--daily .admin-attendance-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.admin-attendance-date-input {
+  max-width: 11rem;
+}
+
+.admin-attendance-daily-table-wrap {
+  padding: 0 1.25rem 1.5rem;
+}
+
+.admin-attendance-daily-badge {
+  display: inline-block;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 0.18rem 0.5rem;
+  border-radius: 999px;
+
+  &--in {
+    color: #1b7a3d;
+    background: rgba(27, 122, 61, 0.12);
+  }
+
+  &--out {
+    color: var(--admin-on-surface-variant, #3e494a);
+    background: rgba(62, 73, 74, 0.1);
+  }
+
+  &--absent {
+    color: var(--admin-error, #ba1a1a);
+    background: rgba(186, 26, 26, 0.12);
+  }
+}
+
+.admin-attendance-page .admin-attendance-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0 1.25rem;
+  margin-bottom: 0.5rem;
+}

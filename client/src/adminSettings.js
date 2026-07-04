@@ -58,6 +58,9 @@ let onOpenCompanyProfileFn = null;
 /** @type {(() => void) | null} */
 let onOpenManageEmployeesFn = null;
 
+/** @type {(() => void) | null} */
+let onOpenManageLocationsFn = null;
+
 export function initAdminSettings({
   api,
   escapeHtml,
@@ -69,6 +72,7 @@ export function initAdminSettings({
   onOpenMyProfile,
   onOpenCompanyProfile,
   onOpenManageEmployees,
+  onOpenManageLocations,
   onToggleTheme,
   getUser,
   showToast,
@@ -85,6 +89,7 @@ export function initAdminSettings({
   onOpenMyProfileFn = onOpenMyProfile ?? null;
   onOpenCompanyProfileFn = onOpenCompanyProfile ?? null;
   onOpenManageEmployeesFn = onOpenManageEmployees ?? null;
+  onOpenManageLocationsFn = onOpenManageLocations ?? null;
   onToggleThemeFn = onToggleTheme ?? null;
   getUserFn = getUser ?? null;
   showToastFn = showToast ?? null;
@@ -100,6 +105,16 @@ function settingsRowHtml({ icon, label, extraClass = "", attrs = "", tag = "butt
   return `<button type="button" class="admin-settings-row ${extraClass}" ${attrs}>${inner}</button>`;
 }
 
+function myProfileSettingsRowHtml() {
+  const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
+  return `<button type="button" class="admin-settings-row js-open-my-profile" data-my-profile-row="1">
+    ${adminMsIconFn?.("account_circle") ?? ""}
+    <span class="admin-settings-row-label">${esc(tr("profile.myProfile"))}</span>
+    <span class="admin-settings-row-status admin-settings-row-status--incomplete d-none" data-my-profile-status>${esc(tr("profile.sectionIncompleteTitle"))}</span>
+    ${adminMsIconFn?.("chevron_right", "admin-settings-row-chevron") ?? ""}
+  </button>`;
+}
+
 function companyProfileSettingsRowHtml() {
   const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
   return `<button type="button" class="admin-settings-row js-open-company-profile" data-company-profile-row="1">
@@ -112,13 +127,7 @@ function companyProfileSettingsRowHtml() {
 
 function ownerSettingsRowsHtml() {
   const isDark = document.documentElement.getAttribute("data-bs-theme") === "dark";
-  const rows = [
-    settingsRowHtml({
-      icon: "account_circle",
-      label: tr("profile.myProfile"),
-      extraClass: "js-open-my-profile",
-    }),
-  ];
+  const rows = [myProfileSettingsRowHtml()];
 
   if (getUserFn?.()?.isOwner) {
     rows.push(companyProfileSettingsRowHtml());
@@ -147,6 +156,11 @@ function ownerSettingsRowsHtml() {
       icon: "groups",
       label: tr("owner.manageEmployees"),
       extraClass: "js-open-manage-employees",
+    }),
+    settingsRowHtml({
+      icon: "pin_drop",
+      label: tr("attendance.manageLocations"),
+      extraClass: "js-open-manage-locations",
     }),
     settingsRowHtml({
       icon: "person",
@@ -178,11 +192,7 @@ function employeeSettingsRowsHtml() {
   const user = getUserFn?.();
   const isDark = document.documentElement.getAttribute("data-bs-theme") === "dark";
   const rows = [
-    settingsRowHtml({
-      icon: "account_circle",
-      label: tr("profile.myProfile"),
-      extraClass: "js-open-my-profile",
-    }),
+    myProfileSettingsRowHtml(),
     settingsRowHtml({
       icon: isDark ? "light_mode" : "dark_mode",
       label: tr("owner.themeToggle"),
@@ -356,6 +366,12 @@ function wireSettingsPage(main, role) {
     btn.addEventListener("click", () => onOpenManageEmployeesFn?.());
   });
 
+  main.querySelectorAll(".js-open-manage-locations").forEach((btn) => {
+    if (btn.dataset.wired === "1") return;
+    btn.dataset.wired = "1";
+    btn.addEventListener("click", () => onOpenManageLocationsFn?.());
+  });
+
   wireNotificationsToggle(main);
   if (role === "owner") {
     wireCompanyLiveLocationToggle(main, {
@@ -367,9 +383,39 @@ function wireSettingsPage(main, role) {
   if (role === "employee") {
     wireAttendanceSettingsToggle(main);
   }
+  void refreshMyProfileSettingsBadge();
   if (role === "owner") {
     void refreshCompanyProfileSettingsBadge();
   }
+}
+
+export function refreshMyProfileSettingsBadge(incomplete = null) {
+  const row = document.querySelector("[data-my-profile-row]");
+  const badge = row?.querySelector("[data-my-profile-status]");
+  if (!row || !badge) return;
+
+  const apply = (isIncomplete) => {
+    badge.classList.toggle("d-none", !isIncomplete);
+    row.classList.toggle("admin-settings-row--incomplete", isIncomplete);
+  };
+
+  if (incomplete === null) {
+    const cached = getUserFn?.()?.profileDocumentsComplete;
+    if (typeof cached === "boolean") {
+      apply(!cached);
+    }
+    if (!apiFn) return;
+    void apiFn("/api/users/profile")
+      .then(({ profile }) => {
+        apply(!profile.profileDocumentsComplete);
+        const user = getUserFn?.();
+        if (user) user.profileDocumentsComplete = profile.profileDocumentsComplete;
+      })
+      .catch(() => {});
+    return;
+  }
+
+  apply(incomplete);
 }
 
 export function refreshCompanyProfileSettingsBadge(incomplete = null) {

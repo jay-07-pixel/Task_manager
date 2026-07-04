@@ -24,6 +24,17 @@ import {
   getCompanyAttendanceSettings,
   setCompanyLiveLocationRequired,
 } from "../services/companyAttendanceSettings.js";
+import {
+  createWorkLocation,
+  deleteWorkLocation,
+  listWorkLocations,
+  updateWorkLocation,
+} from "../services/workLocationService.js";
+import {
+  getCheckStatus,
+  getDailyAttendanceReport,
+  performCheck,
+} from "../services/attendanceCheckService.js";
 
 const router = Router();
 
@@ -39,6 +50,21 @@ const trackingSchema = z.object({
 
 const companySettingsSchema = z.object({
   liveLocationRequired: z.boolean(),
+});
+
+const workLocationSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  latitude: z.number().min(-90).max(90),
+  longitude: z.number().min(-180).max(180),
+  radiusMeters: z.number().int().min(10).max(5000).default(100),
+  isActive: z.boolean().optional(),
+});
+
+const workLocationPatchSchema = workLocationSchema.partial();
+
+const checkCoordsSchema = z.object({
+  latitude: z.number(),
+  longitude: z.number(),
 });
 
 router.get("/status", requireAuth, async (req, res) => {
@@ -229,6 +255,103 @@ router.get("/maps-config", requireOwner, async (_req, res) => {
     provider: apiKey ? "google" : "leaflet",
     apiKey: apiKey || null,
   });
+});
+
+router.get("/work-locations", requireAuth, async (req, res) => {
+  const activeOnly = req.session.role === "employee";
+  const locations = await listWorkLocations({ activeOnly });
+  res.json({ locations });
+});
+
+router.post("/work-locations", requireOwner, async (req, res) => {
+  const parsed = workLocationSchema.safeParse(req.body);
+  if (!parsed.success) {
+    const flat = parsed.error.flatten();
+    const firstField = Object.values(flat.fieldErrors).flat()[0];
+    return res.status(400).json({ error: firstField || "Invalid location data." });
+  }
+  const location = await createWorkLocation(parsed.data);
+  res.status(201).json({ location });
+});
+
+router.patch("/work-locations/:id", requireOwner, async (req, res) => {
+  const parsed = workLocationPatchSchema.safeParse(req.body);
+  if (!parsed.success) {
+    const flat = parsed.error.flatten();
+    const firstField = Object.values(flat.fieldErrors).flat()[0];
+    return res.status(400).json({ error: firstField || "Invalid location data." });
+  }
+  const location = await updateWorkLocation(req.params.id, parsed.data);
+  if (!location) return res.status(404).json({ error: "Location not found." });
+  res.json({ location });
+});
+
+router.delete("/work-locations/:id", requireOwner, async (req, res) => {
+  const ok = await deleteWorkLocation(req.params.id);
+  if (!ok) return res.status(404).json({ error: "Location not found." });
+  res.json({ ok: true });
+});
+
+router.get("/check-status", requireAuth, async (req, res) => {
+  const lat = req.query.latitude != null ? Number(req.query.latitude) : null;
+  const lng = req.query.longitude != null ? Number(req.query.longitude) : null;
+  const status = await getCheckStatus(req.session.userId, {
+    latitude: Number.isFinite(lat) ? lat : undefined,
+    longitude: Number.isFinite(lng) ? lng : undefined,
+  });
+  res.json(status);
+});
+
+router.post("/check-in", requireAuth, async (req, res) => {
+  if (req.session.role !== "employee") {
+    return res.status(403).json({ error: "Employees only" });
+  }
+  const parsed = checkCoordsSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "latitude and longitude required." });
+  }
+  try {
+    const result = await performCheck(
+      req.session.userId,
+      "check_in",
+      parsed.data.latitude,
+      parsed.data.longitude
+    );
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(400).json({ error: err.message || "Check-in failed." });
+  }
+});
+
+router.post("/check-out", requireAuth, async (req, res) => {
+  if (req.session.role !== "employee") {
+    return res.status(403).json({ error: "Employees only" });
+  }
+  const parsed = checkCoordsSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "latitude and longitude required." });
+  }
+  try {
+    const result = await performCheck(
+      req.session.userId,
+      "check_out",
+      parsed.data.latitude,
+      parsed.data.longitude
+    );
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(400).json({ error: err.message || "Check-out failed." });
+  }
+});
+
+router.get("/daily-report", requireOwner, async (req, res) => {
+  const date = typeof req.query.date === "string" ? req.query.date.trim() : "";
+  try {
+    const report = await getDailyAttendanceReport(date || undefined);
+    res.json(report);
+  } catch (err) {
+    res.status(400).json({ error: err.message || "Invalid date." });
+  }
 });
 
 export default router;

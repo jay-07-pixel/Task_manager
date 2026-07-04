@@ -29,6 +29,11 @@ enum TaskProgressUpdateType {
   update
 }
 
+enum AttendanceCheckType {
+  check_in
+  check_out
+}
+
 model User {
   id           String   @id @default(uuid())
   email        String   @unique
@@ -67,6 +72,7 @@ model User {
   locationPreference        EmployeeLocationPreference?
   locationPings             EmployeeLocationPing[]
   locationOffPeriods        EmployeeLocationOffPeriod[]
+  attendanceChecks          AttendanceCheck[]
 }
 
 model TaskList {
@@ -277,6 +283,40 @@ model EmployeeLocationOffPeriod {
 
   @@index([userId, startedAt])
   @@map("employee_location_off_period")
+}
+
+model WorkLocation {
+  id           String   @id @default(uuid())
+  name         String   @db.VarChar(120)
+  latitude     Float
+  longitude    Float
+  radiusMeters Int      @default(100) @map("radius_meters")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  attendanceChecks AttendanceCheck[]
+
+  @@map("work_location")
+}
+
+model AttendanceCheck {
+  id             String              @id @default(uuid())
+  userId         String              @map("user_id")
+  type           AttendanceCheckType
+  latitude       Float
+  longitude      Float
+  workLocationId String?             @map("work_location_id")
+  distanceMeters Float               @map("distance_meters")
+  withinRadius   Boolean             @map("within_radius")
+  recordedAt     DateTime            @default(now()) @map("recorded_at")
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workLocation WorkLocation? @relation(fields: [workLocationId], references: [id], onDelete: SetNull)
+
+  @@index([userId, recordedAt])
+  @@index([recordedAt])
+  @@map("attendance_check")
 }
 
 model ReminderSent {

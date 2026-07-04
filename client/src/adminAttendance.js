@@ -39,6 +39,12 @@ let infoWindow = null;
 /** @type {number | null} */
 let pollTimer = null;
 
+/** @type {"live" | "daily"} */
+let attendanceViewTab = "live";
+
+/** @type {string | null} */
+let dailyReportDate = null;
+
 /** @type {(() => void) | null} */
 let visibilityHandler = null;
 
@@ -635,6 +641,120 @@ function updateLastRefreshedLabel() {
   el.textContent = tr("attendance.lastRefreshed", { time });
 }
 
+function attendanceTabsHtml() {
+  const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
+  return `<div class="admin-attendance-tabs" role="tablist">
+    <button type="button" class="admin-attendance-tab${attendanceViewTab === "live" ? " admin-attendance-tab--active" : ""}" data-attendance-tab="live">${esc(tr("attendance.tabLive"))}</button>
+    <button type="button" class="admin-attendance-tab${attendanceViewTab === "daily" ? " admin-attendance-tab--active" : ""}" data-attendance-tab="daily">${esc(tr("attendance.tabDaily"))}</button>
+  </div>`;
+}
+
+function wireAttendanceTabs(root) {
+  root.querySelectorAll("[data-attendance-tab]").forEach((btn) => {
+    if (btn.dataset.wired === "1") return;
+    btn.dataset.wired = "1";
+    btn.addEventListener("click", () => {
+      const tab = btn.getAttribute("data-attendance-tab");
+      if (tab !== "live" && tab !== "daily") return;
+      if (attendanceViewTab === tab) return;
+      attendanceViewTab = tab;
+      if (tab === "live") {
+        void refreshAdminAttendance();
+        startAttendancePoll();
+      } else {
+        stopAttendancePoll();
+        destroyMap();
+        void renderDailyAttendancePage();
+      }
+    });
+  });
+}
+
+function dailyReportRowHtml(row) {
+  const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
+  const checkIn = row.checkIn
+    ? `${formatDateTime(row.checkIn.recordedAt)} · ${esc(row.checkIn.locationName ?? "—")}`
+    : "—";
+  const checkOut = row.isCheckedIn
+    ? tr("attendance.stillCheckedIn")
+    : row.checkOut
+      ? `${formatDateTime(row.checkOut.recordedAt)} · ${esc(row.checkOut.locationName ?? "—")}`
+      : "—";
+  return `<tr>
+    <td>${esc(row.displayName)}</td>
+    <td class="small">${checkIn}</td>
+    <td class="small">${checkOut}</td>
+    <td>${row.isCheckedIn ? `<span class="admin-attendance-daily-badge admin-attendance-daily-badge--in">${esc(tr("attendance.checkedInBadge"))}</span>` : row.checkIn ? `<span class="admin-attendance-daily-badge admin-attendance-daily-badge--out">${esc(tr("attendance.presentBadge"))}</span>` : `<span class="admin-attendance-daily-badge admin-attendance-daily-badge--absent">${esc(tr("attendance.absentBadge"))}</span>`}</td>
+  </tr>`;
+}
+
+async function renderDailyAttendancePage() {
+  const main = document.getElementById("main-column");
+  if (!main || !apiFn) return;
+  if (!dailyReportDate) {
+    dailyReportDate = new Date().toISOString().slice(0, 10);
+  }
+  main.innerHTML = `<div class="admin-main-scroll d-flex flex-column">
+    ${ownerChromeHeaderFn?.() ?? ""}
+    <div class="admin-attendance-page admin-attendance-page--daily">
+      <div class="admin-attendance-toolbar">
+        ${attendanceTabsHtml()}
+        <div class="admin-attendance-toolbar-actions">
+          <input type="date" class="form-control form-control-sm admin-attendance-date-input" id="admin-attendance-daily-date" value="${dailyReportDate}" />
+          <button type="button" class="btn btn-sm btn-outline-primary js-attendance-daily-refresh">
+            ${adminMsIconFn?.("refresh") ?? ""}
+            <span>${escapeHtmlFn?.(tr("attendance.refresh")) ?? "Refresh"}</span>
+          </button>
+        </div>
+      </div>
+      <p class="admin-attendance-intro">${escapeHtmlFn?.(tr("attendance.dailyReportIntro")) ?? ""}</p>
+      <div class="table-responsive admin-attendance-daily-table-wrap">
+        <table class="table table-hover align-middle mb-0 admin-attendance-daily-table">
+          <thead>
+            <tr>
+              <th>${escapeHtmlFn?.(tr("common.employee")) ?? "Employee"}</th>
+              <th>${escapeHtmlFn?.(tr("attendance.checkIn")) ?? "Check in"}</th>
+              <th>${escapeHtmlFn?.(tr("attendance.checkOut")) ?? "Check out"}</th>
+              <th>${escapeHtmlFn?.(tr("attendance.statusColumn")) ?? "Status"}</th>
+            </tr>
+          </thead>
+          <tbody id="admin-attendance-daily-body">
+            <tr><td colspan="4" class="text-muted">${escapeHtmlFn?.(tr("common.loading")) ?? ""}</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>`;
+  wireOwnerChromeHeaderFn?.(main);
+  wireAttendanceTabs(main);
+  main.querySelector("#admin-attendance-daily-date")?.addEventListener("change", (e) => {
+    dailyReportDate = e.target.value;
+    void loadDailyReport();
+  });
+  main.querySelector(".js-attendance-daily-refresh")?.addEventListener("click", () => {
+    void loadDailyReport();
+  });
+  await loadDailyReport();
+}
+
+async function loadDailyReport() {
+  const body = document.getElementById("admin-attendance-daily-body");
+  if (!body || !apiFn) return;
+  body.innerHTML = `<tr><td colspan="4" class="text-muted">${escapeHtmlFn?.(tr("common.loading")) ?? ""}</td></tr>`;
+  try {
+    const date = dailyReportDate || new Date().toISOString().slice(0, 10);
+    const report = await apiFn(`/api/attendance/daily-report?date=${encodeURIComponent(date)}`);
+    const rows = report.employees ?? [];
+    if (!rows.length) {
+      body.innerHTML = `<tr><td colspan="4" class="text-muted">${escapeHtmlFn?.(tr("attendance.noEmployees")) ?? ""}</td></tr>`;
+      return;
+    }
+    body.innerHTML = rows.map((row) => dailyReportRowHtml(row)).join("");
+  } catch (err) {
+    body.innerHTML = `<tr><td colspan="4" class="text-danger">${escapeHtmlFn?.(err.message) ?? err.message}</td></tr>`;
+  }
+}
+
 function renderAttendancePage() {
   const main = document.getElementById("main-column");
   if (!main) return;
@@ -646,7 +766,7 @@ function renderAttendancePage() {
     ${ownerChromeHeaderFn?.() ?? ""}
     <div class="admin-attendance-page">
       <div class="admin-attendance-toolbar">
-        <p class="admin-attendance-intro mb-0">${escapeHtmlFn?.(tr("attendance.adminIntro")) ?? ""}</p>
+        ${attendanceTabsHtml()}
         <div class="admin-attendance-toolbar-actions">
           <span class="admin-attendance-last-refreshed" id="admin-attendance-last-refreshed"></span>
           <button type="button" class="btn btn-sm btn-outline-primary js-attendance-refresh">
@@ -655,6 +775,7 @@ function renderAttendancePage() {
           </button>
         </div>
       </div>
+      <p class="admin-attendance-intro mb-3">${escapeHtmlFn?.(tr("attendance.adminIntro")) ?? ""}</p>
       <div class="admin-attendance-layout">
         <aside class="admin-attendance-sidebar" id="admin-attendance-emp-list">
           ${employees.length ? employees.map(employeeRowHtml).join("") : `<p class="text-muted small">${escapeHtmlFn?.(tr("attendance.noEmployees")) ?? ""}</p>`}
@@ -673,6 +794,7 @@ function renderAttendancePage() {
     </div>
   </div>`;
   wireOwnerChromeHeaderFn?.(main);
+  wireAttendanceTabs(main);
   wireEmployeeListHandlers(main);
   wireAttendanceRefreshButton(main);
   updateLastRefreshedLabel();
@@ -706,6 +828,10 @@ async function loadEmployeeHistory(userId) {
 
 export async function refreshAdminAttendance({ keepSelection = false, forceFull = false } = {}) {
   if (!apiFn) return;
+  if (attendanceViewTab === "daily") {
+    await renderDailyAttendancePage();
+    return;
+  }
   const data = await apiFn("/api/attendance/live");
   liveData = data;
   if (!keepSelection) selectedEmployeeId = null;
@@ -755,6 +881,10 @@ export function handleAttendanceLiveEvent(detail) {
 export function openOwnerAttendanceView() {
   destroyMap();
   stopAttendancePoll();
+  if (attendanceViewTab === "daily") {
+    void renderDailyAttendancePage();
+    return;
+  }
   void refreshAdminAttendance().then(() => startAttendancePoll());
 }
 
