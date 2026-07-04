@@ -2,6 +2,13 @@ import "./scss/styles.scss";
 import * as bootstrap from "bootstrap";
 import Sortable from "sortablejs";
 import { startEmployeeReminders, stopEmployeeReminders, clearReminderForTask } from "./reminders.js";
+import {
+  initManageEmployees,
+  openOwnerManageEmployeesView,
+  employeeProfileModalHtml,
+  openEmployeeProfileModal,
+  wireEmployeeProfileModal,
+} from "./adminManageEmployees.js";
 import { initCompanyProfile, openOwnerCompanyProfileView } from "./companyProfile.js";
 import {
   profileDocumentsSectionHtml,
@@ -4638,7 +4645,7 @@ async function refreshTeamAdminList() {
           }
           const actions = [];
           actions.push(
-            `<button type="button" class="btn btn-sm btn-outline-secondary team-profile-btn" data-user-id="${u.id}">${tr("profile.editProfile")}</button>`
+            `<button type="button" class="btn btn-sm btn-outline-secondary team-profile-btn" data-user-id="${u.id}">${tr("profile.viewProfile")}</button>`
           );
           if (isAdmin) {
             if (!isSelf) {
@@ -4783,7 +4790,7 @@ async function refreshTeamAdminList() {
     host.querySelectorAll(".team-profile-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
         const id = btn.getAttribute("data-user-id");
-        if (id) void openMyProfileModal(id);
+        if (id) void openEmployeeProfileModal(id);
       });
     });
   } catch (err) {
@@ -6864,6 +6871,11 @@ function renderOwnerMain() {
       return;
     }
   }
+  if (state.ownerView === "manage-employees") {
+    destroyTaskSortables();
+    openOwnerManageEmployeesView();
+    return;
+  }
   if (state.ownerView === "attendance") {
     if (state.user?.liveLocationRequired === false) {
       state.ownerView = "dashboard";
@@ -7201,6 +7213,25 @@ function ownerCompanyProfileChromeHeaderHtml() {
     </header>`;
 }
 
+function ownerManageEmployeesChromeHeaderHtml() {
+  const adminWelcomeName = state.user?.displayName
+    ? escapeHtml(dt(state.user.displayName))
+    : tr("common.admin");
+  return `<header class="admin-dash-header">
+      ${adminMobileNavToggleHtml()}
+      <div class="admin-dash-heading">
+        <h1 class="admin-dash-title">${tr("owner.manageEmployees")}</h1>
+        <p class="admin-dash-subtitle">${tr("common.welcome", { name: adminWelcomeName })}</p>
+      </div>
+      <div class="admin-dash-utilities">
+        ${languageSelectorHtml({ compact: true })}
+        ${ownerTrialTopBannerHtml()}
+        ${adminNotificationsBellHtml(state.user?.id)}
+        ${ownerAdminHeaderProfileHtml()}
+      </div>
+    </header>`;
+}
+
 function ownerSettingsChromeHeaderHtml() {
   const adminWelcomeName = state.user?.displayName
     ? escapeHtml(dt(state.user.displayName))
@@ -7239,6 +7270,7 @@ function ownerReportsChromeHeaderDynamic() {
   if (state.ownerView === "owner-dashboard") return ownerDashboardChromeHeaderHtml();
   if (state.ownerView === "settings") return ownerSettingsChromeHeaderHtml();
   if (state.ownerView === "company-profile") return ownerCompanyProfileChromeHeaderHtml();
+  if (state.ownerView === "manage-employees") return ownerManageEmployeesChromeHeaderHtml();
   if (state.ownerView === "attendance") return ownerAttendanceChromeHeaderHtml();
   return ownerReportsChromeHeaderHtml();
 }
@@ -7336,6 +7368,7 @@ function wireChromeNav() {
         state.ownerView === "owner-dashboard" ||
         state.ownerView === "settings" ||
         state.ownerView === "company-profile" ||
+        state.ownerView === "manage-employees" ||
         state.ownerView === "attendance"
       ) {
         state.ownerView = "dashboard";
@@ -7406,6 +7439,7 @@ function renderOwnerChrome() {
       ${ownerTrialMessageModalHtml()}
       ${teamAdminModalHtml()}
       ${myProfileModalHtml()}
+      ${employeeProfileModalHtml()}
       ${contactUsModalHtml()}
       ${adminNotifOffcanvasHtml(state.user?.id)}
       ${teamChatOffcanvasHtml()}
@@ -7440,6 +7474,12 @@ function renderOwnerChrome() {
       renderOwnerMain();
       dismissAdminMobileNav();
     },
+    onOpenManageEmployees: () => {
+      state.ownerView = "manage-employees";
+      renderListContentOnly();
+      renderOwnerMain();
+      dismissAdminMobileNav();
+    },
     onToggleTheme: toggleAdminTheme,
     getUser: () => state.user,
     showToast,
@@ -7453,6 +7493,7 @@ function renderOwnerChrome() {
       if (state.ownerView === "dashboard") renderOwnerMain();
       else if (state.ownerView === "settings") openOwnerSettingsView();
       else if (state.ownerView === "company-profile") openOwnerCompanyProfileView();
+      else if (state.ownerView === "manage-employees") openOwnerManageEmployeesView();
     },
   });
   initCompanyProfile({
@@ -7468,6 +7509,14 @@ function renderOwnerChrome() {
       }
       refreshCompanyProfileSettingsBadge(!profile.companyProfileComplete);
     },
+  });
+  initManageEmployees({
+    api,
+    escapeHtml,
+    adminMsIcon,
+    ownerChromeHeader: ownerManageEmployeesChromeHeaderHtml,
+    wireOwnerChromeHeader: wireOwnerReportsChromeHeader,
+    showToast,
   });
   initAdminAttendance({
     api,
@@ -7487,6 +7536,7 @@ function renderOwnerChrome() {
   wireOwnerMarkDoneModal();
   wireTeamAdminModal();
   wireMyProfileModal();
+  wireEmployeeProfileModal();
   wireContactUsModal();
   wireThemeIconToggles();
   initTeamChat(chatInitDeps());
@@ -8412,6 +8462,7 @@ function renderEmployeeChrome() {
   wireEmpDelegateModal();
   wireEmpCreateTaskModal();
   wireMyProfileModal();
+  wireEmployeeProfileModal();
   wireContactUsModal();
   initTeamChat(chatInitDeps());
   renderEmployeeMain();

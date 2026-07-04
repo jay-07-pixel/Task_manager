@@ -19,9 +19,10 @@ function docPayload(path, name, url) {
   };
 }
 
-export function appendProfileDocuments(profile, user) {
-  profile.profilePhoto = docPayload(user.profilePhotoPath, user.profilePhotoName, "/api/users/profile-photo");
-  profile.idProof = docPayload(user.idProofPath, user.idProofName, "/api/users/id-proof");
+export function appendProfileDocuments(profile, user, docUserId = null) {
+  const base = docUserId ? `/api/users/${docUserId}` : "/api/users";
+  profile.profilePhoto = docPayload(user.profilePhotoPath, user.profilePhotoName, `${base}/profile-photo`);
+  profile.idProof = docPayload(user.idProofPath, user.idProofName, `${base}/id-proof`);
   profile.profileDocumentsComplete = Boolean(user.profilePhotoPath && user.idProofPath);
   return profile;
 }

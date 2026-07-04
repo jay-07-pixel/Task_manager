@@ -55,6 +55,9 @@ let visitUrl = "https://kalpanik.in/";
 /** @type {(() => void) | null} */
 let onOpenCompanyProfileFn = null;
 
+/** @type {(() => void) | null} */
+let onOpenManageEmployeesFn = null;
+
 export function initAdminSettings({
   api,
   escapeHtml,
@@ -65,6 +68,7 @@ export function initAdminSettings({
   wireEmployeeChromeHeader,
   onOpenMyProfile,
   onOpenCompanyProfile,
+  onOpenManageEmployees,
   onToggleTheme,
   getUser,
   showToast,
@@ -80,6 +84,7 @@ export function initAdminSettings({
   wireEmployeeChromeHeaderFn = wireEmployeeChromeHeader ?? null;
   onOpenMyProfileFn = onOpenMyProfile ?? null;
   onOpenCompanyProfileFn = onOpenCompanyProfile ?? null;
+  onOpenManageEmployeesFn = onOpenManageEmployees ?? null;
   onToggleThemeFn = onToggleTheme ?? null;
   getUserFn = getUser ?? null;
   showToastFn = showToast ?? null;
@@ -137,6 +142,11 @@ function ownerSettingsRowsHtml() {
       label: tr("owner.manageAdmin"),
       extraClass: "js-admin-manage-admin",
       attrs: 'data-bs-toggle="modal" data-bs-target="#teamAdminModal"',
+    }),
+    settingsRowHtml({
+      icon: "groups",
+      label: tr("owner.manageEmployees"),
+      extraClass: "js-open-manage-employees",
     }),
     settingsRowHtml({
       icon: "person",
@@ -338,6 +348,12 @@ function wireSettingsPage(main, role) {
     if (btn.dataset.wired === "1") return;
     btn.dataset.wired = "1";
     btn.addEventListener("click", () => onOpenCompanyProfileFn?.());
+  });
+
+  main.querySelectorAll(".js-open-manage-employees").forEach((btn) => {
+    if (btn.dataset.wired === "1") return;
+    btn.dataset.wired = "1";
+    btn.addEventListener("click", () => onOpenManageEmployeesFn?.());
   });
 
   wireNotificationsToggle(main);

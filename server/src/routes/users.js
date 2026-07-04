@@ -101,7 +101,7 @@ function createProfileDocUpload(root, { imageOnly = false } = {}) {
 const profilePhotoUpload = createProfileDocUpload(profilePhotoUploadsRoot, { imageOnly: true });
 const idProofUpload = createProfileDocUpload(idProofUploadsRoot);
 
-function serializeProfileUser(user) {
+function serializeProfileUser(user, { docUserId = null } = {}) {
   return appendProfileDocuments(
     {
       id: user.id,
@@ -113,7 +113,8 @@ function serializeProfileUser(user) {
       isAdmin: userHasAdminAccess(user),
       isOwner: userIsCompanyOwner(user),
     },
-    user
+    user,
+    docUserId
   );
 }
 
@@ -384,13 +385,53 @@ router.delete("/id-proof", requireAuth, async (req, res) => {
   res.json({ profile: serializeProfileUser(user) });
 });
 
+router.get("/:id/profile-photo", requireOwner, async (req, res) => {
+  const user = await prisma.user.findUnique({
+    where: { id: req.params.id },
+    select: { profilePhotoPath: true, profilePhotoMime: true, profilePhotoName: true },
+  });
+  if (!user?.profilePhotoPath) {
+    return res.status(404).json({ error: "No profile photo on file." });
+  }
+  const full = path.join(profilePhotoUploadsRoot, path.basename(user.profilePhotoPath));
+  if (!fs.existsSync(full)) {
+    return res.status(404).json({ error: "Profile photo file not found." });
+  }
+  res.setHeader("Content-Type", user.profilePhotoMime || "image/jpeg");
+  res.setHeader(
+    "Content-Disposition",
+    `inline; filename="${(user.profilePhotoName || "profile-photo").replace(/"/g, "")}"`
+  );
+  res.sendFile(full);
+});
+
+router.get("/:id/id-proof", requireOwner, async (req, res) => {
+  const user = await prisma.user.findUnique({
+    where: { id: req.params.id },
+    select: { idProofPath: true, idProofMime: true, idProofName: true },
+  });
+  if (!user?.idProofPath) {
+    return res.status(404).json({ error: "No ID proof on file." });
+  }
+  const full = path.join(idProofUploadsRoot, path.basename(user.idProofPath));
+  if (!fs.existsSync(full)) {
+    return res.status(404).json({ error: "ID proof file not found." });
+  }
+  res.setHeader("Content-Type", user.idProofMime || "application/pdf");
+  res.setHeader(
+    "Content-Disposition",
+    `inline; filename="${(user.idProofName || "id-proof").replace(/"/g, "")}"`
+  );
+  res.sendFile(full);
+});
+
 router.get("/:id/profile", requireOwner, async (req, res) => {
   const user = await prisma.user.findUnique({
     where: { id: req.params.id },
     select: profileSelect,
   });
   if (!user) return res.status(404).json({ error: "User not found." });
-  res.json({ profile: serializeProfileUser(user) });
+  res.json({ profile: serializeProfileUser(user, { docUserId: user.id }) });
 });
 
 router.patch("/:id/profile", requireOwner, async (req, res) => {
@@ -405,11 +446,22 @@ router.patch("/:id/profile", requireOwner, async (req, res) => {
   if (!target) return res.status(404).json({ error: "User not found." });
 
   const data = {};
-  if (parsed.data.displayName !== undefined) data.displayName = parsed.data.displayName;
-  if (parsed.data.phone !== undefined) {
-    data.phone = parsed.data.phone ? parsed.data.phone : null;
+  const editingOther = target.id !== req.session.userId;
+  if (editingOther) {
+    if (parsed.data.displayName !== undefined || parsed.data.phone !== undefined) {
+      return res.status(403).json({ error: "Only salary can be updated for other users." });
+    }
+    if (parsed.data.salary === undefined) {
+      return res.status(400).json({ error: "No changes to save." });
+    }
+    data.salary = parsed.data.salary;
+  } else {
+    if (parsed.data.displayName !== undefined) data.displayName = parsed.data.displayName;
+    if (parsed.data.phone !== undefined) {
+      data.phone = parsed.data.phone ? parsed.data.phone : null;
+    }
+    if (parsed.data.salary !== undefined) data.salary = parsed.data.salary;
   }
-  if (parsed.data.salary !== undefined) data.salary = parsed.data.salary;
 
   if (!Object.keys(data).length) {
     return res.status(400).json({ error: "No changes to save." });
@@ -420,7 +472,7 @@ router.patch("/:id/profile", requireOwner, async (req, res) => {
     data,
     select: profileSelect,
   });
-  res.json({ profile: serializeProfileUser(user) });
+  res.json({ profile: serializeProfileUser(user, { docUserId: user.id }) });
 });
 
 router.patch("/:id/role", requireOwner, async (req, res) => {

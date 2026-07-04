@@ -1,0 +1,94 @@
+.manage-employees-page .manage-employee-row {
+  cursor: default;
+  justify-content: space-between;
+
+  &:hover {
+    background: var(--admin-surface-container, #f3f3ff);
+    border-color: var(--admin-outline-variant, #bec8ca);
+  }
+}
+
+.manage-employee-row-left {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.manage-employee-name {
+  display: block;
+  font-weight: 600;
+  color: var(--admin-on-surface, #181a2e);
+}
+
+.manage-employee-email {
+  display: block;
+  font-size: 0.8125rem;
+  color: var(--admin-on-surface-variant, #3e494a);
+  margin-top: 0.1rem;
+}
+
+.manage-employee-badge {
+  display: inline-block;
+  margin-top: 0.35rem;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
+
+  &--owner {
+    color: var(--admin-primary, #006d77);
+    background: rgba(0, 109, 119, 0.12);
+    border: 1px solid rgba(0, 109, 119, 0.25);
+  }
+
+  &--admin {
+    color: #5e35d8;
+    background: rgba(94, 53, 216, 0.1);
+    border: 1px solid rgba(94, 53, 216, 0.25);
+  }
+}
+
+.manage-employee-view-btn {
+  flex-shrink: 0;
+  font-weight: 600;
+}
+
+.manage-employee-documents {
+  border: 1px solid var(--bs-border-color);
+  border-radius: 0.65rem;
+  background: var(--bs-tertiary-bg);
+  padding: 0.85rem 1rem;
+}
+
+.manage-employee-doc-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.35rem 1rem;
+  padding: 0.35rem 0;
+
+  & + & {
+    border-top: 1px solid var(--bs-border-color-translucent, var(--bs-border-color));
+  }
+}
+
+.manage-employee-doc-label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--bs-body-color);
+}
+
+.manage-employee-doc-link {
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.manage-employee-doc-empty {
+  font-size: 0.8125rem;
+  color: var(--bs-secondary-color);
+}
