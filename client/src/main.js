@@ -2435,6 +2435,12 @@ function adminHeaderContactUsItemHtml() {
 
 function ownerAdminHeaderProfileHtml() {
   const name = state.user?.displayName ? escapeHtml(dt(state.user.displayName)) : tr("common.admin");
+  const ownerDashItem = state.user?.isOwner
+    ? `<button type="button" class="admin-header-profile-item js-owner-dashboard-open" role="menuitem">
+        ${adminMsIcon("dashboard")}
+        <span>${tr("owner.ownerDashboard")}</span>
+      </button>`
+    : "";
   return `<div class="admin-header-profile-dropdown">
     <button
       type="button"
@@ -2447,10 +2453,7 @@ function ownerAdminHeaderProfileHtml() {
       <img class="admin-header-profile-photo" src="/icons/admin-profile-avatar.png" alt="" width="48" height="48" />
     </button>
     <div class="admin-header-profile-menu" role="menu">
-      <button type="button" class="admin-header-profile-item js-owner-dashboard-open" role="menuitem">
-        ${adminMsIcon("dashboard")}
-        <span>${tr("owner.ownerDashboard")}</span>
-      </button>
+      ${ownerDashItem}
       ${adminHeaderContactUsItemHtml()}
       ${adminHeaderSettingsItemHtml()}
       <div class="admin-header-profile-divider" role="separator"></div>
@@ -4503,47 +4506,82 @@ async function refreshTeamAdminList() {
   if (!host) return;
   host.innerHTML = `<p class="small text-muted mb-0">${tr("common.loading")}</p>`;
   try {
-    const { users } = await api("/api/users/team");
+    const { users, ownerCount = 0, maxOwners = 2 } = await api("/api/users/team");
     if (!users.length) {
       host.innerHTML = `<p class="small text-muted mb-0">${tr("modals.noTeamMembers")}</p>`;
       return;
     }
     const selfId = state.user?.id || "";
+    const selfIsOwner = Boolean(state.user?.isOwner);
     host.innerHTML = `<div class="list-group list-group-flush border rounded team-admin-list">
       ${users
         .map((u) => {
           const isAdmin = Boolean(u.isAdmin);
+          const isOwner = Boolean(u.isOwner);
           const isSelf = u.id === selfId;
-          let action;
+          const badges = [];
+          if (isOwner) {
+            badges.push(
+              `<span class="badge rounded-pill owner-role-badge team-admin-badge">${
+                isSelf ? tr("owner.ownerYou") : tr("owner.ownerBadge")
+              }</span>`
+            );
+          } else if (isAdmin && isSelf) {
+            badges.push(
+              `<span class="badge rounded-pill owner-role-badge team-admin-badge">${tr("owner.adminYou")}</span>`
+            );
+          }
+          const actions = [];
+          actions.push(
+            `<button type="button" class="btn btn-sm btn-outline-secondary team-profile-btn" data-user-id="${u.id}">${tr("profile.editProfile")}</button>`
+          );
           if (isAdmin) {
-            if (isSelf) {
-              action = `<span class="badge rounded-pill owner-role-badge team-admin-badge">${tr("owner.adminYou")}</span>`;
-            } else {
-              action = `<button type="button" class="btn btn-sm btn-outline-danger team-revoke-btn" data-user-id="${u.id}" data-user-name="${escapeHtml(
-                u.displayName
-              )}">${tr("owner.revokeAdmin")}</button>`;
+            if (!isSelf) {
+              actions.push(
+                `<button type="button" class="btn btn-sm btn-outline-danger team-revoke-btn" data-user-id="${u.id}" data-user-name="${escapeHtml(
+                  u.displayName
+                )}">${tr("owner.revokeAdmin")}</button>`
+              );
+            }
+            if (selfIsOwner && !isOwner && ownerCount < maxOwners) {
+              actions.push(
+                `<button type="button" class="btn btn-sm btn-outline-primary team-make-owner-btn" data-user-id="${u.id}" data-user-name="${escapeHtml(
+                  u.displayName
+                )}">${tr("owner.makeOwner")}</button>`
+              );
+            }
+            if (selfIsOwner && isOwner && !isSelf) {
+              actions.push(
+                `<button type="button" class="btn btn-sm btn-outline-warning team-revoke-owner-btn" data-user-id="${u.id}" data-user-name="${escapeHtml(
+                  u.displayName
+                )}">${tr("owner.revokeOwner")}</button>`
+              );
             }
           } else {
-            action = `<button type="button" class="btn btn-sm btn-primary team-promote-btn" data-user-id="${u.id}" data-user-name="${escapeHtml(
-              u.displayName
-            )}">${tr("owner.makeAdmin")}</button>`;
+            actions.push(
+              `<button type="button" class="btn btn-sm btn-primary team-promote-btn" data-user-id="${u.id}" data-user-name="${escapeHtml(
+                u.displayName
+              )}">${tr("owner.makeAdmin")}</button>`
+            );
           }
           return `<div class="list-group-item team-admin-row">
             <div class="team-admin-row-inner">
               <div class="team-admin-user min-w-0">
-                <div class="fw-medium team-admin-name">${escapeHtml(dt(u.displayName))}</div>
+                <div class="fw-medium team-admin-name">${escapeHtml(dt(u.displayName))}${
+                  badges.length ? ` ${badges.join(" ")}` : ""
+                }</div>
                 <div class="small text-muted team-admin-email">${escapeHtml(u.email)}</div>
                 <div class="small text-muted">${tr("profile.salary")}: ₹${Number(u.salary ?? 15000).toLocaleString()}</div>
               </div>
               <div class="team-admin-actions">
-                <button type="button" class="btn btn-sm btn-outline-secondary team-profile-btn" data-user-id="${u.id}">${tr("profile.editProfile")}</button>
-                ${action}
+                ${actions.join("")}
               </div>
             </div>
           </div>`;
         })
         .join("")}
-    </div>`;
+    </div>
+    <p class="small text-muted mt-2 mb-0">${tr("owner.ownerLimitHint", { max: maxOwners, count: ownerCount })}</p>`;
 
     async function patchTeamRole(id, role, name, successMsg, warnMsg) {
       const result = await api(`/api/users/${id}/role`, {
@@ -4557,6 +4595,18 @@ async function refreshTeamAdminList() {
       }
       await refreshTeamAdminList();
       await loadAssignees();
+    }
+
+    async function patchCompanyOwner(id, isOwner, name) {
+      await api(`/api/users/${id}/company-owner`, {
+        method: "PATCH",
+        body: JSON.stringify({ isOwner }),
+      });
+      showToast(
+        isOwner ? tr("owner.madeOwnerSuccess", { name }) : tr("owner.revokedOwnerSuccess", { name }),
+        "success"
+      );
+      await refreshTeamAdminList();
     }
 
     host.querySelectorAll(".team-promote-btn").forEach((btn) => {
@@ -4578,14 +4628,7 @@ async function refreshTeamAdminList() {
       btn.addEventListener("click", async () => {
         const id = btn.getAttribute("data-user-id");
         const name = btn.getAttribute("data-user-name");
-        if (
-          !id ||
-          !window.confirm(
-            tr("owner.revokeConfirm", { name })
-          )
-        ) {
-          return;
-        }
+        if (!id || !window.confirm(tr("owner.revokeConfirm", { name }))) return;
         btn.disabled = true;
         try {
           await patchTeamRole(
@@ -4595,6 +4638,36 @@ async function refreshTeamAdminList() {
             tr("owner.revokedSuccess", { name }),
             tr("owner.revokedWarn", { name })
           );
+        } catch (err) {
+          showToast(err.message, "danger");
+          btn.disabled = false;
+        }
+      });
+    });
+
+    host.querySelectorAll(".team-make-owner-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = btn.getAttribute("data-user-id");
+        const name = btn.getAttribute("data-user-name");
+        if (!id || !window.confirm(tr("owner.makeOwnerConfirm", { name }))) return;
+        btn.disabled = true;
+        try {
+          await patchCompanyOwner(id, true, name);
+        } catch (err) {
+          showToast(err.message, "danger");
+          btn.disabled = false;
+        }
+      });
+    });
+
+    host.querySelectorAll(".team-revoke-owner-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const id = btn.getAttribute("data-user-id");
+        const name = btn.getAttribute("data-user-name");
+        if (!id || !window.confirm(tr("owner.revokeOwnerConfirm", { name }))) return;
+        btn.disabled = true;
+        try {
+          await patchCompanyOwner(id, false, name);
         } catch (err) {
           showToast(err.message, "danger");
           btn.disabled = false;
@@ -6651,9 +6724,14 @@ function renderOwnerMain() {
     destroyAdminAttendance();
   }
   if (state.ownerView === "owner-dashboard") {
-    destroyTaskSortables();
-    openOwnerDashboardView();
-    return;
+    if (!state.user?.isOwner) {
+      state.ownerView = "dashboard";
+      renderListContentOnly();
+    } else {
+      destroyTaskSortables();
+      openOwnerDashboardView();
+      return;
+    }
   }
   if (state.ownerView === "reports") {
     destroyTaskSortables();
@@ -7044,6 +7122,10 @@ function wireOwnerDashboardOpen(root = document) {
     if (btn.dataset.ownerDashWired === "1") return;
     btn.dataset.ownerDashWired = "1";
     btn.addEventListener("click", () => {
+      if (!state.user?.isOwner) {
+        showToast(tr("owner.ownerDashboardOwnersOnly"), "warning");
+        return;
+      }
       state.ownerView = "owner-dashboard";
       renderListContentOnly();
       renderOwnerMain();
@@ -7134,6 +7216,10 @@ function wireOwnerDashboardAnnouncementListener() {
   window.__ownerDashAnnWired = true;
   window.addEventListener("taskmgr:open-owner-dashboard", () => {
     if (state.user?.role !== "owner") return;
+    if (!state.user?.isOwner) {
+      showToast(tr("owner.ownerDashboardOwnersOnly"), "warning");
+      return;
+    }
     state.ownerView = "owner-dashboard";
     renderListContentOnly();
     renderOwnerMain();

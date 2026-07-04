@@ -37,6 +37,7 @@ model User {
   phone        String?  @map("phone") @db.VarChar(32)
   role         Role     @default(employee)
   isAdmin      Boolean  @default(false) @map("is_admin")
+  isOwner      Boolean  @default(false) @map("is_owner")
   salary       Int      @default(15000)
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")

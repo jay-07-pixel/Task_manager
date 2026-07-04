@@ -2,8 +2,14 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { sendAdminPromotionEmail, sendAdminRevocationEmail } from "../lib/mail.js";
-import { adminUserWhere, userHasAdminAccess } from "../lib/adminUsers.js";
-import { requireAuth, requireOwner } from "../middleware/auth.js";
+import {
+  adminUserWhere,
+  companyOwnerWhere,
+  MAX_COMPANY_OWNERS,
+  userHasAdminAccess,
+  userIsCompanyOwner,
+} from "../lib/adminUsers.js";
+import { requireAuth, requireOwner, requireCompanyOwner } from "../middleware/auth.js";
 import { buildEmployeeMonthlyBudgetRows } from "../services/employeeMonthlyMinutesService.js";
 
 const router = Router();
@@ -31,6 +37,7 @@ const profileSelect = {
   salary: true,
   role: true,
   isAdmin: true,
+  isOwner: true,
   createdAt: true,
 };
 
@@ -43,6 +50,7 @@ function serializeProfileUser(user) {
     salary: user.salary,
     createdAt: user.createdAt,
     isAdmin: userHasAdminAccess(user),
+    isOwner: userIsCompanyOwner(user),
   };
 }
 
@@ -53,6 +61,7 @@ function serializeTeamUser(user) {
     displayName: user.displayName,
     role: user.role,
     isAdmin: userHasAdminAccess(user),
+    isOwner: userIsCompanyOwner(user),
     salary: user.salary,
   };
 }
@@ -140,10 +149,15 @@ router.get("/assignees", requireOwner, async (req, res) => {
 
 router.get("/team", requireOwner, async (req, res) => {
   const users = await prisma.user.findMany({
-    select: { id: true, email: true, displayName: true, role: true, isAdmin: true, salary: true },
-    orderBy: [{ isAdmin: "desc" }, { displayName: "asc" }],
+    select: { id: true, email: true, displayName: true, role: true, isAdmin: true, isOwner: true, salary: true },
+    orderBy: [{ isOwner: "desc" }, { isAdmin: "desc" }, { displayName: "asc" }],
   });
-  res.json({ users: users.map(serializeTeamUser) });
+  const ownerCount = await prisma.user.count({ where: companyOwnerWhere });
+  res.json({
+    users: users.map(serializeTeamUser),
+    ownerCount,
+    maxOwners: MAX_COMPANY_OWNERS,
+  });
 });
 
 router.get("/profile", requireAuth, async (req, res) => {
@@ -266,8 +280,8 @@ router.patch("/:id/role", requireOwner, async (req, res) => {
   if (nextRole === "owner") {
     const user = await prisma.user.update({
       where: { id: target.id },
-      data: { isAdmin: true, role: "employee" },
-      select: { id: true, email: true, displayName: true, role: true, isAdmin: true },
+      data: { isAdmin: true, role: "employee", isOwner: false },
+      select: { id: true, email: true, displayName: true, role: true, isAdmin: true, isOwner: true },
     });
 
     let emailSent = false;
@@ -296,8 +310,8 @@ router.patch("/:id/role", requireOwner, async (req, res) => {
 
   const user = await prisma.user.update({
     where: { id: target.id },
-    data: { isAdmin: false, role: "employee" },
-    select: { id: true, email: true, displayName: true, role: true, isAdmin: true },
+    data: { isAdmin: false, role: "employee", isOwner: false },
+    select: { id: true, email: true, displayName: true, role: true, isAdmin: true, isOwner: true },
   });
 
   let emailSent = false;
@@ -313,6 +327,66 @@ router.patch("/:id/role", requireOwner, async (req, res) => {
   }
 
   res.json({ user: serializeTeamUser(user), emailSent });
+});
+
+const companyOwnerPatchSchema = z.object({
+  isOwner: z.boolean(),
+});
+
+/** Promote/revoke company owner (Owner dashboard). Only existing owners; max 2. */
+router.patch("/:id/company-owner", requireCompanyOwner, async (req, res) => {
+  const parsed = companyOwnerPatchSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid body. Use { isOwner: true|false }." });
+  }
+
+  const wantOwner = parsed.data.isOwner;
+  const target = await prisma.user.findUnique({
+    where: { id: req.params.id },
+    select: { id: true, email: true, displayName: true, role: true, isAdmin: true, isOwner: true },
+  });
+  if (!target) {
+    return res.status(404).json({ error: "User not found" });
+  }
+
+  if (wantOwner) {
+    if (!userHasAdminAccess(target)) {
+      return res.status(400).json({ error: "Only admins can be made company owners. Promote them to admin first." });
+    }
+    if (target.isOwner) {
+      return res.status(400).json({ error: "User is already a company owner." });
+    }
+    const ownerCount = await prisma.user.count({ where: companyOwnerWhere });
+    if (ownerCount >= MAX_COMPANY_OWNERS) {
+      return res.status(400).json({
+        error: `Maximum ${MAX_COMPANY_OWNERS} company owners allowed. Revoke another owner first.`,
+      });
+    }
+    const user = await prisma.user.update({
+      where: { id: target.id },
+      data: { isOwner: true, isAdmin: true },
+      select: { id: true, email: true, displayName: true, role: true, isAdmin: true, isOwner: true, salary: true },
+    });
+    return res.json({ user: serializeTeamUser(user) });
+  }
+
+  if (!target.isOwner) {
+    return res.status(400).json({ error: "User is not a company owner." });
+  }
+  if (target.id === req.session.userId) {
+    return res.status(400).json({ error: "You cannot revoke your own owner access." });
+  }
+  const ownerCount = await prisma.user.count({ where: companyOwnerWhere });
+  if (ownerCount <= 1) {
+    return res.status(400).json({ error: "Cannot revoke the last company owner. Promote another owner first." });
+  }
+
+  const user = await prisma.user.update({
+    where: { id: target.id },
+    data: { isOwner: false },
+    select: { id: true, email: true, displayName: true, role: true, isAdmin: true, isOwner: true, salary: true },
+  });
+  res.json({ user: serializeTeamUser(user) });
 });
 
 export default router;

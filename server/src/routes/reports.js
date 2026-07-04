@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../lib/prisma.js";
-import { requireOwner } from "../middleware/auth.js";
+import { requireOwner, requireCompanyOwner } from "../middleware/auth.js";
 import { adminUserWhere } from "../lib/adminUsers.js";
 import { buildOrgMonthlyMinuteBudgetReport } from "../services/employeeMonthlyMinutesService.js";
 import { MONTHLY_BUDGET_MINUTES, currentYearMonthInAppTz } from "../lib/employeeMonthlyMinutes.js";
@@ -144,7 +144,7 @@ function parseBudgetMonthQuery(req) {
   return { year, month };
 }
 
-router.get("/owner-dashboard/summary", async (req, res) => {
+router.get("/owner-dashboard/summary", requireCompanyOwner, async (req, res) => {
   try {
     const { year, month } = parseBudgetMonthQuery(req);
     const ownerIds = await orgOwnerIds();
@@ -347,6 +347,15 @@ router.get("/employee-performance", async (req, res) => {
   try {
     const ownerId = req.session.userId;
     const scope = req.query.scope === "org" ? "org" : "session";
+    if (scope === "org") {
+      const actor = await prisma.user.findUnique({
+        where: { id: ownerId },
+        select: { isOwner: true, isAdmin: true, role: true },
+      });
+      if (!actor?.isOwner) {
+        return res.status(403).json({ error: "Company owner access required" });
+      }
+    }
     const ownerIds =
       scope === "org" ? await orgOwnerIds() : [ownerId];
     const listOwnerWhere = ownerIds.length ? { in: ownerIds } : ownerId;

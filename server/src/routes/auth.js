@@ -33,6 +33,7 @@ function serializeSessionUser(user, activeRole, company = null) {
     displayName: user.displayName,
     phone: user.phone,
     isAdmin,
+    isOwner: Boolean(user.isOwner),
     role: activeRole,
     liveLocationRequired: company?.liveLocationRequired !== false,
   };
@@ -328,8 +329,9 @@ router.post("/register", async (req, res) => {
       phone: phone.trim(),
       role: "employee",
       isAdmin: bootstrapAdmin,
+      isOwner: bootstrapAdmin,
     },
-    select: { id: true, email: true, displayName: true, phone: true, role: true, isAdmin: true },
+    select: { id: true, email: true, displayName: true, phone: true, role: true, isAdmin: true, isOwner: true },
   });
 
   await prisma.emailVerification.deleteMany({ where: { email: normalizedEmail } }).catch(() => {});
@@ -620,7 +622,7 @@ router.post("/switch-role", requireAuth, async (req, res) => {
 
   const user = await prisma.user.findUnique({
     where: { id: req.session.userId },
-    select: { id: true, email: true, displayName: true, phone: true, role: true, isAdmin: true },
+    select: { id: true, email: true, displayName: true, phone: true, role: true, isAdmin: true, isOwner: true },
   });
   if (!user) {
     return res.status(401).json({ error: "Not found" });
@@ -638,7 +640,7 @@ router.post("/switch-role", requireAuth, async (req, res) => {
 router.get("/me", requireAuth, async (req, res) => {
   const user = await prisma.user.findUnique({
     where: { id: req.session.userId },
-    select: { id: true, email: true, displayName: true, phone: true, role: true, isAdmin: true },
+    select: { id: true, email: true, displayName: true, phone: true, role: true, isAdmin: true, isOwner: true },
   });
   if (!user) {
     return res.status(401).json({ error: "Not found" });
