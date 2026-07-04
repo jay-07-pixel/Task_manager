@@ -11,7 +11,7 @@ import {
 
 /** @typedef {{ id: string, title: string, dueAt: string | null, reminderBeforeMinutes?: number | null, assignees?: { id: string, assigneeDone?: boolean }[] }} ReminderTask */
 
-const DEFAULT_REMINDER_BEFORE_MS = 10 * 60 * 1000;
+const DEFAULT_REMINDER_BEFORE_MS = 30 * 60 * 1000;
 /** Second reminder if still not submitted — 1 hour after due time. */
 const FOLLOWUP_AFTER_DUE_MS = 60 * 60 * 1000;
 const CHECK_INTERVAL_MS = 15 * 1000;
@@ -92,7 +92,7 @@ function reminderBeforeMsForTask(task) {
 function beforeSlotForTask(task) {
   const m = task?.reminderBeforeMinutes;
   if (m === 0) return null;
-  const minutes = m == null ? 10 : m;
+  const minutes = m == null ? 30 : m;
   return `before${minutes}`;
 }
 
@@ -130,7 +130,7 @@ function focusEmployeeTaskReminder(task, slot) {
         taskId: task.id,
         title: task.title,
         dueAt: task.dueAt,
-        slot: slot || "before10",
+        slot: slot || "before30",
       },
     })
   );
@@ -235,7 +235,7 @@ export function handlePushReminderMessage(payload, showToast) {
     title: payload.title || tr("employee.reminders.fallbackTaskTitle"),
     dueAt: payload.dueAt || null,
   };
-  const slot = payload.slot?.startsWith("followup") ? SLOT_FOLLOWUP : payload.slot || "before10";
+  const slot = payload.slot?.startsWith("followup") ? SLOT_FOLLOWUP : payload.slot || "before30";
   if (isBeforeSlot(slot) === false && slot !== SLOT_FOLLOWUP) return;
   if (isReminderFired(task, slot)) return;
 

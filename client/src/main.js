@@ -2028,7 +2028,7 @@ function getEmployeeNotifyParams() {
   return {
     taskId,
     title: params.get("title") || "",
-    slot: params.get("slot") || "before10",
+    slot: params.get("slot") || "before30",
     dueAt: params.get("dueAt"),
   };
 }
@@ -2064,7 +2064,7 @@ async function focusEmployeeTaskFromNotify(notify) {
     ? tr("employee.reminderOverdue")
     : notify.slot?.startsWith("before")
       ? tr("employee.reminderDueSoonCustom", {
-          count: parseInt(String(notify.slot).replace(/^before/, ""), 10) || 10,
+          count: parseInt(String(notify.slot).replace(/^before/, ""), 10) || 30,
         })
       : tr("employee.reminderDueSoon");
   const title = notify.title || task?.title || "Your task";
@@ -2645,20 +2645,24 @@ function fillModalDurationFields(task) {
   valueEl.value = String(minutes);
 }
 
+const REMINDER_BEFORE_OPTIONS = [30, 60, 180, 360, 1440, 2880, 4320];
+
+function normalizeReminderBeforeMinutes(value) {
+  const n = Number(value);
+  if (REMINDER_BEFORE_OPTIONS.includes(n)) return n;
+  return 30;
+}
+
 function parseReminderBeforeMinutesFromModal() {
   if (!document.getElementById("modal-due")?.value?.trim()) return null;
-  const raw = document.getElementById("modal-reminder-before")?.value ?? "";
-  if (raw === "") return null;
-  const n = parseInt(raw, 10);
-  if (!Number.isFinite(n) || n < 0) return null;
-  return n;
+  const raw = document.getElementById("modal-reminder-before")?.value ?? "30";
+  return normalizeReminderBeforeMinutes(parseInt(raw, 10));
 }
 
 function fillModalReminderFields(task) {
   const sel = document.getElementById("modal-reminder-before");
   if (!sel) return;
-  const m = task?.reminderBeforeMinutes;
-  sel.value = m == null ? "" : String(m);
+  sel.value = String(normalizeReminderBeforeMinutes(task?.reminderBeforeMinutes));
   syncModalReminderRowVisibility();
 }
 
@@ -3804,16 +3808,13 @@ function taskModalHtml() {
                   <p class="admin-task-modal-field-hint small text-muted mb-2">${tr("modals.reminderBeforeHint")}</p>
                   <div class="admin-task-modal-select-wrap">
                     <select class="admin-task-modal-select" id="modal-reminder-before" aria-label="${tr("modals.reminderBefore")}">
-                      <option value="">${tr("modals.reminderDefault10")}</option>
-                      <option value="0">${tr("modals.reminderNone")}</option>
-                      <option value="5">${tr("modals.reminderMinutesBefore", { count: 5 })}</option>
-                      <option value="10">${tr("modals.reminderMinutesBefore", { count: 10 })}</option>
-                      <option value="15">${tr("modals.reminderMinutesBefore", { count: 15 })}</option>
-                      <option value="30">${tr("modals.reminderMinutesBefore", { count: 30 })}</option>
+                      <option value="30" selected>${tr("modals.reminderMinutesBefore", { count: 30 })}</option>
                       <option value="60">${tr("modals.reminderHoursBefore", { count: 1 })}</option>
-                      <option value="120">${tr("modals.reminderHoursBefore", { count: 2 })}</option>
+                      <option value="180">${tr("modals.reminderHoursBefore", { count: 3 })}</option>
                       <option value="360">${tr("modals.reminderHoursBefore", { count: 6 })}</option>
                       <option value="1440">${tr("modals.reminderDaysBefore", { count: 1 })}</option>
+                      <option value="2880">${tr("modals.reminderDaysBefore", { count: 2 })}</option>
+                      <option value="4320">${tr("modals.reminderDaysBefore", { count: 3 })}</option>
                     </select>
                     <span class="admin-task-modal-select-chevron">${adminMsIcon("expand_more")}</span>
                   </div>

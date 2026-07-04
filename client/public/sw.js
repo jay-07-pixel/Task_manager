@@ -90,7 +90,7 @@ function formatNotificationCopy(payload) {
   let body = payload.body;
 
   if (!title) {
-    title = slot && String(slot).startsWith("followup") ? "Task overdue" : "Task due in 10 minutes";
+    title = slot && String(slot).startsWith("followup") ? "Task overdue" : "Task due soon";
   }
 
   if (!body) {

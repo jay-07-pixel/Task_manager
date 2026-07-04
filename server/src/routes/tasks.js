@@ -23,6 +23,7 @@ import {
 } from "../lib/taskRecurrenceSort.js";
 import { notifyAdminsTaskSubmitted } from "../services/taskCompletionNotificationService.js";
 import { adminUserWhere, userHasAdminAccess } from "../lib/adminUsers.js";
+import { DEFAULT_REMINDER_BEFORE_MINUTES } from "../lib/reminderTiming.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const uploadsRoot = path.join(__dirname, "..", "..", "uploads", "completion-proofs");
@@ -1826,9 +1827,7 @@ router.post("/lists/:listId", requireOwner, async (req, res) => {
     highPriority: parsed.data.highPriority ?? false,
     durationMinutes: parsed.data.durationMinutes ?? null,
     reminderBeforeMinutes: dueAt
-      ? parsed.data.reminderBeforeMinutes !== undefined
-        ? parsed.data.reminderBeforeMinutes
-        : null
+      ? parsed.data.reminderBeforeMinutes ?? DEFAULT_REMINDER_BEFORE_MINUTES
       : null,
     dueAt,
     dueTimeZone,

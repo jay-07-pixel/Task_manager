@@ -1,5 +1,5 @@
 /** Default pre-deadline reminder when task.reminderBeforeMinutes is null. */
-export const DEFAULT_REMINDER_BEFORE_MINUTES = 10;
+export const DEFAULT_REMINDER_BEFORE_MINUTES = 30;
 
 const FOLLOWUP_1H_AFTER_DUE_MS = 60 * 60 * 1000;
 const FOLLOWUP_6H_AFTER_DUE_MS = 6 * 60 * 60 * 1000;
