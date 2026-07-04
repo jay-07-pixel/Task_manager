@@ -59,3 +59,15 @@
   display: flex;
   justify-content: flex-start;
 }
+
+.manage-locations-page {
+  padding: 0 1.25rem 1.5rem;
+}
+
+.manage-locations-schedule {
+  border-radius: 0.75rem;
+}
+
+.manage-locations-schedule-form .profile-modal-btn-save {
+  min-height: 2.5rem;
+}

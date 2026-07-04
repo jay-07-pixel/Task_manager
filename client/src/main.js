@@ -69,7 +69,15 @@ import {
   initAttendanceCheckIn,
   attendanceCheckInCardHtml,
   wireAttendanceCheckInCard,
+  performAttendanceCheck,
 } from "./attendanceCheckIn.js";
+import {
+  attendanceCheckInReminderModalHtml,
+  initAttendanceCheckInReminder,
+  startAttendanceCheckInReminder,
+  stopAttendanceCheckInReminder,
+  wireAttendanceCheckInReminder,
+} from "./attendanceCheckInReminder.js";
 import {
   initAdminAttendance,
   ownerAttendanceNavItemHtml,
@@ -1962,6 +1970,7 @@ function renderAuthForm() {
 async function logout() {
   stopOwnerAutoSync();
   stopEmployeeReminders();
+  stopAttendanceCheckInReminder();
   stopChatPolling();
   stopAttendanceTracking();
   stopAttendancePoll();
@@ -8481,6 +8490,7 @@ function renderEmployeeChrome() {
       ${taskDescriptionModalHtml()}
       ${myProfileModalHtml()}
       ${contactUsModalHtml()}
+      ${attendanceCheckInReminderModalHtml()}
       ${teamChatOffcanvasHtml()}
     </div>`;
 
@@ -8509,6 +8519,8 @@ function renderEmployeeChrome() {
     },
   });
   initAttendanceCheckIn({ api, showToast });
+  initAttendanceCheckInReminder({ api, showToast, performCheck: performAttendanceCheck });
+  wireAttendanceCheckInReminder();
   renderEmpListContentOnly();
   wireSubmissionDetailModal();
   wireEmpSubmissionModal();
@@ -8552,6 +8564,7 @@ async function render() {
     if (locationOk) {
       renderEmployeeMain();
       startEmployeeReminderSystem();
+      startAttendanceCheckInReminder();
       void prepareEmployeePushOnLogin();
       await handleEmployeeNotifyDeepLink();
     } else {

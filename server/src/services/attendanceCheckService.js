@@ -1,6 +1,11 @@
 import { prisma } from "../lib/prisma.js";
 import { findNearestWorkLocation, validateCoordinates } from "../lib/geofence.js";
 import { getActiveWorkLocations } from "./workLocationService.js";
+import { getDailyAttendanceSchedule } from "./companyAttendanceSettings.js";
+import {
+  evaluateCheckInTiming,
+  evaluateCheckOutTiming,
+} from "../lib/attendanceSchedule.js";
 
 function startOfDayLocal(dateStr) {
   let start;
@@ -26,6 +31,7 @@ function serializeCheck(row) {
     longitude: row.longitude,
     distanceMeters: Math.round(row.distanceMeters),
     withinRadius: row.withinRadius,
+    timingStatus: row.timingStatus ?? null,
     recordedAt: row.recordedAt.toISOString(),
     locationName: row.workLocation?.name ?? null,
     workLocationId: row.workLocationId,
@@ -69,39 +75,24 @@ async function getChecksForDay(userId, dayStart, dayEnd) {
 }
 
 function summarizeDayChecks(checks) {
-  const checkIns = checks.filter((c) => c.type === "check_in");
-  const checkOuts = checks.filter((c) => c.type === "check_out");
-  const isCheckedIn = checkIns.length > checkOuts.length;
-
-  let displayCheckIn = checkIns[0] ?? null;
-  let displayCheckOut = null;
-
-  if (isCheckedIn) {
-    displayCheckIn = checkIns[checkIns.length - 1] ?? null;
-  } else if (checkOuts.length) {
-    displayCheckOut = checkOuts[checkOuts.length - 1];
-    const idx = checks.findIndex((c) => c.id === displayCheckOut.id);
-    for (let i = idx - 1; i >= 0; i -= 1) {
-      if (checks[i].type === "check_in") {
-        displayCheckIn = checks[i];
-        break;
-      }
-    }
-  }
-
+  const checkInRow = checks.find((c) => c.type === "check_in") ?? null;
+  const checkOutRow = checks.find((c) => c.type === "check_out") ?? null;
   return {
-    isCheckedIn,
-    checkIn: displayCheckIn ? serializeCheck(displayCheckIn) : null,
-    checkOut: displayCheckOut ? serializeCheck(displayCheckOut) : null,
+    isCheckedIn: Boolean(checkInRow && !checkOutRow),
+    checkIn: checkInRow ? serializeCheck(checkInRow) : null,
+    checkOut: checkOutRow ? serializeCheck(checkOutRow) : null,
   };
 }
 
 function deriveTodayStatus(checks) {
   const summary = summarizeDayChecks(checks);
+  const hasCheckIn = Boolean(summary.checkIn);
+  const hasCheckOut = Boolean(summary.checkOut);
   return {
     isCheckedIn: summary.isCheckedIn,
-    canCheckIn: !summary.isCheckedIn,
-    canCheckOut: summary.isCheckedIn,
+    dayComplete: hasCheckIn && hasCheckOut,
+    canCheckIn: !hasCheckIn,
+    canCheckOut: hasCheckIn && !hasCheckOut,
     lastCheckIn: summary.checkIn,
     lastCheckOut: summary.checkOut,
   };
@@ -118,10 +109,12 @@ export async function getCheckStatus(userId, { latitude, longitude } = {}) {
   }
 
   const locations = await getActiveWorkLocations();
+  const schedule = await getDailyAttendanceSchedule();
 
   return {
     date: start.toISOString().slice(0, 10),
     locationsCount: locations.length,
+    schedule,
     ...today,
     proximity,
   };
@@ -143,11 +136,24 @@ export async function performCheck(userId, type, latitude, longitude) {
   const today = deriveTodayStatus(checks);
 
   if (type === "check_in" && !today.canCheckIn) {
-    throw new Error("You are already checked in. Check out first.");
+    if (today.dayComplete || today.lastCheckOut) {
+      throw new Error("You already completed attendance for today.");
+    }
+    throw new Error("You already checked in today.");
   }
   if (type === "check_out" && !today.canCheckOut) {
+    if (today.lastCheckOut) {
+      throw new Error("You already checked out today.");
+    }
     throw new Error("You are not checked in yet.");
   }
+
+  const schedule = await getDailyAttendanceSchedule();
+  const now = new Date();
+  const timingStatus =
+    type === "check_in"
+      ? evaluateCheckInTiming(now, schedule.checkInTime)
+      : evaluateCheckOutTiming(now, schedule.checkOutTime);
 
   const row = await prisma.attendanceCheck.create({
     data: {
@@ -158,6 +164,7 @@ export async function performCheck(userId, type, latitude, longitude) {
       workLocationId: proximity.nearest.locationId,
       distanceMeters: proximity.nearest.distanceMeters,
       withinRadius: true,
+      timingStatus,
     },
     include: { workLocation: true },
   });

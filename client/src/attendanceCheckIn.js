@@ -1,4 +1,5 @@
 import { tr } from "./i18n/index.js";
+import { notifyAttendanceCheckCompleted } from "./attendanceCheckInReminder.js";
 
 /** @type {((path: string, opts?: RequestInit) => Promise<any>) | null} */
 let apiFn = null;
@@ -33,6 +34,20 @@ async function refreshCheckStatus(latitude, longitude) {
       : "";
   checkStatus = await apiFn(`/api/attendance/check-status${qs}`);
   return checkStatus;
+}
+
+function timingLabel(status) {
+  if (status === "late") return tr("attendance.timingLate");
+  if (status === "early") return tr("attendance.timingEarly");
+  if (status === "on_time") return tr("attendance.timingOnTime");
+  return "";
+}
+
+function timingClass(status) {
+  if (status === "late") return "text-danger fw-semibold";
+  if (status === "early") return "text-warning fw-semibold";
+  if (status === "on_time") return "text-success";
+  return "";
 }
 
 function formatTime(iso) {
@@ -79,24 +94,27 @@ function renderCheckInCard() {
     return;
   }
 
-  checkInBtn?.classList.remove("d-none");
+  checkInBtn?.classList.toggle("d-none", !checkStatus.canCheckIn);
+  checkOutBtn?.classList.toggle("d-none", !checkStatus.canCheckOut);
+  badgeEl?.classList.remove("d-none");
 
-  if (checkStatus.isCheckedIn) {
+  if (checkStatus.dayComplete) {
+    badgeEl.textContent = tr("attendance.presentBadge");
+    badgeEl.className = "attendance-checkin-status-badge attendance-checkin-status-badge--in";
+    messageEl.textContent = tr("attendance.dayCompleteMessage");
+  } else if (checkStatus.isCheckedIn) {
     badgeEl.textContent = tr("attendance.checkedInBadge");
     badgeEl.className = "attendance-checkin-status-badge attendance-checkin-status-badge--in";
     messageEl.textContent = tr("attendance.checkedInMessage");
-    checkInBtn?.classList.add("d-none");
-    checkOutBtn?.classList.remove("d-none");
   } else {
     badgeEl.textContent = tr("attendance.notCheckedInBadge");
     badgeEl.className = "attendance-checkin-status-badge attendance-checkin-status-badge--out";
     messageEl.textContent = tr("attendance.notCheckedInMessage");
-    checkInBtn?.classList.remove("d-none");
-    checkOutBtn?.classList.add("d-none");
   }
 
+  const showProximity = checkStatus.canCheckIn || checkStatus.canCheckOut;
   const prox = checkStatus.proximity?.nearest;
-  if (prox) {
+  if (showProximity && prox) {
     proximityEl.classList.remove("d-none");
     if (prox.withinRadius) {
       proximityEl.textContent = tr("attendance.withinRadius", {
@@ -117,12 +135,14 @@ function renderCheckInCard() {
 
   if (checkStatus.lastCheckIn || checkStatus.lastCheckOut) {
     timesEl.classList.remove("d-none");
+    const checkInTiming = checkStatus.lastCheckIn?.timingStatus;
+    const checkOutTiming = checkStatus.lastCheckOut?.timingStatus;
     timesEl.innerHTML = [
       checkStatus.lastCheckIn
-        ? `<div>${tr("attendance.todayCheckIn")}: <strong>${formatTime(checkStatus.lastCheckIn.recordedAt)}</strong> · ${checkStatus.lastCheckIn.locationName ?? ""}</div>`
+        ? `<div>${tr("attendance.todayCheckIn")}: <strong>${formatTime(checkStatus.lastCheckIn.recordedAt)}</strong> · ${checkStatus.lastCheckIn.locationName ?? ""}${checkInTiming && checkInTiming !== "on_time" ? ` · <span class="${timingClass(checkInTiming)}">${timingLabel(checkInTiming)}</span>` : ""}</div>`
         : "",
       checkStatus.lastCheckOut
-        ? `<div>${tr("attendance.todayCheckOut")}: <strong>${formatTime(checkStatus.lastCheckOut.recordedAt)}</strong> · ${checkStatus.lastCheckOut.locationName ?? ""}</div>`
+        ? `<div>${tr("attendance.todayCheckOut")}: <strong>${formatTime(checkStatus.lastCheckOut.recordedAt)}</strong> · ${checkStatus.lastCheckOut.locationName ?? ""}${checkOutTiming && checkOutTiming !== "on_time" ? ` · <span class="${timingClass(checkOutTiming)}">${timingLabel(checkOutTiming)}</span>` : ""}</div>`
         : "",
     ]
       .filter(Boolean)
@@ -132,8 +152,9 @@ function renderCheckInCard() {
   }
 }
 
-async function performCheck(type) {
-  if (!apiFn) return;
+/** @param {"check_in" | "check_out"} type @returns {Promise<boolean>} */
+export async function performAttendanceCheck(type) {
+  if (!apiFn) return false;
   const btn = document.getElementById(type === "check_in" ? "attendance-checkin-btn" : "attendance-checkout-btn");
   if (btn) btn.disabled = true;
   try {
@@ -146,10 +167,14 @@ async function performCheck(type) {
     });
     checkStatus = result.status;
     renderCheckInCard();
-    showToastFn?.(
-      type === "check_in" ? tr("attendance.checkInSuccess") : tr("attendance.checkOutSuccess"),
-      "success"
-    );
+    notifyAttendanceCheckCompleted(type);
+    const timing = result.check?.timingStatus;
+    let toastMsg =
+      type === "check_in" ? tr("attendance.checkInSuccess") : tr("attendance.checkOutSuccess");
+    if (timing === "late") toastMsg = tr("attendance.checkInLateToast");
+    else if (timing === "early") toastMsg = tr("attendance.checkOutEarlyToast");
+    showToastFn?.(toastMsg, timing === "late" ? "warning" : timing === "early" ? "warning" : "success");
+    return true;
   } catch (err) {
     showToastFn?.(err.message || tr("errors.requestFailed"), "danger");
     try {
@@ -160,9 +185,14 @@ async function performCheck(type) {
       await refreshCheckStatus();
       renderCheckInCard();
     }
+    return false;
   } finally {
     if (btn) btn.disabled = false;
   }
+}
+
+async function performCheck(type) {
+  await performAttendanceCheck(type);
 }
 
 export async function wireAttendanceCheckInCard() {

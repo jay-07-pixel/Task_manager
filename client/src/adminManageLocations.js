@@ -197,12 +197,71 @@ function manageLocationsPageHtml() {
     ${ownerChromeHeaderFn?.() ?? ""}
     <div class="admin-settings-page manage-locations-page">
       <p class="admin-settings-intro">${esc(tr("attendance.manageLocationsIntro"))}</p>
+      <section class="manage-locations-schedule card border-0 shadow-sm mb-4">
+        <div class="card-body">
+          <h3 class="h6 mb-1">${esc(tr("attendance.dailyScheduleTitle"))}</h3>
+          <p class="small text-muted mb-3">${esc(tr("attendance.dailyScheduleIntro"))}</p>
+          <form id="manage-locations-schedule-form" class="manage-locations-schedule-form">
+            <div class="row g-3 align-items-end">
+              <div class="col-sm-6 col-md-4">
+                <label class="form-label" for="daily-check-in-time">${esc(tr("attendance.dailyCheckInTime"))}</label>
+                <input type="time" class="form-control" id="daily-check-in-time" step="60" />
+              </div>
+              <div class="col-sm-6 col-md-4">
+                <label class="form-label" for="daily-check-out-time">${esc(tr("attendance.dailyCheckOutTime"))}</label>
+                <input type="time" class="form-control" id="daily-check-out-time" step="60" />
+              </div>
+              <div class="col-sm-12 col-md-4">
+                <button type="submit" class="profile-modal-btn-save w-100">${esc(tr("attendance.saveSchedule"))}</button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </section>
       <div class="manage-locations-toolbar mb-3">
         <button type="button" class="profile-modal-btn-save" id="manage-locations-add-btn">${esc(tr("attendance.addLocation"))}</button>
       </div>
       <div class="admin-settings-list manage-locations-list"></div>
     </div>
   </div>`;
+}
+
+async function loadDailyScheduleForm() {
+  if (!apiFn) return;
+  try {
+    const schedule = await apiFn("/api/attendance/daily-schedule");
+    const checkInEl = document.getElementById("daily-check-in-time");
+    const checkOutEl = document.getElementById("daily-check-out-time");
+    if (checkInEl) checkInEl.value = schedule.checkInTime ?? "";
+    if (checkOutEl) checkOutEl.value = schedule.checkOutTime ?? "";
+  } catch {
+    /* ignore */
+  }
+}
+
+async function saveDailySchedule(e) {
+  e.preventDefault();
+  if (!apiFn) return;
+  const checkInTime = document.getElementById("daily-check-in-time")?.value?.trim() || null;
+  const checkOutTime = document.getElementById("daily-check-out-time")?.value?.trim() || null;
+  try {
+    await apiFn("/api/attendance/daily-schedule", {
+      method: "PATCH",
+      body: JSON.stringify({ checkInTime, checkOutTime }),
+    });
+    showToastFn?.(tr("attendance.scheduleSaved"), "success");
+  } catch (err) {
+    showToastFn?.(err.message || tr("errors.requestFailed"), "danger");
+  }
+}
+
+function wireDailyScheduleForm() {
+  const form = document.getElementById("manage-locations-schedule-form");
+  if (!form || form.dataset.wired === "1") return;
+  form.dataset.wired = "1";
+  form.addEventListener("submit", (e) => {
+    void saveDailySchedule(e);
+  });
 }
 
 export function wireManageLocationModal() {
@@ -224,6 +283,8 @@ export function openOwnerManageLocationsView() {
   if (!main) return;
   main.innerHTML = manageLocationsPageHtml();
   wireOwnerChromeHeaderFn?.(main);
+  wireDailyScheduleForm();
   document.getElementById("manage-locations-add-btn")?.addEventListener("click", () => openLocationModal());
+  void loadDailyScheduleForm();
   void renderLocationsList();
 }

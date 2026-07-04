@@ -670,22 +670,155 @@ function wireAttendanceTabs(root) {
   });
 }
 
+function dailyReportSortKey(row) {
+  if (!row.checkIn) return 0;
+  if (row.isCheckedIn) return 2;
+  return 1;
+}
+
+function computeWorkingMinutes(row) {
+  if (!row.checkIn?.recordedAt) return null;
+  const start = new Date(row.checkIn.recordedAt);
+  const end = row.isCheckedIn
+    ? new Date()
+    : row.checkOut?.recordedAt
+      ? new Date(row.checkOut.recordedAt)
+      : null;
+  if (!end || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+  const minutes = Math.round((end.getTime() - start.getTime()) / 60000);
+  return minutes >= 0 ? minutes : null;
+}
+
+function formatWorkingMinutes(row) {
+  const minutes = computeWorkingMinutes(row);
+  if (minutes == null) return "—";
+  if (row.isCheckedIn) {
+    return tr("attendance.workingMinutesOngoing", { minutes });
+  }
+  return tr("attendance.workingMinutes", { minutes });
+}
+
+function dailyReportTimingHtml(timingStatus) {
+  if (timingStatus === "late") {
+    return ` <span class="admin-attendance-timing admin-attendance-timing--late">${escapeHtmlFn?.(tr("attendance.timingLate")) ?? "Late"}</span>`;
+  }
+  if (timingStatus === "early") {
+    return ` <span class="admin-attendance-timing admin-attendance-timing--early">${escapeHtmlFn?.(tr("attendance.timingEarly")) ?? "Early"}</span>`;
+  }
+  return "";
+}
+
+function dailyReportStats(rows) {
+  const total = rows.length;
+  const present = rows.filter((row) => row.checkIn).length;
+  return { total, present, absent: total - present };
+}
+
+function dailySummaryHtml(present, total, absent) {
+  const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
+  return `<div class="admin-attendance-daily-kpi-grid">
+    <div class="admin-attendance-daily-kpi admin-attendance-daily-kpi--present">
+      <div class="admin-attendance-daily-kpi-body">
+        <span class="admin-attendance-daily-kpi-icon" aria-hidden="true">${adminMsIconFn?.("how_to_reg") ?? ""}</span>
+        <span class="admin-attendance-daily-kpi-value tabular-nums">${present}<span class="admin-attendance-daily-kpi-sep">/</span>${total}</span>
+      </div>
+      <span class="admin-attendance-daily-kpi-label">${esc(tr("attendance.dailySummaryPresent"))}</span>
+    </div>
+    <div class="admin-attendance-daily-kpi admin-attendance-daily-kpi--absent">
+      <div class="admin-attendance-daily-kpi-body">
+        <span class="admin-attendance-daily-kpi-icon" aria-hidden="true">${adminMsIconFn?.("person_off") ?? ""}</span>
+        <span class="admin-attendance-daily-kpi-value tabular-nums">${absent}</span>
+      </div>
+      <span class="admin-attendance-daily-kpi-label">${esc(tr("attendance.dailySummaryAbsent"))}</span>
+    </div>
+  </div>`;
+}
+
+function dailyReportStatusBadgeHtml(row) {
+  const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
+  if (row.isCheckedIn) {
+    return `<span class="admin-attendance-daily-badge admin-attendance-daily-badge--in">${esc(tr("attendance.checkedInBadge"))}</span>`;
+  }
+  if (row.checkIn) {
+    return `<span class="admin-attendance-daily-badge admin-attendance-daily-badge--present">${esc(tr("attendance.presentBadge"))}</span>`;
+  }
+  return `<span class="admin-attendance-daily-badge admin-attendance-daily-badge--absent">${esc(tr("attendance.absentBadge"))}</span>`;
+}
+
+function dailyReportCheckInText(row) {
+  const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
+  if (!row.checkIn) return "—";
+  return `${formatDateTime(row.checkIn.recordedAt)} · ${esc(row.checkIn.locationName ?? "—")}${dailyReportTimingHtml(row.checkIn.timingStatus)}`;
+}
+
+function dailyReportCheckOutText(row) {
+  const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
+  if (row.isCheckedIn) return tr("attendance.stillCheckedIn");
+  if (!row.checkOut) return "—";
+  return `${formatDateTime(row.checkOut.recordedAt)} · ${esc(row.checkOut.locationName ?? "—")}${dailyReportTimingHtml(row.checkOut.timingStatus)}`;
+}
+
 function dailyReportRowHtml(row) {
   const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
-  const checkIn = row.checkIn
-    ? `${formatDateTime(row.checkIn.recordedAt)} · ${esc(row.checkIn.locationName ?? "—")}`
-    : "—";
-  const checkOut = row.isCheckedIn
-    ? tr("attendance.stillCheckedIn")
-    : row.checkOut
-      ? `${formatDateTime(row.checkOut.recordedAt)} · ${esc(row.checkOut.locationName ?? "—")}`
-      : "—";
+  const checkIn = dailyReportCheckInText(row);
+  const checkOut = dailyReportCheckOutText(row);
+  const working = formatWorkingMinutes(row);
   return `<tr>
-    <td>${esc(row.displayName)}</td>
-    <td class="small">${checkIn}</td>
-    <td class="small">${checkOut}</td>
-    <td>${row.isCheckedIn ? `<span class="admin-attendance-daily-badge admin-attendance-daily-badge--in">${esc(tr("attendance.checkedInBadge"))}</span>` : row.checkIn ? `<span class="admin-attendance-daily-badge admin-attendance-daily-badge--out">${esc(tr("attendance.presentBadge"))}</span>` : `<span class="admin-attendance-daily-badge admin-attendance-daily-badge--absent">${esc(tr("attendance.absentBadge"))}</span>`}</td>
+    <td class="admin-attendance-daily-employee">${esc(row.displayName)}</td>
+    <td class="small admin-attendance-daily-time">${checkIn}</td>
+    <td class="small admin-attendance-daily-time">${checkOut}</td>
+    <td class="text-end fw-semibold tabular-nums admin-attendance-daily-working">${esc(working)}</td>
+    <td class="admin-attendance-daily-status">${dailyReportStatusBadgeHtml(row)}</td>
   </tr>`;
+}
+
+function dailyReportMobileCardHtml(row) {
+  const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
+  const checkIn = dailyReportCheckInText(row);
+  const checkOut = dailyReportCheckOutText(row);
+  const working = formatWorkingMinutes(row);
+  return `<article class="admin-attendance-daily-card">
+    <div class="admin-attendance-daily-card-head">
+      <h3 class="admin-attendance-daily-card-name">${esc(row.displayName)}</h3>
+      ${dailyReportStatusBadgeHtml(row)}
+    </div>
+    <dl class="admin-attendance-daily-card-details">
+      <div class="admin-attendance-daily-card-row">
+        <dt>${esc(tr("attendance.checkIn"))}</dt>
+        <dd>${checkIn}</dd>
+      </div>
+      <div class="admin-attendance-daily-card-row">
+        <dt>${esc(tr("attendance.checkOut"))}</dt>
+        <dd>${checkOut}</dd>
+      </div>
+      <div class="admin-attendance-daily-card-row">
+        <dt>${esc(tr("attendance.workingMinutesColumn"))}</dt>
+        <dd class="tabular-nums fw-semibold">${esc(working)}</dd>
+      </div>
+    </dl>
+  </article>`;
+}
+
+function renderDailyReportContent(rows) {
+  const summaryEl = document.getElementById("admin-attendance-daily-summary");
+  const body = document.getElementById("admin-attendance-daily-body");
+  const cardsEl = document.getElementById("admin-attendance-daily-cards");
+  const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
+
+  const stats = dailyReportStats(rows);
+  if (summaryEl) {
+    summaryEl.innerHTML = dailySummaryHtml(stats.present, stats.total, stats.absent);
+  }
+
+  if (!rows.length) {
+    const empty = `<p class="admin-attendance-daily-empty">${esc(tr("attendance.noEmployees"))}</p>`;
+    if (body) body.innerHTML = `<tr><td colspan="5" class="text-muted">${esc(tr("attendance.noEmployees"))}</td></tr>`;
+    if (cardsEl) cardsEl.innerHTML = empty;
+    return;
+  }
+
+  if (body) body.innerHTML = rows.map((row) => dailyReportRowHtml(row)).join("");
+  if (cardsEl) cardsEl.innerHTML = rows.map((row) => dailyReportMobileCardHtml(row)).join("");
 }
 
 async function renderDailyAttendancePage() {
@@ -697,31 +830,40 @@ async function renderDailyAttendancePage() {
   main.innerHTML = `<div class="admin-main-scroll d-flex flex-column">
     ${ownerChromeHeaderFn?.() ?? ""}
     <div class="admin-attendance-page admin-attendance-page--daily">
-      <div class="admin-attendance-toolbar">
-        ${attendanceTabsHtml()}
-        <div class="admin-attendance-toolbar-actions">
-          <input type="date" class="form-control form-control-sm admin-attendance-date-input" id="admin-attendance-daily-date" value="${dailyReportDate}" />
-          <button type="button" class="btn btn-sm btn-outline-primary js-attendance-daily-refresh">
-            ${adminMsIconFn?.("refresh") ?? ""}
-            <span>${escapeHtmlFn?.(tr("attendance.refresh")) ?? "Refresh"}</span>
-          </button>
+      <div class="admin-attendance-daily-panel">
+        <div class="admin-attendance-toolbar admin-attendance-daily-toolbar">
+          ${attendanceTabsHtml()}
+          <div class="admin-attendance-toolbar-actions">
+            <input type="date" class="form-control form-control-sm admin-attendance-date-input" id="admin-attendance-daily-date" value="${dailyReportDate}" aria-label="${escapeHtmlFn?.(tr("attendance.dailyReportDateLabel")) ?? "Date"}" />
+            <button type="button" class="btn btn-sm btn-outline-primary js-attendance-daily-refresh">
+              ${adminMsIconFn?.("refresh") ?? ""}
+              <span>${escapeHtmlFn?.(tr("attendance.refresh")) ?? "Refresh"}</span>
+            </button>
+          </div>
         </div>
-      </div>
-      <p class="admin-attendance-intro">${escapeHtmlFn?.(tr("attendance.dailyReportIntro")) ?? ""}</p>
-      <div class="table-responsive admin-attendance-daily-table-wrap">
-        <table class="table table-hover align-middle mb-0 admin-attendance-daily-table">
-          <thead>
-            <tr>
-              <th>${escapeHtmlFn?.(tr("common.employee")) ?? "Employee"}</th>
-              <th>${escapeHtmlFn?.(tr("attendance.checkIn")) ?? "Check in"}</th>
-              <th>${escapeHtmlFn?.(tr("attendance.checkOut")) ?? "Check out"}</th>
-              <th>${escapeHtmlFn?.(tr("attendance.statusColumn")) ?? "Status"}</th>
-            </tr>
-          </thead>
-          <tbody id="admin-attendance-daily-body">
-            <tr><td colspan="4" class="text-muted">${escapeHtmlFn?.(tr("common.loading")) ?? ""}</td></tr>
-          </tbody>
-        </table>
+        <p class="admin-attendance-intro admin-attendance-daily-intro">${escapeHtmlFn?.(tr("attendance.dailyReportIntro")) ?? ""}</p>
+        <div id="admin-attendance-daily-summary" class="admin-attendance-daily-summary">
+          ${dailySummaryHtml(0, 0, 0)}
+        </div>
+        <div class="admin-attendance-daily-table-wrap d-none d-md-block">
+          <table class="table table-hover align-middle mb-0 admin-attendance-daily-table">
+            <thead>
+              <tr>
+                <th>${escapeHtmlFn?.(tr("common.employee")) ?? "Employee"}</th>
+                <th>${escapeHtmlFn?.(tr("attendance.checkIn")) ?? "Check in"}</th>
+                <th>${escapeHtmlFn?.(tr("attendance.checkOut")) ?? "Check out"}</th>
+                <th class="text-end">${escapeHtmlFn?.(tr("attendance.workingMinutesColumn")) ?? "Working (min)"}</th>
+                <th>${escapeHtmlFn?.(tr("attendance.statusColumn")) ?? "Status"}</th>
+              </tr>
+            </thead>
+            <tbody id="admin-attendance-daily-body">
+              <tr><td colspan="5" class="text-muted">${escapeHtmlFn?.(tr("common.loading")) ?? ""}</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div id="admin-attendance-daily-cards" class="admin-attendance-daily-cards d-md-none">
+          <p class="admin-attendance-daily-empty text-muted">${escapeHtmlFn?.(tr("common.loading")) ?? ""}</p>
+        </div>
       </div>
     </div>
   </div>`;
@@ -739,19 +881,26 @@ async function renderDailyAttendancePage() {
 
 async function loadDailyReport() {
   const body = document.getElementById("admin-attendance-daily-body");
-  if (!body || !apiFn) return;
-  body.innerHTML = `<tr><td colspan="4" class="text-muted">${escapeHtmlFn?.(tr("common.loading")) ?? ""}</td></tr>`;
+  const cardsEl = document.getElementById("admin-attendance-daily-cards");
+  if (!apiFn) return;
+
+  const loading = escapeHtmlFn?.(tr("common.loading")) ?? "";
+  if (body) body.innerHTML = `<tr><td colspan="5" class="text-muted">${loading}</td></tr>`;
+  if (cardsEl) cardsEl.innerHTML = `<p class="admin-attendance-daily-empty text-muted">${loading}</p>`;
+
   try {
     const date = dailyReportDate || new Date().toISOString().slice(0, 10);
     const report = await apiFn(`/api/attendance/daily-report?date=${encodeURIComponent(date)}`);
-    const rows = report.employees ?? [];
-    if (!rows.length) {
-      body.innerHTML = `<tr><td colspan="4" class="text-muted">${escapeHtmlFn?.(tr("attendance.noEmployees")) ?? ""}</td></tr>`;
-      return;
-    }
-    body.innerHTML = rows.map((row) => dailyReportRowHtml(row)).join("");
+    const rows = [...(report.employees ?? [])].sort((a, b) => {
+      const keyDiff = dailyReportSortKey(b) - dailyReportSortKey(a);
+      if (keyDiff !== 0) return keyDiff;
+      return String(a.displayName ?? "").localeCompare(String(b.displayName ?? ""), undefined, { sensitivity: "base" });
+    });
+    renderDailyReportContent(rows);
   } catch (err) {
-    body.innerHTML = `<tr><td colspan="4" class="text-danger">${escapeHtmlFn?.(err.message) ?? err.message}</td></tr>`;
+    const msg = escapeHtmlFn?.(err.message) ?? err.message;
+    if (body) body.innerHTML = `<tr><td colspan="5" class="text-danger">${msg}</td></tr>`;
+    if (cardsEl) cardsEl.innerHTML = `<p class="admin-attendance-daily-empty text-danger">${msg}</p>`;
   }
 }
 

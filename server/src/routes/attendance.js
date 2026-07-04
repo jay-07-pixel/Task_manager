@@ -22,7 +22,9 @@ import {
 } from "../services/reverseGeocodeService.js";
 import {
   getCompanyAttendanceSettings,
+  getDailyAttendanceSchedule,
   setCompanyLiveLocationRequired,
+  setDailyAttendanceSchedule,
 } from "../services/companyAttendanceSettings.js";
 import {
   createWorkLocation,
@@ -65,6 +67,11 @@ const workLocationPatchSchema = workLocationSchema.partial();
 const checkCoordsSchema = z.object({
   latitude: z.number(),
   longitude: z.number(),
+});
+
+const dailyScheduleSchema = z.object({
+  checkInTime: z.string().nullable().optional(),
+  checkOutTime: z.string().nullable().optional(),
 });
 
 router.get("/status", requireAuth, async (req, res) => {
@@ -290,6 +297,24 @@ router.delete("/work-locations/:id", requireOwner, async (req, res) => {
   const ok = await deleteWorkLocation(req.params.id);
   if (!ok) return res.status(404).json({ error: "Location not found." });
   res.json({ ok: true });
+});
+
+router.get("/daily-schedule", requireAuth, async (_req, res) => {
+  const schedule = await getDailyAttendanceSchedule();
+  res.json(schedule);
+});
+
+router.patch("/daily-schedule", requireOwner, async (req, res) => {
+  const parsed = dailyScheduleSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Invalid schedule data." });
+  }
+  try {
+    const schedule = await setDailyAttendanceSchedule(parsed.data);
+    res.json({ ok: true, ...schedule });
+  } catch (err) {
+    res.status(400).json({ error: err.message || "Could not save schedule." });
+  }
 });
 
 router.get("/check-status", requireAuth, async (req, res) => {
