@@ -1022,6 +1022,8 @@
     "checkOutEarlyToast": "Checked out — you left early today.",
     "dayCompleteMessage": "Attendance completed for today. Check-in and check-out are done.",
     "todayStatusTitle": "Today's attendance",
+    "myAttendance": "My attendance",
+    "myAttendanceIntro": "Check in, check out, and view your recent attendance history.",
     "historyTitle": "Attendance history",
     "historyEmpty": "No previous attendance yet.",
     "monthlyReportIntro": "Monthly attendance summary for each employee. Working days exclude Sundays.",

@@ -10,6 +10,19 @@
   margin: 0 0.75rem 0.85rem;
 }
 
+.emp-attendance-page-host {
+  padding: 0 1.25rem 1.5rem;
+  max-width: 42rem;
+}
+
+.emp-attendance-page-host .attendance-checkin-sidebar {
+  margin: 0;
+}
+
+.emp-attendance-page-host .attendance-checkin-sidebar-history {
+  max-height: none;
+}
+
 .attendance-checkin-sidebar {
   padding: 0.85rem 0.9rem;
   border: 1px solid var(--admin-outline-variant, #bec8ca);
@@ -109,8 +122,9 @@
   }
 }
 
-.admin-mobile-nav-body .emp-sidebar-attendance-host {
-  margin-top: 0.5rem;
+.admin-mobile-nav-body .emp-attendance-page-host {
+  padding-left: 1rem;
+  padding-right: 1rem;
 }
 
 .attendance-checkin-card-head {

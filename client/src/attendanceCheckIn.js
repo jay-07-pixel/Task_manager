@@ -120,7 +120,7 @@ function renderHistoryLists() {
 }
 
 export function attendanceCheckInSidebarHtml() {
-  return `<section class="attendance-checkin-sidebar" aria-label="${tr("attendance.dailyCheckInTitle")}">
+  return `<section class="attendance-checkin-sidebar attendance-checkin-panel" aria-label="${tr("attendance.myAttendance")}">
     <div class="attendance-checkin-sidebar-today">
       <div class="attendance-checkin-card-head">
         <h2 class="attendance-checkin-card-title">${tr("attendance.todayStatusTitle")}</h2>

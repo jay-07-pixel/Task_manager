@@ -2221,6 +2221,9 @@ function handleCompanyAttendanceChanged(enabled) {
     state.ownerView = "dashboard";
     destroyAdminAttendance();
   }
+  if (!enabled && state.empView === "attendance") {
+    state.empView = "dashboard";
+  }
   if (state.user?.role === "owner") {
     renderListContentOnly();
     if (state.ownerView === "dashboard") renderOwnerMain();
@@ -2230,6 +2233,7 @@ function handleCompanyAttendanceChanged(enabled) {
     else if (state.ownerView === "manage-locations") openOwnerManageLocationsView();
     else if (state.ownerView === "attendance") openOwnerAttendanceView();
   } else if (state.user?.role === "employee") {
+    renderEmpListContentOnly();
     renderEmployeeChrome();
     renderEmployeeMain();
     if (enabled) startAttendanceCheckInReminder();
@@ -8073,6 +8077,15 @@ function empNavFilterButtonHtml(f, active) {
   </button>`;
 }
 
+function empNavAttendanceButtonHtml(active) {
+  return `<button type="button" class="admin-sidebar-nav-item${active ? " active" : ""}" data-emp-view="attendance">
+    <span class="admin-nav-item-left">
+      ${adminMsIcon("how_to_reg")}
+      <span>${escapeHtml(tr("attendance.myAttendance"))}</span>
+    </span>
+  </button>`;
+}
+
 function empTaskSubmittedTimestamp(task) {
   const me = employeeMyAssignee(task);
   if (!me?.lastSubmittedAt) return 0;
@@ -8272,9 +8285,6 @@ function empLeftNavInner() {
         ${adminMsIcon("add")}
         ${tr("nav.createAndAssign")}
       </button>
-      <div class="emp-sidebar-attendance-host">
-        ${state.user?.attendanceEnabled !== false ? attendanceCheckInSidebarHtml() : ""}
-      </div>
       <nav class="admin-sidebar-nav" aria-label="${tr("nav.myWork")}">
         <div class="js-emp-nav-host"></div>
         ${teamChatSidebarNavItemHtml()}
@@ -8293,19 +8303,24 @@ function renderEmpMobileFilters() {
 function renderEmpListContentOnly() {
   const metrics = employeeDashboardMetrics();
   const assignedMetrics = employeeAssignedByMeMetrics();
+  const onDashboard = state.empView !== "attendance";
   const myWorkFilters = [
     { id: "active", label: tr("nav.activeTasks"), icon: "list-task", count: metrics.active },
     { id: "submitted", label: tr("nav.submitted"), icon: "check-circle", count: metrics.done },
     { id: "all", label: tr("nav.allAssigned"), icon: "collection", count: metrics.total },
   ];
   const myWorkHtml = myWorkFilters
-    .map((f) => empNavFilterButtonHtml(f, state.empFilter === f.id))
+    .map((f) => empNavFilterButtonHtml(f, onDashboard && state.empFilter === f.id))
     .join("");
   const assignedHtml = empNavFilterButtonHtml(
     { id: "assigned-by-me", label: tr("nav.assignedByMe"), icon: "person-plus", count: assignedMetrics.total },
-    state.empFilter === "assigned-by-me"
+    onDashboard && state.empFilter === "assigned-by-me"
   );
-  const html = myWorkHtml + assignedHtml;
+  const attendanceHtml =
+    state.user?.attendanceEnabled !== false
+      ? empNavAttendanceButtonHtml(state.empView === "attendance")
+      : "";
+  const html = myWorkHtml + assignedHtml + attendanceHtml;
   document.querySelectorAll(".js-emp-nav-host").forEach((host) => {
     host.innerHTML = html;
   });
@@ -8322,14 +8337,21 @@ function bindEmpNavHandlers() {
       dismissEmpMobileNav();
     });
   });
+  document.querySelectorAll(".js-emp-nav-host [data-emp-view]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      state.empView = btn.getAttribute("data-emp-view") || "dashboard";
+      renderEmpListContentOnly();
+      renderEmployeeMain();
+      dismissEmpMobileNav();
+    });
+  });
 }
 
 function wireEmpChromeNav() {
-  document.getElementById("empNavOffcanvas")?.addEventListener("shown.bs.offcanvas", () => {
-    void refreshAttendanceCheckInCard();
-  });
   document.getElementById("empNavOffcanvas")?.addEventListener("click", (e) => {
-    const actionable = e.target.closest("[data-emp-filter], .js-emp-create-task, .js-open-team-chat");
+    const actionable = e.target.closest(
+      "[data-emp-filter], [data-emp-view], .js-emp-create-task, .js-open-team-chat"
+    );
     if (actionable) dismissEmpMobileNav();
   });
   wireEmpEnablePush();
@@ -8342,12 +8364,53 @@ function wireEmpChromeNav() {
   ensureAdminHeaderProfileMenuDocListener();
 }
 
+function renderEmployeeAttendanceMain() {
+  const main = document.getElementById("emp-main-column");
+  if (!main) return;
+
+  main.innerHTML = `
+    <div class="admin-main-scroll d-flex flex-column">
+      <header class="admin-dash-header">
+        ${empMobileNavToggleHtml()}
+        <div class="admin-dash-heading">
+          <h1 class="admin-dash-title">${escapeHtml(tr("attendance.myAttendance"))}</h1>
+          <p class="admin-dash-subtitle">${escapeHtml(tr("attendance.myAttendanceIntro"))}</p>
+        </div>
+        <div class="admin-dash-utilities">
+          ${languageSelectorHtml({ compact: true })}
+          ${adminNotificationsBellHtml(state.user?.id, state.user)}
+          ${employeeAdminHeaderProfileHtml()}
+        </div>
+      </header>
+      <div class="emp-attendance-page-host">
+        ${attendanceCheckInSidebarHtml()}
+      </div>
+    </div>
+  `;
+
+  ensureAdminHeaderProfileMenuDocListener();
+  wireAdminHeaderProfileMenu(main);
+  wireEmpEnablePush(main);
+  wireLanguageSelector(main);
+  void refreshAttendanceCheckInCard();
+}
+
 function renderEmployeeMain() {
   const main = document.getElementById("emp-main-column");
   if (!main) return;
 
   if (state.empView === "settings") {
     openEmployeeSettingsView();
+    return;
+  }
+
+  if (state.empView === "attendance") {
+    if (state.user?.attendanceEnabled === false) {
+      state.empView = "dashboard";
+      renderEmployeeMain();
+      return;
+    }
+    renderEmployeeAttendanceMain();
     return;
   }
 
