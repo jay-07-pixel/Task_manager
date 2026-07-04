@@ -4,6 +4,12 @@ import Sortable from "sortablejs";
 import { startEmployeeReminders, stopEmployeeReminders, clearReminderForTask } from "./reminders.js";
 import { initCompanyProfile, openOwnerCompanyProfileView } from "./companyProfile.js";
 import {
+  profileDocumentsSectionHtml,
+  syncProfileDocumentsSectionVisibility,
+  fillProfileDocumentsUi,
+  wireProfileDocumentsUpload,
+} from "./userProfileDocs.js";
+import {
   isPushSupported,
   isPushInfrastructureReady,
   preparePushInfrastructure,
@@ -4253,7 +4259,7 @@ function ownerTrialStatusChipHtml() {
 function myProfileModalHtml() {
   return `
     <div class="modal fade" id="myProfileModal" tabindex="-1" aria-labelledby="myProfileModalTitle" aria-hidden="true">
-      <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
           <form id="my-profile-form">
             <div class="modal-header">
@@ -4282,6 +4288,7 @@ function myProfileModalHtml() {
                 </div>
               </div>
               <p class="small text-muted mb-0 d-none" id="my-profile-salary-hint">${tr("profile.salaryReadOnlyHint")}</p>
+              ${profileDocumentsSectionHtml()}
               <p class="small text-muted mt-3 mb-0" id="my-profile-member-since"></p>
             </div>
             <div class="modal-footer">
@@ -4354,6 +4361,12 @@ async function loadMyProfileForm(userId = null) {
     memberSinceEl.textContent = since ? tr("profile.memberSince", { date: since }) : "";
   }
 
+  const isOwnProfile = !profileEditUserId || profileEditUserId === state.user?.id;
+  syncProfileDocumentsSectionVisibility(isOwnProfile);
+  if (isOwnProfile) {
+    fillProfileDocumentsUi(profile);
+  }
+
   return profile;
 }
 
@@ -4413,7 +4426,13 @@ async function saveMyProfile(e) {
   try {
     const { profile } = await api(endpoint, { method: "PATCH", body: JSON.stringify(body) });
     if (!profileEditUserId || profileEditUserId === state.user?.id) {
-      state.user = { ...state.user, displayName: profile.displayName, phone: profile.phone };
+      state.user = {
+        ...state.user,
+        displayName: profile.displayName,
+        phone: profile.phone,
+        profileDocumentsComplete: profile.profileDocumentsComplete,
+      };
+      fillProfileDocumentsUi(profile);
     }
     bootstrap.Modal.getInstance(document.getElementById("myProfileModal"))?.hide();
     showToast(tr("profile.saved"), "success");
@@ -4433,6 +4452,15 @@ function wireMyProfileModal() {
   form.dataset.wired = "1";
   form.addEventListener("submit", (e) => {
     void saveMyProfile(e);
+  });
+  wireProfileDocumentsUpload({
+    api,
+    showToast,
+    onUpdated: (profile) => {
+      if (state.user) {
+        state.user.profileDocumentsComplete = profile.profileDocumentsComplete;
+      }
+    },
   });
   document.getElementById("myProfileModal")?.addEventListener("hidden.bs.modal", () => {
     profileEditUserId = null;

@@ -39,6 +39,12 @@ model User {
   isAdmin      Boolean  @default(false) @map("is_admin")
   isOwner      Boolean  @default(false) @map("is_owner")
   salary       Int      @default(15000)
+  profilePhotoPath String? @map("profile_photo_path") @db.VarChar(512)
+  profilePhotoMime String? @map("profile_photo_mime") @db.VarChar(128)
+  profilePhotoName String? @map("profile_photo_name") @db.VarChar(255)
+  idProofPath      String? @map("id_proof_path") @db.VarChar(512)
+  idProofMime      String? @map("id_proof_mime") @db.VarChar(128)
+  idProofName      String? @map("id_proof_name") @db.VarChar(255)
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 

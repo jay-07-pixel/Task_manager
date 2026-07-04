@@ -1,4 +1,9 @@
 import { Router } from "express";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+import multer from "multer";
+import { randomUUID } from "crypto";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { sendAdminPromotionEmail, sendAdminRevocationEmail } from "../lib/mail.js";
@@ -11,8 +16,22 @@ import {
 } from "../lib/adminUsers.js";
 import { requireAuth, requireOwner, requireCompanyOwner } from "../middleware/auth.js";
 import { buildEmployeeMonthlyBudgetRows } from "../services/employeeMonthlyMinutesService.js";
+import {
+  appendProfileDocuments,
+  clearUserIdProof,
+  clearUserProfilePhoto,
+  profileDocumentSelect,
+  setUserIdProof,
+  setUserProfilePhoto,
+  USER_PROFILE_DOC_MAX_BYTES,
+} from "../lib/userProfileDocs.js";
 
 const router = Router();
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const profilePhotoUploadsRoot = path.join(__dirname, "..", "..", "uploads", "profile-photos");
+const idProofUploadsRoot = path.join(__dirname, "..", "..", "uploads", "id-proofs");
+fs.mkdirSync(profilePhotoUploadsRoot, { recursive: true });
+fs.mkdirSync(idProofUploadsRoot, { recursive: true });
 
 const rolePatchSchema = z.object({
   role: z.enum(["owner", "employee"]),
@@ -39,19 +58,63 @@ const profileSelect = {
   isAdmin: true,
   isOwner: true,
   createdAt: true,
+  ...profileDocumentSelect,
 };
 
+function deleteStoredFile(root, storedName) {
+  if (!storedName || /[\\/]/.test(storedName)) return;
+  fs.unlink(path.join(root, path.basename(storedName)), () => {});
+}
+
+function createProfileDocUpload(root, { imageOnly = false } = {}) {
+  return multer({
+    storage: multer.diskStorage({
+      destination: (_req, _file, cb) => cb(null, root),
+      filename: (_req, file, cb) => {
+        const ext = path.extname(file.originalname || "").toLowerCase() || (imageOnly ? ".jpg" : ".pdf");
+        cb(null, `${randomUUID()}${ext}`);
+      },
+    }),
+    limits: { fileSize: USER_PROFILE_DOC_MAX_BYTES },
+    fileFilter: (_req, file, cb) => {
+      const mime = (file.mimetype || "").toLowerCase();
+      const ok = imageOnly
+        ? mime === "image/jpeg" || mime === "image/png" || mime === "image/webp"
+        : mime === "application/pdf" ||
+          mime === "image/jpeg" ||
+          mime === "image/png" ||
+          mime === "image/webp";
+      cb(
+        ok
+          ? null
+          : new Error(
+              imageOnly
+                ? "Profile photo must be JPEG, PNG, or WebP."
+                : "ID proof must be PDF or image (JPEG, PNG, WebP)."
+            ),
+        ok
+      );
+    },
+  });
+}
+
+const profilePhotoUpload = createProfileDocUpload(profilePhotoUploadsRoot, { imageOnly: true });
+const idProofUpload = createProfileDocUpload(idProofUploadsRoot);
+
 function serializeProfileUser(user) {
-  return {
-    id: user.id,
-    email: user.email,
-    displayName: user.displayName,
-    phone: user.phone,
-    salary: user.salary,
-    createdAt: user.createdAt,
-    isAdmin: userHasAdminAccess(user),
-    isOwner: userIsCompanyOwner(user),
-  };
+  return appendProfileDocuments(
+    {
+      id: user.id,
+      email: user.email,
+      displayName: user.displayName,
+      phone: user.phone,
+      salary: user.salary,
+      createdAt: user.createdAt,
+      isAdmin: userHasAdminAccess(user),
+      isOwner: userIsCompanyOwner(user),
+    },
+    user
+  );
 }
 
 function serializeTeamUser(user) {
@@ -204,6 +267,120 @@ router.patch("/profile", requireAuth, async (req, res) => {
     data,
     select: profileSelect,
   });
+  res.json({ profile: serializeProfileUser(user) });
+});
+
+router.post("/profile-photo", requireAuth, (req, res, next) => {
+  profilePhotoUpload.single("file")(req, res, (err) => {
+    if (err) {
+      if (err.code === "LIMIT_FILE_SIZE") {
+        return res.status(413).json({ error: "Profile photo must be 10 MB or smaller." });
+      }
+      return res.status(400).json({ error: err.message || "Upload failed." });
+    }
+    next();
+  });
+}, async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "No file uploaded." });
+
+  const existing = await prisma.user.findUnique({
+    where: { id: req.session.userId },
+    select: { profilePhotoPath: true },
+  });
+  if (existing?.profilePhotoPath) {
+    deleteStoredFile(profilePhotoUploadsRoot, existing.profilePhotoPath);
+  }
+
+  const user = await setUserProfilePhoto(req.session.userId, {
+    storedName: req.file.filename,
+    mimeType: req.file.mimetype,
+    originalName: req.file.originalname || req.file.filename,
+  });
+  res.json({ profile: serializeProfileUser(user) });
+});
+
+router.get("/profile-photo", requireAuth, async (req, res) => {
+  const user = await prisma.user.findUnique({
+    where: { id: req.session.userId },
+    select: { profilePhotoPath: true, profilePhotoMime: true, profilePhotoName: true },
+  });
+  if (!user?.profilePhotoPath) {
+    return res.status(404).json({ error: "No profile photo on file." });
+  }
+  const full = path.join(profilePhotoUploadsRoot, path.basename(user.profilePhotoPath));
+  if (!fs.existsSync(full)) {
+    return res.status(404).json({ error: "Profile photo file not found." });
+  }
+  res.setHeader("Content-Type", user.profilePhotoMime || "image/jpeg");
+  res.setHeader(
+    "Content-Disposition",
+    `inline; filename="${(user.profilePhotoName || "profile-photo").replace(/"/g, "")}"`
+  );
+  res.sendFile(full);
+});
+
+router.delete("/profile-photo", requireAuth, async (req, res) => {
+  const { row, user } = await clearUserProfilePhoto(req.session.userId);
+  if (row?.profilePhotoPath) {
+    deleteStoredFile(profilePhotoUploadsRoot, row.profilePhotoPath);
+  }
+  res.json({ profile: serializeProfileUser(user) });
+});
+
+router.post("/id-proof", requireAuth, (req, res, next) => {
+  idProofUpload.single("file")(req, res, (err) => {
+    if (err) {
+      if (err.code === "LIMIT_FILE_SIZE") {
+        return res.status(413).json({ error: "ID proof must be 10 MB or smaller." });
+      }
+      return res.status(400).json({ error: err.message || "Upload failed." });
+    }
+    next();
+  });
+}, async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "No file uploaded." });
+
+  const existing = await prisma.user.findUnique({
+    where: { id: req.session.userId },
+    select: { idProofPath: true },
+  });
+  if (existing?.idProofPath) {
+    deleteStoredFile(idProofUploadsRoot, existing.idProofPath);
+  }
+
+  const user = await setUserIdProof(req.session.userId, {
+    storedName: req.file.filename,
+    mimeType: req.file.mimetype,
+    originalName: req.file.originalname || req.file.filename,
+  });
+  res.json({ profile: serializeProfileUser(user) });
+});
+
+router.get("/id-proof", requireAuth, async (req, res) => {
+  const user = await prisma.user.findUnique({
+    where: { id: req.session.userId },
+    select: { idProofPath: true, idProofMime: true, idProofName: true },
+  });
+  if (!user?.idProofPath) {
+    return res.status(404).json({ error: "No ID proof on file." });
+  }
+  const full = path.join(idProofUploadsRoot, path.basename(user.idProofPath));
+  if (!fs.existsSync(full)) {
+    return res.status(404).json({ error: "ID proof file not found." });
+  }
+  res.setHeader("Content-Type", user.idProofMime || "application/pdf");
+  res.setHeader(
+    "Content-Disposition",
+    `inline; filename="${(user.idProofName || "id-proof").replace(/"/g, "")}"`
+  );
+  res.sendFile(full);
+});
+
+router.delete("/id-proof", requireAuth, async (req, res) => {
+  const { row, user } = await clearUserIdProof(req.session.userId);
+  if (row?.idProofPath) {
+    deleteStoredFile(idProofUploadsRoot, row.idProofPath);
+  }
   res.json({ profile: serializeProfileUser(user) });
 });
 
