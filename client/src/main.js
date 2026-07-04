@@ -2,15 +2,7 @@ import "./scss/styles.scss";
 import * as bootstrap from "bootstrap";
 import Sortable from "sortablejs";
 import { startEmployeeReminders, stopEmployeeReminders, clearReminderForTask } from "./reminders.js";
-import {
-  companyProfileSectionHtml,
-  fillCompanyProfileForm,
-  loadCompanyProfileForModal,
-  saveCompanyProfileFromForm,
-  shouldShowCompanyProfileSection,
-  syncCompanyProfileSectionVisibility,
-  wireCompanyProfileGstUpload,
-} from "./companyProfile.js";
+import { initCompanyProfile, openOwnerCompanyProfileView } from "./companyProfile.js";
 import {
   isPushSupported,
   isPushInfrastructureReady,
@@ -2454,6 +2446,12 @@ function ownerAdminHeaderProfileHtml() {
         <span>${tr("owner.ownerDashboard")}</span>
       </button>`
     : "";
+  const companyProfileItem = state.user?.isOwner
+    ? `<button type="button" class="admin-header-profile-item js-open-company-profile" role="menuitem">
+        ${adminMsIcon("business")}
+        <span>${tr("profile.myCompanyDetails")}</span>
+      </button>`
+    : "";
   return `<div class="admin-header-profile-dropdown">
     <button
       type="button"
@@ -2467,6 +2465,7 @@ function ownerAdminHeaderProfileHtml() {
     </button>
     <div class="admin-header-profile-menu" role="menu">
       ${ownerDashItem}
+      ${companyProfileItem}
       ${adminHeaderContactUsItemHtml()}
       ${adminHeaderSettingsItemHtml()}
       <div class="admin-header-profile-divider" role="separator"></div>
@@ -2534,6 +2533,21 @@ function wireAdminHeaderProfileMenu(root) {
     btn.dataset.wired = "1";
     btn.addEventListener("click", () => {
       void openMyProfileModal();
+    });
+  });
+
+  root.querySelectorAll(".js-open-company-profile").forEach((btn) => {
+    if (btn.dataset.wired === "1") return;
+    btn.dataset.wired = "1";
+    btn.addEventListener("click", () => {
+      if (!state.user?.isOwner) {
+        showToast(tr("owner.ownerDashboardOwnersOnly"), "warning");
+        return;
+      }
+      state.ownerView = "company-profile";
+      renderListContentOnly();
+      renderOwnerMain();
+      dismissAdminMobileNav();
     });
   });
 
@@ -4239,7 +4253,7 @@ function ownerTrialStatusChipHtml() {
 function myProfileModalHtml() {
   return `
     <div class="modal fade" id="myProfileModal" tabindex="-1" aria-labelledby="myProfileModalTitle" aria-hidden="true">
-      <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+      <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
           <form id="my-profile-form">
             <div class="modal-header">
@@ -4269,7 +4283,6 @@ function myProfileModalHtml() {
               </div>
               <p class="small text-muted mb-0 d-none" id="my-profile-salary-hint">${tr("profile.salaryReadOnlyHint")}</p>
               <p class="small text-muted mt-3 mb-0" id="my-profile-member-since"></p>
-              ${companyProfileSectionHtml()}
             </div>
             <div class="modal-footer">
               <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">${tr("common.cancel")}</button>
@@ -4322,9 +4335,7 @@ async function loadMyProfileForm(userId = null) {
     introEl.textContent =
       userId && userId !== state.user?.id
         ? tr("profile.adminEditIntro")
-        : state.user?.isOwner
-          ? tr("profile.ownerProfileIntro")
-          : tr("profile.personalDetailsIntro");
+        : tr("profile.personalDetailsIntro");
   }
   if (nameEl) nameEl.value = profile.displayName || "";
   if (emailEl) emailEl.value = profile.email || "";
@@ -4341,15 +4352,6 @@ async function loadMyProfileForm(userId = null) {
   const since = formatProfileMemberSince(profile.createdAt);
   if (memberSinceEl) {
     memberSinceEl.textContent = since ? tr("profile.memberSince", { date: since }) : "";
-  }
-
-  syncCompanyProfileSectionVisibility(state.user, profileEditUserId);
-  if (shouldShowCompanyProfileSection(state.user, profileEditUserId)) {
-    try {
-      await loadCompanyProfileForModal(api);
-    } catch {
-      fillCompanyProfileForm({});
-    }
   }
 
   return profile;
@@ -4413,9 +4415,6 @@ async function saveMyProfile(e) {
     if (!profileEditUserId || profileEditUserId === state.user?.id) {
       state.user = { ...state.user, displayName: profile.displayName, phone: profile.phone };
     }
-    if (shouldShowCompanyProfileSection(state.user, profileEditUserId)) {
-      await saveCompanyProfileFromForm(api, showToast);
-    }
     bootstrap.Modal.getInstance(document.getElementById("myProfileModal"))?.hide();
     showToast(tr("profile.saved"), "success");
     if (document.getElementById("team-admin-list")) {
@@ -4435,7 +4434,6 @@ function wireMyProfileModal() {
   form.addEventListener("submit", (e) => {
     void saveMyProfile(e);
   });
-  wireCompanyProfileGstUpload({ api, showToast });
   document.getElementById("myProfileModal")?.addEventListener("hidden.bs.modal", () => {
     profileEditUserId = null;
   });
@@ -6827,6 +6825,16 @@ function renderOwnerMain() {
     openOwnerSettingsView();
     return;
   }
+  if (state.ownerView === "company-profile") {
+    if (!state.user?.isOwner) {
+      state.ownerView = "dashboard";
+      renderListContentOnly();
+    } else {
+      destroyTaskSortables();
+      openOwnerCompanyProfileView();
+      return;
+    }
+  }
   if (state.ownerView === "attendance") {
     if (state.user?.liveLocationRequired === false) {
       state.ownerView = "dashboard";
@@ -7145,6 +7153,25 @@ function toggleAdminTheme() {
   onSettingsThemeChange();
 }
 
+function ownerCompanyProfileChromeHeaderHtml() {
+  const adminWelcomeName = state.user?.displayName
+    ? escapeHtml(dt(state.user.displayName))
+    : tr("common.admin");
+  return `<header class="admin-dash-header">
+      ${adminMobileNavToggleHtml()}
+      <div class="admin-dash-heading">
+        <h1 class="admin-dash-title">${tr("profile.myCompanyDetails")}</h1>
+        <p class="admin-dash-subtitle">${tr("common.welcome", { name: adminWelcomeName })}</p>
+      </div>
+      <div class="admin-dash-utilities">
+        ${languageSelectorHtml({ compact: true })}
+        ${ownerTrialTopBannerHtml()}
+        ${adminNotificationsBellHtml(state.user?.id)}
+        ${ownerAdminHeaderProfileHtml()}
+      </div>
+    </header>`;
+}
+
 function ownerSettingsChromeHeaderHtml() {
   const adminWelcomeName = state.user?.displayName
     ? escapeHtml(dt(state.user.displayName))
@@ -7182,6 +7209,7 @@ function employeeSettingsChromeHeaderHtml() {
 function ownerReportsChromeHeaderDynamic() {
   if (state.ownerView === "owner-dashboard") return ownerDashboardChromeHeaderHtml();
   if (state.ownerView === "settings") return ownerSettingsChromeHeaderHtml();
+  if (state.ownerView === "company-profile") return ownerCompanyProfileChromeHeaderHtml();
   if (state.ownerView === "attendance") return ownerAttendanceChromeHeaderHtml();
   return ownerReportsChromeHeaderHtml();
 }
@@ -7278,6 +7306,7 @@ function wireChromeNav() {
         state.ownerView === "reports" ||
         state.ownerView === "owner-dashboard" ||
         state.ownerView === "settings" ||
+        state.ownerView === "company-profile" ||
         state.ownerView === "attendance"
       ) {
         state.ownerView = "dashboard";
@@ -7372,6 +7401,16 @@ function renderOwnerChrome() {
     onOpenMyProfile: () => {
       void openMyProfileModal();
     },
+    onOpenCompanyProfile: () => {
+      if (!state.user?.isOwner) {
+        showToast(tr("owner.ownerDashboardOwnersOnly"), "warning");
+        return;
+      }
+      state.ownerView = "company-profile";
+      renderListContentOnly();
+      renderOwnerMain();
+      dismissAdminMobileNav();
+    },
     onToggleTheme: toggleAdminTheme,
     getUser: () => state.user,
     showToast,
@@ -7384,7 +7423,16 @@ function renderOwnerChrome() {
       renderListContentOnly();
       if (state.ownerView === "dashboard") renderOwnerMain();
       else if (state.ownerView === "settings") openOwnerSettingsView();
+      else if (state.ownerView === "company-profile") openOwnerCompanyProfileView();
     },
+  });
+  initCompanyProfile({
+    api,
+    escapeHtml,
+    adminMsIcon,
+    ownerChromeHeader: ownerCompanyProfileChromeHeaderHtml,
+    wireOwnerChromeHeader: wireOwnerReportsChromeHeader,
+    showToast,
   });
   initAdminAttendance({
     api,

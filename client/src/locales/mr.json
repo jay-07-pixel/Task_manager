@@ -430,6 +430,8 @@
     "salaryInvalid": "वैध पगार रक्कम प्रविष्ट करा.",
     "myCompanyDetails": "माझ्या कंपनीचे तपशील",
     "myCompanyDetailsIntro": "तुमच्या संस्थेची कायदेशीर आणि बिलिंग माहिती. फक्त कंपनी मालक पाहू आणि संपादित करू शकतात.",
+    "companyInformation": "कंपनी माहिती",
+    "companyProfileSaved": "कंपनी तपशील जतन केले.",
     "companyName": "कंपनीचे नाव",
     "companyAddress": "कंपनीचा पत्ता",
     "companyState": "राज्य",

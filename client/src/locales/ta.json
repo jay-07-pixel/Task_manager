@@ -430,6 +430,8 @@
     "salaryInvalid": "சரியான சம்பளத் தொகையை உள்ளிடவும்.",
     "myCompanyDetails": "என் நிறுவன விவரங்கள்",
     "myCompanyDetailsIntro": "உங்கள் நிறுவனத்தின் சட்ட மற்றும் பில்லிங் தகவல். நிறுவன உரிமையாளர்கள் மட்டுமே பார்க்க/திருத்த முடியும்.",
+    "companyInformation": "நிறுவன தகவல்",
+    "companyProfileSaved": "நிறுவன விவரங்கள் சேமிக்கப்பட்டன.",
     "companyName": "நிறுவனப் பெயர்",
     "companyAddress": "நிறுவன முகவரி",
     "companyState": "மாநிலம்",

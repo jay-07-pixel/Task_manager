@@ -39,111 +39,144 @@ export const INDIAN_STATES = [
   "Puducherry",
 ];
 
-export function shouldShowCompanyProfileSection(user, profileEditUserId) {
-  return Boolean(user?.isOwner && !profileEditUserId);
+/** @type {((path: string, opts?: RequestInit) => Promise<any>) | null} */
+let apiFn = null;
+
+/** @type {((s: string) => string) | null} */
+let escapeHtmlFn = null;
+
+/** @type {((name: string, extraClass?: string) => string) | null} */
+let adminMsIconFn = null;
+
+/** @type {(() => string) | null} */
+let ownerChromeHeaderFn = null;
+
+/** @type {((main: HTMLElement) => void) | null} */
+let wireOwnerChromeHeaderFn = null;
+
+/** @type {((msg: string, variant?: string) => void) | null} */
+let showToastFn = null;
+
+export function initCompanyProfile({
+  api,
+  escapeHtml,
+  adminMsIcon,
+  ownerChromeHeader,
+  wireOwnerChromeHeader,
+  showToast,
+}) {
+  apiFn = api;
+  escapeHtmlFn = escapeHtml;
+  adminMsIconFn = adminMsIcon;
+  ownerChromeHeaderFn = ownerChromeHeader ?? null;
+  wireOwnerChromeHeaderFn = wireOwnerChromeHeader ?? null;
+  showToastFn = showToast ?? null;
 }
 
 function stateOptionsHtml(selected = "") {
+  const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
   const sel = String(selected || "");
-  const opts = [`<option value="">${tr("profile.companySelectState")}</option>`];
+  const opts = [`<option value="">${esc(tr("profile.companySelectState"))}</option>`];
   for (const st of INDIAN_STATES) {
     opts.push(
-      `<option value="${escapeAttr(st)}"${st === sel ? " selected" : ""}>${escapeHtml(st)}</option>`
+      `<option value="${esc(st)}"${st === sel ? " selected" : ""}>${esc(st)}</option>`
     );
   }
   if (sel && !INDIAN_STATES.includes(sel)) {
-    opts.push(`<option value="${escapeAttr(sel)}" selected>${escapeHtml(sel)}</option>`);
+    opts.push(`<option value="${esc(sel)}" selected>${esc(sel)}</option>`);
   }
   return opts.join("");
 }
 
-function escapeHtml(s) {
-  return String(s ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-function escapeAttr(s) {
-  return escapeHtml(s).replace(/'/g, "&#39;");
-}
-
-export function companyProfileSectionHtml() {
-  return `
-    <div id="my-company-profile-section" class="d-none border-top pt-4 mt-2">
-      <h3 class="h6 fw-semibold mb-1">${tr("profile.myCompanyDetails")}</h3>
-      <p class="small text-muted mb-3">${tr("profile.myCompanyDetailsIntro")}</p>
-      <div class="mb-3">
-        <label class="form-label" for="company-name">${tr("profile.companyName")}</label>
-        <input type="text" class="form-control" id="company-name" maxlength="200" autocomplete="organization" />
-      </div>
-      <div class="mb-3">
-        <label class="form-label" for="company-address">${tr("profile.companyAddress")}</label>
-        <textarea class="form-control" id="company-address" rows="3" maxlength="5000" autocomplete="street-address"></textarea>
-      </div>
-      <div class="mb-3">
-        <label class="form-label" for="company-state">${tr("profile.companyState")}</label>
-        <select class="form-select" id="company-state" aria-label="${tr("profile.companyState")}">
-          ${stateOptionsHtml()}
-        </select>
-      </div>
-      <div class="mb-3">
-        <label class="form-label" for="company-gst">${tr("profile.gstNumber")}</label>
-        <input type="text" class="form-control text-uppercase" id="company-gst" maxlength="32" placeholder="${tr("profile.gstPlaceholder")}" />
-      </div>
-      <div class="mb-3">
-        <label class="form-label">${tr("profile.gstCertificate")}</label>
-        <p class="small text-muted mb-2">${tr("profile.gstCertificateHint")}</p>
-        <input type="file" class="d-none" id="company-gst-file" accept="application/pdf,image/jpeg,image/png,image/webp" />
-        <div class="d-flex flex-wrap align-items-center gap-2">
-          <button type="button" class="btn btn-sm btn-outline-primary" id="company-gst-pick">${tr("profile.uploadGstCertificate")}</button>
-          <button type="button" class="btn btn-sm btn-outline-danger d-none" id="company-gst-remove">${tr("profile.removeGstCertificate")}</button>
+function companyProfilePageHtml() {
+  const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
+  const chromeHeader = ownerChromeHeaderFn?.() ?? "";
+  return `<div class="admin-main-scroll d-flex flex-column">
+    ${chromeHeader}
+    <div class="admin-company-profile-page">
+      <p class="admin-company-profile-intro">${esc(tr("profile.myCompanyDetailsIntro"))}</p>
+      <form id="company-profile-form" class="admin-company-profile-form" novalidate>
+        <section class="admin-company-profile-card" aria-labelledby="company-info-heading">
+          <h2 class="admin-company-profile-card-title" id="company-info-heading">${esc(tr("profile.companyInformation"))}</h2>
+          <div class="admin-company-profile-grid">
+            <div class="admin-company-profile-field admin-company-profile-field--full">
+              <label class="admin-task-modal-field-label" for="company-name">${esc(tr("profile.companyName"))}</label>
+              <input type="text" class="admin-task-modal-input" id="company-name" maxlength="200" autocomplete="organization" />
+            </div>
+            <div class="admin-company-profile-field admin-company-profile-field--full">
+              <label class="admin-task-modal-field-label" for="company-address">${esc(tr("profile.companyAddress"))}</label>
+              <textarea class="admin-task-modal-textarea" id="company-address" rows="3" maxlength="5000" autocomplete="street-address"></textarea>
+            </div>
+            <div class="admin-company-profile-field">
+              <label class="admin-task-modal-field-label" for="company-state">${esc(tr("profile.companyState"))}</label>
+              <div class="admin-task-modal-select-wrap">
+                <select class="admin-task-modal-select" id="company-state" aria-label="${esc(tr("profile.companyState"))}">
+                  ${stateOptionsHtml()}
+                </select>
+                ${adminMsIconFn?.("expand_more", "admin-task-modal-select-chevron") ?? ""}
+              </div>
+            </div>
+            <div class="admin-company-profile-field">
+              <label class="admin-task-modal-field-label" for="company-gst">${esc(tr("profile.gstNumber"))}</label>
+              <input type="text" class="admin-task-modal-input text-uppercase" id="company-gst" maxlength="32" placeholder="${esc(tr("profile.gstPlaceholder"))}" />
+            </div>
+            <div class="admin-company-profile-field admin-company-profile-field--full">
+              <label class="admin-task-modal-field-label">${esc(tr("profile.gstCertificate"))}</label>
+              <p class="admin-task-modal-field-hint mb-2">${esc(tr("profile.gstCertificateHint"))}</p>
+              <input type="file" class="d-none" id="company-gst-file" accept="application/pdf,image/jpeg,image/png,image/webp" />
+              <div class="admin-company-profile-gst-actions">
+                <button type="button" class="admin-task-modal-btn-secondary" id="company-gst-pick">${esc(tr("profile.uploadGstCertificate"))}</button>
+                <button type="button" class="admin-task-modal-btn-secondary admin-company-profile-gst-remove d-none" id="company-gst-remove">${esc(tr("profile.removeGstCertificate"))}</button>
+              </div>
+              <p class="admin-company-profile-gst-label mb-0 mt-2" id="company-gst-file-label" aria-live="polite"></p>
+              <a class="admin-company-profile-gst-view d-none mt-1" id="company-gst-view" href="#" target="_blank" rel="noopener noreferrer">${esc(tr("profile.viewGstCertificate"))}</a>
+            </div>
+          </div>
+        </section>
+        <section class="admin-company-profile-card" aria-labelledby="director-heading">
+          <h2 class="admin-company-profile-card-title" id="director-heading">${esc(tr("profile.directorDetails"))}</h2>
+          <div class="admin-company-profile-grid">
+            <div class="admin-company-profile-field">
+              <label class="admin-task-modal-field-label" for="director-name">${esc(tr("profile.directorName"))}</label>
+              <input type="text" class="admin-task-modal-input" id="director-name" maxlength="120" autocomplete="name" />
+            </div>
+            <div class="admin-company-profile-field">
+              <label class="admin-task-modal-field-label" for="director-phone">${esc(tr("common.phone"))}</label>
+              <input type="tel" class="admin-task-modal-input" id="director-phone" inputmode="numeric" maxlength="10" pattern="\\d{10}" autocomplete="tel" />
+            </div>
+            <div class="admin-company-profile-field admin-company-profile-field--full">
+              <label class="admin-task-modal-field-label" for="director-email">${esc(tr("common.email"))}</label>
+              <input type="email" class="admin-task-modal-input" id="director-email" maxlength="191" autocomplete="email" />
+            </div>
+            <div class="admin-company-profile-field admin-company-profile-field--full">
+              <label class="admin-task-modal-field-label" for="director-details">${esc(tr("profile.directorExtraDetails"))}</label>
+              <textarea class="admin-task-modal-textarea" id="director-details" rows="2" maxlength="5000" placeholder="${esc(tr("profile.directorExtraDetailsPlaceholder"))}"></textarea>
+            </div>
+          </div>
+        </section>
+        <section class="admin-company-profile-card" aria-labelledby="contact2-heading">
+          <h2 class="admin-company-profile-card-title" id="contact2-heading">${esc(tr("profile.contactPerson2"))}</h2>
+          <div class="admin-company-profile-grid">
+            <div class="admin-company-profile-field">
+              <label class="admin-task-modal-field-label" for="contact2-name">${esc(tr("profile.contactName"))}</label>
+              <input type="text" class="admin-task-modal-input" id="contact2-name" maxlength="120" autocomplete="name" />
+            </div>
+            <div class="admin-company-profile-field">
+              <label class="admin-task-modal-field-label" for="contact2-phone">${esc(tr("common.phone"))}</label>
+              <input type="tel" class="admin-task-modal-input" id="contact2-phone" inputmode="numeric" maxlength="10" pattern="\\d{10}" autocomplete="tel" />
+            </div>
+            <div class="admin-company-profile-field admin-company-profile-field--full">
+              <label class="admin-task-modal-field-label" for="contact2-email">${esc(tr("common.email"))}</label>
+              <input type="email" class="admin-task-modal-input" id="contact2-email" maxlength="191" autocomplete="email" />
+            </div>
+          </div>
+        </section>
+        <div class="admin-company-profile-actions">
+          <button type="submit" class="admin-task-modal-btn-save" id="company-profile-save">${esc(tr("common.save"))}</button>
         </div>
-        <p class="small mb-0 mt-2" id="company-gst-file-label" aria-live="polite"></p>
-        <a class="small d-none mt-1" id="company-gst-view" href="#" target="_blank" rel="noopener noreferrer">${tr("profile.viewGstCertificate")}</a>
-      </div>
-      <h4 class="h6 fw-semibold mt-4 mb-2">${tr("profile.directorDetails")}</h4>
-      <div class="row g-2 mb-3">
-        <div class="col-md-6">
-          <label class="form-label" for="director-name">${tr("profile.directorName")}</label>
-          <input type="text" class="form-control" id="director-name" maxlength="120" autocomplete="name" />
-        </div>
-        <div class="col-md-6">
-          <label class="form-label" for="director-phone">${tr("common.phone")}</label>
-          <input type="tel" class="form-control" id="director-phone" inputmode="numeric" maxlength="10" pattern="\\d{10}" autocomplete="tel" />
-        </div>
-        <div class="col-12">
-          <label class="form-label" for="director-email">${tr("common.email")}</label>
-          <input type="email" class="form-control" id="director-email" maxlength="191" autocomplete="email" />
-        </div>
-        <div class="col-12">
-          <label class="form-label" for="director-details">${tr("profile.directorExtraDetails")}</label>
-          <textarea class="form-control" id="director-details" rows="2" maxlength="5000" placeholder="${tr("profile.directorExtraDetailsPlaceholder")}"></textarea>
-        </div>
-      </div>
-      <h4 class="h6 fw-semibold mt-4 mb-2">${tr("profile.contactPerson2")}</h4>
-      <div class="row g-2 mb-2">
-        <div class="col-md-6">
-          <label class="form-label" for="contact2-name">${tr("profile.contactName")}</label>
-          <input type="text" class="form-control" id="contact2-name" maxlength="120" autocomplete="name" />
-        </div>
-        <div class="col-md-6">
-          <label class="form-label" for="contact2-phone">${tr("common.phone")}</label>
-          <input type="tel" class="form-control" id="contact2-phone" inputmode="numeric" maxlength="10" pattern="\\d{10}" autocomplete="tel" />
-        </div>
-        <div class="col-12">
-          <label class="form-label" for="contact2-email">${tr("common.email")}</label>
-          <input type="email" class="form-control" id="contact2-email" maxlength="191" autocomplete="email" />
-        </div>
-      </div>
-    </div>`;
-}
-
-export function syncCompanyProfileSectionVisibility(user, profileEditUserId) {
-  const section = document.getElementById("my-company-profile-section");
-  if (!section) return;
-  section.classList.toggle("d-none", !shouldShowCompanyProfileSection(user, profileEditUserId));
+      </form>
+    </div>
+  </div>`;
 }
 
 export function fillCompanyProfileForm(profile) {
@@ -218,14 +251,15 @@ function validateCompanyProfileBody(body) {
   return null;
 }
 
-export async function saveCompanyProfileFromForm(api, showToast) {
+export async function saveCompanyProfileFromForm() {
+  if (!apiFn) throw new Error(tr("profile.couldNotSave"));
   const body = readCompanyProfileFormBody();
   const err = validateCompanyProfileBody(body);
   if (err) {
-    showToast(err, "warning");
+    showToastFn?.(err, "warning");
     throw new Error(err);
   }
-  const { profile } = await api("/api/company/profile", {
+  const { profile } = await apiFn("/api/company/profile", {
     method: "PATCH",
     body: JSON.stringify(body),
   });
@@ -233,12 +267,11 @@ export async function saveCompanyProfileFromForm(api, showToast) {
   return profile;
 }
 
-export function wireCompanyProfileGstUpload({ api, showToast }) {
-  const pickBtn = document.getElementById("company-gst-pick");
-  const fileInput = document.getElementById("company-gst-file");
-  const removeBtn = document.getElementById("company-gst-remove");
-  if (!pickBtn || !fileInput || pickBtn.dataset.wired === "1") return;
-  pickBtn.dataset.wired = "1";
+function wireCompanyProfileGstUpload(root) {
+  const pickBtn = root.querySelector("#company-gst-pick");
+  const fileInput = root.querySelector("#company-gst-file");
+  const removeBtn = root.querySelector("#company-gst-remove");
+  if (!pickBtn || !fileInput) return;
 
   pickBtn.addEventListener("click", () => fileInput.click());
 
@@ -263,9 +296,9 @@ export function wireCompanyProfileGstUpload({ api, showToast }) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || tr("profile.gstUploadFailed"));
       fillCompanyProfileForm(data.profile);
-      showToast(tr("profile.gstCertificateUploaded"), "success");
+      showToastFn?.(tr("profile.gstCertificateUploaded"), "success");
     } catch (err) {
-      showToast(err.message || tr("profile.gstUploadFailed"), "danger");
+      showToastFn?.(err.message || tr("profile.gstUploadFailed"), "danger");
     } finally {
       pickBtn.disabled = false;
     }
@@ -275,19 +308,60 @@ export function wireCompanyProfileGstUpload({ api, showToast }) {
     if (!window.confirm(tr("profile.removeGstCertificateConfirm"))) return;
     removeBtn.disabled = true;
     try {
-      const { profile } = await api("/api/company/gst-certificate", { method: "DELETE" });
+      const { profile } = await apiFn("/api/company/gst-certificate", { method: "DELETE" });
       fillCompanyProfileForm(profile);
-      showToast(tr("profile.gstCertificateRemoved"), "success");
+      showToastFn?.(tr("profile.gstCertificateRemoved"), "success");
     } catch (err) {
-      showToast(err.message || tr("profile.gstRemoveFailed"), "danger");
+      showToastFn?.(err.message || tr("profile.gstRemoveFailed"), "danger");
     } finally {
       removeBtn.disabled = false;
     }
   });
 }
 
-export async function loadCompanyProfileForModal(api) {
-  const { profile } = await api("/api/company/profile");
-  fillCompanyProfileForm(profile);
-  return profile;
+function wireCompanyProfilePage(main) {
+  const form = main.querySelector("#company-profile-form");
+  if (!form) return;
+
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const saveBtn = main.querySelector("#company-profile-save");
+    if (saveBtn) saveBtn.disabled = true;
+    void saveCompanyProfileFromForm()
+      .then(() => {
+        showToastFn?.(tr("profile.companyProfileSaved"), "success");
+      })
+      .catch((err) => {
+        const validationErr = validateCompanyProfileBody(readCompanyProfileFormBody());
+        if (validationErr) return;
+        showToastFn?.(err.message || tr("profile.couldNotSave"), "danger");
+      })
+      .finally(() => {
+        if (saveBtn) saveBtn.disabled = false;
+      });
+  });
+
+  wireCompanyProfileGstUpload(main);
+}
+
+async function loadCompanyProfilePage() {
+  if (!apiFn) return;
+  try {
+    const { profile } = await apiFn("/api/company/profile");
+    fillCompanyProfileForm(profile);
+    return profile;
+  } catch {
+    fillCompanyProfileForm({});
+    return null;
+  }
+}
+
+export function openOwnerCompanyProfileView() {
+  const main = document.getElementById("main-column");
+  if (!main) return;
+
+  main.innerHTML = companyProfilePageHtml();
+  wireCompanyProfilePage(main);
+  wireOwnerChromeHeaderFn?.(main);
+  void loadCompanyProfilePage();
 }

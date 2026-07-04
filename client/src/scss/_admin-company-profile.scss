@@ -1,0 +1,85 @@
+.admin-company-profile-page {
+  padding: 0 1.25rem 2rem;
+  max-width: 720px;
+}
+
+.admin-company-profile-intro {
+  color: var(--admin-on-surface-variant, #3e494a);
+  font-size: 0.9rem;
+  margin: 0 0 1.25rem;
+  line-height: 1.5;
+}
+
+.admin-company-profile-card {
+  border: 1px solid var(--admin-outline-variant, #bec8ca);
+  border-radius: 12px;
+  background: var(--admin-surface-container, #f3f3ff);
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.admin-company-profile-card-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0 0 1rem;
+  color: var(--admin-on-surface, #181a2e);
+}
+
+.admin-company-profile-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr;
+
+  @media (min-width: 768px) {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.admin-company-profile-field--full {
+  grid-column: 1 / -1;
+}
+
+.admin-company-profile-gst-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.admin-company-profile-gst-remove {
+  color: var(--admin-error, #ba1a1a) !important;
+  border-color: var(--admin-error, #ba1a1a) !important;
+}
+
+.admin-company-profile-gst-label {
+  font-size: 0.8125rem;
+  color: var(--admin-on-surface-variant, #3e494a);
+}
+
+.admin-company-profile-gst-view {
+  display: inline-block;
+  font-size: 0.8125rem;
+  color: var(--admin-primary, #006d77);
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.admin-company-profile-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.25rem;
+}
+
+[data-bs-theme="dark"] {
+  .admin-company-profile-card {
+    background: var(--admin-surface-container, #2a2a3d);
+    border-color: var(--admin-outline-variant, #4a5456);
+  }
+
+  .admin-company-profile-gst-remove {
+    background: transparent;
+  }
+}

@@ -52,6 +52,9 @@ let onCompanyLiveLocationChangedFn = null;
 
 let visitUrl = "https://kalpanik.in/";
 
+/** @type {(() => void) | null} */
+let onOpenCompanyProfileFn = null;
+
 export function initAdminSettings({
   api,
   escapeHtml,
@@ -61,6 +64,7 @@ export function initAdminSettings({
   wireOwnerChromeHeader,
   wireEmployeeChromeHeader,
   onOpenMyProfile,
+  onOpenCompanyProfile,
   onToggleTheme,
   getUser,
   showToast,
@@ -75,6 +79,7 @@ export function initAdminSettings({
   wireOwnerChromeHeaderFn = wireOwnerChromeHeader ?? null;
   wireEmployeeChromeHeaderFn = wireEmployeeChromeHeader ?? null;
   onOpenMyProfileFn = onOpenMyProfile ?? null;
+  onOpenCompanyProfileFn = onOpenCompanyProfile ?? null;
   onToggleThemeFn = onToggleTheme ?? null;
   getUserFn = getUser ?? null;
   showToastFn = showToast ?? null;
@@ -98,6 +103,19 @@ function ownerSettingsRowsHtml() {
       label: tr("profile.myProfile"),
       extraClass: "js-open-my-profile",
     }),
+  ];
+
+  if (getUserFn?.()?.isOwner) {
+    rows.push(
+      settingsRowHtml({
+        icon: "business",
+        label: tr("profile.myCompanyDetails"),
+        extraClass: "js-open-company-profile",
+      })
+    );
+  }
+
+  rows.push(
     settingsRowHtml({
       icon: isDark ? "light_mode" : "dark_mode",
       label: tr("owner.themeToggle"),
@@ -121,8 +139,8 @@ function ownerSettingsRowsHtml() {
       label: tr("owner.switchToUserView"),
       extraClass: "js-switch-account-view",
       attrs: 'data-view-role="employee"',
-    }),
-  ];
+    })
+  );
 
   rows.push(companyLiveLocationSettingsToggleHtml());
 
@@ -310,6 +328,12 @@ function wireSettingsPage(main, role) {
     if (btn.dataset.wired === "1") return;
     btn.dataset.wired = "1";
     btn.addEventListener("click", () => onOpenMyProfileFn?.());
+  });
+
+  main.querySelectorAll(".js-open-company-profile").forEach((btn) => {
+    if (btn.dataset.wired === "1") return;
+    btn.dataset.wired = "1";
+    btn.addEventListener("click", () => onOpenCompanyProfileFn?.());
   });
 
   wireNotificationsToggle(main);

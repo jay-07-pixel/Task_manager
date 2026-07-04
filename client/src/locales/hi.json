@@ -430,6 +430,8 @@
     "salaryInvalid": "मान्य वेतन राशि दर्ज करें।",
     "myCompanyDetails": "मेरी कंपनी का विवरण",
     "myCompanyDetailsIntro": "आपके संगठन की कानूनी और बिलिंग जानकारी। केवल कंपनी मालिक देख और संपादित कर सकते हैं।",
+    "companyInformation": "कंपनी की जानकारी",
+    "companyProfileSaved": "कंपनी विवरण सहेजे गए।",
     "companyName": "कंपनी का नाम",
     "companyAddress": "कंपनी का पता",
     "companyState": "राज्य",

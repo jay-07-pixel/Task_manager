@@ -430,6 +430,8 @@
     "salaryInvalid": "Enter a valid salary amount.",
     "myCompanyDetails": "My company details",
     "myCompanyDetailsIntro": "Legal and billing information for your organization. Only company owners can view and edit this.",
+    "companyInformation": "Company information",
+    "companyProfileSaved": "Company details saved.",
     "companyName": "Company name",
     "companyAddress": "Company address",
     "companyState": "State",
