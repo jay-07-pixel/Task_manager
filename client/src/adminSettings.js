@@ -315,6 +315,8 @@ function wireSettingsPage(main, role) {
   wireNotificationsToggle(main);
   if (role === "owner") {
     wireCompanyLiveLocationToggle(main, {
+      api: apiFn,
+      showToast: showToastFn,
       onChanged: (enabled) => onCompanyLiveLocationChangedFn?.(enabled),
     });
   }

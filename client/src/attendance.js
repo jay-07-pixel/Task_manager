@@ -307,24 +307,31 @@ export function companyLiveLocationSettingsToggleHtml() {
   <p class="admin-settings-hint">${escapeHtml(tr("attendance.manageLiveLocationHint"))}</p>`;
 }
 
-export async function refreshCompanyLiveLocationToggle(root) {
+export async function refreshCompanyLiveLocationToggle(root, api = apiFn) {
   const toggle = root?.querySelector(".js-company-live-location-toggle");
-  if (!toggle || !apiFn) return;
+  if (!toggle || !api) return;
   try {
-    const settings = await apiFn("/api/attendance/company-settings");
+    const settings = await api("/api/attendance/company-settings");
     toggle.checked = settings?.liveLocationRequired !== false;
   } catch {
     toggle.checked = true;
   }
 }
 
-export function wireCompanyLiveLocationToggle(root, { onChanged } = {}) {
+export function wireCompanyLiveLocationToggle(root, { onChanged, api, showToast } = {}) {
+  const request = api || apiFn;
+  const toast = showToast || showToastFn;
   const toggle = root?.querySelector(".js-company-live-location-toggle");
   if (!toggle || toggle.dataset.wired === "1") return;
   toggle.dataset.wired = "1";
-  void refreshCompanyLiveLocationToggle(root);
+  void refreshCompanyLiveLocationToggle(root, request);
   toggle.addEventListener("change", () => {
     const wantOn = toggle.checked;
+    if (!request) {
+      toggle.checked = !wantOn;
+      toast?.(tr("errors.requestFailed"), "danger");
+      return;
+    }
     if (!wantOn) {
       const ok = window.confirm(
         `${tr("attendance.companyDisableConfirmTitle")}\n\n${tr("attendance.companyDisableConfirmMessage")}`
@@ -335,13 +342,13 @@ export function wireCompanyLiveLocationToggle(root, { onChanged } = {}) {
       }
     }
     toggle.disabled = true;
-    void apiFn("/api/attendance/company-settings", {
+    void request("/api/attendance/company-settings", {
       method: "PATCH",
       body: JSON.stringify({ liveLocationRequired: wantOn }),
     })
       .then((settings) => {
         toggle.checked = settings?.liveLocationRequired !== false;
-        showToastFn?.(
+        toast?.(
           wantOn ? tr("attendance.companyEnabledToast") : tr("attendance.companyDisabledToast"),
           "success"
         );
@@ -349,7 +356,7 @@ export function wireCompanyLiveLocationToggle(root, { onChanged } = {}) {
       })
       .catch((err) => {
         toggle.checked = !wantOn;
-        showToastFn?.(err?.message || tr("errors.requestFailed"), "danger");
+        toast?.(err?.message || tr("errors.requestFailed"), "danger");
       })
       .finally(() => {
         toggle.disabled = false;
