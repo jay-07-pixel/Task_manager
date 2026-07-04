@@ -300,7 +300,7 @@ export function companyLiveLocationSettingsToggleHtml() {
       <span class="admin-settings-row-label">${escapeHtml(tr("attendance.manageLiveLocation"))}</span>
     </span>
     <label class="admin-settings-switch">
-      <input type="checkbox" class="admin-settings-switch-input js-company-live-location-toggle" aria-label="${escapeHtml(tr("attendance.manageLiveLocation"))}" />
+      <input type="checkbox" class="admin-settings-switch-input js-company-live-location-toggle" checked aria-label="${escapeHtml(tr("attendance.manageLiveLocation"))}" />
       <span class="admin-settings-switch-track" aria-hidden="true"></span>
     </label>
   </div>
@@ -309,7 +309,10 @@ export function companyLiveLocationSettingsToggleHtml() {
 
 export async function refreshCompanyLiveLocationToggle(root, api = apiFn) {
   const toggle = root?.querySelector(".js-company-live-location-toggle");
-  if (!toggle || !api) return;
+  if (!toggle) return;
+  // Default ON until server says otherwise
+  toggle.checked = true;
+  if (!api) return;
   try {
     const settings = await api("/api/attendance/company-settings");
     toggle.checked = settings?.liveLocationRequired !== false;
