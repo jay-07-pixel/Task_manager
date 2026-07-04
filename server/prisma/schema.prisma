@@ -417,6 +417,20 @@ model CompanySettings {
   trialStartDate       DateTime @map("trial_start_date")
   trialEndDate         DateTime @map("trial_end_date")
   liveLocationRequired Boolean  @default(true) @map("live_location_required")
+  companyName          String?  @map("company_name") @db.VarChar(200)
+  companyAddress       String?  @map("company_address") @db.Text
+  companyState         String?  @map("company_state") @db.VarChar(64)
+  gstNumber            String?  @map("gst_number") @db.VarChar(32)
+  gstCertificatePath   String?  @map("gst_certificate_path") @db.VarChar(512)
+  gstCertificateMime   String?  @map("gst_certificate_mime") @db.VarChar(128)
+  gstCertificateName   String?  @map("gst_certificate_name") @db.VarChar(255)
+  directorName         String?  @map("director_name") @db.VarChar(120)
+  directorEmail        String?  @map("director_email") @db.VarChar(191)
+  directorPhone        String?  @map("director_phone") @db.VarChar(32)
+  directorDetails      String?  @map("director_details") @db.Text
+  contactPerson2Name   String?  @map("contact_person2_name") @db.VarChar(120)
+  contactPerson2Email  String?  @map("contact_person2_email") @db.VarChar(191)
+  contactPerson2Phone  String?  @map("contact_person2_phone") @db.VarChar(32)
   createdAt            DateTime @default(now()) @map("created_at")
   updatedAt            DateTime @updatedAt @map("updated_at")
 

@@ -1,0 +1,15 @@
+-- AlterTable
+ALTER TABLE `company_settings` ADD COLUMN `company_name` VARCHAR(200) NULL,
+    ADD COLUMN `company_address` TEXT NULL,
+    ADD COLUMN `company_state` VARCHAR(64) NULL,
+    ADD COLUMN `gst_number` VARCHAR(32) NULL,
+    ADD COLUMN `gst_certificate_path` VARCHAR(512) NULL,
+    ADD COLUMN `gst_certificate_mime` VARCHAR(128) NULL,
+    ADD COLUMN `gst_certificate_name` VARCHAR(255) NULL,
+    ADD COLUMN `director_name` VARCHAR(120) NULL,
+    ADD COLUMN `director_email` VARCHAR(191) NULL,
+    ADD COLUMN `director_phone` VARCHAR(32) NULL,
+    ADD COLUMN `director_details` TEXT NULL,
+    ADD COLUMN `contact_person2_name` VARCHAR(120) NULL,
+    ADD COLUMN `contact_person2_email` VARCHAR(191) NULL,
+    ADD COLUMN `contact_person2_phone` VARCHAR(32) NULL;

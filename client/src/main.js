@@ -3,6 +3,15 @@ import * as bootstrap from "bootstrap";
 import Sortable from "sortablejs";
 import { startEmployeeReminders, stopEmployeeReminders, clearReminderForTask } from "./reminders.js";
 import {
+  companyProfileSectionHtml,
+  fillCompanyProfileForm,
+  loadCompanyProfileForModal,
+  saveCompanyProfileFromForm,
+  shouldShowCompanyProfileSection,
+  syncCompanyProfileSectionVisibility,
+  wireCompanyProfileGstUpload,
+} from "./companyProfile.js";
+import {
   isPushSupported,
   isPushInfrastructureReady,
   preparePushInfrastructure,
@@ -4230,7 +4239,7 @@ function ownerTrialStatusChipHtml() {
 function myProfileModalHtml() {
   return `
     <div class="modal fade" id="myProfileModal" tabindex="-1" aria-labelledby="myProfileModalTitle" aria-hidden="true">
-      <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
         <div class="modal-content">
           <form id="my-profile-form">
             <div class="modal-header">
@@ -4260,6 +4269,7 @@ function myProfileModalHtml() {
               </div>
               <p class="small text-muted mb-0 d-none" id="my-profile-salary-hint">${tr("profile.salaryReadOnlyHint")}</p>
               <p class="small text-muted mt-3 mb-0" id="my-profile-member-since"></p>
+              ${companyProfileSectionHtml()}
             </div>
             <div class="modal-footer">
               <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">${tr("common.cancel")}</button>
@@ -4312,7 +4322,9 @@ async function loadMyProfileForm(userId = null) {
     introEl.textContent =
       userId && userId !== state.user?.id
         ? tr("profile.adminEditIntro")
-        : tr("profile.personalDetailsIntro");
+        : state.user?.isOwner
+          ? tr("profile.ownerProfileIntro")
+          : tr("profile.personalDetailsIntro");
   }
   if (nameEl) nameEl.value = profile.displayName || "";
   if (emailEl) emailEl.value = profile.email || "";
@@ -4329,6 +4341,15 @@ async function loadMyProfileForm(userId = null) {
   const since = formatProfileMemberSince(profile.createdAt);
   if (memberSinceEl) {
     memberSinceEl.textContent = since ? tr("profile.memberSince", { date: since }) : "";
+  }
+
+  syncCompanyProfileSectionVisibility(state.user, profileEditUserId);
+  if (shouldShowCompanyProfileSection(state.user, profileEditUserId)) {
+    try {
+      await loadCompanyProfileForModal(api);
+    } catch {
+      fillCompanyProfileForm({});
+    }
   }
 
   return profile;
@@ -4392,6 +4413,9 @@ async function saveMyProfile(e) {
     if (!profileEditUserId || profileEditUserId === state.user?.id) {
       state.user = { ...state.user, displayName: profile.displayName, phone: profile.phone };
     }
+    if (shouldShowCompanyProfileSection(state.user, profileEditUserId)) {
+      await saveCompanyProfileFromForm(api, showToast);
+    }
     bootstrap.Modal.getInstance(document.getElementById("myProfileModal"))?.hide();
     showToast(tr("profile.saved"), "success");
     if (document.getElementById("team-admin-list")) {
@@ -4411,6 +4435,7 @@ function wireMyProfileModal() {
   form.addEventListener("submit", (e) => {
     void saveMyProfile(e);
   });
+  wireCompanyProfileGstUpload({ api, showToast });
   document.getElementById("myProfileModal")?.addEventListener("hidden.bs.modal", () => {
     profileEditUserId = null;
   });
