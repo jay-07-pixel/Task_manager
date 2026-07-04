@@ -439,7 +439,8 @@
     "gstNumber": "GST number",
     "gstPlaceholder": "e.g. 27AAAAA0000A1Z5",
     "gstCertificate": "GST certificate",
-    "gstCertificateHint": "Upload PDF or image of your GST registration certificate (max 5 MB).",
+    "gstCertificateHint": "Upload PDF or image of your GST registration certificate (max 10 MB).",
+    "gstFileTooLarge": "GST certificate must be 10 MB or smaller.",
     "uploadGstCertificate": "Upload certificate",
     "removeGstCertificate": "Remove",
     "viewGstCertificate": "View certificate",
@@ -454,7 +455,10 @@
     "directorName": "Director name",
     "directorExtraDetails": "Additional director details",
     "directorExtraDetailsPlaceholder": "Designation, DIN, address, or other notes…",
-    "contactPerson2": "Contact person 2",
+    "contactPersonDetails": "Contact person details",
+    "sectionIncompleteTitle": "Incomplete",
+    "sectionIncompleteMessage": "{{section}} is incomplete. Please fill all required fields before saving.",
+    "sectionsIncompleteMessage": "These sections are incomplete: {{sections}}. Please fill all required fields before saving.",
     "contactName": "Name"
   },
   "settings": {

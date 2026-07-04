@@ -439,7 +439,8 @@
     "gstNumber": "GST எண்",
     "gstPlaceholder": "எ.கா. 27AAAAA0000A1Z5",
     "gstCertificate": "GST சான்றிதழ்",
-    "gstCertificateHint": "GST பதிவு சான்றிதழை PDF அல்லது படமாக பதிவேற்றவும் (அதிகபட்சம் 5 MB).",
+    "gstCertificateHint": "GST பதிவு சான்றிதழை PDF அல்லது படமாக பதிவேற்றவும் (அதிகபட்சம் 10 MB).",
+    "gstFileTooLarge": "GST சான்றிதழ் 10 MB அல்லது அதற்குக் குறைவாக இருக்க வேண்டும்.",
     "uploadGstCertificate": "சான்றிதழை பதிவேற்று",
     "removeGstCertificate": "நீக்கு",
     "viewGstCertificate": "சான்றிதழை பார்",
@@ -454,7 +455,10 @@
     "directorName": "இயக்குநர் பெயர்",
     "directorExtraDetails": "கூடுதல் இயக்குநர் விவரங்கள்",
     "directorExtraDetailsPlaceholder": "பதவி, DIN, முகவரி அல்லது குறிப்புகள்…",
-    "contactPerson2": "தொடர்பு நபர் 2",
+    "contactPersonDetails": "தொடர்பு நபர் விவரங்கள்",
+    "sectionIncompleteTitle": "முழுமையற்றது",
+    "sectionIncompleteMessage": "{{section}} முழுமையற்றது. சேமிப்பதற்கு முன் அனைத்து தேவையான புலங்களையும் நிரப்பவும்.",
+    "sectionsIncompleteMessage": "இந்த பிரிவுகள் முழுமையற்றவை: {{sections}}. சேமிப்பதற்கு முன் அனைத்து தேவையான புலங்களையும் நிரப்பவும்.",
     "contactName": "பெயர்"
   },
   "settings": {

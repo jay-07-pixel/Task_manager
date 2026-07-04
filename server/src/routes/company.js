@@ -60,6 +60,8 @@ const companyProfilePatchSchema = z.object({
   contactPerson2Phone: optionalPhone,
 });
 
+const GST_CERTIFICATE_MAX_BYTES = 10 * 1024 * 1024;
+
 const gstUpload = multer({
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => cb(null, gstUploadsRoot),
@@ -68,7 +70,7 @@ const gstUpload = multer({
       cb(null, `${randomUUID()}${ext}`);
     },
   }),
-  limits: { fileSize: 5 * 1024 * 1024 },
+  limits: { fileSize: GST_CERTIFICATE_MAX_BYTES },
   fileFilter: (_req, file, cb) => {
     const mime = (file.mimetype || "").toLowerCase();
     const ok =
@@ -115,7 +117,7 @@ router.post("/gst-certificate", requireCompanyOwner, (req, res, next) => {
   gstUpload.single("file")(req, res, (err) => {
     if (err) {
       if (err.code === "LIMIT_FILE_SIZE") {
-        return res.status(413).json({ error: "GST certificate must be 5 MB or smaller." });
+        return res.status(413).json({ error: "GST certificate must be 10 MB or smaller." });
       }
       return res.status(400).json({ error: err.message || "Upload failed." });
     }

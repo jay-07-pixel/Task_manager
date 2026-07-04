@@ -439,7 +439,8 @@
     "gstNumber": "GST क्रमांक",
     "gstPlaceholder": "उदा. 27AAAAA0000A1Z5",
     "gstCertificate": "GST प्रमाणपत्र",
-    "gstCertificateHint": "GST नोंदणी प्रमाणपत्र PDF किंवा प्रतिमा अपलोड करा (कमाल 5 MB).",
+    "gstCertificateHint": "GST नोंदणी प्रमाणपत्र PDF किंवा प्रतिमा अपलोड करा (कमाल 10 MB).",
+    "gstFileTooLarge": "GST प्रमाणपत्र 10 MB किंवा त्यापेक्षा लहान असावे.",
     "uploadGstCertificate": "प्रमाणपत्र अपलोड करा",
     "removeGstCertificate": "काढा",
     "viewGstCertificate": "प्रमाणपत्र पहा",
@@ -454,7 +455,10 @@
     "directorName": "संचालकाचे नाव",
     "directorExtraDetails": "अतिरिक्त संचालक तपशील",
     "directorExtraDetailsPlaceholder": "पद, DIN, पत्ता किंवा इतर नोट…",
-    "contactPerson2": "संपर्क व्यक्ती 2",
+    "contactPersonDetails": "संपर्क व्यक्ती तपशील",
+    "sectionIncompleteTitle": "अपूर्ण",
+    "sectionIncompleteMessage": "{{section}} अपूर्ण आहे. जतन करण्यापूर्वी सर्व आवश्यक फील्ड भरा.",
+    "sectionsIncompleteMessage": "हे विभाग अपूर्ण आहेत: {{sections}}. जतन करण्यापूर्वी सर्व आवश्यक फील्ड भरा.",
     "contactName": "नाव"
   },
   "settings": {

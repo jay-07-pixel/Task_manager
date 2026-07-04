@@ -1,31 +1,42 @@
-.admin-company-profile-page {
+.owner-shell.admin-mockup-ui .admin-company-profile-page {
   padding: 0 1.25rem 2rem;
   max-width: 720px;
 }
 
-.admin-company-profile-intro {
+.owner-shell.admin-mockup-ui .admin-company-profile-intro {
   color: var(--admin-on-surface-variant, #3e494a);
   font-size: 0.9rem;
   margin: 0 0 1.25rem;
   line-height: 1.5;
 }
 
-.admin-company-profile-card {
+.owner-shell.admin-mockup-ui .admin-company-profile-card {
   border: 1px solid var(--admin-outline-variant, #bec8ca);
   border-radius: 12px;
   background: var(--admin-surface-container, #f3f3ff);
   padding: 1.25rem;
   margin-bottom: 1rem;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+
+  &--incomplete {
+    border-color: var(--admin-error, #ba1a1a);
+    box-shadow: 0 0 0 3px rgba(186, 26, 26, 0.12);
+  }
 }
 
-.admin-company-profile-card-title {
+.owner-shell.admin-mockup-ui .admin-company-profile-card-title {
   font-size: 0.95rem;
   font-weight: 600;
   margin: 0 0 1rem;
   color: var(--admin-on-surface, #181a2e);
 }
 
-.admin-company-profile-grid {
+.owner-shell.admin-mockup-ui .admin-company-profile-required {
+  color: var(--admin-error, #ba1a1a);
+  margin-left: 0.15rem;
+}
+
+.owner-shell.admin-mockup-ui .admin-company-profile-grid {
   display: grid;
   gap: 1rem;
   grid-template-columns: 1fr;
@@ -35,30 +46,94 @@
   }
 }
 
-.admin-company-profile-field--full {
+.owner-shell.admin-mockup-ui .admin-company-profile-field--full {
   grid-column: 1 / -1;
 }
 
-.admin-company-profile-gst-actions {
+.owner-shell.admin-mockup-ui .admin-company-profile-gst-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.625rem;
 }
 
-.admin-company-profile-gst-remove {
-  color: var(--admin-error, #ba1a1a) !important;
+.owner-shell.admin-mockup-ui .admin-company-profile-upload-btn {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border: none !important;
+  background: linear-gradient(135deg, #00535b 0%, #006972 100%) !important;
+  color: #ffffff !important;
+  font-size: 0.875rem !important;
+  font-weight: 600 !important;
+  padding: 0.65rem 1.25rem !important;
+  border-radius: 0.5rem !important;
+  box-shadow: 0 4px 12px rgba(0, 83, 91, 0.28) !important;
+  cursor: pointer;
+  line-height: 1.25;
+  min-height: 2.5rem;
+
+  &:hover:not(:disabled) {
+    filter: brightness(1.06);
+  }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  .admin-company-profile-upload-icon {
+    font-size: 1.1rem !important;
+    color: #ffffff !important;
+  }
+}
+
+.owner-shell.admin-mockup-ui .admin-company-profile-btn {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #00535b !important;
+  background: #ffffff !important;
+  color: #00535b !important;
+  font-size: 0.875rem !important;
+  font-weight: 600 !important;
+  padding: 0.65rem 1.15rem !important;
+  border-radius: 0.5rem !important;
+  cursor: pointer;
+  line-height: 1.25;
+  min-height: 2.5rem;
+  box-shadow: 0 1px 3px rgba(24, 26, 46, 0.08) !important;
+
+  &:hover:not(:disabled) {
+    background: #e6f4f5 !important;
+  }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+}
+
+.owner-shell.admin-mockup-ui .admin-company-profile-btn--remove {
   border-color: var(--admin-error, #ba1a1a) !important;
+  color: var(--admin-error, #ba1a1a) !important;
+  background: #fff5f5 !important;
+
+  &:hover:not(:disabled) {
+    background: #ffe8e8 !important;
+  }
 }
 
-.admin-company-profile-gst-label {
+.owner-shell.admin-mockup-ui .admin-company-profile-gst-label {
   font-size: 0.8125rem;
   color: var(--admin-on-surface-variant, #3e494a);
 }
 
-.admin-company-profile-gst-view {
+.owner-shell.admin-mockup-ui .admin-company-profile-gst-view {
   display: inline-block;
   font-size: 0.8125rem;
+  font-weight: 600;
   color: var(--admin-primary, #006d77);
   text-decoration: none;
 
@@ -67,19 +142,78 @@
   }
 }
 
-.admin-company-profile-actions {
+.owner-shell.admin-mockup-ui .admin-company-profile-actions {
   display: flex;
   justify-content: flex-end;
   margin-top: 0.25rem;
 }
 
-[data-bs-theme="dark"] {
-  .admin-company-profile-card {
-    background: var(--admin-surface-container, #2a2a3d);
-    border-color: var(--admin-outline-variant, #4a5456);
-  }
+.owner-shell.admin-mockup-ui .admin-company-profile-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 1080;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
 
-  .admin-company-profile-gst-remove {
-    background: transparent;
+.owner-shell.admin-mockup-ui .admin-company-profile-dialog-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(24, 26, 46, 0.45);
+}
+
+.owner-shell.admin-mockup-ui .admin-company-profile-dialog-panel {
+  position: relative;
+  width: min(100%, 24rem);
+  border-radius: 12px;
+  border: 1px solid var(--admin-outline-variant, #bec8ca);
+  background: var(--admin-surface, #fbf8ff);
+  padding: 1.25rem;
+  box-shadow: 0 12px 40px rgba(24, 26, 46, 0.18);
+}
+
+.owner-shell.admin-mockup-ui .admin-company-profile-dialog-title {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--admin-on-surface, #181a2e);
+}
+
+.owner-shell.admin-mockup-ui .admin-company-profile-dialog-message {
+  margin: 0 0 1rem;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--admin-on-surface-variant, #3e494a);
+}
+
+.owner-shell.admin-mockup-ui .admin-company-profile-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+[data-bs-theme="dark"] .owner-shell.admin-mockup-ui .admin-company-profile-card {
+  background: var(--admin-surface-container, #2a2a3d);
+  border-color: var(--admin-outline-variant, #4a5456);
+}
+
+[data-bs-theme="dark"] .owner-shell.admin-mockup-ui .admin-company-profile-upload-btn {
+  background: linear-gradient(135deg, #006972 0%, #00838f 100%) !important;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35) !important;
+}
+
+[data-bs-theme="dark"] .owner-shell.admin-mockup-ui .admin-company-profile-btn--remove {
+  background: #2a1f1f !important;
+  color: #ffb4ab !important;
+  border-color: #ffb4ab !important;
+
+  &:hover:not(:disabled) {
+    background: #3a2525 !important;
   }
+}
+
+[data-bs-theme="dark"] .owner-shell.admin-mockup-ui .admin-company-profile-dialog-panel {
+  background: var(--admin-surface, #1a1a28);
+  border-color: var(--admin-outline-variant, #4a5456);
 }
