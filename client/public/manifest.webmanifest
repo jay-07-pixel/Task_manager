@@ -1,6 +1,6 @@
 {
-  "name": "Kalpanik Task Manager",
-  "short_name": "Kalpanik",
+  "name": "taskmanager_Task_Manager",
+  "short_name": "taskmanager_Task_Manager",
   "description": "Task lists, assignments, attendance, and team management",
   "start_url": "/",
   "display": "standalone",

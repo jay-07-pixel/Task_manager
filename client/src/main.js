@@ -1,3 +1,5 @@
+import { applyPwaBranding } from "./pwaBranding.js";
+import { initPwaSplash, notifyAppReady } from "./pwaSplash.js";
 import "./scss/styles.scss";
 import * as bootstrap from "bootstrap";
 import Sortable from "sortablejs";
@@ -8938,6 +8940,8 @@ async function render() {
 }
 
 initTheme();
+applyPwaBranding();
+initPwaSplash();
 
 async function startup() {
   await initI18n();
@@ -8960,9 +8964,11 @@ async function startup() {
   });
   await render();
   await ensureStateContentTranslations(state);
+  notifyAppReady();
 }
 
 startup().catch((e) => {
   console.error(e);
+  notifyAppReady();
   showToast(String(e.message || e), "danger");
 });

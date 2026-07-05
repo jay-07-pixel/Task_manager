@@ -4,19 +4,86 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#00535b" />
-    <meta name="application-name" content="Kalpanik" />
-    <meta name="apple-mobile-web-app-title" content="Kalpanik" />
+    <meta name="application-name" content="Task_Manager" />
+    <meta name="apple-mobile-web-app-title" content="Task_Manager" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
+    <script>
+      (function () {
+        var aliases = { sugandhshoppee: "sugandshoppe" };
+        var host = (location.hostname || "").toLowerCase();
+        var sub = host.split(".")[0];
+        var inst =
+          host === "localhost" || host === "127.0.0.1"
+            ? "taskmanager"
+            : aliases[sub] || sub || "taskmanager";
+        var name = inst + "_Task_Manager";
+        document.querySelectorAll('meta[name="apple-mobile-web-app-title"], meta[name="application-name"]').forEach(function (el) {
+          el.setAttribute("content", name);
+        });
+      })();
+    </script>
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=swap" rel="stylesheet" />
-    <title>Kalpanik Task Manager</title>
+    <title>Task Manager</title>
+    <style>
+      #pwa-splash {
+        position: fixed;
+        inset: 0;
+        z-index: 10000;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: #ffffff;
+        padding: 1.5rem 1.25rem 2rem;
+        transition: opacity 0.42s ease, visibility 0.42s ease;
+      }
+      #pwa-splash.pwa-splash--hide {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+      .pwa-splash-inner {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        flex: 1;
+        width: 100%;
+        max-width: 28rem;
+        min-height: 0;
+      }
+      .pwa-splash-logo {
+        width: min(88vw, 22rem);
+        height: auto;
+        object-fit: contain;
+        display: block;
+      }
+      .pwa-splash-credit {
+        margin: 0;
+        margin-top: auto;
+        padding-top: 1.75rem;
+        font-family: Inter, system-ui, -apple-system, sans-serif;
+        font-size: 0.8125rem;
+        font-weight: 500;
+        letter-spacing: 0.02em;
+        color: #3e494a;
+        text-align: center;
+      }
+    </style>
   </head>
   <body class="bg-body">
+    <div id="pwa-splash" class="pwa-splash" role="presentation" aria-hidden="false">
+      <div class="pwa-splash-inner">
+        <img src="/icons/kalpanik-splash-logo.png" alt="Kalpanik" class="pwa-splash-logo" width="708" height="488" />
+        <p class="pwa-splash-credit">Developed by Team Kalpanik</p>
+      </div>
+    </div>
     <div id="app"></div>
     <div id="toastHost" class="toast-container position-fixed bottom-0 end-0 p-3"></div>
     <script type="module" src="/src/main.js"></script>

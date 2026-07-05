@@ -28,6 +28,7 @@ import { getTurnstileSiteKey } from "./lib/turnstile.js";
 import { reconcileAllLegacyRolledRecurringTasks } from "./lib/recurringLegacyBackfill.js";
 import { friendlyDbError } from "./lib/dbErrorMessage.js";
 import { syncCompanyTrialSettings } from "./lib/companyTrial.js";
+import { buildWebAppManifest, resolvePwaInstanceName } from "./lib/pwaInstance.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const sessionsDir = path.join(__dirname, "..", "sessions");
@@ -106,6 +107,13 @@ app.get("/api/health", async (_req, res) => {
       hint: "Check DATABASE_URL, MySQL is running, and run prisma migrate + seed on the server.",
     });
   }
+});
+
+app.get("/manifest.webmanifest", (req, res) => {
+  const instance = resolvePwaInstanceName(req.hostname);
+  res.type("application/manifest+json");
+  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  res.json(buildWebAppManifest(instance));
 });
 
 const clientDist = path.join(__dirname, "../../client/dist");

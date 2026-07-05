@@ -5,19 +5,24 @@
 # ~/Task_manager (sugandhshoppee) — 15 June to 15 July
 # COMPANY_TRIAL_START=2026-06-15
 # COMPANY_TRIAL_END=2026-07-15
+# PWA_INSTANCE_NAME=sugandshoppe
 
 # ~/Task_manager_safari — 15 June to 15 July
 # COMPANY_TRIAL_START=2026-06-15
 # COMPANY_TRIAL_END=2026-07-15
+# PWA_INSTANCE_NAME=safari
 
 # ~/Task_manager_ss2n — 30 June to 30 July
 # COMPANY_TRIAL_START=2026-06-30
 # COMPANY_TRIAL_END=2026-07-30
+# PWA_INSTANCE_NAME=ss2n
 
 # ~/Task_manager_acs — 5 July to 5 August
 # COMPANY_TRIAL_START=2026-07-05
 # COMPANY_TRIAL_END=2026-08-05
+# PWA_INSTANCE_NAME=acs
 
 # ~/Task_manager_tacs — 1 July to 1 August
 # COMPANY_TRIAL_START=2026-07-01
 # COMPANY_TRIAL_END=2026-08-01
+# PWA_INSTANCE_NAME=tacs
