@@ -221,6 +221,8 @@
     "deadlineEvery": "दर {{weekday}}",
     "deadlineTomorrow": "उद्या, {{time}}",
     "deadlineToday": "आज, {{time}}",
+    "deadlineTodayShort": "आज",
+    "deadlineTomorrowShort": "उद्या",
     "repeatDoesNot": "पुनरावृत्ती नाही",
     "repeatCustomEllipsis": "सानुकूल…",
     "repeatWeeklyOn": "साप्ताहिक {{weekday}}",

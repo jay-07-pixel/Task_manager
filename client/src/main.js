@@ -2772,15 +2772,33 @@ function taskDurationMetaHtml(minutes) {
   </div>`;
 }
 
+function formatOwnerDeadlineTimeHtml(due, allDay) {
+  if (allDay) {
+    return `<span class="admin-deadline-time">${escapeHtml(tr("common.allDay"))}</span>`;
+  }
+  const timeStr = due.toLocaleTimeString(dateLocale(), { hour: "numeric", minute: "2-digit" });
+  const dtAttr = escapeHtml(due.toISOString().slice(0, 19));
+  return `<time class="admin-deadline-time tabular-nums" datetime="${dtAttr}">${escapeHtml(timeStr)}</time>`;
+}
+
+function wrapOwnerDeadlineHtml(primaryHtml, due, allDay) {
+  return `<div class="admin-deadline-wrap">${primaryHtml}${formatOwnerDeadlineTimeHtml(due, allDay)}</div>`;
+}
+
 function formatOwnerTaskDeadlineMock(task) {
   if (!task.dueAt) return `<span class="admin-deadline admin-deadline--none">—</span>`;
   const due = new Date(task.dueAt);
   if (Number.isNaN(due.getTime())) return `<span class="admin-deadline admin-deadline--none">—</span>`;
 
+  const allDay = task.allDay === true;
   const recurrence = task.recurrence ?? "none";
   if (recurrence === "weekly") {
     const weekday = due.toLocaleDateString(dateLocale(), { weekday: "long" });
-    return `<span class="admin-deadline">${escapeHtml(tr("owner.deadlineEvery", { weekday }))}</span>`;
+    return wrapOwnerDeadlineHtml(
+      `<span class="admin-deadline">${escapeHtml(tr("owner.deadlineEvery", { weekday }))}</span>`,
+      due,
+      allDay
+    );
   }
 
   const now = new Date();
@@ -2795,18 +2813,24 @@ function formatOwnerTaskDeadlineMock(task) {
     a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 
   if (isSameDay(due, startOfTomorrow) || (diffMs > 0 && diffMs <= 36 * 60 * 60 * 1000 && !isSameDay(due, startOfToday))) {
-    const timeStr = due.toLocaleTimeString(dateLocale(), { hour: "numeric", minute: "2-digit" });
-    return `<span class="admin-deadline admin-deadline--urgent">${escapeHtml(tr("owner.deadlineTomorrow", { time: timeStr }))}</span>`;
+    return wrapOwnerDeadlineHtml(
+      `<span class="admin-deadline admin-deadline--urgent">${escapeHtml(tr("owner.deadlineTomorrowShort"))}</span>`,
+      due,
+      allDay
+    );
   }
   if (isSameDay(due, startOfToday) && diffMs >= 0) {
-    const timeStr = due.toLocaleTimeString(dateLocale(), { hour: "numeric", minute: "2-digit" });
-    return `<span class="admin-deadline admin-deadline--urgent">${escapeHtml(tr("owner.deadlineToday", { time: timeStr }))}</span>`;
+    return wrapOwnerDeadlineHtml(
+      `<span class="admin-deadline admin-deadline--urgent">${escapeHtml(tr("owner.deadlineTodayShort"))}</span>`,
+      due,
+      allDay
+    );
   }
 
   const dateStr = due.toLocaleDateString(dateLocale(), { month: "short", day: "numeric", year: "numeric" });
   const isUrgent = diffMs >= 0 && diffMs <= 48 * 60 * 60 * 1000;
   const cls = isUrgent ? " admin-deadline--urgent" : "";
-  return `<span class="admin-deadline${cls}">${escapeHtml(dateStr)}</span>`;
+  return wrapOwnerDeadlineHtml(`<span class="admin-deadline${cls}">${escapeHtml(dateStr)}</span>`, due, allDay);
 }
 
 function formatTrialDate(date) {

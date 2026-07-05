@@ -221,6 +221,8 @@
     "deadlineEvery": "Every {{weekday}}",
     "deadlineTomorrow": "Tomorrow, {{time}}",
     "deadlineToday": "Today, {{time}}",
+    "deadlineTodayShort": "Today",
+    "deadlineTomorrowShort": "Tomorrow",
     "repeatDoesNot": "Does not repeat",
     "repeatCustomEllipsis": "Custom…",
     "repeatWeeklyOn": "Weekly {{weekday}}",

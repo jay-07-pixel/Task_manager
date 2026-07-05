@@ -221,6 +221,8 @@
     "deadlineEvery": "ஒவ்வொரு {{weekday}}",
     "deadlineTomorrow": "நாளை, {{time}}",
     "deadlineToday": "இன்று, {{time}}",
+    "deadlineTodayShort": "இன்று",
+    "deadlineTomorrowShort": "நாளை",
     "repeatDoesNot": "மீள்தோன்றல் இல்லை",
     "repeatCustomEllipsis": "தனிப்பயன்…",
     "repeatWeeklyOn": "வாராந்திரம் {{weekday}}",

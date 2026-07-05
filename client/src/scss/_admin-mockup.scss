@@ -745,6 +745,11 @@
       vertical-align: middle;
     }
 
+    .admin-task-table tbody.owner-task-group tr.task-sort-row .admin-deadline-time {
+      font-size: 0.6875rem;
+      line-height: 1.25;
+    }
+
     .admin-task-table tbody.owner-task-group tr.task-sort-row .admin-deadline--none {
       color: var(--admin-outline);
     }
@@ -1354,6 +1359,19 @@
       background: var(--admin-surface-container-high);
       color: var(--admin-on-surface-variant);
     }
+  }
+
+  .admin-deadline-wrap {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.3;
+  }
+
+  .admin-deadline-time {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--admin-on-surface-variant);
+    margin-top: 0.15rem;
   }
 
   .admin-deadline {

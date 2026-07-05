@@ -47,8 +47,15 @@ export const PRIVACY_TERMS_SECTIONS = [
     ],
   },
   {
+    id: "data-storage",
+    title: "4. Data Storage and Backups",
+    paragraphs: [
+      "Kalpanik takes reasonable steps to protect customer data and maintain backups where applicable. However, no system is completely free from failures or security risks. Customers are responsible for keeping copies of any important business data. To the maximum extent permitted by law, Kalpanik is not responsible for any loss, corruption, or unavailability of data caused by technical issues, third-party service failures, cyberattacks, natural disasters, or events beyond our reasonable control.",
+    ],
+  },
+  {
     id: "contact",
-    title: "4. Contact",
+    title: "5. Contact",
     paragraphs: ["For privacy requests or support, contact: support@kalpanik.in"],
   },
 ];
