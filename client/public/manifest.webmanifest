@@ -1,6 +1,6 @@
 {
-  "name": "taskmanager_Task_Manager",
-  "short_name": "taskmanager_Task_Manager",
+  "name": "TM-TASKMANAGER",
+  "short_name": "TM-TASKMANAGER",
   "description": "Task lists, assignments, attendance, and team management",
   "start_url": "/",
   "display": "standalone",

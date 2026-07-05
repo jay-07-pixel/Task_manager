@@ -1,22 +1,27 @@
 const HOSTNAME_INSTANCE_ALIASES = {
-  sugandhshoppee: "Sugandhshoppee",
+  sugandhshoppee: "TM-SSPL",
+  safari: "TM-SAFARI",
+  tacs: "TM-TACS",
+  acs: "TM-ACS",
+  ss2n: "TM-SS2N",
 };
 
 function sanitizeInstanceSlug(raw) {
   const slug = String(raw || "")
     .trim()
-    .replace(/[^a-zA-Z0-9_]+/g, "_")
+    .replace(/[^a-zA-Z0-9_-]+/g, "")
     .replace(/^_+|_+$/g, "");
-  return slug || "taskmanager";
+  return slug || "TM-TASKMANAGER";
 }
 
 export function pwaInstanceFromHostname(hostname = "") {
   const host = String(hostname).toLowerCase().split(":")[0];
   if (!host || host === "localhost" || host === "127.0.0.1") {
-    return "taskmanager";
+    return "TM-TASKMANAGER";
   }
   const sub = host.split(".")[0];
-  return HOSTNAME_INSTANCE_ALIASES[sub] || sub;
+  if (HOSTNAME_INSTANCE_ALIASES[sub]) return HOSTNAME_INSTANCE_ALIASES[sub];
+  return `TM-${sub.toUpperCase()}`;
 }
 
 export function resolvePwaInstanceName() {
@@ -26,7 +31,7 @@ export function resolvePwaInstanceName() {
 }
 
 export function pwaAppDisplayName(instanceName) {
-  return `${sanitizeInstanceSlug(instanceName)}_Task_Manager`;
+  return sanitizeInstanceSlug(instanceName);
 }
 
 export function buildWebAppManifest(instanceName) {

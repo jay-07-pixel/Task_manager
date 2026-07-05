@@ -4,20 +4,25 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#00535b" />
-    <meta name="application-name" content="Task_Manager" />
-    <meta name="apple-mobile-web-app-title" content="Task_Manager" />
+    <meta name="application-name" content="TM-TASKMANAGER" />
+    <meta name="apple-mobile-web-app-title" content="TM-TASKMANAGER" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <script>
       (function () {
-        var aliases = { sugandhshoppee: "Sugandhshoppee" };
+        var aliases = {
+          sugandhshoppee: "TM-SSPL",
+          safari: "TM-SAFARI",
+          tacs: "TM-TACS",
+          acs: "TM-ACS",
+          ss2n: "TM-SS2N",
+        };
         var host = (location.hostname || "").toLowerCase();
         var sub = host.split(".")[0];
-        var inst =
+        var name =
           host === "localhost" || host === "127.0.0.1"
-            ? "taskmanager"
-            : aliases[sub] || sub || "taskmanager";
-        var name = inst + "_Task_Manager";
+            ? "TM-TASKMANAGER"
+            : aliases[sub] || ("TM-" + sub.toUpperCase());
         document.querySelectorAll('meta[name="apple-mobile-web-app-title"], meta[name="application-name"]').forEach(function (el) {
           el.setAttribute("content", name);
         });
