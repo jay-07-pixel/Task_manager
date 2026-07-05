@@ -142,17 +142,23 @@ let ownerTasksFingerprint = "";
 const OWNER_TRIAL_POPUP_KEY = "taskmgr-owner-trial-popup-shown";
 const EMP_CRITICAL_OVERDUE_MIN_DAYS = 6;
 
-function criticalOverdueThresholdMs(dueAt) {
+/** When taskOverdueDayCount first reaches MIN_DAYS (ceil day count). */
+function criticalOverdueActionThresholdMs(dueAt) {
   const due = new Date(dueAt);
   if (Number.isNaN(due.getTime())) return Infinity;
-  return due.getTime() + EMP_CRITICAL_OVERDUE_MIN_DAYS * 86_400_000;
+  return due.getTime() + (EMP_CRITICAL_OVERDUE_MIN_DAYS - 1) * 86_400_000;
 }
+
+/** Task ids the employee has updated or submitted this session (immediate gate dismiss). */
+/** @type {Set<string>} */
+const empCriticalOverdueSatisfiedIds = new Set();
 
 function employeeHasActedOnCriticalOverdue(task, me = employeeMyAssignee(task)) {
   if (!task?.dueAt || !me) return false;
+  if (empCriticalOverdueSatisfiedIds.has(task.id)) return true;
   if (employeeAssigneeShowsAsSubmitted(task, me)) return true;
 
-  const threshold = criticalOverdueThresholdMs(task.dueAt);
+  const threshold = criticalOverdueActionThresholdMs(task.dueAt);
 
   if (me.lastSubmittedAt) {
     const submittedMs = new Date(me.lastSubmittedAt).getTime();
@@ -5831,6 +5837,7 @@ function wireEmpSubmissionModal() {
         if (idx >= 0) state.empTasks[idx] = result.task;
         else state.empTasks.push(result.task);
       }
+      empCriticalOverdueSatisfiedIds.add(taskId);
       syncEmployeeOverdueGate();
       showToast(tr("toast.taskSubmitted"), "success");
       state.empFilter = "submitted";
@@ -5838,6 +5845,7 @@ function wireEmpSubmissionModal() {
       renderEmpListContentOnly();
       renderEmployeeMain();
       syncEmpTopbarTitle();
+      syncEmployeeOverdueGate();
     } catch (err) {
       errEl.textContent = err.message || "Submission failed";
       errEl.classList.remove("d-none");
@@ -6330,6 +6338,7 @@ function wireProgressUpdateModal() {
       await loadEmployeeTasks();
       renderEmpListContentOnly();
       renderEmployeeMain();
+      syncEmployeeOverdueGate();
     } catch (err) {
       errEl.textContent = err.message || tr("validation.postUpdateFailed");
       errEl.classList.remove("d-none");
@@ -8051,7 +8060,7 @@ function isEmployeeCriticalOverdueTask(task) {
   if (!task?.dueAt) return false;
   const me = employeeMyAssignee(task);
   if (!me || employeeAssigneeShowsAsSubmitted(task, me)) return false;
-  if (empTaskRowDisplayMode(task, me) !== "active") return false;
+  if (employeeAwaitingFreshOccurrence(task, me)) return false;
   return taskOverdueDayCount(task.dueAt) >= EMP_CRITICAL_OVERDUE_MIN_DAYS;
 }
 
@@ -8134,6 +8143,7 @@ function wireEmployeeOverdueGate(gateEl) {
 
 function markEmployeeOverdueGateSatisfied(taskId, { updateType, message } = {}) {
   if (!taskId) return;
+  empCriticalOverdueSatisfiedIds.add(taskId);
   const task = state.empTasks.find((t) => t.id === taskId);
   const me = employeeMyAssignee(task);
   if (task && me) {
@@ -8162,7 +8172,8 @@ function syncEmployeeOverdueGate() {
 
   document.body.classList.add("emp-overdue-gate-open");
   const existing = document.getElementById("emp-critical-overdue-gate");
-  if (existing?.getAttribute("data-task-id") === task.id) return;
+  const existingTaskId = existing?.getAttribute("data-task-id");
+  if (existingTaskId === task.id) return;
 
   existing?.remove();
   document.body.insertAdjacentHTML("beforeend", empCriticalOverdueGateHtml(task));
@@ -8276,9 +8287,36 @@ function empActiveRecurrenceLinesHtml(task) {
   return `<div class="emp-recurrence-lines small text-muted mt-1"><div class="emp-recurrence-pattern">${escapeHtml(pattern)}</div></div>`;
 }
 
+function reconcileCriticalOverdueGateFromServer() {
+  for (const task of state.empTasks) {
+    const me = employeeMyAssignee(task);
+    if (!task?.dueAt || !me) continue;
+    if (employeeAssigneeShowsAsSubmitted(task, me)) {
+      empCriticalOverdueSatisfiedIds.add(task.id);
+      continue;
+    }
+    const threshold = criticalOverdueActionThresholdMs(task.dueAt);
+    if (me.lastSubmittedAt) {
+      const submittedMs = new Date(me.lastSubmittedAt).getTime();
+      if (!Number.isNaN(submittedMs) && submittedMs >= threshold) {
+        empCriticalOverdueSatisfiedIds.add(task.id);
+        continue;
+      }
+    }
+    const updateAt = me.latestProgressUpdate?.createdAt;
+    if (updateAt) {
+      const updateMs = new Date(updateAt).getTime();
+      if (!Number.isNaN(updateMs) && updateMs >= threshold) {
+        empCriticalOverdueSatisfiedIds.add(task.id);
+      }
+    }
+  }
+}
+
 async function loadEmployeeTasks() {
   const { tasks } = await api("/api/tasks/assigned");
   state.empTasks = tasks;
+  reconcileCriticalOverdueGateFromServer();
 }
 
 async function loadEmployeeAssignedByMeTasks() {
