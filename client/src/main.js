@@ -7269,6 +7269,7 @@ function renderOwnerMain() {
     </header>
     ${kpiRow}
     <section class="owner-task-panel" aria-label="${tr("owner.tasksPanel")}">
+      ${shouldShowTaskOverdueColorLegend({ ownerFilter: state.ownerTaskFilter }) ? taskOverdueColorLegendHtml() : ""}
       ${tableBlock}
     </section>
     </div>
@@ -7919,6 +7920,32 @@ function taskOverdueTierClass(dueAt) {
   if (days <= 2) return " owner-task-row--overdue-1-2";
   if (days <= 5) return " owner-task-row--overdue-3-5";
   return " owner-task-row--overdue-6plus";
+}
+
+function taskOverdueColorLegendHtml() {
+  return `<div class="task-overdue-legend" role="note" aria-label="${escapeHtml(tr("common.overdueColorLegendTitle"))}">
+    <p class="task-overdue-legend-intro mb-0">${escapeHtml(tr("common.overdueColorLegendIntro"))}</p>
+    <ul class="task-overdue-legend-list mb-0">
+      <li class="task-overdue-legend-item">
+        <span class="task-overdue-legend-swatch task-overdue-legend-swatch--1-2" aria-hidden="true"></span>
+        ${escapeHtml(tr("common.overdueColor1to2"))}
+      </li>
+      <li class="task-overdue-legend-item">
+        <span class="task-overdue-legend-swatch task-overdue-legend-swatch--3-5" aria-hidden="true"></span>
+        ${escapeHtml(tr("common.overdueColor3to5"))}
+      </li>
+      <li class="task-overdue-legend-item">
+        <span class="task-overdue-legend-swatch task-overdue-legend-swatch--6plus" aria-hidden="true"></span>
+        ${escapeHtml(tr("common.overdueColor6plus"))}
+      </li>
+    </ul>
+  </div>`;
+}
+
+function shouldShowTaskOverdueColorLegend({ ownerFilter, empFilter } = {}) {
+  if (ownerFilter != null) return ownerFilter === "active" || ownerFilter === "in_review";
+  if (empFilter != null) return empFilter === "active";
+  return false;
 }
 
 function formatEmpDeadlineDisplay(task, { submitted = false } = {}) {
@@ -8679,6 +8706,7 @@ function renderEmployeeMain() {
       ${employeeKpiCardHtml("assigned-by-me", tr("employee.kpiIAssigned"), "group_add", assignedMetrics.total, assignedTotal, assignedKpiClass)}
     </div>`;
     tableSection = `<section class="owner-task-panel" aria-label="${tr("employee.assignedTasks")}">
+      ${shouldShowTaskOverdueColorLegend({ empFilter: state.empFilter }) ? taskOverdueColorLegendHtml() : ""}
       <div class="table-responsive owner-task-table-wrap">
         <table class="table table-hover align-middle mb-0 owner-task-table admin-task-table emp-owner-task-table">
           <thead>

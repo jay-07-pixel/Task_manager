@@ -110,7 +110,12 @@
     "removeFile": "फ़ाइल हटाएँ",
     "createdLabel": "बनाया गया:",
     "submittedLabel": "जमा किया:",
-    "deadlineLabel": "अंतिम तिथि:"
+    "deadlineLabel": "अंतिम तिथि:",
+    "overdueColorLegendTitle": "अतिदेय कार्य के रंग",
+    "overdueColorLegendIntro": "अंतिम तिथि बीत चुके कार्य इन रंगों से दिखते हैं:",
+    "overdueColor1to2": "1–2 दिन अतिदेय",
+    "overdueColor3to5": "3–5 दिन अतिदेय",
+    "overdueColor6plus": "6+ दिन अतिदेय"
   },
   "auth": {
     "signIn": "साइन इन",

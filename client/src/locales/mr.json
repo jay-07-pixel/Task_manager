@@ -110,7 +110,12 @@
     "removeFile": "फाइल काढा",
     "createdLabel": "तयार केले:",
     "submittedLabel": "सबमिट केले:",
-    "deadlineLabel": "अंतिम मुदत:"
+    "deadlineLabel": "अंतिम मुदत:",
+    "overdueColorLegendTitle": "मुदत ओलांडलेल्या कार्यांचे रंग",
+    "overdueColorLegendIntro": "मुदत उलटून गेलेली कार्ये या रंगांनी दाखवली जातात:",
+    "overdueColor1to2": "1–2 दिवस मुदत ओलांडली",
+    "overdueColor3to5": "3–5 दिवस मुदत ओलांडली",
+    "overdueColor6plus": "6+ दिवस मुदत ओलांडली"
   },
   "auth": {
     "signIn": "साइन इन",
