@@ -115,7 +115,11 @@
     "overdueColorLegendIntro": "காலக்கெடு கடந்த பணிகள் இந்த வண்ணங்களில் காட்டப்படும்:",
     "overdueColor1to2": "1–2 நாள் காலக்கெடு கடந்தது",
     "overdueColor3to5": "3–5 நாள் காலக்கெடு கடந்தது",
-    "overdueColor6plus": "6+ நாள் காலக்கெடு கடந்தது"
+    "overdueColor6plus": "6+ நாள் காலக்கெடு கடந்தது",
+    "overdueColorFilterLabel": "காட்டு",
+    "overdueColorFilterAll": "அனைத்து பணிகள்",
+    "overdueColorFilterNone": "இந்த காலக்கெடு வடிகட்டிக்கு பொருந்தும் பணிகள் இல்லை.",
+    "overdueColorFilterNoneHint": "அனைத்து பணிகளையும் பார்க்க வடிகட்டியில் \"அனைத்து பணிகள்\" என்பதைத் தேர்ந்தெடுக்கவும்."
   },
   "auth": {
     "signIn": "உள்நுழை",

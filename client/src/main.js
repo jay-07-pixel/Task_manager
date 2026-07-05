@@ -119,6 +119,7 @@ let state = {
   empAssignedByMeTasks: [],
   empFilter: "active",
   ownerTaskFilter: "active",
+  overdueColorFilter: "all",
   ownerView: "dashboard",
   empView: "dashboard",
   companyTrial: null,
@@ -141,9 +142,31 @@ let ownerTasksFingerprint = "";
 const OWNER_TRIAL_POPUP_KEY = "taskmgr-owner-trial-popup-shown";
 const EMP_CRITICAL_OVERDUE_MIN_DAYS = 6;
 
-/** Task ids cleared this session after the employee posts an update or submits. */
-/** @type {Set<string>} */
-let empOverdueGateSatisfiedTaskIds = new Set();
+function criticalOverdueThresholdMs(dueAt) {
+  const due = new Date(dueAt);
+  if (Number.isNaN(due.getTime())) return Infinity;
+  return due.getTime() + EMP_CRITICAL_OVERDUE_MIN_DAYS * 86_400_000;
+}
+
+function employeeHasActedOnCriticalOverdue(task, me = employeeMyAssignee(task)) {
+  if (!task?.dueAt || !me) return false;
+  if (employeeAssigneeShowsAsSubmitted(task, me)) return true;
+
+  const threshold = criticalOverdueThresholdMs(task.dueAt);
+
+  if (me.lastSubmittedAt) {
+    const submittedMs = new Date(me.lastSubmittedAt).getTime();
+    if (!Number.isNaN(submittedMs) && submittedMs >= threshold) return true;
+  }
+
+  const updateAt = me.latestProgressUpdate?.createdAt;
+  if (updateAt) {
+    const updateMs = new Date(updateAt).getTime();
+    if (!Number.isNaN(updateMs) && updateMs >= threshold) return true;
+  }
+
+  return false;
+}
 
 const THEME_STORAGE_KEY = "task-manager-theme";
 const THEME_TRANSITION_MS = 450;
@@ -5808,8 +5831,8 @@ function wireEmpSubmissionModal() {
         if (idx >= 0) state.empTasks[idx] = result.task;
         else state.empTasks.push(result.task);
       }
+      syncEmployeeOverdueGate();
       showToast(tr("toast.taskSubmitted"), "success");
-      markEmployeeOverdueGateSatisfied(taskId);
       state.empFilter = "submitted";
       await loadEmployeeTasks();
       renderEmpListContentOnly();
@@ -6297,6 +6320,8 @@ function wireProgressUpdateModal() {
         method: "POST",
         body: JSON.stringify({ updateType, message }),
       });
+      markEmployeeOverdueGateSatisfied(taskId, { updateType, message });
+      bootstrap.Modal.getInstance(modalEl)?.hide();
       showToast(tr("toast.updatePosted"), "success");
       ta.value = "";
       syncProgressUpdateCharCount();
@@ -6305,7 +6330,6 @@ function wireProgressUpdateModal() {
       await loadEmployeeTasks();
       renderEmpListContentOnly();
       renderEmployeeMain();
-      markEmployeeOverdueGateSatisfied(taskId);
     } catch (err) {
       errEl.textContent = err.message || tr("validation.postUpdateFailed");
       errEl.classList.remove("d-none");
@@ -7163,7 +7187,11 @@ function renderOwnerMain() {
     : tr("common.admin");
 
   const filteredTasks = ownerFilteredTasks();
-  const visibleTasks = sortOwnerTasksForDisplay(filteredTasks);
+  const showOverdueLegend = shouldShowTaskOverdueColorLegend({ ownerFilter: state.ownerTaskFilter });
+  let visibleTasks = sortOwnerTasksForDisplay(filteredTasks);
+  if (showOverdueLegend) {
+    visibleTasks = filterTasksByOverdueColor(visibleTasks, state.overdueColorFilter, ownerTaskOverdueTier);
+  }
 
   const tbodyInner = visibleTasks.map((task) => ownerTaskGroupTbody(task)).join("");
 
@@ -7240,9 +7268,13 @@ function renderOwnerMain() {
       </div>`;
 
   const tableBlock =
-    !list || visibleTasks.length === 0
+    !list
       ? emptyMessage
-      : `<div class="table-responsive owner-task-table-wrap">
+      : filteredTasks.length > 0 && visibleTasks.length === 0 && showOverdueLegend && state.overdueColorFilter !== "all"
+        ? overdueFilterEmptyMessageHtml()
+        : visibleTasks.length === 0
+          ? emptyMessage
+          : `<div class="table-responsive owner-task-table-wrap">
           <table class="table table-hover align-middle mb-0 owner-task-table admin-task-table${useEmpAssignColumns ? " owner-task-table--emp-assign" : ""}" id="owner-task-table-sort">
             <thead>
               <tr>
@@ -7277,7 +7309,7 @@ function renderOwnerMain() {
     </header>
     ${kpiRow}
     <section class="owner-task-panel" aria-label="${tr("owner.tasksPanel")}">
-      ${shouldShowTaskOverdueColorLegend({ ownerFilter: state.ownerTaskFilter }) ? taskOverdueColorLegendHtml() : ""}
+      ${showOverdueLegend ? taskOverdueColorLegendHtml() : ""}
       ${tableBlock}
     </section>
     </div>
@@ -7312,6 +7344,7 @@ function renderOwnerMain() {
   });
 
   bindOwnerDescriptionPopups(main);
+  wireOverdueColorFilter(main);
   bindAssignmentAttachmentViewers(main, (taskId) => findTaskById(taskId));
 
   main.querySelectorAll(".owner-mark-done-open").forEach((btn) => {
@@ -7930,23 +7963,81 @@ function taskOverdueTierClass(dueAt) {
   return " owner-task-row--overdue-6plus";
 }
 
+function taskOverdueTierFromDueAt(dueAt) {
+  const days = taskOverdueDayCount(dueAt);
+  if (days <= 0) return "";
+  if (days <= 2) return "1-2";
+  if (days <= 5) return "3-5";
+  return "6plus";
+}
+
+function ownerTaskOverdueTier(task) {
+  if (task?.completed || !task?.dueAt) return "";
+  return taskOverdueTierFromDueAt(task.dueAt);
+}
+
+function empTaskOverdueTier(task) {
+  if (!task?.dueAt) return "";
+  const me = employeeMyAssignee(task);
+  if (!me || employeeAssigneeShowsAsSubmitted(task, me)) return "";
+  if (empTaskRowDisplayMode(task, me) !== "active") return "";
+  return taskOverdueTierFromDueAt(task.dueAt);
+}
+
+function filterTasksByOverdueColor(tasks, filter, getTier) {
+  if (!filter || filter === "all") return tasks;
+  return tasks.filter((task) => getTier(task) === filter);
+}
+
 function taskOverdueColorLegendHtml() {
+  const filter = state.overdueColorFilter || "all";
   return `<div class="task-overdue-legend" role="note" aria-label="${escapeHtml(tr("common.overdueColorLegendTitle"))}">
-    <p class="task-overdue-legend-intro mb-0">${escapeHtml(tr("common.overdueColorLegendIntro"))}</p>
-    <ul class="task-overdue-legend-list mb-0">
-      <li class="task-overdue-legend-item">
-        <span class="task-overdue-legend-swatch task-overdue-legend-swatch--1-2" aria-hidden="true"></span>
-        ${escapeHtml(tr("common.overdueColor1to2"))}
-      </li>
-      <li class="task-overdue-legend-item">
-        <span class="task-overdue-legend-swatch task-overdue-legend-swatch--3-5" aria-hidden="true"></span>
-        ${escapeHtml(tr("common.overdueColor3to5"))}
-      </li>
-      <li class="task-overdue-legend-item">
-        <span class="task-overdue-legend-swatch task-overdue-legend-swatch--6plus" aria-hidden="true"></span>
-        ${escapeHtml(tr("common.overdueColor6plus"))}
-      </li>
-    </ul>
+    <div class="task-overdue-legend-main">
+      <p class="task-overdue-legend-intro mb-0">${escapeHtml(tr("common.overdueColorLegendIntro"))}</p>
+      <ul class="task-overdue-legend-list mb-0">
+        <li class="task-overdue-legend-item">
+          <span class="task-overdue-legend-swatch task-overdue-legend-swatch--1-2" aria-hidden="true"></span>
+          ${escapeHtml(tr("common.overdueColor1to2"))}
+        </li>
+        <li class="task-overdue-legend-item">
+          <span class="task-overdue-legend-swatch task-overdue-legend-swatch--3-5" aria-hidden="true"></span>
+          ${escapeHtml(tr("common.overdueColor3to5"))}
+        </li>
+        <li class="task-overdue-legend-item">
+          <span class="task-overdue-legend-swatch task-overdue-legend-swatch--6plus" aria-hidden="true"></span>
+          ${escapeHtml(tr("common.overdueColor6plus"))}
+        </li>
+      </ul>
+    </div>
+    <div class="task-overdue-legend-filter">
+      <label class="task-overdue-legend-filter-label" for="task-overdue-color-filter">${escapeHtml(tr("common.overdueColorFilterLabel"))}</label>
+      <select id="task-overdue-color-filter" class="task-overdue-legend-select form-select form-select-sm" aria-label="${escapeHtml(tr("common.overdueColorFilterLabel"))}">
+        <option value="all"${filter === "all" ? " selected" : ""}>${escapeHtml(tr("common.overdueColorFilterAll"))}</option>
+        <option value="1-2"${filter === "1-2" ? " selected" : ""}>${escapeHtml(tr("common.overdueColor1to2"))}</option>
+        <option value="3-5"${filter === "3-5" ? " selected" : ""}>${escapeHtml(tr("common.overdueColor3to5"))}</option>
+        <option value="6plus"${filter === "6plus" ? " selected" : ""}>${escapeHtml(tr("common.overdueColor6plus"))}</option>
+      </select>
+    </div>
+  </div>`;
+}
+
+function wireOverdueColorFilter(root) {
+  const select = root?.querySelector("#task-overdue-color-filter");
+  if (!select) return;
+  select.addEventListener("change", () => {
+    const value = select.value;
+    if (value !== "all" && value !== "1-2" && value !== "3-5" && value !== "6plus") return;
+    state.overdueColorFilter = value;
+    if (state.user?.role === "employee") renderEmployeeMain();
+    else renderOwnerMain();
+  });
+}
+
+function overdueFilterEmptyMessageHtml() {
+  return `<div class="owner-empty-state py-5 px-3">
+    <i class="bi bi-funnel owner-empty-icon text-primary" aria-hidden="true"></i>
+    <p class="owner-empty-title mb-1">${escapeHtml(tr("common.overdueColorFilterNone"))}</p>
+    <p class="owner-empty-desc text-muted small mb-0">${escapeHtml(tr("common.overdueColorFilterNoneHint"))}</p>
   </div>`;
 }
 
@@ -7965,9 +8056,10 @@ function isEmployeeCriticalOverdueTask(task) {
 }
 
 function getEmployeeCriticalOverdueTask() {
-  const tasks = state.empTasks
-    .filter(isEmployeeCriticalOverdueTask)
-    .filter((task) => !empOverdueGateSatisfiedTaskIds.has(task.id));
+  const tasks = state.empTasks.filter((task) => {
+    if (!isEmployeeCriticalOverdueTask(task)) return false;
+    return !employeeHasActedOnCriticalOverdue(task);
+  });
   if (!tasks.length) return null;
   tasks.sort((a, b) => taskOverdueDayCount(b.dueAt) - taskOverdueDayCount(a.dueAt));
   return tasks[0];
@@ -8040,9 +8132,19 @@ function wireEmployeeOverdueGate(gateEl) {
   });
 }
 
-function markEmployeeOverdueGateSatisfied(taskId) {
+function markEmployeeOverdueGateSatisfied(taskId, { updateType, message } = {}) {
   if (!taskId) return;
-  empOverdueGateSatisfiedTaskIds.add(taskId);
+  const task = state.empTasks.find((t) => t.id === taskId);
+  const me = employeeMyAssignee(task);
+  if (task && me) {
+    const now = new Date().toISOString();
+    me.progressUpdateCount = (me.progressUpdateCount ?? 0) + 1;
+    me.latestProgressUpdate = {
+      updateType: updateType || "update",
+      message: message || "",
+      createdAt: now,
+    };
+  }
   syncEmployeeOverdueGate();
 }
 
@@ -8810,8 +8912,15 @@ function renderEmployeeMain() {
   } else {
     const metrics = employeeDashboardMetrics();
     const assignedMetrics = employeeAssignedByMeMetrics();
-    const filtered = empFilteredTasks();
-    const tableBody = empTaskTableRows(filtered);
+    const showOverdueLegend = shouldShowTaskOverdueColorLegend({ empFilter: state.empFilter });
+    const baseFiltered = empFilteredTasks();
+    let visibleTasks = baseFiltered;
+    if (showOverdueLegend) {
+      visibleTasks = filterTasksByOverdueColor(baseFiltered, state.overdueColorFilter, empTaskOverdueTier);
+    }
+    const overdueFilterEmpty =
+      showOverdueLegend && state.overdueColorFilter !== "all" && baseFiltered.length > 0 && visibleTasks.length === 0;
+    const tableBody = empTaskTableRows(visibleTasks);
     const kpiTotal = Math.max(metrics.total, 1);
     const assignedTotal = Math.max(assignedMetrics.total, 1);
     const activeKpiClass = state.empFilter === "active" ? " admin-kpi-card--active" : "";
@@ -8825,8 +8934,11 @@ function renderEmployeeMain() {
       ${employeeKpiCardHtml("assigned-by-me", tr("employee.kpiIAssigned"), "group_add", assignedMetrics.total, assignedTotal, assignedKpiClass)}
     </div>`;
     tableSection = `<section class="owner-task-panel" aria-label="${tr("employee.assignedTasks")}">
-      ${shouldShowTaskOverdueColorLegend({ empFilter: state.empFilter }) ? taskOverdueColorLegendHtml() : ""}
-      <div class="table-responsive owner-task-table-wrap">
+      ${showOverdueLegend ? taskOverdueColorLegendHtml() : ""}
+      ${
+        overdueFilterEmpty
+          ? overdueFilterEmptyMessageHtml()
+          : `<div class="table-responsive owner-task-table-wrap">
         <table class="table table-hover align-middle mb-0 owner-task-table admin-task-table emp-owner-task-table">
           <thead>
             <tr>
@@ -8838,7 +8950,8 @@ function renderEmployeeMain() {
           </thead>
           ${tableBody}
         </table>
-      </div>
+      </div>`
+      }
     </section>`;
   }
 
@@ -8935,6 +9048,7 @@ function renderEmployeeMain() {
   });
 
   bindAssignmentAttachmentViewers(main, (taskId) => state.empTasks.find((t) => t.id === taskId));
+  wireOverdueColorFilter(main);
   syncEmployeeOverdueGate();
 }
 

@@ -191,7 +191,8 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.45rem 0.85rem;
+  justify-content: space-between;
+  gap: 0.65rem 1rem;
   margin: 0 0 0.85rem;
   padding: 0.65rem 0.85rem;
   border: 1px solid color-mix(in srgb, var(--admin-outline-variant, var(--bs-border-color)) 55%, transparent);
@@ -202,8 +203,42 @@
   color: var(--admin-on-surface, var(--bs-body-color));
 }
 
+.task-overdue-legend-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem 0.85rem;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .task-overdue-legend-intro {
   font-weight: 600;
+}
+
+.task-overdue-legend-filter {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.task-overdue-legend-filter-label {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--admin-on-surface-variant, var(--bs-secondary-color));
+}
+
+.task-overdue-legend-select {
+  min-width: 9.5rem;
+  max-width: 100%;
+  font-size: 0.8125rem;
+  border-color: color-mix(in srgb, var(--admin-outline-variant, var(--bs-border-color)) 65%, transparent);
+  background-color: var(--admin-surface-container-lowest, var(--bs-body-bg));
+  color: var(--admin-on-surface, var(--bs-body-color));
 }
 
 .task-overdue-legend-list {
@@ -248,6 +283,12 @@
 @media (max-width: 767.98px) {
   .task-overdue-legend {
     flex-direction: column;
+    align-items: stretch;
+    gap: 0.65rem;
+  }
+
+  .task-overdue-legend-main {
+    flex-direction: column;
     align-items: flex-start;
     gap: 0.5rem;
   }
@@ -256,5 +297,15 @@
     flex-direction: column;
     align-items: flex-start;
     gap: 0.35rem;
+  }
+
+  .task-overdue-legend-filter {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .task-overdue-legend-select {
+    flex: 1 1 auto;
+    min-width: 0;
   }
 }

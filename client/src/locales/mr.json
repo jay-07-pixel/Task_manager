@@ -115,7 +115,11 @@
     "overdueColorLegendIntro": "मुदत उलटून गेलेली कार्ये या रंगांनी दाखवली जातात:",
     "overdueColor1to2": "1–2 दिवस मुदत ओलांडली",
     "overdueColor3to5": "3–5 दिवस मुदत ओलांडली",
-    "overdueColor6plus": "6+ दिवस मुदत ओलांडली"
+    "overdueColor6plus": "6+ दिवस मुदत ओलांडली",
+    "overdueColorFilterLabel": "दाखवा",
+    "overdueColorFilterAll": "सर्व कार्ये",
+    "overdueColorFilterNone": "या मुदत ओलांडलेल्या फिल्टरशी कोणतेही कार्य जुळत नाही.",
+    "overdueColorFilterNoneHint": "सर्व कार्ये पाहण्यासाठी फिल्टरमध्ये \"सर्व कार्ये\" निवडा."
   },
   "auth": {
     "signIn": "साइन इन",

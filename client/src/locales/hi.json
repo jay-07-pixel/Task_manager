@@ -115,7 +115,11 @@
     "overdueColorLegendIntro": "अंतिम तिथि बीत चुके कार्य इन रंगों से दिखते हैं:",
     "overdueColor1to2": "1–2 दिन अतिदेय",
     "overdueColor3to5": "3–5 दिन अतिदेय",
-    "overdueColor6plus": "6+ दिन अतिदेय"
+    "overdueColor6plus": "6+ दिन अतिदेय",
+    "overdueColorFilterLabel": "दिखाएँ",
+    "overdueColorFilterAll": "सभी कार्य",
+    "overdueColorFilterNone": "इस अतिदेय फ़िल्टर से कोई कार्य मेल नहीं खाता।",
+    "overdueColorFilterNoneHint": "सभी कार्य देखने के लिए फ़िल्टर में \"सभी कार्य\" चुनें।"
   },
   "auth": {
     "signIn": "साइन इन",

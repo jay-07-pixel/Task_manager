@@ -115,7 +115,11 @@
     "overdueColorLegendIntro": "Tasks past their deadline are highlighted:",
     "overdueColor1to2": "1–2 days overdue",
     "overdueColor3to5": "3–5 days overdue",
-    "overdueColor6plus": "6+ days overdue"
+    "overdueColor6plus": "6+ days overdue",
+    "overdueColorFilterLabel": "Show",
+    "overdueColorFilterAll": "All tasks",
+    "overdueColorFilterNone": "No tasks match this overdue filter.",
+    "overdueColorFilterNoneHint": "Choose \"All tasks\" in the filter to see everything again."
   },
   "auth": {
     "signIn": "Sign in",
