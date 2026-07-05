@@ -4050,12 +4050,19 @@ function submissionDetailModalHtml() {
             <div id="submission-detail-file-wrap" class="submission-detail-file-wrap d-none">
               <p id="submission-detail-file-label" class="small text-uppercase text-secondary fw-semibold mb-2">${tr("common.attachments")}</p>
               <div id="submission-detail-gallery" class="submission-detail-gallery d-none"></div>
-              <div id="submission-detail-image-frame" class="submission-detail-image-frame rounded border bg-black d-flex align-items-center justify-content-center d-none">
-                <img id="submission-detail-img" src="" class="w-100" style="max-height: min(70vh, 720px); object-fit: contain;" alt="${tr("common.submissionImage")}" />
-              </div>
-              <video id="submission-detail-video" class="submission-detail-video w-100 rounded border bg-black d-none" style="max-height: min(70vh, 720px);" controls playsinline preload="metadata"></video>
+              <button type="button" id="submission-detail-image-frame" class="submission-detail-image-frame submission-detail-media-open js-submission-media-open d-none" data-media-index="0" aria-label="${tr("chat.viewImageFullScreen")}">
+                <img id="submission-detail-img" src="" class="w-100 submission-detail-img-preview" alt="${tr("common.submissionImage")}" />
+                <span class="submission-detail-media-open-badge" aria-hidden="true">${adminMsIcon("fullscreen")}</span>
+              </button>
+              <button type="button" id="submission-detail-video-wrap" class="submission-detail-video-wrap submission-detail-media-open js-submission-media-open d-none" data-media-index="0" aria-label="${tr("chat.viewVideoFullScreen")}">
+                <video id="submission-detail-video" class="submission-detail-video w-100" playsinline preload="metadata"></video>
+                <span class="submission-detail-media-open-badge" aria-hidden="true">${adminMsIcon("fullscreen")}</span>
+              </button>
               <audio id="submission-detail-audio" class="submission-detail-audio w-100 d-none" controls></audio>
-              <iframe id="submission-detail-pdf" class="w-100 rounded border d-none" style="height: min(70vh, 720px);" title="${tr("common.submissionPdf")}"></iframe>
+              <button type="button" id="submission-detail-pdf-wrap" class="submission-detail-pdf-wrap submission-detail-media-open js-submission-media-open d-none" data-media-index="0" aria-label="${tr("chat.fullScreen")}">
+                <iframe id="submission-detail-pdf" class="submission-detail-pdf-embed w-100" title="${tr("common.submissionPdf")}"></iframe>
+                <span class="submission-detail-media-open-badge" aria-hidden="true">${adminMsIcon("fullscreen")}</span>
+              </button>
             </div>
             <p id="submission-detail-empty" class="text-muted small mb-0 d-none">${tr("modals.noSubmissionContent")}</p>
           </div>
@@ -4064,6 +4071,14 @@ function submissionDetailModalHtml() {
           </div>
         </div>
       </div>
+    </div>
+    <div id="submission-media-lightbox" class="submission-media-lightbox d-none" role="dialog" aria-modal="true" aria-label="${tr("chat.fullScreenMedia")}">
+      <button type="button" class="submission-media-lightbox-backdrop js-submission-media-lightbox-close" aria-label="${tr("common.close")}"></button>
+      <button type="button" class="submission-media-lightbox-close js-submission-media-lightbox-close" aria-label="${tr("common.close")}">${adminMsIcon("close")}</button>
+      <button type="button" class="submission-media-lightbox-nav submission-media-lightbox-nav--prev js-submission-media-lightbox-prev d-none" aria-label="${tr("chat.fullScreen")}">${adminMsIcon("chevron_left")}</button>
+      <button type="button" class="submission-media-lightbox-nav submission-media-lightbox-nav--next js-submission-media-lightbox-next d-none" aria-label="${tr("chat.fullScreen")}">${adminMsIcon("chevron_right")}</button>
+      <p id="submission-media-lightbox-counter" class="submission-media-lightbox-counter d-none"></p>
+      <div id="submission-media-lightbox-inner" class="submission-media-lightbox-inner"></div>
     </div>`;
 }
 
@@ -5091,10 +5106,104 @@ function lookupAssigneeSubmission(taskId, userId) {
   };
 }
 
+/** @type {{ url: string, kind: string, mime?: string }[]} */
+let submissionDetailMediaItems = [];
+let submissionLightboxIndex = 0;
+
+function submissionLightboxVisualItems() {
+  return submissionDetailMediaItems.filter((item) => item.kind === "image" || item.kind === "video" || item.kind === "pdf");
+}
+
+function renderSubmissionLightboxContent(item) {
+  const inner = document.getElementById("submission-media-lightbox-inner");
+  if (!inner || !item) return;
+  inner.querySelectorAll("video").forEach((v) => {
+    v.pause();
+    v.removeAttribute("src");
+    v.load();
+  });
+  inner.innerHTML = "";
+  if (item.kind === "video") {
+    const mime = item.mime && item.mime.startsWith("video/") ? item.mime : "video/mp4";
+    inner.innerHTML = `<video class="submission-media-lightbox-video" controls autoplay playsinline src="${escapeHtml(item.url)}" type="${escapeHtml(mime)}"></video>`;
+    return;
+  }
+  if (item.kind === "pdf") {
+    inner.innerHTML = `<iframe class="submission-media-lightbox-pdf" src="${escapeHtml(item.url)}" title="${escapeHtml(tr("common.submissionPdf"))}"></iframe>`;
+    return;
+  }
+  inner.innerHTML = `<img src="${escapeHtml(item.url)}" alt="${escapeHtml(tr("common.submissionImage"))}" class="submission-media-lightbox-image" />`;
+}
+
+function syncSubmissionLightboxNav() {
+  const visual = submissionLightboxVisualItems();
+  const box = document.getElementById("submission-media-lightbox");
+  const prev = box?.querySelector(".js-submission-media-lightbox-prev");
+  const next = box?.querySelector(".js-submission-media-lightbox-next");
+  const counter = document.getElementById("submission-media-lightbox-counter");
+  const showNav = visual.length > 1;
+  prev?.classList.toggle("d-none", !showNav);
+  next?.classList.toggle("d-none", !showNav);
+  counter?.classList.toggle("d-none", !showNav);
+  if (showNav && counter) {
+    counter.textContent = `${submissionLightboxIndex + 1} / ${visual.length}`;
+  }
+}
+
+function openSubmissionMediaLightbox(index = 0) {
+  const visual = submissionLightboxVisualItems();
+  if (!visual.length) return;
+  submissionLightboxIndex = Math.max(0, Math.min(index, visual.length - 1));
+  const box = document.getElementById("submission-media-lightbox");
+  if (!box) return;
+  renderSubmissionLightboxContent(visual[submissionLightboxIndex]);
+  syncSubmissionLightboxNav();
+  box.classList.remove("d-none");
+  document.body.classList.add("submission-media-lightbox-open");
+}
+
+function closeSubmissionMediaLightbox() {
+  const box = document.getElementById("submission-media-lightbox");
+  const inner = document.getElementById("submission-media-lightbox-inner");
+  if (inner) {
+    inner.querySelectorAll("video").forEach((v) => {
+      v.pause();
+      v.removeAttribute("src");
+      v.load();
+    });
+    inner.innerHTML = "";
+  }
+  box?.classList.add("d-none");
+  document.body.classList.remove("submission-media-lightbox-open");
+}
+
+function stepSubmissionMediaLightbox(delta) {
+  const visual = submissionLightboxVisualItems();
+  if (visual.length <= 1) return;
+  submissionLightboxIndex = (submissionLightboxIndex + delta + visual.length) % visual.length;
+  renderSubmissionLightboxContent(visual[submissionLightboxIndex]);
+  syncSubmissionLightboxNav();
+}
+
+function pushSubmissionDetailMediaItem(resource) {
+  if (resource.kind === "audio") return -1;
+  submissionDetailMediaItems.push({
+    url: resource.url,
+    kind: resource.kind || "image",
+    mime: resource.mime,
+  });
+  return submissionDetailMediaItems.length - 1;
+}
+
 function clearSubmissionDetailMedia() {
+  submissionDetailMediaItems = [];
+  submissionLightboxIndex = 0;
+  closeSubmissionMediaLightbox();
   const img = document.getElementById("submission-detail-img");
   const video = document.getElementById("submission-detail-video");
   const pdf = document.getElementById("submission-detail-pdf");
+  const videoWrap = document.getElementById("submission-detail-video-wrap");
+  const pdfWrap = document.getElementById("submission-detail-pdf-wrap");
   const gallery = document.getElementById("submission-detail-gallery");
   const imageFrame = document.getElementById("submission-detail-image-frame");
   if (img?.src?.startsWith("blob:")) {
@@ -5103,7 +5212,6 @@ function clearSubmissionDetailMedia() {
   }
   if (img) {
     img.removeAttribute("src");
-    img.classList.add("d-none");
   }
   if (video) {
     if (video.src?.startsWith("blob:")) {
@@ -5113,16 +5221,16 @@ function clearSubmissionDetailMedia() {
     video.pause();
     video.removeAttribute("src");
     video.load();
-    video.classList.add("d-none");
   }
+  videoWrap?.classList.add("d-none");
   if (pdf?.src?.startsWith("blob:")) {
     URL.revokeObjectURL(pdf.src);
     proofBlobUrls.delete(pdf.src);
   }
   if (pdf) {
     pdf.removeAttribute("src");
-    pdf.classList.add("d-none");
   }
+  pdfWrap?.classList.add("d-none");
   const audio = document.getElementById("submission-detail-audio");
   if (audio) {
     if (audio.src?.startsWith("blob:")) {
@@ -5150,22 +5258,37 @@ function clearSubmissionDetailMedia() {
   imageFrame?.classList.add("d-none");
 }
 
-function appendSubmissionDetailGalleryItem(gallery, resource) {
+function appendSubmissionDetailGalleryItem(gallery, resource, mediaIndex) {
+  const label =
+    resource.kind === "video" ? tr("chat.viewVideoFullScreen") : tr("chat.viewImageFullScreen");
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "submission-detail-gallery-open js-submission-media-open";
+  btn.dataset.mediaIndex = String(mediaIndex);
+  btn.setAttribute("aria-label", label);
+
   if (resource.kind === "video") {
     const node = document.createElement("video");
     node.src = resource.url;
-    node.controls = true;
     node.playsInline = true;
     node.preload = "metadata";
+    node.muted = true;
     node.className = "submission-detail-gallery-video";
-    gallery.appendChild(node);
-    return;
+    btn.appendChild(node);
+  } else {
+    const node = document.createElement("img");
+    node.src = resource.url;
+    node.alt = tr("common.submissionImage");
+    node.className = "submission-detail-gallery-img";
+    btn.appendChild(node);
   }
-  const node = document.createElement("img");
-  node.src = resource.url;
-  node.alt = tr("common.submissionImage");
-  node.className = "submission-detail-gallery-img";
-  gallery.appendChild(node);
+
+  const badge = document.createElement("span");
+  badge.className = "submission-detail-media-open-badge";
+  badge.setAttribute("aria-hidden", "true");
+  badge.innerHTML = adminMsIcon("fullscreen");
+  btn.appendChild(badge);
+  gallery.appendChild(btn);
 }
 
 function appendSubmissionDetailGalleryAudio(gallery, resource) {
@@ -5193,13 +5316,15 @@ async function openSubmissionDetailModal({ title, submissionText, proofUrl, proo
   const fileWrap = document.getElementById("submission-detail-file-wrap");
   const fileLabel = document.getElementById("submission-detail-file-label");
   const imageFrame = document.getElementById("submission-detail-image-frame");
+  const videoWrap = document.getElementById("submission-detail-video-wrap");
+  const pdfWrap = document.getElementById("submission-detail-pdf-wrap");
   const gallery = document.getElementById("submission-detail-gallery");
   const img = document.getElementById("submission-detail-img");
   const video = document.getElementById("submission-detail-video");
   const pdf = document.getElementById("submission-detail-pdf");
   const audio = document.getElementById("submission-detail-audio");
   const emptyEl = document.getElementById("submission-detail-empty");
-  if (!modalEl || !titleEl || !textWrap || !textEl || !fileWrap || !fileLabel || !imageFrame || !gallery || !img || !video || !pdf || !audio || !emptyEl) return;
+  if (!modalEl || !titleEl || !textWrap || !textEl || !fileWrap || !fileLabel || !imageFrame || !videoWrap || !pdfWrap || !gallery || !img || !video || !pdf || !audio || !emptyEl) return;
 
   const text = (submissionText || "").trim();
   const hasText = text.length > 0;
@@ -5237,14 +5362,17 @@ async function openSubmissionDetailModal({ title, submissionText, proofUrl, proo
       const resource = attachmentItems?.length
         ? await loadAttachmentResource(items[0])
         : await fetchProofResource(items[0].url || items[0]);
+      const mediaIndex = pushSubmissionDetailMediaItem(resource);
       if (resource.kind === "pdf") {
         fileLabel.textContent = "PDF";
         pdf.src = resource.url;
-        pdf.classList.remove("d-none");
+        pdfWrap.dataset.mediaIndex = String(mediaIndex);
+        pdfWrap.classList.remove("d-none");
       } else if (resource.kind === "video") {
         fileLabel.textContent = tr("tasks.videoAttachment");
         video.src = resource.url;
-        video.classList.remove("d-none");
+        videoWrap.dataset.mediaIndex = String(mediaIndex);
+        videoWrap.classList.remove("d-none");
       } else if (resource.kind === "audio") {
         fileLabel.textContent = tr("tasks.voiceNote");
         audio.src = resource.url;
@@ -5254,9 +5382,9 @@ async function openSubmissionDetailModal({ title, submissionText, proofUrl, proo
         audio.load();
       } else {
         fileLabel.textContent = tr("tasks.imageAttachment");
+        imageFrame.dataset.mediaIndex = String(mediaIndex);
         imageFrame.classList.remove("d-none");
         img.src = resource.url;
-        img.classList.remove("d-none");
       }
       return;
     }
@@ -5268,15 +5396,18 @@ async function openSubmissionDetailModal({ title, submissionText, proofUrl, proo
         ? await loadAttachmentResource(item)
         : await fetchProofResource(item.url || item);
       if (resource.kind === "pdf") {
+        const mediaIndex = pushSubmissionDetailMediaItem(resource);
         pdf.src = resource.url;
-        pdf.classList.remove("d-none");
+        pdfWrap.dataset.mediaIndex = String(mediaIndex);
+        pdfWrap.classList.remove("d-none");
         continue;
       }
       if (resource.kind === "audio") {
         appendSubmissionDetailGalleryAudio(gallery, resource);
         continue;
       }
-      appendSubmissionDetailGalleryItem(gallery, resource);
+      const mediaIndex = pushSubmissionDetailMediaItem(resource);
+      appendSubmissionDetailGalleryItem(gallery, resource, mediaIndex);
     }
   } catch (err) {
     modal.hide();
@@ -5318,6 +5449,54 @@ function wireSubmissionDetailModal() {
   modalEl.addEventListener("hidden.bs.modal", () => {
     clearSubmissionDetailMedia();
   });
+  modalEl.addEventListener("click", (e) => {
+    const open = e.target.closest(".js-submission-media-open");
+    if (!open) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const mediaIndex = Number.parseInt(open.getAttribute("data-media-index") ?? "", 10);
+    if (Number.isNaN(mediaIndex)) return;
+    const visual = submissionLightboxVisualItems();
+    const item = submissionDetailMediaItems[mediaIndex];
+    if (!item) return;
+    const visualIndex = visual.findIndex((v) => v.url === item.url && v.kind === item.kind);
+    openSubmissionMediaLightbox(visualIndex >= 0 ? visualIndex : 0);
+  });
+
+  const lightbox = document.getElementById("submission-media-lightbox");
+  lightbox?.addEventListener("click", (e) => {
+    if (e.target.closest(".js-submission-media-lightbox-close") || e.target.classList.contains("submission-media-lightbox-backdrop")) {
+      closeSubmissionMediaLightbox();
+      return;
+    }
+    if (e.target.closest(".js-submission-media-lightbox-prev")) {
+      e.preventDefault();
+      stepSubmissionMediaLightbox(-1);
+      return;
+    }
+    if (e.target.closest(".js-submission-media-lightbox-next")) {
+      e.preventDefault();
+      stepSubmissionMediaLightbox(1);
+    }
+  });
+
+  if (!document.documentElement.dataset.wiredSubmissionLightboxKeys) {
+    document.documentElement.dataset.wiredSubmissionLightboxKeys = "1";
+    document.addEventListener("keydown", (e) => {
+      const box = document.getElementById("submission-media-lightbox");
+      if (!box || box.classList.contains("d-none")) return;
+      if (e.key === "Escape") {
+        e.preventDefault();
+        closeSubmissionMediaLightbox();
+      } else if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        stepSubmissionMediaLightbox(-1);
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        stepSubmissionMediaLightbox(1);
+      }
+    });
+  }
 }
 
 function syncEmpSubmissionCharCount() {

@@ -4,7 +4,7 @@
   "description": "Task lists, assignments, attendance, and team management",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#000000",
+  "background_color": "#fbf8ff",
   "theme_color": "#00535b",
   "scope": "/",
   "icons": [
