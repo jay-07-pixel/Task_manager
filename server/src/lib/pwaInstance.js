@@ -1,13 +1,12 @@
 /** Map first hostname label → home-screen instance slug. */
 const HOSTNAME_INSTANCE_ALIASES = {
-  sugandhshoppee: "sugandshoppe",
+  sugandhshoppee: "Sugandhshoppee",
 };
 
 function sanitizeInstanceSlug(raw) {
   const slug = String(raw || "")
     .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9_]+/g, "_")
+    .replace(/[^a-zA-Z0-9_]+/g, "_")
     .replace(/^_+|_+$/g, "");
   return slug || "taskmanager";
 }
