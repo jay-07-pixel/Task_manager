@@ -1,5 +1,5 @@
 import { Chart } from "chart.js/auto";
-import { tr, dateLocale } from "./i18n/index.js";
+import { tr, dateLocale, formatDateTime24 } from "./i18n/index.js";
 import { dt, ensureContentTranslations } from "./i18n/contentTranslate.js";
 
 /** @type {Record<string, Chart>} */
@@ -209,9 +209,8 @@ function statusBreakdownColors(labels) {
 
 function formatReportDateTime(iso) {
   if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString(dateLocale(), { dateStyle: "medium", timeStyle: "short" });
+  const formatted = formatDateTime24(iso);
+  return formatted || "—";
 }
 
 function formatBudgetMinutes(n) {
@@ -946,10 +945,7 @@ function companyTrialSectionHtml(trial) {
 }
 
 function ownerDashboardPageHtml(data) {
-  const generated = new Date(data.generatedAt).toLocaleString(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
+  const generated = formatDateTime24(data.generatedAt);
 
   return `
     <div class="admin-main-scroll d-flex flex-column">
@@ -980,10 +976,7 @@ function ownerDashboardPageHtml(data) {
 
 function reportPageHtml(data) {
   const o = data.overview;
-  const generated = new Date(data.generatedAt).toLocaleString(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
+  const generated = formatDateTime24(data.generatedAt);
 
   return `
     <div class="admin-main-scroll d-flex flex-column">

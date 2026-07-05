@@ -100,7 +100,7 @@ import {
   sortTasksByRecurrenceThenCreated,
   compareHighPriorityFirst,
 } from "./taskRecurrenceSort.js";
-import { initI18n, tr, dateLocale, setLanguageChangeHandler } from "./i18n/index.js";
+import { initI18n, tr, dateLocale, formatTime24, formatDateTime24, formatShortDateTime24, setLanguageChangeHandler } from "./i18n/index.js";
 import { dt, ensureStateContentTranslations, initContentTranslate, onContentTranslationsUpdated } from "./i18n/contentTranslate.js";
 import { languageSelectorHtml, wireLanguageSelector } from "./i18n/languageSelector.js";
 
@@ -2778,7 +2778,7 @@ function formatOwnerDeadlineTimeHtml(due, allDay) {
   if (allDay) {
     return `<span class="admin-deadline-time">${escapeHtml(tr("common.allDay"))}</span>`;
   }
-  const timeStr = due.toLocaleTimeString(dateLocale(), { hour: "numeric", minute: "2-digit" });
+  const timeStr = formatTime24(due);
   const dtAttr = escapeHtml(due.toISOString().slice(0, 19));
   return `<time class="admin-deadline-time tabular-nums" datetime="${dtAttr}">${escapeHtml(timeStr)}</time>`;
 }
@@ -5840,13 +5840,7 @@ function progressUpdateTypeMeta(type) {
 function formatProgressUpdateTime(iso) {
   if (!iso) return "";
   try {
-    const d = new Date(iso);
-    return d.toLocaleString(dateLocale(), {
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    });
+    return formatShortDateTime24(iso);
   } catch {
     return iso.slice(0, 16).replace("T", " ");
   }
@@ -7906,9 +7900,8 @@ function employeeAssigneeShowsAsSubmitted(task, assigneeRow = employeeMyAssignee
 
 function formatEmpDue(iso) {
   if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString(dateLocale(), { dateStyle: "medium", timeStyle: "short" });
+  const formatted = formatDateTime24(iso);
+  return formatted || "—";
 }
 
 function empTaskOverdueDayCount(dueAt) {
@@ -7941,7 +7934,7 @@ function formatTaskCreatedDate(iso, { short = false } = {}) {
   if (short) {
     return d.toLocaleDateString(dateLocale(), { month: "short", day: "numeric", year: "numeric" });
   }
-  return d.toLocaleString(dateLocale(), { dateStyle: "medium", timeStyle: "short" });
+  return formatDateTime24(iso);
 }
 
 function taskCreatedMetaHtml(createdAt) {

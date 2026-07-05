@@ -1,4 +1,4 @@
-import { tr } from "./i18n/index.js";
+import { tr, formatWeekdayDateTime24 } from "./i18n/index.js";
 import {
   cancelBackgroundAlarms,
   getLocalPushSubscription,
@@ -107,15 +107,7 @@ function reminderKey(task, slot) {
 }
 
 function formatDueTime(dueAt) {
-  const d = new Date(dueAt);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleString(undefined, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  return formatWeekdayDateTime24(dueAt);
 }
 
 export function stopTaskAlarm() {

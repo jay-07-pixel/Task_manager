@@ -34,12 +34,13 @@ export function formatDueTime(dueAt, allDay = false, dueTimeZone = null) {
     });
   }
 
-  return d.toLocaleString("en-US", {
+  return d.toLocaleString("en-IN", {
     timeZone,
     weekday: "short",
     month: "short",
     day: "numeric",
-    hour: "numeric",
+    hour: "2-digit",
     minute: "2-digit",
+    hour12: false,
   });
 }

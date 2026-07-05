@@ -1,4 +1,4 @@
-import { tr, dateLocale } from "./i18n/index.js";
+import { tr, dateLocale, formatDateTime24, formatTime24 } from "./i18n/index.js";
 
 /** @type {((path: string, opts?: RequestInit) => Promise<any>) | null} */
 let apiFn = null;
@@ -127,9 +127,8 @@ function formatDuration(ms) {
 
 function formatDateTime(iso) {
   if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString(dateLocale(), { dateStyle: "medium", timeStyle: "short" });
+  const formatted = formatDateTime24(iso);
+  return formatted || "—";
 }
 
 async function loadMapsConfig() {
@@ -675,7 +674,7 @@ function updateLastRefreshedLabel() {
   const el = document.getElementById("admin-attendance-last-refreshed");
   if (!el) return;
   const now = new Date();
-  const time = now.toLocaleTimeString(dateLocale(), { hour: "numeric", minute: "2-digit", second: "2-digit" });
+  const time = formatTime24(now, { second: "2-digit" });
   el.textContent = tr("attendance.lastRefreshed", { time });
 }
 

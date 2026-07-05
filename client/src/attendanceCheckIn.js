@@ -1,4 +1,4 @@
-import { tr, dateLocale } from "./i18n/index.js";
+import { tr, dateLocale, formatTime24 } from "./i18n/index.js";
 import { notifyAttendanceCheckCompleted } from "./attendanceCheckInReminder.js";
 
 /** @type {((path: string, opts?: RequestInit) => Promise<any>) | null} */
@@ -68,11 +68,8 @@ function timingClass(status) {
 
 function formatTime(iso) {
   if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
-  } catch {
-    return "—";
-  }
+  const formatted = formatTime24(iso);
+  return formatted || "—";
 }
 
 function formatHistoryDate(dateStr) {

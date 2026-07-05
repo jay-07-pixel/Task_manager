@@ -119,4 +119,61 @@ export function dateLocale() {
   return "en-IN";
 }
 
+const TIME_24H = Object.freeze({ hour: "2-digit", minute: "2-digit", hour12: false });
+const TIME_24H_SECONDS = Object.freeze({ hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+
+function toDate(value) {
+  const d = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+/** Time only, 24-hour clock (e.g. 10:30, 22:15). */
+export function formatTime24(value, options = {}) {
+  const d = toDate(value);
+  if (!d) return "";
+  return d.toLocaleTimeString(dateLocale(), { ...TIME_24H, ...options });
+}
+
+/** Date + time, 24-hour clock. */
+export function formatDateTime24(value, options = {}) {
+  const d = toDate(value);
+  if (!d) return "";
+  return d.toLocaleString(dateLocale(), {
+    dateStyle: "medium",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    ...options,
+  });
+}
+
+/** Short date + time, 24-hour clock (e.g. 4 Jul, 22:15). */
+export function formatShortDateTime24(value, options = {}) {
+  const d = toDate(value);
+  if (!d) return "";
+  return d.toLocaleString(dateLocale(), {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    ...options,
+  });
+}
+
+/** Weekday + short date + time, 24-hour clock. */
+export function formatWeekdayDateTime24(value, options = {}) {
+  const d = toDate(value);
+  if (!d) return "";
+  return d.toLocaleString(dateLocale(), {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    ...options,
+  });
+}
+
 export { i18n };
