@@ -37,6 +37,24 @@
   .task-grip {
     background: color-mix(in srgb, #fbbf24 92%, transparent) !important;
   }
+
+  .admin-recurrence-pill--repeat,
+  .owner-task-recurrence-badge {
+    background: rgba(0, 0, 0, 0.12) !important;
+    color: #451a03 !important;
+    border: 1px solid rgba(0, 0, 0, 0.18) !important;
+  }
+
+  .admin-recurrence-pill--repeat .material-symbols-outlined,
+  .admin-recurrence-pill--repeat .admin-recurrence-icon,
+  .owner-task-recurrence-badge .bi {
+    color: inherit !important;
+  }
+
+  .admin-recurrence-pill--none {
+    background: rgba(255, 255, 255, 0.35) !important;
+    color: #451a03 !important;
+  }
 }
 
 .owner-task-row--overdue-3-5,
@@ -76,6 +94,24 @@
 
   .task-grip {
     background: color-mix(in srgb, #f59e0b 92%, transparent) !important;
+  }
+
+  .admin-recurrence-pill--repeat,
+  .owner-task-recurrence-badge {
+    background: rgba(0, 0, 0, 0.14) !important;
+    color: #431407 !important;
+    border: 1px solid rgba(0, 0, 0, 0.2) !important;
+  }
+
+  .admin-recurrence-pill--repeat .material-symbols-outlined,
+  .admin-recurrence-pill--repeat .admin-recurrence-icon,
+  .owner-task-recurrence-badge .bi {
+    color: inherit !important;
+  }
+
+  .admin-recurrence-pill--none {
+    background: rgba(255, 255, 255, 0.32) !important;
+    color: #431407 !important;
   }
 }
 
@@ -173,6 +209,24 @@
 
   .task-grip {
     background: color-mix(in srgb, #92400e 92%, transparent) !important;
+  }
+
+  .admin-recurrence-pill--repeat,
+  .owner-task-recurrence-badge {
+    background: rgba(255, 251, 235, 0.22) !important;
+    color: #fffbeb !important;
+    border: 1px solid rgba(255, 251, 235, 0.38) !important;
+  }
+
+  .admin-recurrence-pill--repeat .material-symbols-outlined,
+  .admin-recurrence-pill--repeat .admin-recurrence-icon,
+  .owner-task-recurrence-badge .bi {
+    color: inherit !important;
+  }
+
+  .admin-recurrence-pill--none {
+    background: rgba(255, 251, 235, 0.16) !important;
+    color: rgba(255, 251, 235, 0.88) !important;
   }
 }
 

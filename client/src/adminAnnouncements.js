@@ -24,6 +24,19 @@ export const ADMIN_ANNOUNCEMENTS = [
     action: { labelKey: "legal.readFullDocument", type: "open-legal" },
   },
   {
+    id: "feature-overdue-colors-apk-20260706",
+    date: "06-07-26",
+    title: "Overdue task colors & new app (APK)",
+    icon: "bi-palette-fill",
+    body:
+      "Website — Active tasks now show overdue colors: amber (1–2 days), orange (3–5 days), brown (6+ days). High priority stays red; overdue colors take priority when both apply. A color legend and filter appear above the task list. Employees with tasks 6+ days overdue are blocked until they post an update or submit. App — Latest Kalpanik Reminder APK includes matching overdue colors, the 6+ day blocking screen, and Privacy Policy in Settings. Ask staff to download and install from their dashboard (uninstall the old app first if install is blocked).",
+    action: {
+      labelKey: "notifications.downloadApk",
+      href: (import.meta.env.VITE_APK_DOWNLOAD_URL || "").trim() || "/downloads/sugandh-reminder.apk",
+      download: true,
+    },
+  },
+  {
     id: "feature-apk-update-20260704",
     date: "04-07-26",
     title: "New Kalpanik Reminder app (APK)",
