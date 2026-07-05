@@ -7912,6 +7912,14 @@ function empTaskOverdueDayCount(dueAt) {
   return Math.max(1, Math.ceil((now - due.getTime()) / 86_400_000));
 }
 
+function empTaskOverdueTierClass(dueAt) {
+  const days = empTaskOverdueDayCount(dueAt);
+  if (days <= 0) return "";
+  if (days <= 2) return " emp-task-row--overdue-1-2";
+  if (days <= 5) return " emp-task-row--overdue-3-5";
+  return " emp-task-row--overdue-6plus";
+}
+
 function formatEmpDeadlineDisplay(task, { submitted = false } = {}) {
   if (!task?.dueAt) return `<span class="text-muted">—</span>`;
   const due = new Date(task.dueAt);
@@ -8415,9 +8423,10 @@ function empTaskTableRows(tasks) {
         </div>`;
       const rowDone = submitted ? "owner-task-row--completed" : "";
       const priorityClass = ownerTaskRowPriorityClass(task);
+      const overdueClass = submitted ? "" : empTaskOverdueTierClass(task.dueAt);
       const submittedWhen = me?.lastSubmittedAt || me?.assigneeDoneAt || null;
       const datesCell = empTaskDatesCellHtml(task, submitted, submittedWhen);
-      return `<tr class="owner-task-row emp-task-row${priorityClass} ${rowDone}" data-task-id="${task.id}">
+      return `<tr class="owner-task-row emp-task-row${priorityClass}${overdueClass} ${rowDone}" data-task-id="${task.id}">
         <td class="owner-task-cell owner-task-col--task emp-col-task align-middle">
           <span class="fw-semibold emp-task-title ${submitted ? "text-muted text-decoration-line-through" : ""}">${escapeHtml(dt(task.title))}</span>
           ${taskAssignmentAttachmentsBadgeHtml(task)}
