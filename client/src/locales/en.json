@@ -367,7 +367,12 @@
     "submittedTasks": "Submitted tasks",
     "allAssignedTasks": "All assigned tasks",
     "assignedByMeHint": "Tasks you created or assigned to colleagues. Status only — updates and submissions are visible to admin.",
-    "activeTasksHint": "Post progress updates while you work, then submit with notes and/or an image when done."
+    "activeTasksHint": "Post progress updates while you work, then submit with notes and/or an image when done.",
+    "criticalOverdueGateTitle": "Urgent overdue task",
+    "criticalOverdueGateIntro": "This task is 6 or more days past its deadline. Post a progress update or submit your work before you can use the app.",
+    "criticalOverdueGateMustAct": "You must post an update or submit this task to continue.",
+    "criticalOverdueGatePostUpdate": "Post update",
+    "criticalOverdueGateSubmit": "Submit task"
   },
   "modals": {
     "listName": "List name",

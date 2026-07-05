@@ -367,7 +367,12 @@
     "submittedTasks": "जमा किए कार्य",
     "allAssignedTasks": "सभी असाइन कार्य",
     "assignedByMeHint": "आपके द्वारा बनाए या असाइन किए कार्य। केवल स्थिति — अपडेट और जमा एडमिन को दिखते हैं।",
-    "activeTasksHint": "काम करते समय प्रगति अपडेट पोस्ट करें, फिर नोट्स और/या छवि के साथ जमा करें।"
+    "activeTasksHint": "काम करते समय प्रगति अपडेट पोस्ट करें, फिर नोट्स और/या छवि के साथ जमा करें।",
+    "criticalOverdueGateTitle": "अत्यावश्यक अतिदेय कार्य",
+    "criticalOverdueGateIntro": "यह कार्य अंतिम तिथि से 6 या अधिक दिन देर से है। ऐप का उपयोग करने से पहले प्रगति अपडेट पोस्ट करें या कार्य जमा करें।",
+    "criticalOverdueGateMustAct": "जारी रखने के लिए अपडेट पोस्ट करना या यह कार्य जमा करना आवश्यक है।",
+    "criticalOverdueGatePostUpdate": "अपडेट पोस्ट करें",
+    "criticalOverdueGateSubmit": "कार्य जमा करें"
   },
   "modals": {
     "listName": "सूची का नाम",

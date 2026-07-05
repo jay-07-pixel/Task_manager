@@ -139,6 +139,11 @@ const OWNER_SYNC_INTERVAL_MS = 12_000;
 let ownerSyncTimer = null;
 let ownerTasksFingerprint = "";
 const OWNER_TRIAL_POPUP_KEY = "taskmgr-owner-trial-popup-shown";
+const EMP_CRITICAL_OVERDUE_MIN_DAYS = 6;
+
+/** Task ids cleared this session after the employee posts an update or submits. */
+/** @type {Set<string>} */
+let empOverdueGateSatisfiedTaskIds = new Set();
 
 const THEME_STORAGE_KEY = "task-manager-theme";
 const THEME_TRANSITION_MS = 450;
@@ -2251,6 +2256,7 @@ function handleCompanyAttendanceChanged(enabled) {
     renderEmployeeChrome();
     renderEmployeeMain();
     if (enabled) startAttendanceCheckInReminder();
+    syncEmployeeOverdueGate();
   }
 }
 
@@ -5803,6 +5809,7 @@ function wireEmpSubmissionModal() {
         else state.empTasks.push(result.task);
       }
       showToast(tr("toast.taskSubmitted"), "success");
+      markEmployeeOverdueGateSatisfied(taskId);
       state.empFilter = "submitted";
       await loadEmployeeTasks();
       renderEmpListContentOnly();
@@ -6298,6 +6305,7 @@ function wireProgressUpdateModal() {
       await loadEmployeeTasks();
       renderEmpListContentOnly();
       renderEmployeeMain();
+      markEmployeeOverdueGateSatisfied(taskId);
     } catch (err) {
       errEl.textContent = err.message || tr("validation.postUpdateFailed");
       errEl.classList.remove("d-none");
@@ -7948,6 +7956,117 @@ function shouldShowTaskOverdueColorLegend({ ownerFilter, empFilter } = {}) {
   return false;
 }
 
+function isEmployeeCriticalOverdueTask(task) {
+  if (!task?.dueAt) return false;
+  const me = employeeMyAssignee(task);
+  if (!me || employeeAssigneeShowsAsSubmitted(task, me)) return false;
+  if (empTaskRowDisplayMode(task, me) !== "active") return false;
+  return taskOverdueDayCount(task.dueAt) >= EMP_CRITICAL_OVERDUE_MIN_DAYS;
+}
+
+function getEmployeeCriticalOverdueTask() {
+  const tasks = state.empTasks
+    .filter(isEmployeeCriticalOverdueTask)
+    .filter((task) => !empOverdueGateSatisfiedTaskIds.has(task.id));
+  if (!tasks.length) return null;
+  tasks.sort((a, b) => taskOverdueDayCount(b.dueAt) - taskOverdueDayCount(a.dueAt));
+  return tasks[0];
+}
+
+function isEmployeeOverdueGateActive() {
+  return document.body.classList.contains("emp-overdue-gate-open");
+}
+
+function empCriticalOverdueGateHtml(task) {
+  const days = taskOverdueDayCount(task.dueAt);
+  const overdueLabel = tr("employee.overdueByDays", { count: days });
+  const notesRaw = (task.notes || "").trim().replace(/\s+/g, " ");
+  const descriptionBlock = notesRaw
+    ? `<p class="emp-critical-overdue-gate__desc">${escapeHtml(dt(notesRaw.length > 240 ? `${notesRaw.slice(0, 237)}…` : notesRaw))}</p>`
+    : "";
+  return `<div id="emp-critical-overdue-gate" class="emp-critical-overdue-gate" role="alertdialog" aria-modal="true" aria-labelledby="emp-critical-overdue-gate-title" data-task-id="${escapeHtml(task.id)}">
+    <div class="emp-critical-overdue-gate__panel admin-emp-modal-card">
+      <div class="emp-critical-overdue-gate__badge">${escapeHtml(tr("common.overdueColor6plus"))}</div>
+      <h2 class="emp-critical-overdue-gate__title" id="emp-critical-overdue-gate-title">${escapeHtml(tr("employee.criticalOverdueGateTitle"))}</h2>
+      <p class="emp-critical-overdue-gate__intro">${escapeHtml(tr("employee.criticalOverdueGateIntro"))}</p>
+      <div class="emp-critical-overdue-gate__task">
+        <p class="admin-emp-modal-field-label mb-1">${tr("common.task")}</p>
+        <p class="emp-critical-overdue-gate__task-title fw-semibold mb-2">${escapeHtml(dt(task.title))}</p>
+        <p class="emp-critical-overdue-gate__deadline text-danger fw-semibold mb-0 tabular-nums">${escapeHtml(overdueLabel)}</p>
+        <p class="emp-critical-overdue-gate__deadline-was small text-muted mb-0 tabular-nums">${escapeHtml(formatEmpDue(task.dueAt))}</p>
+        ${descriptionBlock}
+      </div>
+      <div class="emp-critical-overdue-gate__actions">
+        <button type="button" class="admin-task-modal-btn-secondary emp-gate-post-update" data-task-id="${escapeHtml(task.id)}">
+          ${adminMsIcon("chat")} ${escapeHtml(tr("employee.criticalOverdueGatePostUpdate"))}
+        </button>
+        <button type="button" class="admin-task-modal-btn-save emp-gate-submit-task" data-task-id="${escapeHtml(task.id)}">
+          ${adminMsIcon("send")} ${escapeHtml(tr("employee.criticalOverdueGateSubmit"))}
+        </button>
+      </div>
+      <p class="emp-critical-overdue-gate__must-act mb-0">${escapeHtml(tr("employee.criticalOverdueGateMustAct"))}</p>
+    </div>
+  </div>`;
+}
+
+function removeEmployeeOverdueGate() {
+  const wasOpen = document.body.classList.contains("emp-overdue-gate-open");
+  document.getElementById("emp-critical-overdue-gate")?.remove();
+  document.body.classList.remove("emp-overdue-gate-open");
+  if (
+    wasOpen &&
+    state.user?.role === "employee" &&
+    state.user?.attendanceEnabled === true &&
+    !getEmployeeCriticalOverdueTask()
+  ) {
+    startAttendanceCheckInReminder();
+  }
+}
+
+function wireEmployeeOverdueGate(gateEl) {
+  if (!gateEl || gateEl.dataset.wiredOverdueGate === "1") return;
+  gateEl.dataset.wiredOverdueGate = "1";
+
+  gateEl.querySelector(".emp-gate-post-update")?.addEventListener("click", () => {
+    const taskId = gateEl.getAttribute("data-task-id");
+    const task = state.empTasks.find((t) => t.id === taskId);
+    if (task) void openEmpProgressUpdateModal(task);
+  });
+
+  gateEl.querySelector(".emp-gate-submit-task")?.addEventListener("click", () => {
+    const taskId = gateEl.getAttribute("data-task-id");
+    const task = state.empTasks.find((t) => t.id === taskId);
+    if (task) openEmpSubmissionModal(task);
+  });
+}
+
+function markEmployeeOverdueGateSatisfied(taskId) {
+  if (!taskId) return;
+  empOverdueGateSatisfiedTaskIds.add(taskId);
+  syncEmployeeOverdueGate();
+}
+
+function syncEmployeeOverdueGate() {
+  if (state.user?.role !== "employee") {
+    removeEmployeeOverdueGate();
+    return;
+  }
+
+  const task = getEmployeeCriticalOverdueTask();
+  if (!task) {
+    removeEmployeeOverdueGate();
+    return;
+  }
+
+  document.body.classList.add("emp-overdue-gate-open");
+  const existing = document.getElementById("emp-critical-overdue-gate");
+  if (existing?.getAttribute("data-task-id") === task.id) return;
+
+  existing?.remove();
+  document.body.insertAdjacentHTML("beforeend", empCriticalOverdueGateHtml(task));
+  wireEmployeeOverdueGate(document.getElementById("emp-critical-overdue-gate"));
+}
+
 function formatEmpDeadlineDisplay(task, { submitted = false } = {}) {
   if (!task?.dueAt) return `<span class="text-muted">—</span>`;
   const due = new Date(task.dueAt);
@@ -8816,6 +8935,7 @@ function renderEmployeeMain() {
   });
 
   bindAssignmentAttachmentViewers(main, (taskId) => state.empTasks.find((t) => t.id === taskId));
+  syncEmployeeOverdueGate();
 }
 
 function renderEmployeeChrome() {
@@ -8888,6 +9008,7 @@ function renderEmployeeChrome() {
   void wireAttendanceCheckInCard();
   initTeamChat(chatInitDeps());
   renderEmployeeMain();
+  syncEmployeeOverdueGate();
   wireAdminNotifications(state.user?.id, document, state.user);
   wireChatNotifyHandlers();
   handleOpenChatDeepLink();
@@ -8921,7 +9042,8 @@ async function render() {
     if (locationOk) {
       renderEmployeeMain();
       startEmployeeReminderSystem();
-      if (state.user?.attendanceEnabled === true) {
+      syncEmployeeOverdueGate();
+      if (state.user?.attendanceEnabled === true && !isEmployeeOverdueGateActive()) {
         startAttendanceCheckInReminder();
       }
       void prepareEmployeePushOnLogin();

@@ -528,3 +528,90 @@ body:has(.admin-emp-modal.show) .modal-backdrop {
     color: var(--bs-primary);
   }
 }
+
+body.emp-overdue-gate-open {
+  overflow: hidden;
+}
+
+.emp-critical-overdue-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 1040;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right))
+    max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+  background: rgba(24, 26, 46, 0.72);
+  backdrop-filter: blur(4px);
+}
+
+.emp-critical-overdue-gate__panel {
+  width: min(32rem, 100%);
+  max-height: min(90vh, calc(100dvh - 2rem));
+  overflow: auto;
+  padding: 1.25rem 1.35rem 1.1rem;
+  border: 2px solid #92400e;
+  box-shadow: 0 18px 48px rgba(120, 53, 15, 0.35);
+}
+
+.emp-critical-overdue-gate__badge {
+  display: inline-block;
+  margin-bottom: 0.65rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: #92400e;
+  color: #fffbeb;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.emp-critical-overdue-gate__title {
+  margin: 0 0 0.45rem;
+  font-size: 1.2rem;
+  line-height: 1.3;
+}
+
+.emp-critical-overdue-gate__intro,
+.emp-critical-overdue-gate__must-act {
+  font-size: 0.875rem;
+  line-height: 1.45;
+  color: var(--admin-on-surface-variant, var(--bs-secondary-color));
+}
+
+.emp-critical-overdue-gate__task {
+  margin: 1rem 0;
+  padding: 0.85rem 0.95rem;
+  border-radius: 0.65rem;
+  border: 1px solid rgba(146, 64, 14, 0.35);
+  background: color-mix(in srgb, #92400e 8%, var(--admin-surface-container-low, var(--bs-body-bg)));
+}
+
+.emp-critical-overdue-gate__task-title {
+  font-size: 1rem;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.emp-critical-overdue-gate__desc {
+  margin: 0.65rem 0 0;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: var(--admin-on-surface-variant, var(--bs-secondary-color));
+  word-break: break-word;
+}
+
+.emp-critical-overdue-gate__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin-bottom: 0.75rem;
+}
+
+.emp-critical-overdue-gate__actions .admin-task-modal-btn-secondary,
+.emp-critical-overdue-gate__actions .admin-task-modal-btn-save {
+  flex: 1 1 11rem;
+  justify-content: center;
+}

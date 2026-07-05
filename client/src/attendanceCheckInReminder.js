@@ -97,6 +97,7 @@ function showReminderModal(type, status) {
 
 async function tickReminder() {
   if (!apiFn || document.hidden || isReminderOpen()) return;
+  if (document.body.classList.contains("emp-overdue-gate-open")) return;
 
   try {
     const status = await apiFn("/api/attendance/check-status");
