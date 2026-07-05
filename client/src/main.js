@@ -7022,9 +7022,10 @@ function ownerTaskGroupTbody(task) {
 
   const groupDone = task.completed ? "owner-task-group--completed" : "";
   const priorityClass = ownerTaskRowPriorityClass(task);
+  const overdueClass = task.completed ? "" : taskOverdueTierClass(task.dueAt);
 
   return `<tbody class="owner-task-group ${groupDone}${task.highPriority ? " owner-task-group--high-priority" : ""}" data-task-id="${task.id}">
-    <tr class="task-sort-row owner-task-row${priorityClass} ${task.completed ? "owner-task-row--completed" : ""}" data-task-id="${task.id}">
+    <tr class="task-sort-row owner-task-row${priorityClass}${overdueClass} ${task.completed ? "owner-task-row--completed" : ""}" data-task-id="${task.id}">
       <td class="owner-task-cell owner-task-cell--icon text-center align-middle">
         ${adminMsIcon("assignment", "admin-task-type-icon")}
         <span class="task-grip grip-handle" title="${tr("common.dragToReorder")}">${adminMsIcon("drag_indicator")}</span>
@@ -7904,7 +7905,7 @@ function formatEmpDue(iso) {
   return formatted || "—";
 }
 
-function empTaskOverdueDayCount(dueAt) {
+function taskOverdueDayCount(dueAt) {
   const due = new Date(dueAt);
   if (Number.isNaN(due.getTime())) return 0;
   const now = Date.now();
@@ -7912,12 +7913,12 @@ function empTaskOverdueDayCount(dueAt) {
   return Math.max(1, Math.ceil((now - due.getTime()) / 86_400_000));
 }
 
-function empTaskOverdueTierClass(dueAt) {
-  const days = empTaskOverdueDayCount(dueAt);
+function taskOverdueTierClass(dueAt) {
+  const days = taskOverdueDayCount(dueAt);
   if (days <= 0) return "";
-  if (days <= 2) return " emp-task-row--overdue-1-2";
-  if (days <= 5) return " emp-task-row--overdue-3-5";
-  return " emp-task-row--overdue-6plus";
+  if (days <= 2) return " owner-task-row--overdue-1-2";
+  if (days <= 5) return " owner-task-row--overdue-3-5";
+  return " owner-task-row--overdue-6plus";
 }
 
 function formatEmpDeadlineDisplay(task, { submitted = false } = {}) {
@@ -7926,7 +7927,7 @@ function formatEmpDeadlineDisplay(task, { submitted = false } = {}) {
   if (Number.isNaN(due.getTime())) return `<span class="text-muted">—</span>`;
 
   if (!submitted && Date.now() > due.getTime()) {
-    const days = empTaskOverdueDayCount(task.dueAt);
+    const days = taskOverdueDayCount(task.dueAt);
     const overdueLabel = tr("employee.overdueByDays", { count: days });
     return `<span class="emp-deadline-overdue text-danger fw-semibold tabular-nums">${escapeHtml(overdueLabel)}</span>
       <span class="d-block small text-muted emp-deadline-was tabular-nums mt-1">${escapeHtml(formatEmpDue(task.dueAt))}</span>`;
@@ -8423,7 +8424,7 @@ function empTaskTableRows(tasks) {
         </div>`;
       const rowDone = submitted ? "owner-task-row--completed" : "";
       const priorityClass = ownerTaskRowPriorityClass(task);
-      const overdueClass = submitted ? "" : empTaskOverdueTierClass(task.dueAt);
+      const overdueClass = submitted ? "" : taskOverdueTierClass(task.dueAt);
       const submittedWhen = me?.lastSubmittedAt || me?.assigneeDoneAt || null;
       const datesCell = empTaskDatesCellHtml(task, submitted, submittedWhen);
       return `<tr class="owner-task-row emp-task-row${priorityClass}${overdueClass} ${rowDone}" data-task-id="${task.id}">
