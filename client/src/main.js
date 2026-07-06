@@ -5907,6 +5907,7 @@ function wireEmpSubmissionModal() {
         else state.empTasks.push(result.task);
       }
       empCriticalOverdueSatisfiedIds.add(taskId);
+      removeEmployeeOverdueGate();
       syncEmployeeOverdueGate();
       showToast(tr("toast.taskSubmitted"), "success");
       state.empFilter = "submitted";
@@ -8229,9 +8230,15 @@ function empCriticalOverdueGateHtml(task) {
   </div>`;
 }
 
+function dismissCriticalOverdueGateForTask(taskId) {
+  if (!taskId) return;
+  empCriticalOverdueSatisfiedIds.add(taskId);
+  removeEmployeeOverdueGate();
+}
+
 function removeEmployeeOverdueGate() {
   const wasOpen = document.body.classList.contains("emp-overdue-gate-open");
-  document.getElementById("emp-critical-overdue-gate")?.remove();
+  document.querySelectorAll(".emp-critical-overdue-gate").forEach((el) => el.remove());
   document.body.classList.remove("emp-overdue-gate-open");
   if (
     wasOpen &&
@@ -8247,38 +8254,34 @@ function wireEmployeeOverdueGate(gateEl) {
   if (!gateEl || gateEl.dataset.wiredOverdueGate === "1") return;
   gateEl.dataset.wiredOverdueGate = "1";
 
-  gateEl.querySelector(".emp-gate-postpone-task")?.addEventListener("click", async () => {
+  gateEl.querySelector(".emp-gate-postpone-task")?.addEventListener("click", () => {
     const taskId = gateEl.getAttribute("data-task-id");
-    const btn = gateEl.querySelector(".emp-gate-postpone-task");
-    if (!taskId || !btn) return;
-    btn.disabled = true;
-    try {
-      const { request } = await api("/api/deadline-extensions", {
-        method: "POST",
-        body: JSON.stringify({ taskId }),
-      });
-      const task = state.empTasks.find((t) => t.id === taskId);
-      if (task) {
-        task.pendingDeadlineExtension = request;
+    if (!taskId) return;
+    dismissCriticalOverdueGateForTask(taskId);
+
+    void (async () => {
+      try {
+        const { request } = await api("/api/deadline-extensions", {
+          method: "POST",
+          body: JSON.stringify({ taskId }),
+        });
+        const task = state.empTasks.find((t) => t.id === taskId);
+        if (task) {
+          task.pendingDeadlineExtension = request;
+        }
+        showToast(tr("employee.criticalOverdueGatePostponeSent"), "success");
+        schedulePostponeGraceRecheck();
+      } catch (err) {
+        showToast(err.message || tr("employee.criticalOverdueGatePostponeFailed"), "warning");
       }
-      empCriticalOverdueSatisfiedIds.add(taskId);
-      removeEmployeeOverdueGate();
-      showToast(tr("employee.criticalOverdueGatePostponeSent"), "success");
-      schedulePostponeGraceRecheck();
-      syncEmployeeOverdueGate();
-    } catch (err) {
-      showToast(err.message || tr("employee.criticalOverdueGatePostponeFailed"), "danger");
-    } finally {
-      btn.disabled = false;
-    }
+    })();
   });
 
   gateEl.querySelector(".emp-gate-submit-task")?.addEventListener("click", () => {
     const taskId = gateEl.getAttribute("data-task-id");
     const task = state.empTasks.find((t) => t.id === taskId);
     if (!task) return;
-    empCriticalOverdueSatisfiedIds.add(taskId);
-    removeEmployeeOverdueGate();
+    dismissCriticalOverdueGateForTask(taskId);
     openEmpSubmissionModal(task);
   });
 }
@@ -8318,12 +8321,15 @@ function syncEmployeeOverdueGate() {
     return;
   }
 
-  document.body.classList.add("emp-overdue-gate-open");
   const existing = document.getElementById("emp-critical-overdue-gate");
   const existingTaskId = existing?.getAttribute("data-task-id");
-  if (existingTaskId === task.id) return;
+  if (existingTaskId === task.id) {
+    document.body.classList.add("emp-overdue-gate-open");
+    return;
+  }
 
   existing?.remove();
+  document.body.classList.add("emp-overdue-gate-open");
   document.body.insertAdjacentHTML("beforeend", empCriticalOverdueGateHtml(task));
   wireEmployeeOverdueGate(document.getElementById("emp-critical-overdue-gate"));
 }
