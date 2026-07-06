@@ -106,6 +106,7 @@ import {
   compareTasksByRecurrenceThenCreated,
   sortTasksByRecurrenceThenCreated,
   compareHighPriorityFirst,
+  compareCompletedTasksRecentFirst,
 } from "./taskRecurrenceSort.js";
 import { initI18n, tr, dateLocale, formatTime24, formatDateTime24, formatShortDateTime24, setLanguageChangeHandler } from "./i18n/index.js";
 import { dt, ensureStateContentTranslations, initContentTranslate, onContentTranslationsUpdated } from "./i18n/contentTranslate.js";
