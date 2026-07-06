@@ -373,10 +373,12 @@
     "assignedByMeHint": "तुम्ही तयार केलेली किंवा नियुक्त केलेली कार्ये. फक्त स्थिती — अपडेट आणि सबमिशन अॅडमिनला दिसतात.",
     "activeTasksHint": "काम करताना प्रगती अपडेट पोस्ट करा, नंतर नोट्स आणि/किंवा प्रतिमेसह सबमिट करा.",
     "criticalOverdueGateTitle": "तातडीचे मुदत ओलांडलेले कार्य",
-    "criticalOverdueGateIntro": "हे कार्य अंतिम मुदतीपासून 6 किंवा अधिक दिवसांनी उशीरा आहे. अॅप वापरण्यापूर्वी प्रगती अपडेट पोस्ट करा किंवा कार्य सबमिट करा.",
-    "criticalOverdueGateMustAct": "पुढे जाण्यासाठी अपडेट पोस्ट करणे किंवा हे कार्य सबमिट करणे आवश्यक आहे.",
-    "criticalOverdueGatePostUpdate": "अपडेट पोस्ट करा",
-    "criticalOverdueGateSubmit": "कार्य सबमिट करा"
+    "criticalOverdueGateIntro": "हे कार्य अंतिम मुदतीपासून 6 किंवा अधिक दिवसांनी उशीरा आहे. अॅप वापरण्यापूर्वी कार्य सबमिट करा किंवा Postpone विनंती करा.",
+    "criticalOverdueGateMustAct": "पुढे जाण्यासाठी कार्य सबमिट करा किंवा Postpone दाबा. 24 तासांत मंजुरी न मिळाल्यास ही स्क्रीन परत येईल.",
+    "criticalOverdueGatePostpone": "Postpone",
+    "criticalOverdueGateSubmit": "कार्य सबमिट करा",
+    "criticalOverdueGatePostponeSent": "Postpone विनंती प्रशासकाला पाठवली. मंजुरीची वाट पाहताना 24 तास अॅप वापरू शकता.",
+    "criticalOverdueGatePostponeFailed": "Postpone विनंती पाठवता आली नाही."
   },
   "modals": {
     "listName": "यादीचे नाव",
@@ -1057,5 +1059,29 @@
     "monthlyMinutesHours": "{{hours}} तास {{minutes}} मिनिट",
     "monthlyPresentShort": "{{count}} उपस्थित",
     "monthlyReportInvalidMonth": "कृपया वैध महिना निवडा."
+  },
+  "deadlineExtensions": {
+    "navLabel": "मुदत वाढवणे",
+    "title": "मुदत वाढवणे",
+    "intro": "6+ दिवस उशीरा कार्यांसाठी कर्मचारी Postpone विनंती करू शकतात. नवीन तारीख ठेवून मंजुरी द्या.",
+    "emptyTitle": "कोणतीही प्रलंबित विनंती नाही",
+    "emptyDesc": "कर्मचारी Postpone दाबल्यावर विनंती येथे दिसेल.",
+    "requestFrom": "{{name}} ची विनंती",
+    "overdueLabel": "मुदत ओलांडली",
+    "requestedAt": "विनंती वेळ",
+    "expiresAt": "पॉपअप परत",
+    "requestBody": "{{name}} ने \"{{task}}\" साठी Postpone मागितले. नवीन तारीख ठेवून मंजूर करा.",
+    "reviewApprove": "पाहा आणि मंजूर करा",
+    "approveTitle": "मुदत वाढवणे मंजूर करा",
+    "approveIntro": "{{name}} ने \"{{task}}\" साठी अधिक वेळ मागितला. सध्याची मुदत: {{currentDue}}. नवीन तारीख निवडा (आवश्यक).",
+    "newDeadlineLabel": "नवीन मुदत तारीख",
+    "newDeadlineHint": "कार्याची मुदत या तारखेला अपडेट होईल.",
+    "newDeadlineRequired": "कृपया नवीन मुदत तारीख निवडा.",
+    "approveAndUpdate": "मंजूर करा आणि मुदत अपडेट करा",
+    "approveFailed": "विनंती मंजूर करता आली नाही.",
+    "approvedToast": "मुदत अपडेट झाली आणि विनंती मंजूर.",
+    "pendingCount": "{{count}} प्रलंबित",
+    "adminNotifyTitle": "मुदत वाढवण्याची विनंती",
+    "adminNotifyBody": "{{name}} ने \"{{task}}\" Postpone मागितले."
   }
 }

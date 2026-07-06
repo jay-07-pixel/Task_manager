@@ -373,10 +373,12 @@
     "assignedByMeHint": "Tasks you created or assigned to colleagues. Status only — updates and submissions are visible to admin.",
     "activeTasksHint": "Post progress updates while you work, then submit with notes and/or an image when done.",
     "criticalOverdueGateTitle": "Urgent overdue task",
-    "criticalOverdueGateIntro": "This task is 6 or more days past its deadline. Post a progress update or submit your work before you can use the app.",
-    "criticalOverdueGateMustAct": "You must post an update or submit this task to continue.",
-    "criticalOverdueGatePostUpdate": "Post update",
-    "criticalOverdueGateSubmit": "Submit task"
+    "criticalOverdueGateIntro": "This task is 6 or more days past its deadline. Submit your work or request a deadline extension before you can use the app.",
+    "criticalOverdueGateMustAct": "Submit this task or request a postpone to continue. If your postpone is not approved within 24 hours, this screen will return.",
+    "criticalOverdueGatePostpone": "Postpone",
+    "criticalOverdueGateSubmit": "Submit task",
+    "criticalOverdueGatePostponeSent": "Postpone request sent to admin. You can use the app for 24 hours while waiting for approval.",
+    "criticalOverdueGatePostponeFailed": "Could not send postpone request."
   },
   "modals": {
     "listName": "List name",
@@ -1057,5 +1059,29 @@
     "monthlyMinutesHours": "{{hours}}h {{minutes}}m",
     "monthlyPresentShort": "{{count}} present",
     "monthlyReportInvalidMonth": "Please select a valid month."
+  },
+  "deadlineExtensions": {
+    "navLabel": "Deadline extensions",
+    "title": "Deadline extensions",
+    "intro": "Employees with tasks 6+ days overdue can request a postpone. Approve a request by setting a new deadline date.",
+    "emptyTitle": "No pending requests",
+    "emptyDesc": "When an employee taps Postpone on an urgent overdue task, their request will appear here.",
+    "requestFrom": "Request from {{name}}",
+    "overdueLabel": "Overdue",
+    "requestedAt": "Requested",
+    "expiresAt": "Popup returns after",
+    "requestBody": "{{name}} asked to postpone \"{{task}}\". Set a new deadline to approve.",
+    "reviewApprove": "Review & approve",
+    "approveTitle": "Approve deadline extension",
+    "approveIntro": "{{name}} requested more time for \"{{task}}\". Current deadline: {{currentDue}}. Choose a new date (required).",
+    "newDeadlineLabel": "New deadline date",
+    "newDeadlineHint": "The task deadline will be updated to this date.",
+    "newDeadlineRequired": "Please choose a new deadline date.",
+    "approveAndUpdate": "Approve & update deadline",
+    "approveFailed": "Could not approve request.",
+    "approvedToast": "Deadline updated and request approved.",
+    "pendingCount": "{{count}} pending",
+    "adminNotifyTitle": "Deadline extension request",
+    "adminNotifyBody": "{{name}} asked to postpone \"{{task}}\"."
   }
 }

@@ -185,6 +185,9 @@ self.addEventListener("push", (event) => {
       if (data?.type === "location_tracking_off" || data?.type === "location_tracking_on") {
         await notifyOpenClients({ type: "taskmgr-attendance-changed", detail: data });
       }
+      if (data?.type === "deadline_extension_request") {
+        await notifyOpenClients({ type: "taskmgr-deadline-extension-request", detail: data });
+      }
     })()
   );
 });
@@ -207,6 +210,11 @@ self.addEventListener("notificationclick", (event) => {
     return;
   }
   if (data.type === "location_tracking_on" && data.url) {
+    const path = data.url.startsWith("/") ? data.url : `/${data.url}`;
+    event.waitUntil(openAppUrl(path));
+    return;
+  }
+  if (data.type === "deadline_extension_request" && data.url) {
     const path = data.url.startsWith("/") ? data.url : `/${data.url}`;
     event.waitUntil(openAppUrl(path));
     return;

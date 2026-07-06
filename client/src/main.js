@@ -95,7 +95,14 @@ import {
   syncOwnerAttendanceTabAfterSettingsChange,
 } from "./adminAttendance.js";
 import {
-  compareCompletedTasksRecentFirst,
+  initAdminDeadlineExtensions,
+  ownerDeadlineExtensionsNavItemHtml,
+  openOwnerDeadlineExtensionsView,
+  destroyAdminDeadlineExtensions,
+  ownerDeadlineExtensionsChromeHeaderHtml,
+  fetchPendingDeadlineExtensionCount,
+} from "./adminDeadlineExtensions.js";
+import {
   compareTasksByRecurrenceThenCreated,
   sortTasksByRecurrenceThenCreated,
   compareHighPriorityFirst,
@@ -123,6 +130,7 @@ let state = {
   ownerView: "dashboard",
   empView: "dashboard",
   companyTrial: null,
+  deadlineExtensionPendingCount: 0,
 };
 
 /** @type {any[]} */
@@ -141,6 +149,10 @@ let ownerSyncTimer = null;
 let ownerTasksFingerprint = "";
 const OWNER_TRIAL_POPUP_KEY = "taskmgr-owner-trial-popup-shown";
 const EMP_CRITICAL_OVERDUE_MIN_DAYS = 6;
+const POSTPONE_GRACE_MS = 24 * 60 * 60 * 1000;
+
+/** @type {number | null} */
+let empPostponeGraceTimer = null;
 
 /** When taskOverdueDayCount first reaches MIN_DAYS (ceil day count). */
 function criticalOverdueActionThresholdMs(dueAt) {
@@ -153,22 +165,25 @@ function criticalOverdueActionThresholdMs(dueAt) {
 /** @type {Set<string>} */
 const empCriticalOverdueSatisfiedIds = new Set();
 
+function employeeHasActivePostponeGrace(task) {
+  const ext = task?.pendingDeadlineExtension;
+  if (!ext || ext.status !== "pending" || !ext.requestedAt) return false;
+  const requestedMs = new Date(ext.requestedAt).getTime();
+  if (Number.isNaN(requestedMs)) return false;
+  return Date.now() < requestedMs + POSTPONE_GRACE_MS;
+}
+
 function employeeHasActedOnCriticalOverdue(task, me = employeeMyAssignee(task)) {
   if (!task?.dueAt || !me) return false;
   if (empCriticalOverdueSatisfiedIds.has(task.id)) return true;
   if (employeeAssigneeShowsAsSubmitted(task, me)) return true;
+  if (employeeHasActivePostponeGrace(task)) return true;
 
   const threshold = criticalOverdueActionThresholdMs(task.dueAt);
 
   if (me.lastSubmittedAt) {
     const submittedMs = new Date(me.lastSubmittedAt).getTime();
     if (!Number.isNaN(submittedMs) && submittedMs >= threshold) return true;
-  }
-
-  const updateAt = me.latestProgressUpdate?.createdAt;
-  if (updateAt) {
-    const updateMs = new Date(updateAt).getTime();
-    if (!Number.isNaN(updateMs) && updateMs >= threshold) return true;
   }
 
   return false;
@@ -2016,6 +2031,7 @@ async function logout() {
   stopAttendanceTracking();
   stopAttendancePoll();
   destroyAdminAttendance();
+  destroyAdminDeadlineExtensions();
   sessionStorage.removeItem(OWNER_TRIAL_POPUP_KEY);
   try {
     await api("/api/auth/logout", { method: "POST" });
@@ -2069,6 +2085,17 @@ function wireChatNotifyHandlers() {
         }
         return;
       }
+      if (event.data?.type === "taskmgr-deadline-extension-request" && state.user?.role === "owner") {
+        const detail = event.data.detail || {};
+        const name = detail.employeeName || "Employee";
+        const taskTitle = detail.taskTitle || tr("common.task");
+        showToast(tr("deadlineExtensions.adminNotifyBody", { name, task: taskTitle }), "warning");
+        void refreshDeadlineExtensionNavBadge();
+        if (state.ownerView === "deadline-extensions") {
+          document.dispatchEvent(new CustomEvent("taskmgr:deadline-extensions-changed"));
+        }
+        return;
+      }
       if (event.data?.type === "taskmgr-navigate" && state.user) {
         const url = event.data.url || "";
         const chatMatch = url.match(/openChat=([^&]+)/);
@@ -2079,6 +2106,13 @@ function wireChatNotifyHandlers() {
         if (url.includes("openAttendance=1") && state.user.role === "owner") {
           window.history.replaceState({}, "", window.location.pathname);
           state.ownerView = "attendance";
+          renderListContentOnly();
+          renderOwnerMain();
+          return;
+        }
+        if (url.includes("openDeadlineExtensions=1") && state.user.role === "owner") {
+          window.history.replaceState({}, "", window.location.pathname);
+          state.ownerView = "deadline-extensions";
           renderListContentOnly();
           renderOwnerMain();
           return;
@@ -2256,6 +2290,39 @@ function handleOpenAttendanceDeepLink() {
   renderOwnerMain();
 }
 
+function handleOpenDeadlineExtensionsDeepLink() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("openDeadlineExtensions") !== "1" || state.user?.role !== "owner") return;
+  window.history.replaceState({}, "", window.location.pathname);
+  state.ownerView = "deadline-extensions";
+  renderListContentOnly();
+  renderOwnerMain();
+}
+
+async function refreshDeadlineExtensionNavBadge() {
+  if (state.user?.role !== "owner") return;
+  state.deadlineExtensionPendingCount = await fetchPendingDeadlineExtensionCount();
+  document.querySelectorAll(".js-owner-deadline-extensions-nav").forEach((btn) => {
+    const left = btn.querySelector(".admin-nav-item-left");
+    if (!left) return;
+    let badge = btn.querySelector(".admin-nav-badge");
+    if (state.deadlineExtensionPendingCount > 0) {
+      if (!badge) {
+        badge = document.createElement("span");
+        badge.className = "admin-nav-badge";
+        btn.appendChild(badge);
+      }
+      badge.textContent = String(state.deadlineExtensionPendingCount);
+      badge.setAttribute(
+        "aria-label",
+        tr("deadlineExtensions.pendingCount", { count: state.deadlineExtensionPendingCount })
+      );
+    } else {
+      badge?.remove();
+    }
+  });
+}
+
 function handleCompanyAttendanceChanged(enabled) {
   if (state.user) state.user.attendanceEnabled = enabled;
   stopAttendanceCheckInReminder();
@@ -2280,6 +2347,7 @@ function handleCompanyAttendanceChanged(enabled) {
     else if (state.ownerView === "manage-employees") openOwnerManageEmployeesView();
     else if (state.ownerView === "manage-locations") openOwnerManageLocationsView();
     else if (state.ownerView === "attendance") openOwnerAttendanceView();
+    else if (state.ownerView === "deadline-extensions") openOwnerDeadlineExtensionsView();
   } else if (state.user?.role === "employee") {
     renderEmpListContentOnly();
     renderEmployeeChrome();
@@ -3131,6 +3199,7 @@ function leftNavInner() {
         ${teamChatSidebarNavItemHtml()}
         ${ownerReportsNavItemHtml(state.ownerView === "reports")}
         ${ownerAttendanceNavVisible() ? ownerAttendanceNavItemHtml(state.ownerView === "attendance") : ""}
+        ${ownerDeadlineExtensionsNavItemHtml(state.ownerView === "deadline-extensions", state.deadlineExtensionPendingCount)}
       </nav>
       <div class="admin-your-lists-section">
         <div class="admin-your-lists-head">
@@ -6328,7 +6397,6 @@ function wireProgressUpdateModal() {
         method: "POST",
         body: JSON.stringify({ updateType, message }),
       });
-      markEmployeeOverdueGateSatisfied(taskId, { updateType, message });
       bootstrap.Modal.getInstance(modalEl)?.hide();
       showToast(tr("toast.updatePosted"), "success");
       ta.value = "";
@@ -6816,9 +6884,13 @@ function renderListContentOnly() {
   document.querySelectorAll(".js-owner-attendance-nav").forEach((btn) => {
     btn.classList.toggle("admin-sidebar-nav-item--active", state.ownerView === "attendance");
   });
+  document.querySelectorAll(".js-owner-deadline-extensions-nav").forEach((btn) => {
+    btn.classList.toggle("admin-sidebar-nav-item--active", state.ownerView === "deadline-extensions");
+  });
   bindListNavHandlers();
   wireOwnerReportsNav();
   wireOwnerAttendanceNav();
+  wireOwnerDeadlineExtensionsNav();
 }
 
 function renderListGroup() {
@@ -7139,6 +7211,9 @@ function renderOwnerMain() {
   if (state.ownerView !== "attendance") {
     destroyAdminAttendance();
   }
+  if (state.ownerView !== "deadline-extensions") {
+    destroyAdminDeadlineExtensions();
+  }
   if (state.ownerView === "owner-dashboard") {
     if (!state.user?.isOwner) {
       state.ownerView = "dashboard";
@@ -7188,6 +7263,11 @@ function renderOwnerMain() {
       openOwnerAttendanceView();
       return;
     }
+  }
+  if (state.ownerView === "deadline-extensions") {
+    destroyTaskSortables();
+    openOwnerDeadlineExtensionsView();
+    return;
   }
   const list = state.lists.find((l) => l.id === state.activeListId);
   const listId = state.activeListId;
@@ -7605,6 +7685,7 @@ function ownerReportsChromeHeaderDynamic() {
   if (state.ownerView === "manage-employees") return ownerManageEmployeesChromeHeaderHtml();
   if (state.ownerView === "manage-locations") return ownerManageLocationsChromeHeaderHtml();
   if (state.ownerView === "attendance") return ownerAttendanceChromeHeaderHtml();
+  if (state.ownerView === "deadline-extensions") return ownerDeadlineExtensionsChromeHeaderHtml();
   return ownerReportsChromeHeaderHtml();
 }
 
@@ -7633,6 +7714,19 @@ function wireOwnerDashboardOpen(root = document) {
         return;
       }
       state.ownerView = "owner-dashboard";
+      renderListContentOnly();
+      renderOwnerMain();
+      dismissAdminMobileNav();
+    });
+  });
+}
+
+function wireOwnerDeadlineExtensionsNav() {
+  document.querySelectorAll(".js-owner-deadline-extensions-nav").forEach((btn) => {
+    if (btn.dataset.deadlineExtWired === "1") return;
+    btn.dataset.deadlineExtWired = "1";
+    btn.addEventListener("click", () => {
+      state.ownerView = "deadline-extensions";
       renderListContentOnly();
       renderOwnerMain();
       dismissAdminMobileNav();
@@ -7670,7 +7764,7 @@ function wireChromeNav() {
   document.querySelectorAll(".js-logout").forEach((b) => b.addEventListener("click", logout));
   document.getElementById("leftNavOffcanvas")?.addEventListener("click", (e) => {
     const actionable = e.target.closest(
-      "[data-list-id], .js-owner-create-task, .admin-sidebar-nav-item, .team-chat-sidebar-nav-item, .js-owner-reports-nav, .js-owner-attendance-nav"
+      "[data-list-id], .js-owner-create-task, .admin-sidebar-nav-item, .team-chat-sidebar-nav-item, .js-owner-reports-nav, .js-owner-attendance-nav, .js-owner-deadline-extensions-nav"
     );
     if (!actionable || e.target.closest(".grip-handle, .js-new-list, .js-list-delete")) return;
     dismissAdminMobileNav();
@@ -7703,7 +7797,8 @@ function wireChromeNav() {
         state.ownerView === "company-profile" ||
         state.ownerView === "manage-employees" ||
         state.ownerView === "manage-locations" ||
-        state.ownerView === "attendance"
+        state.ownerView === "attendance" ||
+        state.ownerView === "deadline-extensions"
       ) {
         state.ownerView = "dashboard";
         renderListContentOnly();
@@ -7718,6 +7813,7 @@ function wireChromeNav() {
   });
   wireOwnerReportsNav();
   wireOwnerAttendanceNav();
+  wireOwnerDeadlineExtensionsNav();
 }
 
 function wireOwnerDashboardAnnouncementListener() {
@@ -7741,6 +7837,13 @@ function wireOwnerDashboardAnnouncementListener() {
       return;
     }
     state.ownerView = "attendance";
+    renderListContentOnly();
+    renderOwnerMain();
+    dismissAdminMobileNav();
+  });
+  window.addEventListener("taskmgr:open-deadline-extensions", () => {
+    if (state.user?.role !== "owner") return;
+    state.ownerView = "deadline-extensions";
     renderListContentOnly();
     renderOwnerMain();
     dismissAdminMobileNav();
@@ -7843,6 +7946,7 @@ function renderOwnerChrome() {
       else if (state.ownerView === "manage-employees") openOwnerManageEmployeesView();
       else if (state.ownerView === "manage-locations") openOwnerManageLocationsView();
       else if (state.ownerView === "attendance") openOwnerAttendanceView();
+      else if (state.ownerView === "deadline-extensions") openOwnerDeadlineExtensionsView();
     },
     onCompanyAttendanceChanged: handleCompanyAttendanceChanged,
   });
@@ -7886,8 +7990,23 @@ function renderOwnerChrome() {
     getLiveLocationRequired: () => state.user?.liveLocationRequired !== false,
     getDailyAttendanceEnabled: () => state.user?.attendanceEnabled === true,
   });
+  initAdminDeadlineExtensions({
+    api,
+    escapeHtml,
+    adminMsIcon,
+    ownerChromeHeader: ownerDeadlineExtensionsChromeHeaderHtml,
+    wireOwnerChromeHeader: wireOwnerReportsChromeHeader,
+    showToast,
+  });
   renderListGroup();
   renderOwnerMain();
+  void refreshDeadlineExtensionNavBadge();
+  if (!window.__deadlineExtBadgeListener) {
+    window.__deadlineExtBadgeListener = true;
+    document.addEventListener("taskmgr:deadline-extensions-changed", () => {
+      void refreshDeadlineExtensionNavBadge();
+    });
+  }
   wireAdminNotifications(state.user?.id, document, state.user);
   wireTaskModal();
   wireCustomRecurrenceModal();
@@ -8098,8 +8217,8 @@ function empCriticalOverdueGateHtml(task) {
         ${descriptionBlock}
       </div>
       <div class="emp-critical-overdue-gate__actions">
-        <button type="button" class="admin-task-modal-btn-secondary emp-gate-post-update" data-task-id="${escapeHtml(task.id)}">
-          ${adminMsIcon("chat")} ${escapeHtml(tr("employee.criticalOverdueGatePostUpdate"))}
+        <button type="button" class="admin-task-modal-btn-secondary emp-gate-postpone-task" data-task-id="${escapeHtml(task.id)}">
+          ${adminMsIcon("schedule")} ${escapeHtml(tr("employee.criticalOverdueGatePostpone"))}
         </button>
         <button type="button" class="admin-task-modal-btn-save emp-gate-submit-task" data-task-id="${escapeHtml(task.id)}">
           ${adminMsIcon("send")} ${escapeHtml(tr("employee.criticalOverdueGateSubmit"))}
@@ -8128,34 +8247,63 @@ function wireEmployeeOverdueGate(gateEl) {
   if (!gateEl || gateEl.dataset.wiredOverdueGate === "1") return;
   gateEl.dataset.wiredOverdueGate = "1";
 
-  gateEl.querySelector(".emp-gate-post-update")?.addEventListener("click", () => {
+  gateEl.querySelector(".emp-gate-postpone-task")?.addEventListener("click", async () => {
     const taskId = gateEl.getAttribute("data-task-id");
-    const task = state.empTasks.find((t) => t.id === taskId);
-    if (task) void openEmpProgressUpdateModal(task);
+    const btn = gateEl.querySelector(".emp-gate-postpone-task");
+    if (!taskId || !btn) return;
+    btn.disabled = true;
+    try {
+      const { request } = await api("/api/deadline-extensions", {
+        method: "POST",
+        body: JSON.stringify({ taskId }),
+      });
+      const task = state.empTasks.find((t) => t.id === taskId);
+      if (task) {
+        task.pendingDeadlineExtension = request;
+      }
+      empCriticalOverdueSatisfiedIds.add(taskId);
+      removeEmployeeOverdueGate();
+      showToast(tr("employee.criticalOverdueGatePostponeSent"), "success");
+      schedulePostponeGraceRecheck();
+      syncEmployeeOverdueGate();
+    } catch (err) {
+      showToast(err.message || tr("employee.criticalOverdueGatePostponeFailed"), "danger");
+    } finally {
+      btn.disabled = false;
+    }
   });
 
   gateEl.querySelector(".emp-gate-submit-task")?.addEventListener("click", () => {
     const taskId = gateEl.getAttribute("data-task-id");
     const task = state.empTasks.find((t) => t.id === taskId);
-    if (task) openEmpSubmissionModal(task);
+    if (!task) return;
+    empCriticalOverdueSatisfiedIds.add(taskId);
+    removeEmployeeOverdueGate();
+    openEmpSubmissionModal(task);
   });
 }
 
-function markEmployeeOverdueGateSatisfied(taskId, { updateType, message } = {}) {
-  if (!taskId) return;
-  empCriticalOverdueSatisfiedIds.add(taskId);
-  const task = state.empTasks.find((t) => t.id === taskId);
-  const me = employeeMyAssignee(task);
-  if (task && me) {
-    const now = new Date().toISOString();
-    me.progressUpdateCount = (me.progressUpdateCount ?? 0) + 1;
-    me.latestProgressUpdate = {
-      updateType: updateType || "update",
-      message: message || "",
-      createdAt: now,
-    };
+function schedulePostponeGraceRecheck() {
+  if (empPostponeGraceTimer != null) {
+    window.clearTimeout(empPostponeGraceTimer);
+    empPostponeGraceTimer = null;
   }
-  syncEmployeeOverdueGate();
+  let minRemaining = null;
+  for (const task of state.empTasks) {
+    const ext = task.pendingDeadlineExtension;
+    if (!ext || ext.status !== "pending" || !ext.requestedAt) continue;
+    const expiresAt = new Date(ext.requestedAt).getTime() + POSTPONE_GRACE_MS;
+    const remaining = expiresAt - Date.now();
+    if (remaining > 0 && (minRemaining === null || remaining < minRemaining)) {
+      minRemaining = remaining;
+    }
+  }
+  if (minRemaining == null) return;
+  empPostponeGraceTimer = window.setTimeout(() => {
+    empPostponeGraceTimer = null;
+    syncEmployeeOverdueGate();
+    schedulePostponeGraceRecheck();
+  }, minRemaining + 500);
 }
 
 function syncEmployeeOverdueGate() {
@@ -8295,22 +8443,19 @@ function reconcileCriticalOverdueGateFromServer() {
       empCriticalOverdueSatisfiedIds.add(task.id);
       continue;
     }
+    if (employeeHasActivePostponeGrace(task)) {
+      empCriticalOverdueSatisfiedIds.add(task.id);
+      continue;
+    }
     const threshold = criticalOverdueActionThresholdMs(task.dueAt);
     if (me.lastSubmittedAt) {
       const submittedMs = new Date(me.lastSubmittedAt).getTime();
       if (!Number.isNaN(submittedMs) && submittedMs >= threshold) {
         empCriticalOverdueSatisfiedIds.add(task.id);
-        continue;
-      }
-    }
-    const updateAt = me.latestProgressUpdate?.createdAt;
-    if (updateAt) {
-      const updateMs = new Date(updateAt).getTime();
-      if (!Number.isNaN(updateMs) && updateMs >= threshold) {
-        empCriticalOverdueSatisfiedIds.add(task.id);
       }
     }
   }
+  schedulePostponeGraceRecheck();
 }
 
 async function loadEmployeeTasks() {
@@ -9232,6 +9377,7 @@ async function render() {
   maybePromptLegalAnnouncement(state.user);
   wireChatNotifyHandlers();
   handleOpenAttendanceDeepLink();
+  handleOpenDeadlineExtensionsDeepLink();
   await handleOwnerNotifyDeepLink();
   const pendingOwnerNotify = sessionStorage.getItem("taskmgr-pending-owner-notify");
   if (pendingOwnerNotify) {

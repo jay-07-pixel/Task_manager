@@ -14,6 +14,7 @@ import {
   shouldRollOnEmployeeComplete,
 } from "../lib/recurrenceRoll.js";
 import { requireAuth, requireOwner } from "../middleware/auth.js";
+import { attachPendingDeadlineExtensions } from "./deadlineExtensions.js";
 import { isVideoAttachment } from "../lib/chatUpload.js";
 import {
   compareCompletedTasksRecentFirst,
@@ -905,6 +906,7 @@ export function serializeTask(t) {
     sortOrder: t.sortOrder,
     createdAt: t.createdAt?.toISOString?.() ?? t.createdAt ?? null,
     assignmentAttachments: serializeAssignmentAttachments(t),
+    pendingDeadlineExtension: t.pendingDeadlineExtension ?? null,
   };
 }
 
@@ -1007,7 +1009,7 @@ router.get("/assigned", requireAuth, async (req, res) => {
     return res.status(403).json({ error: "Employees only" });
   }
   const meId = req.session.userId;
-  const tasks = sortEmployeeAssignedTasks(
+  let tasks = sortEmployeeAssignedTasks(
     await attachProgressUpdateMeta(
       await prisma.task.findMany({
         where: { assignments: { some: { userId: meId } } },
@@ -1018,6 +1020,7 @@ router.get("/assigned", requireAuth, async (req, res) => {
     ),
     meId
   );
+  tasks = await attachPendingDeadlineExtensions(tasks, meId);
   res.json({ tasks: tasks.map(serializeTask) });
 });
 

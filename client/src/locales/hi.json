@@ -373,10 +373,12 @@
     "assignedByMeHint": "आपके द्वारा बनाए या असाइन किए कार्य। केवल स्थिति — अपडेट और जमा एडमिन को दिखते हैं।",
     "activeTasksHint": "काम करते समय प्रगति अपडेट पोस्ट करें, फिर नोट्स और/या छवि के साथ जमा करें।",
     "criticalOverdueGateTitle": "अत्यावश्यक अतिदेय कार्य",
-    "criticalOverdueGateIntro": "यह कार्य अंतिम तिथि से 6 या अधिक दिन देर से है। ऐप का उपयोग करने से पहले प्रगति अपडेट पोस्ट करें या कार्य जमा करें।",
-    "criticalOverdueGateMustAct": "जारी रखने के लिए अपडेट पोस्ट करना या यह कार्य जमा करना आवश्यक है।",
-    "criticalOverdueGatePostUpdate": "अपडेट पोस्ट करें",
-    "criticalOverdueGateSubmit": "कार्य जमा करें"
+    "criticalOverdueGateIntro": "यह कार्य अंतिम तिथि से 6 या अधिक दिन देर से है। ऐप का उपयोग करने से पहले कार्य जमा करें या समय बढ़ाने का अनुरोध करें।",
+    "criticalOverdueGateMustAct": "जारी रखने के लिए कार्य जमा करें या Postpone दबाएँ। यदि 24 घंटे में मंजूरी नहीं मिलती, यह स्क्रीन फिर दिखेगी।",
+    "criticalOverdueGatePostpone": "Postpone",
+    "criticalOverdueGateSubmit": "कार्य जमा करें",
+    "criticalOverdueGatePostponeSent": "Postpone अनुरोध एडमिन को भेजा गया। मंजूरी की प्रतीक्षा में 24 घंटे तक ऐप उपयोग कर सकते हैं।",
+    "criticalOverdueGatePostponeFailed": "Postpone अनुरोध भेजा नहीं जा सका।"
   },
   "modals": {
     "listName": "सूची का नाम",
@@ -1057,5 +1059,29 @@
     "monthlyMinutesHours": "{{hours}} घंटे {{minutes}} मिनट",
     "monthlyPresentShort": "{{count}} उपस्थित",
     "monthlyReportInvalidMonth": "कृपया एक वैध महीना चुनें।"
+  },
+  "deadlineExtensions": {
+    "navLabel": "समय सीमा विस्तार",
+    "title": "समय सीमा विस्तार",
+    "intro": "6+ दिन अतिदेय कार्यों पर कर्मचारी Postpone का अनुरोध कर सकते हैं। नई तिथि सेट करके मंजूरी दें।",
+    "emptyTitle": "कोई लंबित अनुरोध नहीं",
+    "emptyDesc": "जब कोई कर्मचारी Postpone दबाएगा, अनुरोध यहाँ दिखेगा।",
+    "requestFrom": "{{name}} का अनुरोध",
+    "overdueLabel": "अतिदेय",
+    "requestedAt": "अनुरोध समय",
+    "expiresAt": "पॉपअप वापस",
+    "requestBody": "{{name}} ने \"{{task}}\" के लिए Postpone माँगा। नई तिथि सेट करके मंजूरी दें।",
+    "reviewApprove": "समीक्षा और मंजूरी",
+    "approveTitle": "समय सीमा विस्तार मंजूर करें",
+    "approveIntro": "{{name}} ने \"{{task}}\" के लिए और समय माँगा। वर्तमान समय सीमा: {{currentDue}}। नई तिथि चुनें (आवश्यक)।",
+    "newDeadlineLabel": "नई समय सीमा तिथि",
+    "newDeadlineHint": "कार्य की समय सीमा इस तिथि पर अपडेट होगी।",
+    "newDeadlineRequired": "कृपया नई समय सीमा तिथि चुनें।",
+    "approveAndUpdate": "मंजूर करें और समय सीमा अपडेट करें",
+    "approveFailed": "अनुरोध मंजूर नहीं हो सका।",
+    "approvedToast": "समय सीमा अपडेट और अनुरोध मंजूर।",
+    "pendingCount": "{{count}} लंबित",
+    "adminNotifyTitle": "समय सीमा विस्तार अनुरोध",
+    "adminNotifyBody": "{{name}} ने \"{{task}}\" Postpone माँगा।"
   }
 }

@@ -34,6 +34,11 @@ enum AttendanceCheckType {
   check_out
 }
 
+enum TaskDeadlineExtensionStatus {
+  pending
+  approved
+}
+
 model User {
   id           String   @id @default(uuid())
   email        String   @unique
@@ -73,6 +78,8 @@ model User {
   locationPings             EmployeeLocationPing[]
   locationOffPeriods        EmployeeLocationOffPeriod[]
   attendanceChecks          AttendanceCheck[]
+  deadlineExtensionRequests TaskDeadlineExtensionRequest[] @relation("DeadlineExtensionEmployee")
+  deadlineExtensionsApproved TaskDeadlineExtensionRequest[] @relation("DeadlineExtensionApprovedBy")
 }
 
 model TaskList {
@@ -167,8 +174,28 @@ model Task {
   progressUpdates        TaskProgressUpdate[]
   progressUpdateReads    TaskProgressUpdateRead[]
   assignmentAttachments  TaskAssignmentAttachment[]
+  deadlineExtensionRequests TaskDeadlineExtensionRequest[]
 
   @@index([listId])
+}
+
+model TaskDeadlineExtensionRequest {
+  id               String                      @id @default(uuid())
+  taskId           String                      @map("task_id")
+  employeeUserId   String                      @map("employee_user_id")
+  requestedAt      DateTime                    @default(now()) @map("requested_at")
+  status           TaskDeadlineExtensionStatus @default(pending)
+  approvedAt       DateTime?                   @map("approved_at")
+  approvedByUserId String?                     @map("approved_by_user_id")
+  newDueAt         DateTime?                   @map("new_due_at")
+
+  task       Task  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  employee   User  @relation("DeadlineExtensionEmployee", fields: [employeeUserId], references: [id], onDelete: Cascade)
+  approvedBy User? @relation("DeadlineExtensionApprovedBy", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([taskId, employeeUserId])
+  @@index([status])
+  @@map("task_deadline_extension_request")
 }
 
 model TaskAssignmentAttachment {
