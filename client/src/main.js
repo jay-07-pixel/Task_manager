@@ -2155,6 +2155,7 @@ function getEmployeeNotifyParams() {
     title: params.get("title") || "",
     slot: params.get("slot") || "before30",
     dueAt: params.get("dueAt"),
+    reopened: params.get("reopened") === "1",
   };
 }
 
@@ -2174,7 +2175,9 @@ async function focusEmployeeTaskFromNotify(notify) {
   }
 
   const task = state.empTasks.find((t) => t.id === notify.taskId);
-  if (task && employeeAssigneeShowsAsSubmitted(task) && !employeeAwaitingFreshOccurrence(task)) {
+  if (notify.reopened) {
+    state.empFilter = "active";
+  } else if (task && employeeAssigneeShowsAsSubmitted(task) && !employeeAwaitingFreshOccurrence(task)) {
     state.empFilter = "submitted";
   } else if (!task) {
     state.empFilter = "all";
@@ -2185,14 +2188,16 @@ async function focusEmployeeTaskFromNotify(notify) {
   renderEmpListContentOnly();
   renderEmployeeMain();
 
-  const slotLabel = notify.slot?.startsWith("followup")
-    ? tr("employee.reminderOverdue")
-    : notify.slot?.startsWith("before")
-      ? tr("employee.reminderDueSoonCustom", {
-          count: parseInt(String(notify.slot).replace(/^before/, ""), 10) || 30,
-        })
-      : tr("employee.reminderDueSoon");
   const title = notify.title || task?.title || "Your task";
+  const slotLabel = notify.reopened
+    ? tr("employee.taskReopenedNotify")
+    : notify.slot?.startsWith("followup")
+      ? tr("employee.reminderOverdue")
+      : notify.slot?.startsWith("before")
+        ? tr("employee.reminderDueSoonCustom", {
+            count: parseInt(String(notify.slot).replace(/^before/, ""), 10) || 30,
+          })
+        : tr("employee.reminderDueSoon");
 
   requestAnimationFrame(() => {
     const row = document.querySelector(
@@ -2205,7 +2210,10 @@ async function focusEmployeeTaskFromNotify(notify) {
     }
   });
 
-  showToast(`${slotLabel}: ${title}`, "warning");
+  showToast(
+    notify.reopened ? tr("employee.taskReopenedToast", { title }) : `${slotLabel}: ${title}`,
+    notify.reopened ? "warning" : "warning"
+  );
 }
 
 async function handleEmployeeNotifyDeepLink() {
@@ -2421,11 +2429,13 @@ function wireEmployeeNotifyHandlers() {
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.addEventListener("message", (event) => {
       if (event.data?.type === "taskmgr-open-task" && state.user?.role === "employee") {
+        const payload = event.data.detail || event.data.payload || {};
         void focusEmployeeTaskFromNotify({
-          taskId: event.data.payload?.taskId,
-          title: event.data.payload?.title,
-          slot: event.data.payload?.slot,
-          dueAt: event.data.payload?.dueAt,
+          taskId: payload.taskId,
+          title: payload.title,
+          slot: payload.slot,
+          dueAt: payload.dueAt,
+          reopened: payload.type === "task_reopened" || payload.reopened === true,
         });
       }
     });
@@ -6101,8 +6111,47 @@ function ownerMockAssigneeUpdatesHtml(taskId, assignee) {
   </div>`;
 }
 
+function assigneeOwnerCurrentSubmitted(assignee) {
+  if (!assignee) return false;
+  return !!(assignee.submissionText?.trim() || assigneeProofUrls(assignee).length);
+}
+
+function assigneeOwnerArchivedSubmitted(assignee) {
+  if (!assignee) return false;
+  return !!(assignee.lastSubmissionText?.trim() || assigneeProofUrls(assignee, { archived: true }).length);
+}
+
+async function reopenAssigneeForTask(taskId, userId, employeeName) {
+  if (!taskId || !userId) return;
+  if (!window.confirm(tr("owner.reassignConfirm", { name: employeeName || tr("common.employee") }))) return;
+  try {
+    const { task } = await api(`/api/tasks/${taskId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ reopenAssignee: { userId } }),
+    });
+    const idx = state.tasks.findIndex((t) => t.id === taskId);
+    if (idx >= 0) state.tasks[idx] = task;
+    if (state.ownerTaskFilter === "completed" && !task.completed) {
+      state.ownerTaskFilter = "active";
+    }
+    renderOwnerMain();
+    showToast(tr("toast.taskReassigned"), "success");
+  } catch (err) {
+    showToast(err.message, "danger");
+  }
+}
+
 function ownerMockAssigneeSubmissionHtml(taskId, assignee) {
-  if (!assigneeHasSubmission(assignee)) {
+  const hasCurrent = assignee.assigneeDone && assigneeOwnerCurrentSubmitted(assignee);
+  const hasArchived = assigneeOwnerArchivedSubmitted(assignee);
+  if (!hasCurrent && !hasArchived) {
+    if (assignee.assigneeDone) {
+      return `<div class="admin-expand-col-block admin-expand-col-block--submission">
+        <span class="admin-expand-col-label">${tr("modals.submission")}</span>
+        <p class="admin-expand-empty">${tr("owner.noSubmissionYet")}</p>
+        <button type="button" class="btn btn-sm btn-outline-warning owner-reassign-assignee-btn mt-2" data-reassign-task-id="${taskId}" data-reassign-user-id="${escapeHtml(assignee.id)}" data-reassign-user-name="${escapeHtml(dt(assignee.displayName))}">${adminMsIcon("assignment_return")} ${tr("owner.reassignTask")}</button>
+      </div>`;
+    }
     return `<div class="admin-expand-col-block admin-expand-col-block--submission">
       <span class="admin-expand-col-label">${tr("modals.submission")}</span>
       <p class="admin-expand-empty">${tr("owner.noSubmissionYet")}</p>
@@ -6110,10 +6159,21 @@ function ownerMockAssigneeSubmissionHtml(taskId, assignee) {
   }
   const view = resolveAssigneeSubmissionForView(assignee);
   const when = view.submittedAt ? formatProgressUpdateTime(view.submittedAt) : "";
+  const currentBtn = hasCurrent
+    ? `<button type="button" class="admin-expand-view-submission owner-view-submission-btn" data-view-submission-task-id="${taskId}" data-view-submission-user-id="${escapeHtml(assignee.id)}" aria-label="${tr("owner.viewSubmissionFor", { name: escapeHtml(dt(assignee.displayName)) })}">${tr("owner.viewSubmission")}</button>`
+    : "";
+  const archivedBtn = hasArchived
+    ? `<button type="button" class="admin-expand-view-submission owner-view-submission-btn" data-view-submission-task-id="${taskId}" data-view-submission-user-id="${escapeHtml(assignee.id)}" data-view-submission-archived="1" aria-label="${tr("owner.viewPreviousSubmissionFor", { name: escapeHtml(dt(assignee.displayName)) })}">${tr("owner.viewPreviousSubmission")}</button>`
+    : "";
+  const reassignBtn =
+    assignee.assigneeDone
+      ? `<button type="button" class="btn btn-sm btn-outline-warning owner-reassign-assignee-btn mt-2" data-reassign-task-id="${taskId}" data-reassign-user-id="${escapeHtml(assignee.id)}" data-reassign-user-name="${escapeHtml(dt(assignee.displayName))}">${adminMsIcon("assignment_return")} ${tr("owner.reassignTask")}</button>`
+      : "";
   return `<div class="admin-expand-col-block admin-expand-col-block--submission">
     <span class="admin-expand-col-label">${tr("modals.submission")}</span>
-    <button type="button" class="admin-expand-view-submission owner-view-submission-btn" data-view-submission-task-id="${taskId}" data-view-submission-user-id="${escapeHtml(assignee.id)}" aria-label="${tr("owner.viewSubmissionFor", { name: escapeHtml(dt(assignee.displayName)) })}">${tr("owner.viewSubmission")}</button>
+    <div class="d-flex flex-wrap gap-2 align-items-center">${currentBtn}${archivedBtn}</div>
     ${when ? `<span class="admin-expand-submission-meta tabular-nums">${escapeHtml(when)}</span>` : ""}
+    ${reassignBtn}
   </div>`;
 }
 
@@ -6123,7 +6183,7 @@ function ownerMockAssigneeCardHtml(task, assignee, { isEmpAssignList = false } =
   const statusLabel = assignee.assigneeDone
     ? tr("owner.statusSubmitted")
     : rolledSubmission
-      ? tr("owner.statusSubmitted")
+      ? tr("owner.statusResubmitRequired")
       : tr("owner.statusPending");
   const statusClass = isDone ? "admin-expand-status--submitted" : "admin-expand-status--pending";
   const avatarClass = isDone ? "admin-expand-card-avatar--done" : "admin-expand-card-avatar--pending";
@@ -7507,10 +7567,22 @@ function renderOwnerMain() {
       e.stopPropagation();
       const taskId = btn.getAttribute("data-view-submission-task-id");
       const userId = btn.getAttribute("data-view-submission-user-id");
+      const archived = btn.getAttribute("data-view-submission-archived") === "1";
       if (!taskId || !userId) return;
-      void openSubmissionDetailForAssignee(taskId, userId).catch((err) => {
+      void openSubmissionDetailForAssignee(taskId, userId, { archived }).catch((err) => {
         showToast(err.message || tr("toast.couldNotLoadSubmission"), "danger");
       });
+    });
+  });
+
+  main.querySelectorAll(".owner-reassign-assignee-btn").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const taskId = btn.getAttribute("data-reassign-task-id");
+      const userId = btn.getAttribute("data-reassign-user-id");
+      const name = btn.getAttribute("data-reassign-user-name") || "";
+      if (!taskId || !userId) return;
+      void reopenAssigneeForTask(taskId, userId, name);
     });
   });
 
@@ -8892,6 +8964,13 @@ function empTaskTableRows(tasks) {
       const archivedNotesLine = archivedNotesPreview
         ? `<div class="small text-muted emp-submitted-notes-preview mt-1" title="${escapeHtml(archivedNotesRaw)}">${escapeHtml(archivedNotesPreview)}</div>`
         : "";
+      const needsResubmit = !submitted && employeeHasArchivedSubmission(me);
+      const previousSubmissionBtn = needsResubmit
+        ? `<button type="button" class="btn btn-sm btn-outline-secondary emp-view-submission emp-action-btn" data-task-id="${task.id}" data-user-id="${escapeHtml(state.user?.id || "")}" data-archived="1"><i class="bi bi-clock-history me-1" aria-hidden="true"></i>${tr("employee.viewPreviousSubmission")}</button>`
+        : "";
+      const resubmitHint = needsResubmit
+        ? `<div class="small text-warning emp-resubmit-hint mt-1">${escapeHtml(tr("employee.resubmitRequiredHint"))}</div>`
+        : "";
       const submissionBtn = submitted
         ? hasViewableSubmission
           ? `<button type="button" class="btn btn-sm btn-outline-primary emp-view-submission emp-action-btn" data-task-id="${task.id}" data-user-id="${escapeHtml(state.user?.id || "")}"><i class="bi bi-eye me-1" aria-hidden="true"></i>${tr("common.view")}</button>`
@@ -8908,7 +8987,9 @@ function empTaskTableRows(tasks) {
           <button type="button" class="btn btn-sm emp-open-progress-update emp-update-btn emp-action-btn" data-task-id="${task.id}">
             <i class="bi bi-chat-left-dots" aria-hidden="true"></i><span>${tr("common.update")}</span>${updateBadge}
           </button>
+          ${previousSubmissionBtn}
           ${submissionBtn}
+          ${resubmitHint}
         </div>`;
       const rowDone = submitted ? "owner-task-row--completed" : "";
       const priorityClass = ownerTaskRowPriorityClass(task);
@@ -9280,7 +9361,8 @@ function renderEmployeeMain() {
       const task = state.empTasks.find((t) => t.id === taskId);
       const me = employeeMyAssignee(task);
       const archived =
-        employeeHasArchivedSubmission(me) && !employeeHasCurrentSubmission(me);
+        btn.getAttribute("data-archived") === "1" ||
+        (employeeHasArchivedSubmission(me) && !employeeHasCurrentSubmission(me));
       void openSubmissionDetailForAssignee(taskId, userId, { archived }).catch((err) => {
         showToast(err.message || tr("toast.couldNotLoadSubmission"), "danger");
       });

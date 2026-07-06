@@ -304,6 +304,11 @@
     "delegationHistory": "प्रत्यायोजन इतिहास",
     "viewSubmission": "सबमिशन पहा",
     "viewSubmissionFor": "{{name}} चे सबमिशन पहा",
+    "viewPreviousSubmission": "मागील सबमिशन",
+    "viewPreviousSubmissionFor": "{{name}} — मागील सबमिशन",
+    "reassignTask": "Reassign",
+    "reassignConfirm": "\"{{name}}\" ला हे काम पुन्हा पाठवायचे?\n\nजुने सबमिशन जतन राहील.",
+    "statusResubmitRequired": "पुन्हा सबमिट करा",
     "viewAllUpdatesFor": "{{name}} चे सर्व अपडेट पहा",
     "updatesCol": "अपडेट",
     "noUpdates": "अपडेट नाहीत",
@@ -378,7 +383,11 @@
     "criticalOverdueGatePostpone": "Postpone",
     "criticalOverdueGateSubmit": "कार्य सबमिट करा",
     "criticalOverdueGatePostponeSent": "Postpone विनंती प्रशासकाला पाठवली. मंजुरीची वाट पाहताना 24 तास अॅप वापरू शकता.",
-    "criticalOverdueGatePostponeFailed": "Postpone विनंती पाठवता आली नाही."
+    "criticalOverdueGatePostponeFailed": "Postpone विनंती पाठवता आली नाही.",
+    "taskReopenedNotify": "पुन्हा सबमिट करा",
+    "taskReopenedToast": "कृपया पुन्हा सबमिट करा: {{title}}",
+    "viewPreviousSubmission": "मागील सबमिशन",
+    "resubmitRequiredHint": "अॅडमिनने नवीन सबमिशन मागितले आहे. तुमचे जुने काम जतन आहे."
   },
   "modals": {
     "listName": "यादीचे नाव",
@@ -613,6 +622,7 @@
     "taskCreated": "कार्य तयार केले.",
     "tasksRefreshed": "कार्ये रिफ्रेश केली.",
     "taskDeleted": "कार्य हटवले.",
+    "taskReassigned": "कार्य पुन्हा कर्मचाऱ्याला पाठवले.",
     "couldNotLoadEmployees": "कर्मचारी लोड होऊ शकले नाहीत.",
     "taskCreatedAssigned": "कार्य तयार आणि नियुक्त केले.",
     "taskAssignedColleague": "सहकार्याला कार्य नियुक्त केले.",

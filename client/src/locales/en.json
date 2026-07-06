@@ -304,6 +304,11 @@
     "delegationHistory": "Delegation history",
     "viewSubmission": "View submission",
     "viewSubmissionFor": "View submission for {{name}}",
+    "viewPreviousSubmission": "View previous submission",
+    "viewPreviousSubmissionFor": "View previous submission for {{name}}",
+    "reassignTask": "Reassign",
+    "reassignConfirm": "Send \"{{name}}\" this task again for a new submission?\n\nTheir previous submission will be kept on file.",
+    "statusResubmitRequired": "Resubmit required",
     "viewAllUpdatesFor": "View all updates for {{name}}",
     "updatesCol": "Updates",
     "noUpdates": "No updates",
@@ -378,7 +383,11 @@
     "criticalOverdueGatePostpone": "Postpone",
     "criticalOverdueGateSubmit": "Submit task",
     "criticalOverdueGatePostponeSent": "Postpone request sent to admin. You can use the app for 24 hours while waiting for approval.",
-    "criticalOverdueGatePostponeFailed": "Could not send postpone request."
+    "criticalOverdueGatePostponeFailed": "Could not send postpone request.",
+    "taskReopenedNotify": "Resubmit required",
+    "taskReopenedToast": "Please resubmit: {{title}}",
+    "viewPreviousSubmission": "View previous",
+    "resubmitRequiredHint": "Admin asked for a new submission. Your previous work is saved below."
   },
   "modals": {
     "listName": "List name",
@@ -613,6 +622,7 @@
     "taskCreated": "Task created.",
     "tasksRefreshed": "Tasks refreshed.",
     "taskDeleted": "Task deleted.",
+    "taskReassigned": "Task sent back to employee for resubmission.",
     "couldNotLoadEmployees": "Could not load employees.",
     "taskCreatedAssigned": "Task created and assigned.",
     "taskAssignedColleague": "Task assigned to colleague.",

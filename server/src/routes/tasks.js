@@ -23,6 +23,7 @@ import {
   compareHighPriorityFirst,
 } from "../lib/taskRecurrenceSort.js";
 import { notifyAdminsTaskSubmitted } from "../services/taskCompletionNotificationService.js";
+import { notifyEmployeeTaskReopened } from "../services/taskReopenNotificationService.js";
 import { adminUserWhere, userHasAdminAccess } from "../lib/adminUsers.js";
 import { DEFAULT_REMINDER_BEFORE_MINUTES } from "../lib/reminderTiming.js";
 
@@ -109,12 +110,67 @@ function resolveAssigneeArchivedSubmissionView(row) {
   }
   const lastText = (row.lastSubmissionText ?? "").trim();
   const lastProof = row.lastCompletionProofPath ?? null;
+  const archivedAt = row.archivedSubmittedAt ?? row.lastSubmittedAt ?? null;
   return {
     submissionText: lastText || null,
     proofPath: lastProof,
     archived: !!(lastText || lastProof),
-    submittedAt: row.lastSubmittedAt ?? null,
+    submittedAt: archivedAt,
   };
+}
+
+function assigneeHasArchivedSubmissionContent(row) {
+  if (!row) return false;
+  const lastText = (row.lastSubmissionText ?? "").trim();
+  const archivedProofCount = (row.submissionProofs ?? []).filter((p) => p.archived).length;
+  return !!(lastText || row.lastCompletionProofPath || archivedProofCount > 0);
+}
+
+function mergeArchivedSubmissionText(existing, addition) {
+  const prev = (existing ?? "").trim();
+  const next = (addition ?? "").trim();
+  if (!next) return prev || null;
+  if (!prev) return next;
+  return `${prev}\n\n---\n\n${next}`;
+}
+
+/** Archive current submission and reopen assignee for resubmit (admin reassign). */
+async function archiveAssigneeSubmissionForReopen(taskId, userId, row) {
+  const currentText = (row.submissionText ?? "").trim();
+  const archivedAt = row.lastSubmittedAt ?? new Date();
+
+  await prisma.taskSubmissionProof.updateMany({
+    where: { taskId, userId, archived: false },
+    data: { archived: true },
+  });
+
+  const archivedProofRows = await prisma.taskSubmissionProof.findMany({
+    where: { taskId, userId, archived: true },
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+    select: { filePath: true },
+  });
+
+  let lastProofPath = row.lastCompletionProofPath ?? null;
+  if (row.completionProofPath) {
+    lastProofPath = row.completionProofPath;
+  } else if (!lastProofPath && archivedProofRows.length) {
+    lastProofPath = archivedProofRows[0].filePath;
+  }
+
+  const lastText = mergeArchivedSubmissionText(row.lastSubmissionText, currentText);
+
+  await prisma.taskAssignee.update({
+    where: { taskId_userId: { taskId, userId } },
+    data: {
+      assigneeDone: false,
+      submissionText: null,
+      completionProofPath: null,
+      lastSubmissionText: lastText,
+      lastCompletionProofPath: lastProofPath,
+      archivedSubmittedAt: row.archivedSubmittedAt ?? archivedAt,
+      lastSubmittedAt: null,
+    },
+  });
 }
 
 /** Admin / fallback: current occurrence first, then archived. */
@@ -679,8 +735,7 @@ async function syncTaskCompletedFromAssignments(taskId) {
   });
 }
 
-async function notifyAdminsIfEmployeeSubmitted(task, employeeUserId, wasAlreadyDone) {
-  if (wasAlreadyDone) return;
+async function notifyAdminsIfEmployeeSubmitted(task, employeeUserId, _wasAlreadyDone) {
   const employee = await prisma.user.findUnique({
     where: { id: employeeUserId },
     select: { id: true, displayName: true, role: true },
@@ -1875,6 +1930,7 @@ const patchTaskSchema = z.object({
       assigneeDone: z.boolean(),
     })
     .optional(),
+  reopenAssignee: z.object({ userId: z.string().uuid() }).optional(),
 });
 
 router.patch("/:id", requireAuth, async (req, res) => {
@@ -1903,6 +1959,34 @@ router.patch("/:id", requireAuth, async (req, res) => {
   const data = {};
 
   if (isOwner) {
+    if (parsed.data.reopenAssignee) {
+      const { userId } = parsed.data.reopenAssignee;
+      const row = task.assignments.find((a) => a.userId === userId);
+      if (!row) {
+        return res.status(400).json({ error: "That employee is not assigned to this task" });
+      }
+      if (!row.assigneeDone && !assigneeHasSubmissionContent(row) && !assigneeHasArchivedSubmissionContent(row)) {
+        return res.status(400).json({ error: "This employee has not submitted work on this task yet" });
+      }
+      await archiveAssigneeSubmissionForReopen(task.id, userId, row);
+      await syncTaskCompletedFromAssignments(task.id);
+      const admin = await prisma.user.findUnique({
+        where: { id: req.session.userId },
+        select: { displayName: true },
+      });
+      void notifyEmployeeTaskReopened({
+        taskId: task.id,
+        taskTitle: task.title,
+        employeeUserId: userId,
+        adminName: admin?.displayName || "Admin",
+      }).catch((err) => console.error("[task-reopen-notify]", err));
+      const afterReopen = await prisma.task.findUnique({
+        where: { id: task.id },
+        include: taskAssigneeInclude,
+      });
+      return res.json({ task: serializeTask(afterReopen) });
+    }
+
     if (parsed.data.assigneeSetDone) {
       const { userId, assigneeDone } = parsed.data.assigneeSetDone;
       const row = task.assignments.find((a) => a.userId === userId);

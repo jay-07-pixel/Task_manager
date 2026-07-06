@@ -304,6 +304,11 @@
     "delegationHistory": "प्रत्यायोजन इतिहास",
     "viewSubmission": "जमा देखें",
     "viewSubmissionFor": "{{name}} की जमा देखें",
+    "viewPreviousSubmission": "पिछली जमा देखें",
+    "viewPreviousSubmissionFor": "{{name}} की पिछली जमा देखें",
+    "reassignTask": "Reassign",
+    "reassignConfirm": "\"{{name}}\" को यह कार्य फिर से भेजें?\n\nउनकी पिछली जमा सुरक्षित रहेगी।",
+    "statusResubmitRequired": "फिर जमा करें",
     "viewAllUpdatesFor": "{{name}} के सभी अपडेट देखें",
     "updatesCol": "अपडेट",
     "noUpdates": "कोई अपडेट नहीं",
@@ -378,7 +383,11 @@
     "criticalOverdueGatePostpone": "Postpone",
     "criticalOverdueGateSubmit": "कार्य जमा करें",
     "criticalOverdueGatePostponeSent": "Postpone अनुरोध एडमिन को भेजा गया। मंजूरी की प्रतीक्षा में 24 घंटे तक ऐप उपयोग कर सकते हैं।",
-    "criticalOverdueGatePostponeFailed": "Postpone अनुरोध भेजा नहीं जा सका।"
+    "criticalOverdueGatePostponeFailed": "Postpone अनुरोध भेजा नहीं जा सका।",
+    "taskReopenedNotify": "फिर जमा करें",
+    "taskReopenedToast": "कृपया फिर जमा करें: {{title}}",
+    "viewPreviousSubmission": "पिछली जमा",
+    "resubmitRequiredHint": "एडमिन ने नई जमा माँगी है। आपका पिछला काम सुरक्षित है।"
   },
   "modals": {
     "listName": "सूची का नाम",
@@ -613,6 +622,7 @@
     "taskCreated": "कार्य बनाया।",
     "tasksRefreshed": "कार्य रीफ़्रेश किए।",
     "taskDeleted": "कार्य हटाया।",
+    "taskReassigned": "कार्य फिर से कर्मचारी को भेजा गया।",
     "couldNotLoadEmployees": "कर्मचारी लोड नहीं हो सके।",
     "taskCreatedAssigned": "कार्य बनाया और असाइन किया।",
     "taskAssignedColleague": "सहकर्मी को कार्य असाइन किया।",

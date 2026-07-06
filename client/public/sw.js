@@ -67,6 +67,14 @@ function formatNotificationCopy(payload) {
     };
   }
 
+  if (msgType === "task_reopened") {
+    return {
+      title: payload.title || "Task reassigned",
+      body: payload.body || "Your admin asked you to resubmit work on a task.",
+      data: { ...data, type: "task_reopened" },
+    };
+  }
+
   if (msgType === "location_tracking_off") {
     return {
       title: payload.title || "Location tracking turned off",
@@ -114,6 +122,7 @@ async function showNotificationFromPayload(payload) {
   const { title, body, data } = formatNotificationCopy(payload);
   const isChat = data?.type === "chat_message";
   const isTaskSubmitted = data?.type === "task_submitted";
+  const isTaskReopened = data?.type === "task_reopened";
   const isLocationEvent =
     data?.type === "location_tracking_off" || data?.type === "location_tracking_on";
   const tag =
@@ -122,7 +131,9 @@ async function showNotificationFromPayload(payload) {
       ? `taskmgr-chat-${data.conversationId || "message"}`
       : isTaskSubmitted
         ? `taskmgr-submit-${data.taskId || "task"}`
-        : isLocationEvent
+        : isTaskReopened
+          ? `taskmgr-reopen-${data.taskId || "task"}`
+          : isLocationEvent
           ? `taskmgr-loc-${data.employeeId || "employee"}`
           : `taskmgr-${data.taskId || "reminder"}-${data.slot || "alert"}`);
 
@@ -134,7 +145,7 @@ async function showNotificationFromPayload(payload) {
       : "/?openAttendance=1";
 
   const notifyUrl =
-    isTaskSubmitted && data?.url
+    (isTaskSubmitted || isTaskReopened) && data?.url
       ? data.url.startsWith("/")
         ? data.url
         : `/${data.url}`
@@ -191,6 +202,9 @@ self.addEventListener("push", (event) => {
       if (data?.type === "task_submitted") {
         await notifyOpenClients({ type: "taskmgr-open-task", detail: data });
       }
+      if (data?.type === "task_reopened") {
+        await notifyOpenClients({ type: "taskmgr-open-task", detail: data });
+      }
     })()
   );
 });
@@ -203,6 +217,11 @@ self.addEventListener("notificationclick", (event) => {
     return;
   }
   if (data.type === "task_submitted" && data.url) {
+    const path = data.url.startsWith("/") ? data.url : `/${data.url}`;
+    event.waitUntil(openAppUrl(path));
+    return;
+  }
+  if (data.type === "task_reopened" && data.url) {
     const path = data.url.startsWith("/") ? data.url : `/${data.url}`;
     event.waitUntil(openAppUrl(path));
     return;
