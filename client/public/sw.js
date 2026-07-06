@@ -188,6 +188,9 @@ self.addEventListener("push", (event) => {
       if (data?.type === "deadline_extension_request") {
         await notifyOpenClients({ type: "taskmgr-deadline-extension-request", detail: data });
       }
+      if (data?.type === "task_submitted") {
+        await notifyOpenClients({ type: "taskmgr-open-task", detail: data });
+      }
     })()
   );
 });

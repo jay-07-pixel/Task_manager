@@ -2096,6 +2096,16 @@ function wireChatNotifyHandlers() {
         }
         return;
       }
+      if (event.data?.type === "taskmgr-open-task" && state.user?.role === "owner") {
+        const detail = event.data.detail || {};
+        void focusOwnerTaskFromNotify({
+          taskId: detail.taskId || "",
+          listId: detail.listId || "",
+          employeeId: detail.employeeId || "",
+          allAssigneesDone: detail.allAssigneesDone === true || detail.allAssigneesDone === "1",
+        });
+        return;
+      }
       if (event.data?.type === "taskmgr-navigate" && state.user) {
         const url = event.data.url || "";
         const chatMatch = url.match(/openChat=([^&]+)/);
@@ -2119,12 +2129,15 @@ function wireChatNotifyHandlers() {
         }
         const taskMatch = url.match(/openTask=([^&]+)/);
         if (taskMatch?.[1] && state.user.role === "owner") {
-          const params = new URLSearchParams(url.split("?")[1] || "");
+          const query = url.includes("?") ? url.slice(url.indexOf("?")) : "";
+          const params = new URLSearchParams(query);
           void focusOwnerTaskFromNotify({
             taskId: decodeURIComponent(taskMatch[1]),
             listId: params.get("listId") || "",
             employeeId: params.get("employeeId") || "",
+            allAssigneesDone: params.get("allAssigneesDone") === "1",
           });
+          return;
         }
       }
     });
@@ -2221,37 +2234,73 @@ async function focusOwnerTaskFromNotify(notify) {
 
   state.ownerView = "dashboard";
 
-  if (notify.listId && notify.listId !== state.activeListId) {
-    state.activeListId = notify.listId;
+  if (!state.lists.length) {
     try {
-      await loadTasks(state.activeListId);
-    } catch {
-      /* keep going */
-    }
-  } else if (!state.tasks.some((t) => t.id === notify.taskId)) {
-    try {
-      await loadTasks(state.activeListId);
+      await loadLists();
     } catch {
       /* keep going */
     }
   }
 
-  const task = state.tasks.find((t) => t.id === notify.taskId);
+  let task = null;
+
+  const tryLoadList = async (listId) => {
+    if (!listId) return null;
+    state.activeListId = listId;
+    try {
+      await loadTasks(listId);
+    } catch {
+      return null;
+    }
+    return state.tasks.find((t) => t.id === notify.taskId) ?? null;
+  };
+
+  if (notify.listId) {
+    task = await tryLoadList(notify.listId);
+  }
+
+  if (!task) {
+    for (const list of state.lists) {
+      task = await tryLoadList(list.id);
+      if (task) break;
+    }
+  }
+
+  if (!task && notify.listId) {
+    task = await tryLoadList(notify.listId);
+  }
+
   if (task?.completed || notify.allAssigneesDone) {
     state.ownerTaskFilter = "completed";
+  } else if (task && taskIsInReview(task)) {
+    state.ownerTaskFilter = "in_review";
   } else {
     state.ownerTaskFilter = "active";
   }
 
-  renderOwnerChrome();
+  renderListContentOnly();
+  renderOwnerMain();
 
   const title = task?.title ? dt(task.title) : tr("common.task");
   showToast(tr("toast.taskSubmittedNotify", { title }), "success");
 
+  const taskId = notify.taskId;
+  const cssTaskId =
+    typeof CSS !== "undefined" && typeof CSS.escape === "function"
+      ? CSS.escape(taskId)
+      : String(taskId).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+
   requestAnimationFrame(() => {
-    const row = document.querySelector(
-      `tr.owner-task-row[data-task-id="${CSS.escape(notify.taskId)}"]`
-    );
+    const detailId = `owner-task-detail-${taskId}`;
+    const detailEl = document.getElementById(detailId);
+    const expandBtn = document.querySelector(`[data-bs-target="#${detailId}"].owner-task-expand-btn`);
+    if (detailEl && expandBtn && !detailEl.classList.contains("show")) {
+      bootstrap.Collapse.getOrCreateInstance(detailEl).show();
+      expandBtn.setAttribute("aria-expanded", "true");
+      syncAdminTaskExpandIcon(expandBtn);
+    }
+
+    const row = document.querySelector(`tr.owner-task-row[data-task-id="${cssTaskId}"]`);
     if (row) {
       row.classList.add("owner-task-row--notify-highlight");
       row.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -2262,9 +2311,11 @@ async function focusOwnerTaskFromNotify(notify) {
   if (notify.employeeId) {
     try {
       await openSubmissionDetailForAssignee(notify.taskId, notify.employeeId);
-    } catch {
-      /* task visible without submission modal */
+    } catch (err) {
+      showToast(err?.message || tr("toast.couldNotLoadSubmission"), "warning");
     }
+  } else if (!task) {
+    showToast(tr("toast.couldNotLoadSubmission"), "warning");
   }
 }
 
