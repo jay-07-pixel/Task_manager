@@ -910,7 +910,8 @@ function companyTrialSectionHtml(trial) {
   const end = new Date(trial.trialEndDate);
   const startStr = start.toLocaleDateString(dateLocale(), { month: "short", day: "numeric", year: "numeric" });
   const endStr = end.toLocaleDateString(dateLocale(), { month: "short", day: "numeric", year: "numeric" });
-  const remaining = trial.remainingDays ?? 0;
+  const dayMs = 24 * 60 * 60 * 1000;
+  const remaining = Math.max(0, Math.ceil((end.getTime() - Date.now()) / dayMs));
   const dayLabel = remaining === 1 ? tr("owner.day") : tr("owner.days");
   const statusMod = trial.isExpired ? " owner-dash-trial-card--expired" : remaining <= 7 ? " owner-dash-trial-card--warn" : "";
 

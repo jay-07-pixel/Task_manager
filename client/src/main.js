@@ -4484,12 +4484,10 @@ function ownerTrialStatusInfo() {
   const end = new Date(trial.trialEndDate);
   const now = new Date();
   const dayMs = 24 * 60 * 60 * 1000;
-  const daysRemaining =
-    typeof trial.remainingDays === "number"
-      ? trial.remainingDays
-      : Math.max(0, Math.ceil((end.getTime() - now.getTime()) / dayMs));
-  const hasStarted = trial.hasStarted ?? now.getTime() >= start.getTime();
-  const isExpired = trial.isExpired ?? now.getTime() > end.getTime();
+  // Always derive from end date so the banner stays current between API refreshes.
+  const daysRemaining = Math.max(0, Math.ceil((end.getTime() - now.getTime()) / dayMs));
+  const hasStarted = now.getTime() >= start.getTime();
+  const isExpired = now.getTime() > end.getTime();
   return { start, end, daysRemaining, hasStarted, isExpired };
 }
 
@@ -8310,6 +8308,7 @@ function wireEmployeeOverdueGate(gateEl) {
     const taskId = gateEl.getAttribute("data-task-id");
     if (!taskId) return;
     dismissCriticalOverdueGateForTask(taskId);
+    syncEmployeeOverdueGate();
 
     void (async () => {
       try {
