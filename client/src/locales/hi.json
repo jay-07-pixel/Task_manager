@@ -387,6 +387,7 @@
     "taskReopenedNotify": "फिर जमा करें",
     "taskReopenedToast": "कृपया फिर जमा करें: {{title}}",
     "viewPreviousSubmission": "पिछली जमा",
+    "updateSubmission": "जमा अपडेट करें",
     "resubmitRequiredHint": "एडमिन ने नई जमा माँगी है। आपका पिछला काम सुरक्षित है।"
   },
   "modals": {

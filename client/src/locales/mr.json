@@ -387,6 +387,7 @@
     "taskReopenedNotify": "पुन्हा सबमिट करा",
     "taskReopenedToast": "कृपया पुन्हा सबमिट करा: {{title}}",
     "viewPreviousSubmission": "मागील सबमिशन",
+    "updateSubmission": "सबमिशन अपडेट करा",
     "resubmitRequiredHint": "अॅडमिनने नवीन सबमिशन मागितले आहे. तुमचे जुने काम जतन आहे."
   },
   "modals": {

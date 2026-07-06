@@ -213,7 +213,9 @@ export async function attachPendingDeadlineExtensions(tasks, employeeUserId) {
     orderBy: { requestedAt: "desc" },
   });
   const byTask = new Map();
+  const now = Date.now();
   for (const row of pending) {
+    if (now >= row.requestedAt.getTime() + POSTPONE_GRACE_MS) continue;
     if (!byTask.has(row.taskId)) byTask.set(row.taskId, row);
   }
   return tasks.map((t) => ({

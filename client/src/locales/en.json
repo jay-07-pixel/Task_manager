@@ -387,6 +387,7 @@
     "taskReopenedNotify": "Resubmit required",
     "taskReopenedToast": "Please resubmit: {{title}}",
     "viewPreviousSubmission": "View previous",
+    "updateSubmission": "Update submission",
     "resubmitRequiredHint": "Admin asked for a new submission. Your previous work is saved below."
   },
   "modals": {

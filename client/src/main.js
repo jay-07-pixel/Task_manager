@@ -151,9 +151,98 @@ let ownerTasksFingerprint = "";
 const OWNER_TRIAL_POPUP_KEY = "taskmgr-owner-trial-popup-shown";
 const EMP_CRITICAL_OVERDUE_MIN_DAYS = 6;
 const POSTPONE_GRACE_MS = 24 * 60 * 60 * 1000;
+const POSTPONE_GRACE_STORAGE_KEY = "taskmgr-postpone-grace-v1";
 
 /** @type {number | null} */
 let empPostponeGraceTimer = null;
+
+function readPostponeGraceMap() {
+  try {
+    const raw = localStorage.getItem(POSTPONE_GRACE_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function writePostponeGraceMap(map) {
+  localStorage.setItem(POSTPONE_GRACE_STORAGE_KEY, JSON.stringify(map));
+}
+
+function pruneExpiredPostponeGrace(map = readPostponeGraceMap()) {
+  const now = Date.now();
+  let changed = false;
+  for (const [taskId, requestedAt] of Object.entries(map)) {
+    const ms = new Date(requestedAt).getTime();
+    if (Number.isNaN(ms) || now >= ms + POSTPONE_GRACE_MS) {
+      delete map[taskId];
+      changed = true;
+    }
+  }
+  if (changed) writePostponeGraceMap(map);
+  return map;
+}
+
+function savePostponeGraceForTask(taskId, requestedAt) {
+  if (!taskId || !requestedAt) return;
+  const map = pruneExpiredPostponeGrace();
+  map[taskId] = requestedAt;
+  writePostponeGraceMap(map);
+}
+
+function clearPostponeGraceForTask(taskId) {
+  if (!taskId) return;
+  const map = readPostponeGraceMap();
+  if (!map[taskId]) return;
+  delete map[taskId];
+  writePostponeGraceMap(map);
+}
+
+function getLocalPostponeGraceRequestedAt(taskId) {
+  if (!taskId) return null;
+  const map = pruneExpiredPostponeGrace();
+  return map[taskId] ?? null;
+}
+
+function buildPendingExtensionFromRequestedAt(requestedAt, id = null) {
+  const requestedMs = new Date(requestedAt).getTime();
+  if (Number.isNaN(requestedMs)) return null;
+  return {
+    ...(id ? { id } : {}),
+    requestedAt: new Date(requestedMs).toISOString(),
+    status: "pending",
+    expiresAt: new Date(requestedMs + POSTPONE_GRACE_MS).toISOString(),
+  };
+}
+
+function postponeGraceStillActive(requestedAt, expiresAt = null) {
+  if (expiresAt) {
+    const expiresMs = new Date(expiresAt).getTime();
+    if (!Number.isNaN(expiresMs)) return Date.now() < expiresMs;
+  }
+  if (!requestedAt) return false;
+  const requestedMs = new Date(requestedAt).getTime();
+  if (Number.isNaN(requestedMs)) return false;
+  return Date.now() < requestedMs + POSTPONE_GRACE_MS;
+}
+
+function mergePostponeGraceOntoEmployeeTasks() {
+  const map = pruneExpiredPostponeGrace();
+  for (const task of state.empTasks) {
+    const serverExt = task.pendingDeadlineExtension;
+    if (serverExt?.status === "pending" && postponeGraceStillActive(serverExt.requestedAt, serverExt.expiresAt)) {
+      savePostponeGraceForTask(task.id, serverExt.requestedAt);
+      continue;
+    }
+    const localRequestedAt = map[task.id];
+    if (localRequestedAt && postponeGraceStillActive(localRequestedAt)) {
+      task.pendingDeadlineExtension = buildPendingExtensionFromRequestedAt(
+        localRequestedAt,
+        serverExt?.id ?? null
+      );
+    }
+  }
+}
 
 /** When taskOverdueDayCount first reaches MIN_DAYS (ceil day count). */
 function criticalOverdueActionThresholdMs(dueAt) {
@@ -167,11 +256,13 @@ function criticalOverdueActionThresholdMs(dueAt) {
 const empCriticalOverdueSatisfiedIds = new Set();
 
 function employeeHasActivePostponeGrace(task) {
-  const ext = task?.pendingDeadlineExtension;
-  if (!ext || ext.status !== "pending" || !ext.requestedAt) return false;
-  const requestedMs = new Date(ext.requestedAt).getTime();
-  if (Number.isNaN(requestedMs)) return false;
-  return Date.now() < requestedMs + POSTPONE_GRACE_MS;
+  if (!task?.id) return false;
+  const ext = task.pendingDeadlineExtension;
+  if (ext?.status === "pending" && postponeGraceStillActive(ext.requestedAt, ext.expiresAt)) {
+    return true;
+  }
+  const localRequestedAt = getLocalPostponeGraceRequestedAt(task.id);
+  return postponeGraceStillActive(localRequestedAt);
 }
 
 function employeeHasActedOnCriticalOverdue(task, me = employeeMyAssignee(task)) {
@@ -5702,7 +5793,10 @@ function openEmpSubmissionModal(task) {
 
   const me = employeeMyAssignee(task);
   const freshOccurrence = employeeAwaitingFreshOccurrence(task, me);
-  const currentText = freshOccurrence ? "" : me?.submissionText?.trim() || "";
+  const resubmitAfterDone =
+    !!me?.assigneeDone && (employeeHasCurrentSubmission(me) || employeeHasArchivedSubmission(me));
+  const currentText =
+    freshOccurrence || resubmitAfterDone ? "" : me?.submissionText?.trim() || "";
 
   idInput.value = task.id;
   titleEl.textContent = dt(task.title);
@@ -5967,6 +6061,7 @@ function wireEmpSubmissionModal() {
         else state.empTasks.push(result.task);
       }
       empCriticalOverdueSatisfiedIds.add(taskId);
+      clearPostponeGraceForTask(taskId);
       removeEmployeeOverdueGate();
       syncEmployeeOverdueGate();
       showToast(tr("toast.taskSubmitted"), "success");
@@ -8379,6 +8474,12 @@ function wireEmployeeOverdueGate(gateEl) {
   gateEl.querySelector(".emp-gate-postpone-task")?.addEventListener("click", () => {
     const taskId = gateEl.getAttribute("data-task-id");
     if (!taskId) return;
+    const task = state.empTasks.find((t) => t.id === taskId);
+    const optimisticAt = new Date().toISOString();
+    if (task) {
+      task.pendingDeadlineExtension = buildPendingExtensionFromRequestedAt(optimisticAt);
+    }
+    savePostponeGraceForTask(taskId, optimisticAt);
     dismissCriticalOverdueGateForTask(taskId);
     syncEmployeeOverdueGate();
 
@@ -8388,13 +8489,24 @@ function wireEmployeeOverdueGate(gateEl) {
           method: "POST",
           body: JSON.stringify({ taskId }),
         });
-        const task = state.empTasks.find((t) => t.id === taskId);
-        if (task) {
-          task.pendingDeadlineExtension = request;
+        const liveTask = state.empTasks.find((t) => t.id === taskId);
+        if (liveTask && request) {
+          liveTask.pendingDeadlineExtension = {
+            id: request.id,
+            requestedAt: request.requestedAt,
+            status: request.status,
+            expiresAt: request.expiresAt,
+          };
         }
+        if (request?.requestedAt) savePostponeGraceForTask(taskId, request.requestedAt);
         showToast(tr("employee.criticalOverdueGatePostponeSent"), "success");
         schedulePostponeGraceRecheck();
       } catch (err) {
+        clearPostponeGraceForTask(taskId);
+        empCriticalOverdueSatisfiedIds.delete(taskId);
+        const liveTask = state.empTasks.find((t) => t.id === taskId);
+        if (liveTask) liveTask.pendingDeadlineExtension = null;
+        syncEmployeeOverdueGate();
         showToast(err.message || tr("employee.criticalOverdueGatePostponeFailed"), "warning");
       }
     })();
@@ -8416,9 +8528,14 @@ function schedulePostponeGraceRecheck() {
   }
   let minRemaining = null;
   for (const task of state.empTasks) {
+    if (!employeeHasActivePostponeGrace(task)) continue;
     const ext = task.pendingDeadlineExtension;
-    if (!ext || ext.status !== "pending" || !ext.requestedAt) continue;
-    const expiresAt = new Date(ext.requestedAt).getTime() + POSTPONE_GRACE_MS;
+    const localAt = getLocalPostponeGraceRequestedAt(task.id);
+    const requestedAt = ext?.requestedAt ?? localAt;
+    if (!requestedAt) continue;
+    const expiresAt = ext?.expiresAt
+      ? new Date(ext.expiresAt).getTime()
+      : new Date(requestedAt).getTime() + POSTPONE_GRACE_MS;
     const remaining = expiresAt - Date.now();
     if (remaining > 0 && (minRemaining === null || remaining < minRemaining)) {
       minRemaining = remaining;
@@ -8590,6 +8707,7 @@ function reconcileCriticalOverdueGateFromServer() {
 async function loadEmployeeTasks() {
   const { tasks } = await api("/api/tasks/assigned");
   state.empTasks = tasks;
+  mergePostponeGraceOntoEmployeeTasks();
   reconcileCriticalOverdueGateFromServer();
 }
 
@@ -8944,9 +9062,6 @@ function empTaskTableRows(tasks) {
       const me = employeeMyAssignee(task);
       const displayMode = empTaskRowDisplayMode(task, me);
       const submitted = displayMode === "submitted";
-      const hasViewableSubmission = submitted
-        ? employeeHasArchivedSubmission(me) || employeeHasCurrentSubmission(me)
-        : employeeHasCurrentSubmission(me);
       const notesRaw = (task.notes || "").trim().replace(/\s+/g, " ");
       const descriptionBox = empTaskDescriptionBoxHtml(notesRaw, task.id, task.title);
       const updateCount = employeeAwaitingFreshOccurrence(task, me) ? 0 : (me?.progressUpdateCount ?? 0);
@@ -8971,12 +9086,19 @@ function empTaskTableRows(tasks) {
       const resubmitHint = needsResubmit
         ? `<div class="small text-warning emp-resubmit-hint mt-1">${escapeHtml(tr("employee.resubmitRequiredHint"))}</div>`
         : "";
-      const submissionBtn = submitted
-        ? hasViewableSubmission
+      const viewCurrentBtn =
+        submitted && employeeHasCurrentSubmission(me)
           ? `<button type="button" class="btn btn-sm btn-outline-primary emp-view-submission emp-action-btn" data-task-id="${task.id}" data-user-id="${escapeHtml(state.user?.id || "")}"><i class="bi bi-eye me-1" aria-hidden="true"></i>${tr("common.view")}</button>`
-          : me?.lastSubmittedAt
-            ? `<span class="small text-success text-nowrap"><i class="bi bi-check-circle me-1" aria-hidden="true"></i>${escapeHtml(formatProgressUpdateTime(me.lastSubmittedAt))}</span>`
-            : `<span class="small text-success"><i class="bi bi-check-circle me-1" aria-hidden="true"></i>${tr("employee.submittedLabel")}</span>`
+          : "";
+      const viewPreviousBtnSubmitted =
+        submitted && employeeHasArchivedSubmission(me)
+          ? `<button type="button" class="btn btn-sm btn-outline-secondary emp-view-submission emp-action-btn" data-task-id="${task.id}" data-user-id="${escapeHtml(state.user?.id || "")}" data-archived="1"><i class="bi bi-clock-history me-1" aria-hidden="true"></i>${tr("employee.viewPreviousSubmission")}</button>`
+          : "";
+      const updateSubmissionBtn = submitted
+        ? `<button type="button" class="btn btn-sm btn-primary emp-open-submit emp-action-btn" data-task-id="${task.id}"><i class="bi bi-pencil-square me-1" aria-hidden="true"></i>${tr("employee.updateSubmission")}</button>`
+        : "";
+      const submissionBtn = submitted
+        ? `${viewCurrentBtn}${viewPreviousBtnSubmitted}${updateSubmissionBtn}`
         : `<button type="button" class="btn btn-sm btn-primary emp-open-submit emp-action-btn" data-task-id="${task.id}"><i class="bi bi-send me-1" aria-hidden="true"></i>${tr("common.submit")}</button>`;
       const assignedByLine = me?.assignedBy?.displayName
         ? `<div class="small text-muted emp-assigned-by-line mt-1">From ${escapeHtml(dt(me.assignedBy.displayName))}</div>`

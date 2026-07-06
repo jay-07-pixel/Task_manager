@@ -387,6 +387,7 @@
     "taskReopenedNotify": "மீண்டும் சமர்ப்பிக்கவும்",
     "taskReopenedToast": "மீண்டும் சமர்ப்பிக்கவும்: {{title}}",
     "viewPreviousSubmission": "முந்தைய சமர்ப்பிப்பு",
+    "updateSubmission": "சமர்ப்பிப்பைப் புதுப்பி",
     "resubmitRequiredHint": "நிர்வாகி புதிய சமர்ப்பிப்பைக் கேட்டுள்ளார். உங்கள் பழைய வேலை சேமிக்கப்பட்டுள்ளது."
   },
   "modals": {

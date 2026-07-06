@@ -134,10 +134,21 @@ function mergeArchivedSubmissionText(existing, addition) {
   return `${prev}\n\n---\n\n${next}`;
 }
 
-/** Archive current submission and reopen assignee for resubmit (admin reassign). */
-async function archiveAssigneeSubmissionForReopen(taskId, userId, row) {
+/** Archive current submission text/proofs onto the assignee row. */
+async function archiveAssigneeCurrentSubmission(taskId, userId, row, { reopen = false } = {}) {
   const currentText = (row.submissionText ?? "").trim();
   const archivedAt = row.lastSubmittedAt ?? new Date();
+  const hasCurrent =
+    currentText || row.completionProofPath || (row.submissionProofs ?? []).some((p) => !p.archived);
+  if (!hasCurrent) {
+    if (reopen) {
+      await prisma.taskAssignee.update({
+        where: { taskId_userId: { taskId, userId } },
+        data: { assigneeDone: false },
+      });
+    }
+    return;
+  }
 
   await prisma.taskSubmissionProof.updateMany({
     where: { taskId, userId, archived: false },
@@ -162,15 +173,19 @@ async function archiveAssigneeSubmissionForReopen(taskId, userId, row) {
   await prisma.taskAssignee.update({
     where: { taskId_userId: { taskId, userId } },
     data: {
-      assigneeDone: false,
       submissionText: null,
       completionProofPath: null,
       lastSubmissionText: lastText,
       lastCompletionProofPath: lastProofPath,
       archivedSubmittedAt: row.archivedSubmittedAt ?? archivedAt,
-      lastSubmittedAt: null,
+      ...(reopen ? { assigneeDone: false, lastSubmittedAt: null } : {}),
     },
   });
+}
+
+/** Archive current submission and reopen assignee for resubmit (admin reassign). */
+async function archiveAssigneeSubmissionForReopen(taskId, userId, row) {
+  await archiveAssigneeCurrentSubmission(taskId, userId, row, { reopen: true });
 }
 
 /** Admin / fallback: current occurrence first, then archived. */
@@ -1707,12 +1722,13 @@ router.post("/:id/completion-proof", requireAuth, handleProofUpload, async (req,
       if (sizeErr) return res.status(400).json({ error: sizeErr });
     }
 
-    let completionProofPath = my?.completionProofPath ?? null;
+    const wasAlreadyDone = my?.assigneeDone === true;
+    if (my && assigneeHasSubmissionContent(my)) {
+      await archiveAssigneeCurrentSubmission(task.id, req.session.userId, my, { reopen: false });
+    }
+
+    let completionProofPath = null;
     if (proofFiles.length > 0) {
-      await deleteAssigneeProofFiles(task.id, req.session.userId, { archived: false });
-      if (my?.completionProofPath) {
-        deleteProofFile(my.completionProofPath);
-      }
       await prisma.taskSubmissionProof.createMany({
         data: proofFiles.map((f, index) => ({
           id: randomUUID(),
@@ -1724,16 +1740,12 @@ router.post("/:id/completion-proof", requireAuth, handleProofUpload, async (req,
         })),
       });
       completionProofPath = proofFiles[0].filename;
-    } else {
-      const existingProofs = await loadAssigneeProofRows(task.id, req.session.userId, { archived: false });
-      completionProofPath = existingProofs[0]?.filePath ?? my?.completionProofPath ?? null;
     }
 
     if (!submissionText && !completionProofPath) {
       return res.status(400).json({ error: SUBMISSION_REQUIRED_MSG });
     }
 
-    const wasAlreadyDone = my?.assigneeDone === true;
     const submittedAt = new Date();
     await prisma.taskAssignee.update({
       where: { taskId_userId: { taskId: task.id, userId: req.session.userId } },
@@ -1750,7 +1762,7 @@ router.post("/:id/completion-proof", requireAuth, handleProofUpload, async (req,
       where: { id: task.id },
       include: { ...taskAssigneeInclude, ...taskListSelect },
     });
-    if (fresh) {
+    if (fresh && !wasAlreadyDone) {
       await maybeRollRecurringAfterEmployeeComplete(fresh, req.session.userId);
     }
     const updated = await prisma.task.findUnique({
@@ -2135,7 +2147,7 @@ router.patch("/:id", requireAuth, async (req, res) => {
       where: { id: task.id },
       include: { ...taskAssigneeInclude, ...taskListSelect },
     });
-    if (fresh && d.completed === true) {
+    if (fresh && d.completed === true && !wasAlreadyDone) {
       await maybeRollRecurringAfterEmployeeComplete(fresh, req.session.userId);
     }
     const afterAssignee = await prisma.task.findUnique({
