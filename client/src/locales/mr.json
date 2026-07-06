@@ -174,7 +174,8 @@
     "assignedByMe": "माझ्याकडून नियुक्त",
     "employeeAssignments": "कर्मचारी नियुक्त्या",
     "messages": "संदेश",
-    "reports": "अहवाल"
+    "reports": "अहवाल",
+    "adminDashboard": "प्रशासक डॅशबोर्ड"
   },
   "owner": {
     "dashboardTitle": "अॅडमिन डॅशबोर्ड",

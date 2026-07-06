@@ -1,91 +1,345 @@
-.admin-deadline-ext-page {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  min-height: 100%;
+.owner-shell.admin-mockup-ui {
+  .admin-deadline-ext-page {
+    padding: 0 1.25rem 2rem;
+    max-width: 72rem;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  .admin-deadline-ext-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .admin-deadline-ext-intro {
+    color: var(--admin-on-surface-variant, #3e494a);
+    font-size: 0.9rem;
+    margin: 0;
+    flex: 1 1 16rem;
+    max-width: 42rem;
+    line-height: 1.5;
+  }
+
+  .admin-deadline-ext-toolbar-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.65rem;
+  }
+
+  .deadline-ext-pending-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.3rem 0.65rem;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--admin-on-error-container, #93000a);
+    background: var(--admin-error-container, #ffdad6);
+    border: 1px solid color-mix(in srgb, var(--admin-error, #ba1a1a) 22%, transparent);
+  }
+
+  .js-deadline-ext-refresh {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+
+    .material-symbols-outlined {
+      font-size: 1.1rem;
+    }
+
+    &.is-refreshing .material-symbols-outlined {
+      animation: deadline-ext-spin 0.8s linear infinite;
+    }
+  }
+
+  .admin-icon-btn.js-deadline-ext-refresh.is-refreshing .material-symbols-outlined {
+    animation: deadline-ext-spin 0.8s linear infinite;
+  }
+
+  @keyframes deadline-ext-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .deadline-ext-kpi-row {
+    margin-bottom: 1.1rem;
+  }
+
+  .deadline-ext-kpi-card {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-radius: 0.85rem;
+    background: var(--admin-surface-container-low, #f4f3ff);
+    border: 1px solid var(--admin-outline-variant, #bec8ca);
+    box-shadow: 0 1px 2px color-mix(in srgb, var(--admin-primary, #006d77) 8%, transparent);
+  }
+
+  .deadline-ext-kpi-icon {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 0.7rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: color-mix(in srgb, var(--admin-primary, #006d77) 14%, transparent);
+    color: var(--admin-primary, #006d77);
+
+    .material-symbols-outlined {
+      font-size: 1.35rem;
+    }
+  }
+
+  .deadline-ext-kpi-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+  }
+
+  .deadline-ext-kpi-num {
+    font-size: 1.35rem;
+    font-weight: 700;
+    line-height: 1.1;
+    color: var(--admin-on-surface, #181a2e);
+  }
+
+  .deadline-ext-kpi-label {
+    font-size: 0.78rem;
+    color: var(--admin-on-surface-variant, #3e494a);
+  }
+
+  .admin-deadline-ext-body {
+    min-width: 0;
+  }
+
+  .deadline-ext-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr));
+    gap: 1rem;
+  }
+
+  .deadline-ext-card {
+    position: relative;
+    background: var(--admin-surface-container-low, #f4f3ff);
+    border: 1px solid var(--admin-outline-variant, #bec8ca);
+    border-radius: 0.85rem;
+    overflow: hidden;
+    min-width: 0;
+    box-shadow: 0 1px 3px color-mix(in srgb, var(--admin-on-surface, #181a2e) 6%, transparent);
+    transition: box-shadow 0.15s ease, border-color 0.15s ease;
+
+    &:hover {
+      border-color: color-mix(in srgb, var(--admin-primary, #006d77) 35%, var(--admin-outline-variant, #bec8ca));
+      box-shadow: 0 4px 14px color-mix(in srgb, var(--admin-primary, #006d77) 12%, transparent);
+    }
+  }
+
+  .deadline-ext-card-accent {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: linear-gradient(180deg, #dc2626, #f97316);
+  }
+
+  .deadline-ext-card-inner {
+    padding: 1rem 1.1rem 1rem 1.15rem;
+    min-width: 0;
+  }
+
+  .deadline-ext-card-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    margin-bottom: 0.9rem;
+    min-width: 0;
+  }
+
+  .deadline-ext-avatar {
+    flex-shrink: 0;
+    width: 2.65rem;
+    height: 2.65rem;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.88rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    background: linear-gradient(145deg, #7c4dff, #5e35d8);
+    color: #fff;
+    box-shadow: 0 2px 8px rgba(94, 53, 216, 0.3);
+  }
+
+  .deadline-ext-card-head-text {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .deadline-ext-card-employee {
+    font-size: 0.78rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--admin-on-surface-variant, #3e494a);
+  }
+
+  .deadline-ext-card-task {
+    font-weight: 600;
+    color: var(--admin-on-surface, #181a2e);
+    margin-top: 0.15rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+
+  .deadline-ext-overdue-badge {
+    flex-shrink: 0;
+    align-self: flex-start;
+    padding: 0.25rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1.2;
+    color: #991b1b;
+    background: #fee2e2;
+    border: 1px solid #fecaca;
+    white-space: nowrap;
+  }
+
+  .deadline-ext-stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.45rem;
+    margin-bottom: 0.95rem;
+  }
+
+  .deadline-ext-stat {
+    padding: 0.5rem 0.55rem;
+    border-radius: 0.55rem;
+    background: var(--admin-surface, #fff);
+    border: 1px solid var(--admin-outline-variant, #bec8ca);
+    min-width: 0;
+  }
+
+  .deadline-ext-stat-value {
+    display: block;
+    font-size: 0.82rem;
+    font-weight: 600;
+    line-height: 1.25;
+    color: var(--admin-on-surface, #181a2e);
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .deadline-ext-stat-label {
+    display: block;
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--admin-on-surface-variant, #3e494a);
+    margin-top: 0.15rem;
+  }
+
+  .deadline-ext-stat--remind .deadline-ext-stat-value {
+    color: var(--admin-primary, #006d77);
+  }
+
+  .deadline-ext-card-foot {
+    display: flex;
+    justify-content: flex-end;
+    padding-top: 0.15rem;
+    border-top: 1px solid var(--admin-outline-variant, #bec8ca);
+  }
+
+  .deadline-ext-approve-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 0.85rem;
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 0.65rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #fff;
+    background: linear-gradient(135deg, var(--admin-primary, #006d77), color-mix(in srgb, var(--admin-primary, #006d77) 75%, #004f58));
+    box-shadow: 0 2px 6px color-mix(in srgb, var(--admin-primary, #006d77) 35%, transparent);
+    cursor: pointer;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+
+    .material-symbols-outlined {
+      font-size: 1.1rem;
+    }
+
+    &:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 10px color-mix(in srgb, var(--admin-primary, #006d77) 40%, transparent);
+    }
+
+    &:active {
+      transform: translateY(0);
+    }
+  }
+
+  .deadline-ext-empty {
+    border-radius: 0.85rem;
+    background: var(--admin-surface-container-low, #f4f3ff);
+    border: 1px dashed var(--admin-outline-variant, #bec8ca);
+
+    .owner-empty-icon {
+      color: var(--admin-primary, #006d77);
+      opacity: 0.85;
+    }
+  }
+
+  @media (max-width: 767.98px) {
+    .deadline-ext-stats {
+      grid-template-columns: 1fr;
+    }
+
+    .deadline-ext-overdue-badge {
+      display: none;
+    }
+
+    .deadline-ext-card-head {
+      flex-wrap: wrap;
+    }
+  }
+
+  @media (max-width: 575.98px) {
+    .admin-deadline-ext-page {
+      padding: 0 0.85rem 1.5rem;
+    }
+  }
 }
 
-.admin-deadline-ext-body {
-  padding: 0 0 2rem;
-}
+[data-bs-theme="dark"] .owner-shell.admin-mockup-ui {
+  .deadline-ext-overdue-badge {
+    color: #fecaca;
+    background: color-mix(in srgb, #dc2626 22%, transparent);
+    border-color: color-mix(in srgb, #dc2626 40%, transparent);
+  }
 
-.admin-deadline-ext-intro {
-  color: var(--bs-secondary-color);
-  margin-bottom: 1.25rem;
-  max-width: 42rem;
-}
+  .deadline-ext-pending-pill {
+    color: #ffdad6;
+    background: color-mix(in srgb, #ba1a1a 28%, transparent);
+    border-color: color-mix(in srgb, #ba1a1a 45%, transparent);
+  }
 
-.deadline-ext-list {
-  display: grid;
-  gap: 1rem;
-}
-
-.deadline-ext-card {
-  background: var(--admin-surface, #fff);
-  border: 1px solid var(--admin-border, #e2e8f0);
-  border-radius: 0.85rem;
-  padding: 1rem 1.1rem;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
-}
-
-.deadline-ext-card-head {
-  display: flex;
-  gap: 0.75rem;
-  align-items: flex-start;
-  margin-bottom: 0.85rem;
-}
-
-.deadline-ext-card-icon {
-  width: 2.25rem;
-  height: 2.25rem;
-  border-radius: 0.65rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: color-mix(in srgb, var(--bs-primary) 12%, transparent);
-  color: var(--bs-primary);
-  flex-shrink: 0;
-}
-
-.deadline-ext-card-title {
-  font-weight: 600;
-}
-
-.deadline-ext-card-task {
-  color: var(--bs-secondary-color);
-}
-
-.deadline-ext-card-meta {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.5rem 1rem;
-  margin: 0 0 0.75rem;
-  font-size: 0.875rem;
-}
-
-.deadline-ext-card-meta div {
-  min-width: 0;
-}
-
-.deadline-ext-card-meta dt {
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  color: var(--bs-secondary-color);
-  margin-bottom: 0.1rem;
-}
-
-.deadline-ext-card-meta dd {
-  margin: 0;
-}
-
-.deadline-ext-card-body {
-  line-height: 1.45;
-}
-
-@media (max-width: 575.98px) {
-  .deadline-ext-card-meta {
-    grid-template-columns: 1fr;
+  .deadline-ext-stat {
+    background: var(--admin-surface-container, #1e1f2e);
   }
 }
 

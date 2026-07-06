@@ -174,7 +174,8 @@
     "assignedByMe": "मेरे द्वारा असाइन",
     "employeeAssignments": "कर्मचारी असाइनमेंट",
     "messages": "संदेश",
-    "reports": "रिपोर्ट"
+    "reports": "रिपोर्ट",
+    "adminDashboard": "एडमिन डैशबोर्ड"
   },
   "owner": {
     "dashboardTitle": "एडमिन डैशबोर्ड",

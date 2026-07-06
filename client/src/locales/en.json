@@ -174,7 +174,8 @@
     "assignedByMe": "Assigned by me",
     "employeeAssignments": "Employee assignments",
     "messages": "Messages",
-    "reports": "Reports"
+    "reports": "Reports",
+    "adminDashboard": "Admin dashboard"
   },
   "owner": {
     "dashboardTitle": "Admin Dashboard",

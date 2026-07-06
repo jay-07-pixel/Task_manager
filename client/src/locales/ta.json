@@ -174,7 +174,8 @@
     "assignedByMe": "என்னால் ஒதுக்கப்பட்டவை",
     "employeeAssignments": "பணியாளர் ஒதுக்கீடுகள்",
     "messages": "செய்திகள்",
-    "reports": "அறிக்கைகள்"
+    "reports": "அறிக்கைகள்",
+    "adminDashboard": "நிர்வாக டாஷ்போர்டு"
   },
   "owner": {
     "dashboardTitle": "நிர்வாகி டாஷ்போர்டு",

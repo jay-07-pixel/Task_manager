@@ -85,6 +85,45 @@ function formatDue(iso) {
   return formatted || "—";
 }
 
+function personInitials(name) {
+  const parts = String(name || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (!parts.length) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
+function personAvatarHtml(displayName) {
+  const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
+  const rawName = dt(displayName) || displayName || tr("common.employee");
+  return `<div class="deadline-ext-avatar" aria-hidden="true">${esc(personInitials(rawName))}</div>`;
+}
+
+function extensionStatHtml(value, label, modifier = "") {
+  const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
+  const mod = modifier ? ` deadline-ext-stat--${modifier}` : "";
+  return `<div class="deadline-ext-stat${mod}">
+    <span class="deadline-ext-stat-value tabular-nums">${esc(String(value))}</span>
+    <span class="deadline-ext-stat-label">${esc(label)}</span>
+  </div>`;
+}
+
+function pendingSummaryHtml(count) {
+  const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
+  if (!count) return "";
+  return `<div class="deadline-ext-kpi-row" id="deadline-ext-kpi-row">
+    <div class="deadline-ext-kpi-card">
+      <div class="deadline-ext-kpi-icon" aria-hidden="true">${adminMsIconFn?.("pending_actions") ?? ""}</div>
+      <div class="deadline-ext-kpi-body">
+        <span class="deadline-ext-kpi-num tabular-nums" id="deadline-ext-pending-num">${count}</span>
+        <span class="deadline-ext-kpi-label">${esc(tr("deadlineExtensions.pendingCount", { count }))}</span>
+      </div>
+    </div>
+  </div>`;
+}
+
 function approveModalHtml() {
   return `
     <div class="modal fade profile-modal" id="deadlineExtensionApproveModal" tabindex="-1" aria-labelledby="deadlineExtensionApproveTitle" aria-hidden="true">
@@ -126,43 +165,91 @@ function requestCardHtml(req) {
   const expires = formatDue(req.expiresAt);
 
   return `<article class="deadline-ext-card" data-request-id="${esc(req.id)}">
-    <div class="deadline-ext-card-head">
-      <div class="deadline-ext-card-icon" aria-hidden="true">${adminMsIconFn?.("schedule") ?? ""}</div>
-      <div class="min-w-0">
-        <h3 class="deadline-ext-card-title h6 mb-1">${esc(tr("deadlineExtensions.requestFrom", { name: employeeName }))}</h3>
-        <p class="deadline-ext-card-task mb-0"><strong>${esc(tr("common.task"))}:</strong> ${taskTitle}</p>
+    <div class="deadline-ext-card-accent" aria-hidden="true"></div>
+    <div class="deadline-ext-card-inner">
+      <header class="deadline-ext-card-head">
+        ${personAvatarHtml(req.employee?.displayName)}
+        <div class="deadline-ext-card-head-text min-w-0">
+          <p class="deadline-ext-card-employee mb-0">${employeeName}</p>
+          <h3 class="deadline-ext-card-task h6 mb-0">${taskTitle}</h3>
+        </div>
+        <span class="deadline-ext-overdue-badge">${esc(overdueLabel)}</span>
+      </header>
+      <div class="deadline-ext-stats">
+        ${extensionStatHtml(currentDue, tr("common.deadlineLabel"))}
+        ${extensionStatHtml(requested, tr("deadlineExtensions.requestedAt"))}
+        ${extensionStatHtml(expires, tr("deadlineExtensions.expiresAt"), "remind")}
       </div>
+      <footer class="deadline-ext-card-foot">
+        <button type="button" class="deadline-ext-approve-btn js-deadline-ext-approve" data-request-id="${esc(req.id)}" data-employee-name="${employeeName}" data-task-title="${taskTitle}" data-current-due="${esc(req.task?.dueAt || "")}">
+          ${adminMsIconFn?.("check_circle") ?? ""}
+          <span>${esc(tr("deadlineExtensions.reviewApprove"))}</span>
+        </button>
+      </footer>
     </div>
-    <dl class="deadline-ext-card-meta">
-      <div><dt>${esc(tr("common.deadlineLabel"))}</dt><dd class="tabular-nums">${esc(currentDue)}</dd></div>
-      <div><dt>${esc(tr("deadlineExtensions.overdueLabel"))}</dt><dd class="text-danger fw-semibold">${esc(overdueLabel)}</dd></div>
-      <div><dt>${esc(tr("deadlineExtensions.requestedAt"))}</dt><dd class="tabular-nums">${esc(requested)}</dd></div>
-      <div><dt>${esc(tr("deadlineExtensions.expiresAt"))}</dt><dd class="tabular-nums">${esc(expires)}</dd></div>
-    </dl>
-    <p class="deadline-ext-card-body small text-muted mb-3">${esc(tr("deadlineExtensions.requestBody", { name: employeeName, task: taskTitle }))}</p>
-    <button type="button" class="admin-task-modal-btn-save js-deadline-ext-approve" data-request-id="${esc(req.id)}" data-employee-name="${employeeName}" data-task-title="${taskTitle}" data-current-due="${esc(req.task?.dueAt || "")}">
-      ${adminMsIconFn?.("check_circle") ?? ""} ${esc(tr("deadlineExtensions.reviewApprove"))}
-    </button>
   </article>`;
+}
+
+function updatePendingCountUi(count) {
+  const pill = document.getElementById("deadline-ext-pending-pill");
+  const kpiRow = document.getElementById("deadline-ext-kpi-row");
+  const kpiNum = document.getElementById("deadline-ext-pending-num");
+  const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
+
+  if (pill) {
+    if (count > 0) {
+      pill.classList.remove("d-none");
+      pill.textContent = tr("deadlineExtensions.pendingCount", { count });
+    } else {
+      pill.classList.add("d-none");
+    }
+  }
+
+  if (kpiNum) kpiNum.textContent = String(count);
+
+  if (kpiRow && count === 0) {
+    kpiRow.remove();
+  } else if (!kpiRow && count > 0) {
+    const toolbar = document.querySelector(".admin-deadline-ext-toolbar");
+    toolbar?.insertAdjacentHTML("afterend", pendingSummaryHtml(count));
+  }
 }
 
 function pageHtml() {
   const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
-  const cards = pendingRequests.length
+  const count = pendingRequests.length;
+  const cards = count
     ? `<div class="deadline-ext-list">${pendingRequests.map(requestCardHtml).join("")}</div>`
-    : `<div class="owner-empty-state py-5 px-3">
-        <span class="material-symbols-outlined owner-empty-icon text-primary" aria-hidden="true">event_available</span>
+    : `<div class="owner-empty-state deadline-ext-empty py-5 px-3">
+        <span class="material-symbols-outlined owner-empty-icon" aria-hidden="true">event_available</span>
         <p class="owner-empty-title mb-1">${esc(tr("deadlineExtensions.emptyTitle"))}</p>
-        <p class="owner-empty-desc text-muted small mb-0">${esc(tr("deadlineExtensions.emptyDesc"))}</p>
+        <p class="owner-empty-desc mb-0">${esc(tr("deadlineExtensions.emptyDesc"))}</p>
       </div>`;
 
-  return `<div class="admin-deadline-ext-page">
+  const pendingPill =
+    count > 0
+      ? `<span class="deadline-ext-pending-pill" id="deadline-ext-pending-pill">${esc(tr("deadlineExtensions.pendingCount", { count }))}</span>`
+      : `<span class="deadline-ext-pending-pill d-none" id="deadline-ext-pending-pill"></span>`;
+
+  return `<div class="admin-main-scroll d-flex flex-column">
     ${ownerChromeHeaderFn?.() ?? ""}
-    <div class="admin-deadline-ext-body">
-      <p class="admin-deadline-ext-intro">${esc(tr("deadlineExtensions.intro"))}</p>
-      ${cards}
+    <div class="admin-deadline-ext-page">
+      <div class="admin-deadline-ext-toolbar">
+        <p class="admin-deadline-ext-intro mb-0">${esc(tr("deadlineExtensions.intro"))}</p>
+        <div class="admin-deadline-ext-toolbar-actions">
+          ${pendingPill}
+          <button type="button" class="btn btn-sm btn-outline-primary js-deadline-ext-refresh">
+            ${adminMsIconFn?.("refresh") ?? ""}
+            <span>${esc(tr("common.refresh"))}</span>
+          </button>
+        </div>
+      </div>
+      ${pendingSummaryHtml(count)}
+      <div class="admin-deadline-ext-body">
+        ${cards}
+      </div>
+      ${approveModalHtml()}
     </div>
-    ${approveModalHtml()}
   </div>`;
 }
 
@@ -249,6 +336,15 @@ function wirePage(root) {
       bootstrap.Modal.getOrCreateInstance(document.getElementById("deadlineExtensionApproveModal")).show();
     });
   });
+
+  root.querySelectorAll(".js-deadline-ext-refresh").forEach((btn) => {
+    if (btn.dataset.wired === "1") return;
+    btn.dataset.wired = "1";
+    btn.addEventListener("click", () => {
+      btn.classList.add("is-refreshing");
+      void refreshDeadlineExtensionsPage().finally(() => btn.classList.remove("is-refreshing"));
+    });
+  });
 }
 
 async function loadPendingRequests() {
@@ -285,7 +381,17 @@ function startDeadlineExtensionsPoll() {
     void loadPendingRequests().then(() => {
       const list = document.querySelector(".deadline-ext-list");
       const main = document.getElementById("main-column");
-      if (!main || !list) return;
+      if (!main) return;
+
+      updatePendingCountUi(pendingRequests.length);
+
+      if (!list) {
+        if (pendingRequests.length > 0) {
+          void refreshDeadlineExtensionsPage();
+        }
+        return;
+      }
+
       list.innerHTML = pendingRequests.map(requestCardHtml).join("");
       wirePage(main);
     });
@@ -309,9 +415,3 @@ export function ownerDeadlineExtensionsChromeHeaderHtml() {
     </div>
   </header>`;
 }
-
-document.addEventListener("click", (e) => {
-  const btn = e.target.closest?.(".js-deadline-ext-refresh");
-  if (!btn) return;
-  void refreshDeadlineExtensionsPage();
-});
