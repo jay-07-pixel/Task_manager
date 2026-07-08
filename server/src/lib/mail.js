@@ -132,6 +132,80 @@ export async function sendPasswordResetEmail(to, otp) {
   return { ok: true, devMode: false };
 }
 
+/**
+ * Notify an admin that an employee requested a password reset (same OTP email + employee name).
+ * @param {string} to Admin email
+ * @param {{ employeeName: string; employeeEmail: string; otp: string }} params
+ */
+export async function sendPasswordResetAdminNotifyEmail(to, { employeeName, employeeEmail, otp }) {
+  const config = getBrevoConfig();
+  const safeName = employeeName?.trim() || employeeEmail || "An employee";
+  const safeEmail = employeeEmail?.trim() || "";
+
+  if (!config) {
+    if (process.env.NODE_ENV !== "production") {
+      console.log(
+        `[mail] Brevo not configured — password reset admin notify for ${to}: ${safeName} <${safeEmail}> OTP ${otp} (dev only, not sent)`
+      );
+      return { ok: true, devMode: true };
+    }
+    return { ok: false, skipped: true };
+  }
+
+  const subject = `Password reset requested — ${safeName}`;
+  const textContent = [
+    `${safeName}${safeEmail ? ` (${safeEmail})` : ""} requested a password reset.`,
+    "",
+    `Password reset code: ${otp}`,
+    "This code expires in 10 minutes.",
+    "",
+    "The employee also received this code by email.",
+  ].join("\n");
+  const htmlContent = `
+      <div style="font-family:system-ui,sans-serif;max-width:480px;margin:0 auto">
+        <h2 style="color:#0d6efd">Task Manager</h2>
+        <p style="margin-bottom:0.5rem">
+          <strong>${escapeHtml(safeName)}</strong>${safeEmail ? ` (<a href="mailto:${escapeHtml(safeEmail)}" style="color:#0d6efd">${escapeHtml(safeEmail)}</a>)` : ""}
+          requested a password reset.
+        </p>
+        <p>Use this code to reset their password:</p>
+        <p style="font-size:28px;font-weight:700;letter-spacing:6px">${escapeHtml(otp)}</p>
+        <p style="color:#666">This code expires in <strong>10 minutes</strong>.</p>
+        <p style="color:#999;font-size:12px">The employee also received this code. If this was unexpected, contact them or your team.</p>
+      </div>
+    `;
+
+  const res = await fetch(BREVO_API_URL, {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+      "api-key": config.apiKey,
+    },
+    body: JSON.stringify({
+      sender: { name: config.senderName, email: config.senderEmail },
+      to: [{ email: to }],
+      subject,
+      htmlContent,
+      textContent,
+    }),
+  });
+
+  if (!res.ok) {
+    let detail = res.statusText;
+    try {
+      const errBody = await res.json();
+      detail = errBody?.message || errBody?.error || JSON.stringify(errBody);
+    } catch {
+      /* ignore */
+    }
+    console.error("[mail/brevo] password reset admin notify", res.status, detail);
+    return { ok: false };
+  }
+
+  return { ok: true, devMode: false };
+}
+
 function escapeHtml(value) {
   return String(value)
     .replace(/&/g, "&amp;")

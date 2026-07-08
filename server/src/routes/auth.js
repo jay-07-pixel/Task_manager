@@ -4,7 +4,7 @@ import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth } from "../middleware/auth.js";
 import { createRateLimiter } from "../middleware/otpRateLimit.js";
-import { sendOtpEmail, sendPasswordResetEmail } from "../lib/mail.js";
+import { sendOtpEmail, sendPasswordResetEmail, sendPasswordResetAdminNotifyEmail } from "../lib/mail.js";
 import { getTurnstileSiteKey, verifyTurnstileToken } from "../lib/turnstile.js";
 import { friendlyDbError } from "../lib/dbErrorMessage.js";
 import {
@@ -24,6 +24,25 @@ import { getCompanyTrialStatus, TRIAL_EXPIRED_MESSAGE } from "../lib/companyTria
 import { getCompanyAttendanceSettings } from "../services/companyAttendanceSettings.js";
 
 const router = Router();
+
+async function notifyAdminsEmployeePasswordReset(requester, otp) {
+  if (userHasAdminAccess(requester)) return;
+
+  const admins = await prisma.user.findMany({
+    where: adminUserWhere,
+    select: { email: true },
+  });
+  if (!admins.length) return;
+
+  const employeeName = requester.displayName?.trim() || requester.email;
+  const employeeEmail = requester.email;
+
+  await Promise.allSettled(
+    admins.map((admin) =>
+      sendPasswordResetAdminNotifyEmail(admin.email, { employeeName, employeeEmail, otp })
+    )
+  );
+}
 
 function serializeSessionUser(user, activeRole, company = null) {
   const isAdmin = userHasAdminAccess(user);
@@ -458,6 +477,10 @@ router.post("/forgot-password/send-otp", forgotPasswordSendLimiter, async (req, 
     delete req.session.passwordResetVerifiedEmail;
 
     await sendPasswordResetEmail(email, otp);
+
+    void notifyAdminsEmployeePasswordReset(user, otp).catch((err) => {
+      console.error("[auth/forgot-password/send-otp] admin notify", err);
+    });
 
     res.json({
       ok: true,
