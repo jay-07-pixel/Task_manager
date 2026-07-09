@@ -5,7 +5,7 @@ import { prisma } from "../lib/prisma.js";
 import { requireAuth } from "../middleware/auth.js";
 import { createRateLimiter } from "../middleware/otpRateLimit.js";
 import { sendOtpEmail, sendPasswordResetEmail, sendPasswordResetAdminNotifyEmail } from "../lib/mail.js";
-import { getTurnstileSiteKey, verifyTurnstileToken } from "../lib/turnstile.js";
+import { getTurnstileSiteKey, verifyTurnstileToken, isTurnstileConfigured } from "../lib/turnstile.js";
 import { friendlyDbError } from "../lib/dbErrorMessage.js";
 import {
   generateOtpCode,
@@ -122,6 +122,36 @@ const sendOtpSchema = z.object({
   email: emailSchema,
   turnstileToken: z.string().min(1, "Please complete CAPTCHA"),
 });
+
+const forgotPasswordSendOtpSchema = z.object({
+  email: emailSchema,
+  turnstileToken: z.string().optional(),
+});
+
+function isNativeKalpanikClient(req) {
+  if (req.get("X-Kalpanik-Client") === "SugandhReminder-Android") {
+    return true;
+  }
+  const userAgent = req.get("User-Agent") || "";
+  return userAgent.includes("in.kalpanik.sugandhreminder");
+}
+
+async function requireTurnstileUnlessSkipped(req, turnstileToken) {
+  if (isNativeKalpanikClient(req) || !isTurnstileConfigured()) {
+    return null;
+  }
+  if (!turnstileToken?.trim()) {
+    return { status: 400, error: "Please complete CAPTCHA" };
+  }
+  const captcha = await verifyTurnstileToken(
+    turnstileToken,
+    req.ip || req.socket?.remoteAddress
+  );
+  if (!captcha.ok) {
+    return { status: 400, error: captcha.error || "CAPTCHA verification failed." };
+  }
+  return null;
+}
 
 const verifyOtpSchema = z.object({
   email: emailSchema,
@@ -398,7 +428,7 @@ const resetPasswordSchema = z.object({
 
 router.post("/forgot-password/send-otp", forgotPasswordSendLimiter, async (req, res) => {
   try {
-    const parsed = sendOtpSchema.safeParse(req.body);
+    const parsed = forgotPasswordSendOtpSchema.safeParse(req.body);
     if (!parsed.success) {
       const flat = parsed.error.flatten();
       const firstField = Object.values(flat.fieldErrors).flat()[0];
@@ -407,12 +437,9 @@ router.post("/forgot-password/send-otp", forgotPasswordSendLimiter, async (req, 
       });
     }
 
-    const captcha = await verifyTurnstileToken(
-      parsed.data.turnstileToken,
-      req.ip || req.socket?.remoteAddress
-    );
-    if (!captcha.ok) {
-      return res.status(400).json({ error: captcha.error || "CAPTCHA verification failed." });
+    const captchaError = await requireTurnstileUnlessSkipped(req, parsed.data.turnstileToken);
+    if (captchaError) {
+      return res.status(captchaError.status).json({ error: captchaError.error });
     }
 
     const email = normalizeEmail(parsed.data.email);
