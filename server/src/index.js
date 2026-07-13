@@ -3,6 +3,7 @@ import fs from "fs";
 import express from "express";
 import "express-async-errors";
 import cors from "cors";
+import compression from "compression";
 import cookieParser from "cookie-parser";
 import session from "express-session";
 import sessionFileStore from "session-file-store";
@@ -61,6 +62,7 @@ app.use(
     credentials: true,
   })
 );
+app.use(compression());
 app.use(express.json());
 app.use(cookieParser());
 app.use(

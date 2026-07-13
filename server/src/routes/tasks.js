@@ -1188,6 +1188,24 @@ router.post("/employee-create", requireAuth, async (req, res) => {
   res.status(201).json({ task: serializeTask(withDelegations) });
 });
 
+router.get("/owner-all", requireOwner, async (req, res) => {
+  const ownerId = req.session.userId;
+  const lists = await prisma.taskList.findMany({
+    where: { ownerId },
+    select: { id: true, title: true },
+  });
+  const empList = lists.find((l) => l.title === EMPLOYEE_ASSIGNMENTS_LIST_TITLE);
+  if (empList) await reconcileEmployeeAssignmentTasks(empList.id);
+
+  const tasks = await prisma.task.findMany({
+    where: { list: { ownerId } },
+    include: taskListInclude,
+  });
+  const withMeta = await attachProgressUpdateMeta(tasks, ownerId);
+  const withDelegations = await attachDelegationsToTasks(withMeta);
+  res.json({ tasks: withDelegations.map(serializeTask) });
+});
+
 router.get("/lists/:listId", requireOwner, async (req, res) => {
   const list = await assertListOwner(req.params.listId, req.session.userId);
   if (!list) return res.status(404).json({ error: "List not found" });

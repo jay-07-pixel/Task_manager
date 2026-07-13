@@ -129,6 +129,7 @@ let state = {
   ownerTaskFilter: "active",
   overdueColorFilter: "all",
   allTasksEmployeeFilter: "all",
+  allTasksDeadlineFilter: "all",
   ownerView: "dashboard",
   empView: "dashboard",
   companyTrial: null,
@@ -154,6 +155,11 @@ let ownerTasksFingerprint = "";
 /** @type {Map<string, object[]>} */
 const ownerTasksCache = new Map();
 let ownerMainLoading = false;
+let ownerNavBusyUntil = 0;
+/** @type {number | null} */
+let ownerListRefreshTimer = null;
+let ownerListRefreshTarget = null;
+let taskSortableListId = null;
 const OWNER_TRIAL_POPUP_KEY = "taskmgr-owner-trial-popup-shown";
 const EMP_CRITICAL_OVERDUE_MIN_DAYS = 6;
 const POSTPONE_GRACE_MS = 24 * 60 * 60 * 1000;
@@ -3225,7 +3231,8 @@ function setOwnerTaskFilter(filter) {
     return;
   }
   state.ownerTaskFilter = filter;
-  renderOwnerMain();
+  markOwnerNavBusy(350);
+  requestAnimationFrame(() => renderOwnerMain());
 }
 
 function ownerEmployeesCellHtml(task) {
@@ -6641,27 +6648,40 @@ async function loadLists() {
   }
 }
 
+function markOwnerNavBusy(ms = 450) {
+  ownerNavBusyUntil = Date.now() + ms;
+}
+
+function isOwnerNavBusy() {
+  return Date.now() < ownerNavBusyUntil;
+}
+
+function scheduleOwnerListBackgroundRefresh(listId) {
+  ownerListRefreshTarget = listId;
+  if (ownerListRefreshTimer != null) {
+    window.clearTimeout(ownerListRefreshTimer);
+  }
+  ownerListRefreshTimer = window.setTimeout(() => {
+    ownerListRefreshTimer = null;
+    const target = ownerListRefreshTarget;
+    ownerListRefreshTarget = null;
+    if (target) void refreshOwnerListTasksInBackground(target);
+  }, 900);
+}
+
 function ownerTasksFingerprintFrom(tasks) {
-  return JSON.stringify(
-    (tasks ?? []).map((t) => ({
-      id: t.id,
-      c: t.completed,
-      p: t.highPriority ? 1 : 0,
-      s: t.sortOrder,
-      a: (t.assignees ?? []).map((x) => [
-        x.id,
-        x.assigneeDone,
-        x.submissionText ?? "",
-        x.completionProofUrl ?? "",
-        (x.completionProofUrls ?? []).join("|"),
-        x.progressUpdateCount ?? 0,
-        x.unreadProgressUpdateCount ?? 0,
-        x.latestProgressUpdate?.message ?? "",
-        x.latestProgressUpdate?.createdAt ?? "",
-        x.assigneeDone,
-      ]),
-    }))
-  );
+  if (!tasks?.length) return "0";
+  const parts = [];
+  for (const t of tasks) {
+    let assigneeSig = "";
+    for (const a of t.assignees ?? []) {
+      assigneeSig += `${a.id}:${a.assigneeDone ? 1 : 0}:${a.unreadProgressUpdateCount ?? 0};`;
+    }
+    parts.push(
+      `${t.id}:${t.completed ? 1 : 0}:${t.highPriority ? 1 : 0}:${t.sortOrder ?? 0}:${t.dueAt ?? ""}:${assigneeSig}`
+    );
+  }
+  return `${tasks.length}|${parts.join(",")}`;
 }
 
 function captureOwnerExpandedTaskIds() {
@@ -6803,7 +6823,7 @@ async function syncOwnerDashboard({ forceRender = false } = {}) {
   }
   if (!state.activeListId) return;
   if (!forceRender && document.hidden) return;
-  if (!forceRender && (isOwnerInteractiveBusy() || isOwnerSortableActive())) return;
+  if (!forceRender && (isOwnerInteractiveBusy() || isOwnerSortableActive() || isOwnerNavBusy())) return;
 
   const ui = forceRender ? null : captureOwnerUiState();
   try {
@@ -6864,21 +6884,30 @@ async function loadAllOwnerTasks({ awaitTranslation = false } = {}) {
     ownerTasksCache.set(OWNER_ALL_TASKS_LIST_ID, []);
     return;
   }
-  const batches = await Promise.all(
-    state.lists.map(async (list) => {
-      try {
-        const { tasks } = await api(`/api/tasks/lists/${list.id}`);
-        return (tasks ?? []).map((task) => ({
-          ...task,
-          ownerAllTasksListId: list.id,
-          ownerAllTasksListTitle: list.title,
-        }));
-      } catch {
-        return [];
-      }
-    })
-  );
-  state.tasks = batches.flat();
+  try {
+    const { tasks } = await api("/api/tasks/owner-all");
+    state.tasks = (tasks ?? []).map((task) => ({
+      ...task,
+      ownerAllTasksListId: task.listId ?? task.list?.id ?? null,
+      ownerAllTasksListTitle: task.list?.title ?? "",
+    }));
+  } catch {
+    const batches = await Promise.all(
+      state.lists.map(async (list) => {
+        try {
+          const { tasks } = await api(`/api/tasks/lists/${list.id}`);
+          return (tasks ?? []).map((task) => ({
+            ...task,
+            ownerAllTasksListId: list.id,
+            ownerAllTasksListTitle: list.title,
+          }));
+        } catch {
+          return [];
+        }
+      })
+    );
+    state.tasks = batches.flat();
+  }
   updateOwnerTasksFingerprint();
   ownerTasksCache.set(OWNER_ALL_TASKS_LIST_ID, state.tasks);
   const runTranslation = async () => {
@@ -6887,7 +6916,8 @@ async function loadAllOwnerTasks({ awaitTranslation = false } = {}) {
       updated &&
       state.user?.role === "owner" &&
       state.ownerView === "dashboard" &&
-      isAllTasksList(state.activeListId)
+      isAllTasksList(state.activeListId) &&
+      !isOwnerNavBusy()
     ) {
       renderOwnerMain();
       initListSortable();
@@ -6917,7 +6947,8 @@ async function loadTasks(listId, { awaitTranslation = false } = {}) {
       updated &&
       state.user?.role === "owner" &&
       state.ownerView === "dashboard" &&
-      state.activeListId === listId
+      state.activeListId === listId &&
+      !isOwnerNavBusy()
     ) {
       renderOwnerMain();
       initListSortable();
@@ -6967,6 +6998,11 @@ function updateOwnerSidebarActiveState() {
 
 function navigateOwnerView(view) {
   dismissAdminMobileNav();
+  if (state.ownerView === view) {
+    updateOwnerSidebarActiveState();
+    return;
+  }
+  markOwnerNavBusy(500);
   state.ownerView = view;
   ownerMainLoading = false;
   updateOwnerSidebarActiveState();
@@ -6976,10 +7012,16 @@ function navigateOwnerView(view) {
 async function selectOwnerList(listId) {
   if (!listId) return;
   dismissAdminMobileNav();
+  if (listId === state.activeListId && state.ownerView === "dashboard" && !ownerMainLoading) {
+    updateOwnerSidebarActiveState();
+    return;
+  }
+  markOwnerNavBusy(500);
   state.ownerView = "dashboard";
   clearAdminReportsCache();
   if (!isAllTasksList(listId)) {
     state.allTasksEmployeeFilter = "all";
+    state.allTasksDeadlineFilter = "all";
   }
   state.activeListId = listId;
   state.ownerTaskFilter = "active";
@@ -6992,7 +7034,7 @@ async function selectOwnerList(listId) {
     updateOwnerTasksFingerprint();
     renderOwnerMain();
     initListSortable();
-    void refreshOwnerListTasksInBackground(listId);
+    scheduleOwnerListBackgroundRefresh(listId);
     return;
   }
 
@@ -7308,13 +7350,16 @@ function destroyTaskSortables() {
     taskRootSortable.destroy();
     taskRootSortable = null;
   }
+  taskSortableListId = null;
 }
 
 function initIncompleteSortables(listId) {
+  if (taskSortableListId === listId && taskRootSortable) return;
   destroyTaskSortables();
   const table = document.getElementById("owner-task-table-sort");
   if (!table || !table.querySelector("tbody.owner-task-group")) return;
 
+  taskSortableListId = listId;
   taskRootSortable = Sortable.create(table, {
     handle: ".task-grip",
     animation: 150,
@@ -7689,12 +7734,17 @@ function renderOwnerMain() {
   if (allTasksView && state.allTasksEmployeeFilter !== "all") {
     visibleTasks = filterTasksByAllTasksEmployee(visibleTasks, state.allTasksEmployeeFilter);
   }
+  if (allTasksView && state.allTasksDeadlineFilter !== "all") {
+    visibleTasks = filterTasksByAllTasksDeadline(visibleTasks, state.allTasksDeadlineFilter);
+  }
   if (showOverdueLegend) {
     visibleTasks = filterTasksByOverdueColor(visibleTasks, state.overdueColorFilter, ownerTaskOverdueTier);
   }
   const allTasksFiltersActive =
     allTasksView &&
-    (state.allTasksEmployeeFilter !== "all" || state.overdueColorFilter !== "all");
+    (state.allTasksEmployeeFilter !== "all" ||
+      state.overdueColorFilter !== "all" ||
+      state.allTasksDeadlineFilter !== "all");
 
   const tbodyInner = visibleTasks.map((task) => ownerTaskGroupTbody(task)).join("");
 
@@ -7862,6 +7912,7 @@ function renderOwnerMain() {
   bindOwnerDescriptionPopups(main);
   wireOverdueColorFilter(main);
   wireAllTasksEmployeeFilter(main);
+  wireAllTasksDeadlineFilter(main);
   bindAssignmentAttachmentViewers(main, (taskId) => findTaskById(taskId));
 
   main.querySelectorAll(".owner-mark-done-open").forEach((btn) => {
@@ -8540,11 +8591,89 @@ function filterTasksByAllTasksEmployee(tasks, listId) {
   return tasks.filter((task) => task.ownerAllTasksListId === listId);
 }
 
-function overdueColorFilterSelectHtml(selectId, filter, { labelKey = "common.overdueColorFilterLabel" } = {}) {
+function localCalendarDayKey(date = new Date()) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function taskDueOnCalendarDay(task, dayKey) {
+  if (!task?.dueAt || !dayKey) return false;
+  if (task.allDay) {
+    return String(task.dueAt).slice(0, 10) === dayKey;
+  }
+  const due = new Date(task.dueAt);
+  if (Number.isNaN(due.getTime())) return false;
+  return localCalendarDayKey(due) === dayKey;
+}
+
+function filterTasksByAllTasksDeadline(tasks, filter) {
+  if (!filter || filter === "all") return tasks;
+  const dayKey = filter === "today" ? localCalendarDayKey() : filter;
+  return tasks.filter((task) => taskDueOnCalendarDay(task, dayKey));
+}
+
+function overdueLegendItemsHtml(activeFilter) {
+  const tiers = [
+    { id: "1-2", swatch: "1-2", labelKey: "common.overdueColor1to2" },
+    { id: "3-5", swatch: "3-5", labelKey: "common.overdueColor3to5" },
+    { id: "6plus", swatch: "6plus", labelKey: "common.overdueColor6plus" },
+  ];
+  return tiers
+    .map((tier) => {
+      const active = activeFilter === tier.id;
+      return `<li>
+        <button
+          type="button"
+          class="task-overdue-legend-pick${active ? " task-overdue-legend-pick--active" : ""}"
+          data-overdue-tier="${tier.id}"
+          aria-pressed="${active ? "true" : "false"}"
+        >
+          <span class="task-overdue-legend-swatch task-overdue-legend-swatch--${tier.swatch}" aria-hidden="true"></span>
+          ${escapeHtml(tr(tier.labelKey))}
+        </button>
+      </li>`;
+    })
+    .join("");
+}
+
+function allTasksDeadlineFilterHtml() {
+  const filter = state.allTasksDeadlineFilter || "all";
+  const todayActive = filter === "today";
+  const pickedDate = filter !== "all" && filter !== "today" ? filter : "";
+  return `<div class="task-overdue-legend-filter all-tasks-deadline-filter">
+      <label class="task-overdue-legend-filter-label" for="all-tasks-deadline-date">${escapeHtml(tr("owner.allTasksDeadlineFilterLabel"))}</label>
+      <div class="all-tasks-deadline-controls">
+        <button
+          type="button"
+          class="all-tasks-deadline-today-btn${todayActive ? " active" : ""}"
+          data-all-tasks-deadline="today"
+          aria-pressed="${todayActive ? "true" : "false"}"
+        >${escapeHtml(tr("owner.allTasksDeadlineToday"))}</button>
+        <input
+          type="date"
+          id="all-tasks-deadline-date"
+          class="task-overdue-legend-select form-control form-control-sm all-tasks-deadline-date"
+          value="${escapeHtml(pickedDate)}"
+          aria-label="${escapeHtml(tr("owner.allTasksDeadlinePickDate"))}"
+        />
+        <button
+          type="button"
+          class="all-tasks-deadline-clear-btn"
+          data-all-tasks-deadline="all"
+          title="${escapeHtml(tr("owner.allTasksDeadlineAll"))}"
+          aria-label="${escapeHtml(tr("owner.allTasksDeadlineAll"))}"
+        >${escapeHtml(tr("owner.allTasksDeadlineAll"))}</button>
+      </div>
+    </div>`;
+}
+
+function overdueColorFilterSelectHtml(selectId, filter) {
   const value = filter || "all";
   return `<div class="task-overdue-legend-filter">
-      <label class="task-overdue-legend-filter-label" for="${selectId}">${escapeHtml(tr(labelKey))}</label>
-      <select id="${selectId}" class="task-overdue-legend-select form-select form-select-sm" aria-label="${escapeHtml(tr(labelKey))}">
+      <label class="task-overdue-legend-filter-label" for="${selectId}">${escapeHtml(tr("common.overdueColorFilterLabel"))}</label>
+      <select id="${selectId}" class="task-overdue-legend-select form-select form-select-sm" aria-label="${escapeHtml(tr("common.overdueColorFilterLabel"))}">
         <option value="all"${value === "all" ? " selected" : ""}>${escapeHtml(tr("common.overdueColorFilterAll"))}</option>
         <option value="1-2"${value === "1-2" ? " selected" : ""}>${escapeHtml(tr("common.overdueColor1to2"))}</option>
         <option value="3-5"${value === "3-5" ? " selected" : ""}>${escapeHtml(tr("common.overdueColor3to5"))}</option>
@@ -8555,6 +8684,7 @@ function overdueColorFilterSelectHtml(selectId, filter, { labelKey = "common.ove
 
 function allTasksFilterBarHtml() {
   const employeeFilter = state.allTasksEmployeeFilter || "all";
+  const overdueFilter = state.overdueColorFilter || "all";
   const employees = allTasksEmployeeFilterOptions();
   const employeeOptions = employees
     .map(
@@ -8566,18 +8696,7 @@ function allTasksFilterBarHtml() {
     <div class="task-overdue-legend-main">
       <p class="task-overdue-legend-intro mb-0">${escapeHtml(tr("common.overdueColorLegendIntro"))}</p>
       <ul class="task-overdue-legend-list mb-0">
-        <li class="task-overdue-legend-item">
-          <span class="task-overdue-legend-swatch task-overdue-legend-swatch--1-2" aria-hidden="true"></span>
-          ${escapeHtml(tr("common.overdueColor1to2"))}
-        </li>
-        <li class="task-overdue-legend-item">
-          <span class="task-overdue-legend-swatch task-overdue-legend-swatch--3-5" aria-hidden="true"></span>
-          ${escapeHtml(tr("common.overdueColor3to5"))}
-        </li>
-        <li class="task-overdue-legend-item">
-          <span class="task-overdue-legend-swatch task-overdue-legend-swatch--6plus" aria-hidden="true"></span>
-          ${escapeHtml(tr("common.overdueColor6plus"))}
-        </li>
+        ${overdueLegendItemsHtml(overdueFilter)}
       </ul>
     </div>
     <div class="task-overdue-legend-filters">
@@ -8588,9 +8707,8 @@ function allTasksFilterBarHtml() {
           ${employeeOptions}
         </select>
       </div>
-      ${overdueColorFilterSelectHtml("task-overdue-color-filter", state.overdueColorFilter, {
-        labelKey: "owner.allTasksDeadlineFilterLabel",
-      })}
+      ${allTasksDeadlineFilterHtml()}
+      ${overdueColorFilterSelectHtml("task-overdue-color-filter", overdueFilter)}
     </div>
   </div>`;
 }
@@ -8601,22 +8719,58 @@ function taskOverdueColorLegendHtml() {
     <div class="task-overdue-legend-main">
       <p class="task-overdue-legend-intro mb-0">${escapeHtml(tr("common.overdueColorLegendIntro"))}</p>
       <ul class="task-overdue-legend-list mb-0">
-        <li class="task-overdue-legend-item">
-          <span class="task-overdue-legend-swatch task-overdue-legend-swatch--1-2" aria-hidden="true"></span>
-          ${escapeHtml(tr("common.overdueColor1to2"))}
-        </li>
-        <li class="task-overdue-legend-item">
-          <span class="task-overdue-legend-swatch task-overdue-legend-swatch--3-5" aria-hidden="true"></span>
-          ${escapeHtml(tr("common.overdueColor3to5"))}
-        </li>
-        <li class="task-overdue-legend-item">
-          <span class="task-overdue-legend-swatch task-overdue-legend-swatch--6plus" aria-hidden="true"></span>
-          ${escapeHtml(tr("common.overdueColor6plus"))}
-        </li>
+        ${overdueLegendItemsHtml(filter)}
       </ul>
     </div>
     ${overdueColorFilterSelectHtml("task-overdue-color-filter", filter)}
   </div>`;
+}
+
+function applyOverdueColorFilter(value, root) {
+  if (value !== "all" && value !== "1-2" && value !== "3-5" && value !== "6plus") return;
+  state.overdueColorFilter = value;
+  const select = root?.querySelector("#task-overdue-color-filter");
+  if (select && select.value !== value) select.value = value;
+  markOwnerNavBusy(350);
+  if (state.user?.role === "employee") requestAnimationFrame(() => renderEmployeeMain());
+  else requestAnimationFrame(() => renderOwnerMain());
+}
+
+function wireAllTasksDeadlineFilter(root) {
+  root?.querySelectorAll("[data-all-tasks-deadline]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const value = btn.getAttribute("data-all-tasks-deadline") || "all";
+      state.allTasksDeadlineFilter = value;
+      const dateInput = root.querySelector("#all-tasks-deadline-date");
+      if (dateInput && value !== "all" && value !== "today") {
+        dateInput.value = value;
+      } else if (dateInput && value === "all") {
+        dateInput.value = "";
+      }
+      markOwnerNavBusy(350);
+      requestAnimationFrame(() => renderOwnerMain());
+    });
+  });
+  const dateInput = root?.querySelector("#all-tasks-deadline-date");
+  if (dateInput) {
+    dateInput.addEventListener("change", () => {
+      const value = dateInput.value?.trim();
+      state.allTasksDeadlineFilter = value || "all";
+      markOwnerNavBusy(350);
+      requestAnimationFrame(() => renderOwnerMain());
+    });
+  }
+}
+
+function wireOverdueLegendPicks(root) {
+  root?.querySelectorAll("[data-overdue-tier]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const tier = btn.getAttribute("data-overdue-tier");
+      if (!tier) return;
+      const next = state.overdueColorFilter === tier ? "all" : tier;
+      applyOverdueColorFilter(next, root);
+    });
+  });
 }
 
 function wireAllTasksEmployeeFilter(root) {
@@ -8624,19 +8778,17 @@ function wireAllTasksEmployeeFilter(root) {
   if (!select) return;
   select.addEventListener("change", () => {
     state.allTasksEmployeeFilter = select.value || "all";
-    renderOwnerMain();
+    markOwnerNavBusy(350);
+    requestAnimationFrame(() => renderOwnerMain());
   });
 }
 
 function wireOverdueColorFilter(root) {
+  wireOverdueLegendPicks(root);
   const select = root?.querySelector("#task-overdue-color-filter");
   if (!select) return;
   select.addEventListener("change", () => {
-    const value = select.value;
-    if (value !== "all" && value !== "1-2" && value !== "3-5" && value !== "6plus") return;
-    state.overdueColorFilter = value;
-    if (state.user?.role === "employee") renderEmployeeMain();
-    else renderOwnerMain();
+    applyOverdueColorFilter(select.value, root);
   });
 }
 
@@ -9947,7 +10099,7 @@ async function startup() {
   initContentTranslate(api);
   onContentTranslationsUpdated(() => {
     rerenderChatTranslatedContent();
-    if (!state.user) return;
+    if (!state.user || isOwnerNavBusy()) return;
     if (state.user.role === "owner") {
       updateOwnerSidebarActiveState();
       renderOwnerMain();

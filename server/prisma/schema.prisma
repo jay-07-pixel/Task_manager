@@ -94,6 +94,8 @@ model TaskList {
 
   owner User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   tasks Task[]
+
+  @@index([ownerId])
 }
 
 model TaskAssignee {
@@ -116,6 +118,7 @@ model TaskAssignee {
   @@id([taskId, userId])
   @@map("task_assignee")
   @@index([userId])
+  @@index([assignedByUserId])
 }
 
 model TaskSubmissionProof {
@@ -178,6 +181,7 @@ model Task {
   deadlineExtensionRequests TaskDeadlineExtensionRequest[]
 
   @@index([listId])
+  @@index([listId, completed])
 }
 
 model TaskDeadlineExtensionRequest {
