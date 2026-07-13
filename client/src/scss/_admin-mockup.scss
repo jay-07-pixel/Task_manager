@@ -1321,6 +1321,12 @@
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+
+      &--unassigned {
+        background: rgba(220, 38, 38, 0.12);
+        color: #b91c1c;
+        font-weight: 700;
+      }
     }
 
     .owner-task-title-wrap .task-created-row .emp-task-date-label {

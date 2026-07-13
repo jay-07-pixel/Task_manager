@@ -7164,6 +7164,10 @@ function ownerTaskListBadgeHtml(task) {
     .filter(Boolean);
   if (assigneeNames.length) {
     badges.push(`<span class="owner-task-assignee-badge">${escapeHtml(assigneeNames.join(", "))}</span>`);
+  } else {
+    badges.push(
+      `<span class="owner-task-assignee-badge owner-task-assignee-badge--unassigned">${escapeHtml(tr("common.unassigned"))}</span>`
+    );
   }
   if (!badges.length) return "";
   return `<span class="owner-task-all-tasks-badges">${badges.join("")}</span>`;

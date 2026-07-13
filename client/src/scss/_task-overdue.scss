@@ -64,6 +64,11 @@
   .owner-task-assignee-badge {
     background: rgba(0, 0, 0, 0.1) !important;
     color: #451a03 !important;
+
+    &--unassigned {
+      background: rgba(185, 28, 28, 0.2) !important;
+      color: #7f1d1d !important;
+    }
   }
 }
 
@@ -132,6 +137,11 @@
   .owner-task-assignee-badge {
     background: rgba(0, 0, 0, 0.12) !important;
     color: #431407 !important;
+
+    &--unassigned {
+      background: rgba(127, 29, 29, 0.28) !important;
+      color: #431407 !important;
+    }
   }
 }
 
@@ -257,6 +267,11 @@
   .owner-task-assignee-badge {
     background: rgba(255, 251, 235, 0.2) !important;
     color: #fffbeb !important;
+
+    &--unassigned {
+      background: rgba(254, 226, 226, 0.35) !important;
+      color: #fee2e2 !important;
+    }
   }
 }
 
