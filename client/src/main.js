@@ -8638,42 +8638,32 @@ function overdueLegendItemsHtml(activeFilter) {
     .join("");
 }
 
-function allTasksDeadlineFilterHtml() {
+function allTasksDeadlineInputValue() {
   const filter = state.allTasksDeadlineFilter || "all";
-  const todayActive = filter === "today";
-  const pickedDate = filter !== "all" && filter !== "today" ? filter : "";
-  return `<div class="task-overdue-legend-filter all-tasks-deadline-filter">
-      <label class="task-overdue-legend-filter-label" for="all-tasks-deadline-date">${escapeHtml(tr("owner.allTasksDeadlineFilterLabel"))}</label>
-      <div class="all-tasks-deadline-controls">
-        <button
-          type="button"
-          class="all-tasks-deadline-today-btn${todayActive ? " active" : ""}"
-          data-all-tasks-deadline="today"
-          aria-pressed="${todayActive ? "true" : "false"}"
-        >${escapeHtml(tr("owner.allTasksDeadlineToday"))}</button>
-        <input
-          type="date"
-          id="all-tasks-deadline-date"
-          class="task-overdue-legend-select form-control form-control-sm all-tasks-deadline-date"
-          value="${escapeHtml(pickedDate)}"
-          aria-label="${escapeHtml(tr("owner.allTasksDeadlinePickDate"))}"
-        />
-        <button
-          type="button"
-          class="all-tasks-deadline-clear-btn"
-          data-all-tasks-deadline="all"
-          title="${escapeHtml(tr("owner.allTasksDeadlineAll"))}"
-          aria-label="${escapeHtml(tr("owner.allTasksDeadlineAll"))}"
-        >${escapeHtml(tr("owner.allTasksDeadlineAll"))}</button>
-      </div>
+  if (filter === "all") return "";
+  if (filter === "today") return localCalendarDayKey();
+  return filter;
+}
+
+function allTasksDeadlineFilterHtml() {
+  const pickedDate = allTasksDeadlineInputValue();
+  return `<div class="all-tasks-filter-field">
+      <label class="all-tasks-filter-label" for="all-tasks-deadline-date">${escapeHtml(tr("owner.allTasksDeadlineFilterLabel"))}</label>
+      <input
+        type="date"
+        id="all-tasks-deadline-date"
+        class="form-control form-control-sm all-tasks-filter-control all-tasks-deadline-date"
+        value="${escapeHtml(pickedDate)}"
+        aria-label="${escapeHtml(tr("owner.allTasksDeadlinePickDate"))}"
+      />
     </div>`;
 }
 
 function overdueColorFilterSelectHtml(selectId, filter) {
   const value = filter || "all";
-  return `<div class="task-overdue-legend-filter">
-      <label class="task-overdue-legend-filter-label" for="${selectId}">${escapeHtml(tr("common.overdueColorFilterLabel"))}</label>
-      <select id="${selectId}" class="task-overdue-legend-select form-select form-select-sm" aria-label="${escapeHtml(tr("common.overdueColorFilterLabel"))}">
+  return `<div class="all-tasks-filter-field">
+      <label class="all-tasks-filter-label" for="${selectId}">${escapeHtml(tr("common.overdueColorFilterLabel"))}</label>
+      <select id="${selectId}" class="form-select form-select-sm all-tasks-filter-control task-overdue-legend-select" aria-label="${escapeHtml(tr("common.overdueColorFilterLabel"))}">
         <option value="all"${value === "all" ? " selected" : ""}>${escapeHtml(tr("common.overdueColorFilterAll"))}</option>
         <option value="1-2"${value === "1-2" ? " selected" : ""}>${escapeHtml(tr("common.overdueColor1to2"))}</option>
         <option value="3-5"${value === "3-5" ? " selected" : ""}>${escapeHtml(tr("common.overdueColor3to5"))}</option>
@@ -8692,25 +8682,17 @@ function allTasksFilterBarHtml() {
         `<option value="${escapeHtml(list.id)}"${employeeFilter === list.id ? " selected" : ""}>${escapeHtml(dt(list.title))}</option>`
     )
     .join("");
-  return `<div class="task-overdue-legend task-all-tasks-filters" role="note" aria-label="${escapeHtml(tr("common.overdueColorLegendTitle"))}">
-    <div class="task-overdue-legend-main">
-      <p class="task-overdue-legend-intro mb-0">${escapeHtml(tr("common.overdueColorLegendIntro"))}</p>
-      <ul class="task-overdue-legend-list mb-0">
-        ${overdueLegendItemsHtml(overdueFilter)}
-      </ul>
-    </div>
-    <div class="task-overdue-legend-filters">
-      <div class="task-overdue-legend-filter">
-        <label class="task-overdue-legend-filter-label" for="all-tasks-employee-filter">${escapeHtml(tr("owner.allTasksEmployeeFilterLabel"))}</label>
-        <select id="all-tasks-employee-filter" class="task-overdue-legend-select form-select form-select-sm" aria-label="${escapeHtml(tr("owner.allTasksEmployeeFilterLabel"))}">
+  return `<div class="all-tasks-filter-bar" aria-label="${escapeHtml(tr("owner.allTasksFiltersAria"))}">
+      <div class="all-tasks-filter-field">
+        <label class="all-tasks-filter-label" for="all-tasks-employee-filter">${escapeHtml(tr("owner.allTasksEmployeeFilterLabel"))}</label>
+        <select id="all-tasks-employee-filter" class="form-select form-select-sm all-tasks-filter-control" aria-label="${escapeHtml(tr("owner.allTasksEmployeeFilterLabel"))}">
           <option value="all"${employeeFilter === "all" ? " selected" : ""}>${escapeHtml(tr("owner.allTasksEmployeeFilterAll"))}</option>
           ${employeeOptions}
         </select>
       </div>
       ${allTasksDeadlineFilterHtml()}
       ${overdueColorFilterSelectHtml("task-overdue-color-filter", overdueFilter)}
-    </div>
-  </div>`;
+    </div>`;
 }
 
 function taskOverdueColorLegendHtml() {
@@ -8722,7 +8704,15 @@ function taskOverdueColorLegendHtml() {
         ${overdueLegendItemsHtml(filter)}
       </ul>
     </div>
-    ${overdueColorFilterSelectHtml("task-overdue-color-filter", filter)}
+    <div class="task-overdue-legend-filter">
+      <label class="task-overdue-legend-filter-label" for="task-overdue-color-filter">${escapeHtml(tr("common.overdueColorFilterLabel"))}</label>
+      <select id="task-overdue-color-filter" class="task-overdue-legend-select form-select form-select-sm" aria-label="${escapeHtml(tr("common.overdueColorFilterLabel"))}">
+        <option value="all"${filter === "all" ? " selected" : ""}>${escapeHtml(tr("common.overdueColorFilterAll"))}</option>
+        <option value="1-2"${filter === "1-2" ? " selected" : ""}>${escapeHtml(tr("common.overdueColor1to2"))}</option>
+        <option value="3-5"${filter === "3-5" ? " selected" : ""}>${escapeHtml(tr("common.overdueColor3to5"))}</option>
+        <option value="6plus"${filter === "6plus" ? " selected" : ""}>${escapeHtml(tr("common.overdueColor6plus"))}</option>
+      </select>
+    </div>
   </div>`;
 }
 
@@ -8737,29 +8727,14 @@ function applyOverdueColorFilter(value, root) {
 }
 
 function wireAllTasksDeadlineFilter(root) {
-  root?.querySelectorAll("[data-all-tasks-deadline]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const value = btn.getAttribute("data-all-tasks-deadline") || "all";
-      state.allTasksDeadlineFilter = value;
-      const dateInput = root.querySelector("#all-tasks-deadline-date");
-      if (dateInput && value !== "all" && value !== "today") {
-        dateInput.value = value;
-      } else if (dateInput && value === "all") {
-        dateInput.value = "";
-      }
-      markOwnerNavBusy(350);
-      requestAnimationFrame(() => renderOwnerMain());
-    });
-  });
   const dateInput = root?.querySelector("#all-tasks-deadline-date");
-  if (dateInput) {
-    dateInput.addEventListener("change", () => {
-      const value = dateInput.value?.trim();
-      state.allTasksDeadlineFilter = value || "all";
-      markOwnerNavBusy(350);
-      requestAnimationFrame(() => renderOwnerMain());
-    });
-  }
+  if (!dateInput) return;
+  dateInput.addEventListener("change", () => {
+    const value = dateInput.value?.trim();
+    state.allTasksDeadlineFilter = value || "all";
+    markOwnerNavBusy(350);
+    requestAnimationFrame(() => renderOwnerMain());
+  });
 }
 
 function wireOverdueLegendPicks(root) {

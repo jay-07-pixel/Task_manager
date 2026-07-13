@@ -370,45 +370,44 @@
   }
 }
 
-.all-tasks-deadline-filter {
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.35rem;
+.all-tasks-filter-bar {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem 1rem;
+  align-items: end;
+  margin: 0 0 0.85rem;
+  padding: 0.8rem 0.95rem;
+  border: 1px solid color-mix(in srgb, var(--admin-outline-variant, var(--bs-border-color)) 55%, transparent);
+  border-radius: 0.65rem;
+  background: color-mix(in srgb, var(--admin-secondary-container, var(--bs-primary-bg-subtle)) 18%, var(--admin-surface-container-low, var(--bs-body-bg)));
 }
 
-.all-tasks-deadline-controls {
+.all-tasks-filter-field {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.4rem;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
 }
 
-.all-tasks-deadline-today-btn,
-.all-tasks-deadline-clear-btn {
-  padding: 0.25rem 0.55rem;
-  border: 1px solid color-mix(in srgb, var(--admin-outline-variant, var(--bs-border-color)) 65%, transparent);
-  border-radius: 0.375rem;
-  background: var(--admin-surface-container-lowest, var(--bs-body-bg));
-  color: var(--admin-on-surface, var(--bs-body-color));
+.all-tasks-filter-label {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--admin-on-surface-variant, var(--bs-secondary-color));
+}
+
+.all-tasks-filter-control {
+  width: 100%;
+  min-width: 0;
   font-size: 0.8125rem;
-  line-height: 1.3;
-  cursor: pointer;
-
-  &:hover {
-    background: color-mix(in srgb, var(--admin-primary, #006d77) 8%, var(--admin-surface-container-lowest, var(--bs-body-bg)));
-  }
-
-  &.active {
-    border-color: color-mix(in srgb, var(--admin-primary, #006d77) 45%, transparent);
-    background: color-mix(in srgb, var(--admin-primary, #006d77) 12%, transparent);
-    color: var(--admin-primary, #006d77);
-    font-weight: 600;
-  }
+  border-color: color-mix(in srgb, var(--admin-outline-variant, var(--bs-border-color)) 65%, transparent);
+  background-color: var(--admin-surface-container-lowest, var(--bs-body-bg));
+  color: var(--admin-on-surface, var(--bs-body-color));
 }
 
 .all-tasks-deadline-date {
-  min-width: 9.5rem;
-  max-width: 100%;
+  min-height: calc(1.5em + 0.5rem + 2px);
 }
 
 .task-overdue-legend-swatch {
@@ -468,6 +467,10 @@
   .task-all-tasks-filters .task-overdue-legend-select {
     min-width: 0;
     width: 100%;
+  }
+
+  .all-tasks-filter-bar {
+    grid-template-columns: 1fr;
   }
 
   .task-overdue-legend-select {
