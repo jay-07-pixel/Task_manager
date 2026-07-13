@@ -145,6 +145,8 @@ let pendingCustomRecurrence = null;
 let listNameResolve = null;
 
 const OWNER_SYNC_INTERVAL_MS = 12_000;
+/** Virtual sidebar id — aggregates tasks from every list. */
+const OWNER_ALL_TASKS_LIST_ID = "__owner_all_tasks__";
 /** @type {number | null} */
 let ownerSyncTimer = null;
 let ownerTasksFingerprint = "";
@@ -3193,6 +3195,9 @@ function ownerKpiCardHtml(filterKey, label, msIcon, count, total, activeClass = 
 function ownerFilteredTasks() {
   const activeList = state.lists.find((l) => l.id === state.activeListId);
   const tasks = state.tasks;
+  if (isAllTasksList(state.activeListId) && state.ownerTaskFilter === "active") {
+    return tasks.filter((t) => !t.completed);
+  }
   if (state.ownerTaskFilter === "completed") {
     return tasks.filter((t) => t.completed);
   }
@@ -3209,6 +3214,9 @@ function ownerFilteredTasks() {
 function sortOwnerTasksForDisplay(tasks) {
   if (state.ownerTaskFilter === "completed") {
     return [...tasks].sort(compareCompletedTasksRecentFirst);
+  }
+  if (isAllTasksList(state.activeListId)) {
+    return sortTasksByDeadlineClosest(tasks);
   }
   return sortTasksByRecurrenceThenCreated(tasks);
 }
@@ -3362,6 +3370,7 @@ function leftNavInner() {
           </button>
         </div>
         <div class="list-group list-group-flush owner-list-nav js-list-host"></div>
+        <div class="admin-your-lists-footer js-all-tasks-host"></div>
       </div>
     </div>`;
 }
@@ -6728,7 +6737,7 @@ function openOwnerCreateTaskModal() {
   }
   let listId = state.activeListId;
   const activeList = state.lists.find((l) => l.id === listId);
-  if (!listId || isEmployeeAssignmentsList(activeList)) {
+  if (!listId || isEmployeeAssignmentsList(activeList) || isAllTasksList(listId)) {
     listId = lists[0].id;
   }
 
@@ -6808,6 +6817,14 @@ async function syncOwnerDashboard({ forceRender = false } = {}) {
 
   const ui = forceRender ? null : captureOwnerUiState();
   try {
+    if (isAllTasksList(state.activeListId)) {
+      const before = ownerTasksFingerprint;
+      await loadAllOwnerTasks();
+      if (!forceRender && ownerTasksFingerprint === before) return;
+      renderOwnerMain();
+      restoreOwnerUiState(ui);
+      return;
+    }
     const { tasks } = await api(`/api/tasks/lists/${state.activeListId}`);
     const fp = ownerTasksFingerprintFrom(tasks);
     if (!forceRender && fp === ownerTasksFingerprint) return;
@@ -6849,10 +6866,39 @@ function startOwnerAutoSync() {
   window.addEventListener("focus", onOwnerFocusSync);
 }
 
+async function loadAllOwnerTasks() {
+  if (!state.lists.length) {
+    state.tasks = [];
+    updateOwnerTasksFingerprint();
+    return;
+  }
+  const batches = await Promise.all(
+    state.lists.map(async (list) => {
+      try {
+        const { tasks } = await api(`/api/tasks/lists/${list.id}`);
+        return (tasks ?? []).map((task) => ({
+          ...task,
+          ownerAllTasksListId: list.id,
+          ownerAllTasksListTitle: list.title,
+        }));
+      } catch {
+        return [];
+      }
+    })
+  );
+  state.tasks = batches.flat();
+  updateOwnerTasksFingerprint();
+  await ensureStateContentTranslations(state);
+}
+
 async function loadTasks(listId) {
   if (!listId) {
     state.tasks = [];
     updateOwnerTasksFingerprint();
+    return;
+  }
+  if (isAllTasksList(listId)) {
+    await loadAllOwnerTasks();
     return;
   }
   const { tasks } = await api(`/api/tasks/lists/${listId}`);
@@ -6872,7 +6918,7 @@ async function loadAssignees() {
 }
 
 function bindListNavHandlers() {
-  document.querySelectorAll(".js-list-host, .js-emp-assign-list-host").forEach((host) => {
+  document.querySelectorAll(".js-list-host, .js-emp-assign-list-host, .js-all-tasks-host").forEach((host) => {
     host.querySelectorAll("[data-list-id]").forEach((btn) => {
       btn.querySelectorAll(".js-list-delete").forEach((delBtn) => {
         delBtn.addEventListener("click", (e) => {
@@ -6895,7 +6941,6 @@ function bindListNavHandlers() {
         state.ownerView = "dashboard";
         clearAdminReportsCache();
         state.activeListId = listId;
-        const list = state.lists.find((x) => x.id === listId);
         state.ownerTaskFilter = "active";
         await loadTasks(state.activeListId);
         renderOwnerMain();
@@ -6931,6 +6976,45 @@ function bindListNavHandlers() {
 
 function isEmployeeAssignmentsList(list) {
   return list?.kind === "employee_assignments" || list?.title === tr("nav.employeeAssignments");
+}
+
+function isAllTasksList(listOrId) {
+  const id = typeof listOrId === "string" ? listOrId : listOrId?.id;
+  return id === OWNER_ALL_TASKS_LIST_ID;
+}
+
+function ownerAllTasksNavButtonHtml() {
+  const active = state.ownerView === "dashboard" && isAllTasksList(state.activeListId);
+  return `<button type="button" class="admin-sidebar-nav-item owner-list-item owner-list-item--pinned${active ? " active" : ""}" data-list-id="${OWNER_ALL_TASKS_LIST_ID}" data-system-pinned="1">
+    <span class="admin-nav-item-left min-w-0">
+      ${adminMsIcon("format_list_bulleted")}
+      <span class="owner-emp-assign-title" title="${tr("nav.allTasksHint")}">${escapeHtml(tr("nav.allTasks"))}</span>
+    </span>
+    <span class="owner-list-item-actions">
+      ${active ? adminMsIcon("chevron_right", "admin-nav-chevron") : ""}
+    </span>
+  </button>`;
+}
+
+function ownerTaskListBadgeHtml(task) {
+  if (!isAllTasksList(state.activeListId)) return "";
+  const raw =
+    task.ownerAllTasksListTitle ||
+    state.lists.find((l) => l.id === task.ownerAllTasksListId)?.title ||
+    "";
+  if (!raw) return "";
+  return `<span class="owner-task-list-badge">${escapeHtml(dt(raw))}</span>`;
+}
+
+function sortTasksByDeadlineClosest(tasks) {
+  return [...tasks].sort((a, b) => {
+    const aDue = a.dueAt ? new Date(a.dueAt).getTime() : Number.POSITIVE_INFINITY;
+    const bDue = b.dueAt ? new Date(b.dueAt).getTime() : Number.POSITIVE_INFINITY;
+    if (aDue !== bDue) return aDue - bDue;
+    const aCreated = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const bCreated = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+    return aCreated - bCreated;
+  });
 }
 
 const LIST_PIN_HOLD_MS = 550;
@@ -7076,6 +7160,7 @@ function renderListContentOnly() {
   const userLists = sortUserLists(state.lists.filter((l) => !isEmployeeAssignmentsList(l)));
   const pinnedHtml = pinnedLists.map((l) => ownerListNavButtonHtml(l, { systemPinned: true })).join("");
   const userHtml = userLists.map((l) => ownerListNavButtonHtml(l)).join("");
+  const allTasksHtml = ownerAllTasksNavButtonHtml();
   document.querySelectorAll(".js-emp-assign-list-host").forEach((host) => {
     host.innerHTML =
       pinnedHtml ||
@@ -7083,6 +7168,9 @@ function renderListContentOnly() {
   });
   document.querySelectorAll(".js-list-host").forEach((host) => {
     host.innerHTML = userHtml;
+  });
+  document.querySelectorAll(".js-all-tasks-host").forEach((host) => {
+    host.innerHTML = allTasksHtml;
   });
   document.querySelectorAll(".js-owner-reports-nav").forEach((btn) => {
     btn.classList.toggle("admin-sidebar-nav-item--active", state.ownerView === "reports");
@@ -7309,8 +7397,10 @@ function wireTaskModal() {
 }
 
 function ownerTaskGroupTbody(task) {
-  const activeList = state.lists.find((l) => l.id === state.activeListId);
-  const isEmpAssignList = isEmployeeAssignmentsList(activeList);
+  const rowList = isAllTasksList(state.activeListId)
+    ? state.lists.find((l) => l.id === task.ownerAllTasksListId)
+    : state.lists.find((l) => l.id === state.activeListId);
+  const isEmpAssignList = isEmployeeAssignmentsList(rowList);
   const assignees = task.assignees ?? [];
   const nAssigned = assignees.length;
   const nDone = assignees.filter((a) => assigneeShowsSubmittedForOwner(a)).length;
@@ -7354,6 +7444,7 @@ function ownerTaskGroupTbody(task) {
           <button type="button" class="btn btn-link text-start text-decoration-none p-0 owner-task-open-details" data-open-id="${
           task.id
         }" aria-label="${tr("common.openTaskDetails")}">${escapeHtml(dt(task.title))}</button>
+          ${ownerTaskListBadgeHtml(task)}
           ${taskCreatedMetaHtml(task.createdAt)}
           ${taskAssignmentAttachmentsBadgeHtml(task)}
         </div>
@@ -7475,11 +7566,17 @@ function renderOwnerMain() {
     openOwnerDeadlineExtensionsView();
     return;
   }
-  const list = state.lists.find((l) => l.id === state.activeListId);
+  const allTasksView = isAllTasksList(state.activeListId);
+  const list = allTasksView
+    ? { id: OWNER_ALL_TASKS_LIST_ID, title: tr("nav.allTasks") }
+    : state.lists.find((l) => l.id === state.activeListId);
   const listId = state.activeListId;
   const adminWelcomeName = state.user?.displayName
     ? escapeHtml(dt(state.user.displayName))
     : tr("common.admin");
+  const dashSubtitle = allTasksView
+    ? tr("owner.allTasksSubtitle")
+    : tr("common.welcome", { name: adminWelcomeName });
 
   const filteredTasks = ownerFilteredTasks();
   const showOverdueLegend = shouldShowTaskOverdueColorLegend({ ownerFilter: state.ownerTaskFilter });
@@ -7490,7 +7587,7 @@ function renderOwnerMain() {
 
   const tbodyInner = visibleTasks.map((task) => ownerTaskGroupTbody(task)).join("");
 
-  const isEmpAssignList = isEmployeeAssignmentsList(list);
+  const isEmpAssignList = allTasksView ? false : isEmployeeAssignmentsList(list);
   const useEmpAssignColumns = isEmpAssignList || state.ownerTaskFilter === "employee_assigned";
 
   const metrics = ownerDashboardMetrics();
@@ -7532,6 +7629,12 @@ function renderOwnerMain() {
             <i class="bi bi-person-lines-fill owner-empty-icon text-info" aria-hidden="true"></i>
             <p class="owner-empty-title mb-1">${tr("empty.noEmployeeAssignments")}</p>
             <p class="owner-empty-desc text-muted small mb-0">When employees use <strong>Create & assign task</strong> or assign a task to a colleague, it appears here. Click <strong>Refresh</strong> or re-open this list if you expect tasks to show.</p>
+          </div>`
+        : allTasksView
+          ? `<div class="owner-empty-state py-5 px-3">
+        <i class="bi bi-calendar-event owner-empty-icon text-primary" aria-hidden="true"></i>
+        <p class="owner-empty-title mb-1">${tr("empty.noAllTasks")}</p>
+        <p class="owner-empty-desc text-muted small mb-0">${tr("empty.noAllTasksDesc")}</p>
           </div>`
         : `<div class="owner-empty-state py-5 px-3">
         <i class="bi bi-clipboard2-plus owner-empty-icon text-primary" aria-hidden="true"></i>
@@ -7590,7 +7693,7 @@ function renderOwnerMain() {
       ${adminMobileNavToggleHtml()}
       <div class="admin-dash-heading">
         <h1 class="admin-dash-title">${tr("owner.dashboardTitle")}</h1>
-        <p class="admin-dash-subtitle">${tr("common.welcome", { name: adminWelcomeName })}</p>
+        <p class="admin-dash-subtitle">${escapeHtml(dashSubtitle)}</p>
       </div>
       <div class="admin-dash-utilities">
         ${languageSelectorHtml({ compact: true })}
@@ -7747,7 +7850,7 @@ function renderOwnerMain() {
     });
   });
 
-  if (state.ownerTaskFilter === "active" && visibleTasks.length > 0) {
+  if (state.ownerTaskFilter === "active" && visibleTasks.length > 0 && !allTasksView) {
   initIncompleteSortables(listId);
   } else {
     destroyTaskSortables();
