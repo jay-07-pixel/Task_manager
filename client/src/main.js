@@ -129,6 +129,7 @@ let state = {
   ownerTaskFilter: "active",
   overdueColorFilter: "all",
   allTasksEmployeeFilter: "all",
+  allTasksListFilter: "all",
   allTasksDeadlineFilter: "all",
   ownerView: "dashboard",
   empView: "dashboard",
@@ -7021,6 +7022,7 @@ async function selectOwnerList(listId) {
   clearAdminReportsCache();
   if (!isAllTasksList(listId)) {
     state.allTasksEmployeeFilter = "all";
+    state.allTasksListFilter = "all";
     state.allTasksDeadlineFilter = "all";
   }
   state.activeListId = listId;
@@ -7149,12 +7151,22 @@ function ownerAllTasksNavButtonHtml() {
 
 function ownerTaskListBadgeHtml(task) {
   if (!isAllTasksList(state.activeListId)) return "";
-  const raw =
+  const badges = [];
+  const listTitle =
     task.ownerAllTasksListTitle ||
     state.lists.find((l) => l.id === task.ownerAllTasksListId)?.title ||
     "";
-  if (!raw) return "";
-  return `<span class="owner-task-list-badge">${escapeHtml(dt(raw))}</span>`;
+  if (listTitle) {
+    badges.push(`<span class="owner-task-list-badge">${escapeHtml(dt(listTitle))}</span>`);
+  }
+  const assigneeNames = (task.assignees ?? [])
+    .map((assignee) => dt(assignee.displayName || assignee.email || tr("common.employee")))
+    .filter(Boolean);
+  if (assigneeNames.length) {
+    badges.push(`<span class="owner-task-assignee-badge">${escapeHtml(assigneeNames.join(", "))}</span>`);
+  }
+  if (!badges.length) return "";
+  return `<span class="owner-task-all-tasks-badges">${badges.join("")}</span>`;
 }
 
 function sortTasksByDeadlineClosest(tasks) {
@@ -7731,6 +7743,9 @@ function renderOwnerMain() {
     allTasksView,
   });
   let visibleTasks = sortOwnerTasksForDisplay(filteredTasks);
+  if (allTasksView && state.allTasksListFilter !== "all") {
+    visibleTasks = filterTasksByAllTasksList(visibleTasks, state.allTasksListFilter);
+  }
   if (allTasksView && state.allTasksEmployeeFilter !== "all") {
     visibleTasks = filterTasksByAllTasksEmployee(visibleTasks, state.allTasksEmployeeFilter);
   }
@@ -7742,7 +7757,8 @@ function renderOwnerMain() {
   }
   const allTasksFiltersActive =
     allTasksView &&
-    (state.allTasksEmployeeFilter !== "all" ||
+    (state.allTasksListFilter !== "all" ||
+      state.allTasksEmployeeFilter !== "all" ||
       state.overdueColorFilter !== "all" ||
       state.allTasksDeadlineFilter !== "all");
 
@@ -7911,6 +7927,7 @@ function renderOwnerMain() {
 
   bindOwnerDescriptionPopups(main);
   wireOverdueColorFilter(main);
+  wireAllTasksListFilter(main);
   wireAllTasksEmployeeFilter(main);
   wireAllTasksDeadlineFilter(main);
   bindAssignmentAttachmentViewers(main, (taskId) => findTaskById(taskId));
@@ -8578,6 +8595,19 @@ function filterTasksByOverdueColor(tasks, filter, getTier) {
   return tasks.filter((task) => getTier(task) === filter);
 }
 
+function allTasksListFilterOptions() {
+  const listIds = new Set();
+  for (const task of state.tasks ?? []) {
+    if (task.ownerAllTasksListId) listIds.add(task.ownerAllTasksListId);
+  }
+  return sortUserLists(state.lists.filter((l) => listIds.has(l.id) && !isEmployeeAssignmentsList(l)));
+}
+
+function filterTasksByAllTasksList(tasks, listId) {
+  if (!listId || listId === "all") return tasks;
+  return tasks.filter((task) => task.ownerAllTasksListId === listId);
+}
+
 function allTasksEmployeeFilterOptions() {
   const byId = new Map();
   for (const task of state.tasks ?? []) {
@@ -8681,6 +8711,12 @@ function overdueColorFilterSelectHtml(selectId, filter) {
 }
 
 function allTasksFilterBarHtml() {
+  const lists = allTasksListFilterOptions();
+  let listFilter = state.allTasksListFilter || "all";
+  if (listFilter !== "all" && !lists.some((list) => list.id === listFilter)) {
+    listFilter = "all";
+    state.allTasksListFilter = "all";
+  }
   const employees = allTasksEmployeeFilterOptions();
   let employeeFilter = state.allTasksEmployeeFilter || "all";
   if (employeeFilter !== "all" && !employees.some((employee) => employee.id === employeeFilter)) {
@@ -8688,6 +8724,12 @@ function allTasksFilterBarHtml() {
     state.allTasksEmployeeFilter = "all";
   }
   const overdueFilter = state.overdueColorFilter || "all";
+  const listOptions = lists
+    .map(
+      (list) =>
+        `<option value="${escapeHtml(list.id)}"${listFilter === list.id ? " selected" : ""}>${escapeHtml(dt(list.title))}</option>`
+    )
+    .join("");
   const employeeOptions = employees
     .map(
       (employee) =>
@@ -8695,6 +8737,13 @@ function allTasksFilterBarHtml() {
     )
     .join("");
   return `<div class="all-tasks-filter-bar" aria-label="${escapeHtml(tr("owner.allTasksFiltersAria"))}">
+      <div class="all-tasks-filter-field">
+        <label class="all-tasks-filter-label" for="all-tasks-list-filter">${escapeHtml(tr("owner.allTasksListFilterLabel"))}</label>
+        <select id="all-tasks-list-filter" class="form-select form-select-sm all-tasks-filter-control" aria-label="${escapeHtml(tr("owner.allTasksListFilterLabel"))}">
+          <option value="all"${listFilter === "all" ? " selected" : ""}>${escapeHtml(tr("owner.allTasksListFilterAll"))}</option>
+          ${listOptions}
+        </select>
+      </div>
       <div class="all-tasks-filter-field">
         <label class="all-tasks-filter-label" for="all-tasks-employee-filter">${escapeHtml(tr("owner.allTasksEmployeeFilterLabel"))}</label>
         <select id="all-tasks-employee-filter" class="form-select form-select-sm all-tasks-filter-control" aria-label="${escapeHtml(tr("owner.allTasksEmployeeFilterLabel"))}">
@@ -8757,6 +8806,16 @@ function wireOverdueLegendPicks(root) {
       const next = state.overdueColorFilter === tier ? "all" : tier;
       applyOverdueColorFilter(next, root);
     });
+  });
+}
+
+function wireAllTasksListFilter(root) {
+  const select = root?.querySelector("#all-tasks-list-filter");
+  if (!select) return;
+  select.addEventListener("change", () => {
+    state.allTasksListFilter = select.value || "all";
+    markOwnerNavBusy(350);
+    requestAnimationFrame(() => renderOwnerMain());
   });
 }
 

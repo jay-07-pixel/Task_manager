@@ -60,6 +60,11 @@
     background: rgba(0, 0, 0, 0.12) !important;
     color: #451a03 !important;
   }
+
+  .owner-task-assignee-badge {
+    background: rgba(0, 0, 0, 0.1) !important;
+    color: #451a03 !important;
+  }
 }
 
 .owner-task-row--overdue-3-5,
@@ -121,6 +126,11 @@
 
   .owner-task-list-badge {
     background: rgba(0, 0, 0, 0.14) !important;
+    color: #431407 !important;
+  }
+
+  .owner-task-assignee-badge {
+    background: rgba(0, 0, 0, 0.12) !important;
     color: #431407 !important;
   }
 }
@@ -241,6 +251,11 @@
 
   .owner-task-list-badge {
     background: rgba(255, 251, 235, 0.24) !important;
+    color: #fffbeb !important;
+  }
+
+  .owner-task-assignee-badge {
+    background: rgba(255, 251, 235, 0.2) !important;
     color: #fffbeb !important;
   }
 }
@@ -372,7 +387,7 @@
 
 .all-tasks-filter-bar {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.75rem 1rem;
   align-items: end;
   margin: 0 0 0.85rem;
