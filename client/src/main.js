@@ -128,6 +128,7 @@ let state = {
   empFilter: "active",
   ownerTaskFilter: "active",
   overdueColorFilter: "all",
+  allTasksEmployeeFilter: "all",
   ownerView: "dashboard",
   empView: "dashboard",
   companyTrial: null,
@@ -150,6 +151,9 @@ const OWNER_ALL_TASKS_LIST_ID = "__owner_all_tasks__";
 /** @type {number | null} */
 let ownerSyncTimer = null;
 let ownerTasksFingerprint = "";
+/** @type {Map<string, object[]>} */
+const ownerTasksCache = new Map();
+let ownerMainLoading = false;
 const OWNER_TRIAL_POPUP_KEY = "taskmgr-owner-trial-popup-shown";
 const EMP_CRITICAL_OVERDUE_MIN_DAYS = 6;
 const POSTPONE_GRACE_MS = 24 * 60 * 60 * 1000;
@@ -2209,16 +2213,12 @@ function wireChatNotifyHandlers() {
         }
         if (url.includes("openAttendance=1") && state.user.role === "owner") {
           window.history.replaceState({}, "", window.location.pathname);
-          state.ownerView = "attendance";
-          renderListContentOnly();
-          renderOwnerMain();
+          navigateOwnerView("attendance");
           return;
         }
         if (url.includes("openDeadlineExtensions=1") && state.user.role === "owner") {
           window.history.replaceState({}, "", window.location.pathname);
-          state.ownerView = "deadline-extensions";
-          renderListContentOnly();
-          renderOwnerMain();
+          navigateOwnerView("deadline-extensions");
           return;
         }
         const taskMatch = url.match(/openTask=([^&]+)/);
@@ -2380,7 +2380,7 @@ async function focusOwnerTaskFromNotify(notify) {
     state.ownerTaskFilter = "active";
   }
 
-  renderListContentOnly();
+  updateOwnerSidebarActiveState();
   renderOwnerMain();
 
   const title = task?.title ? dt(task.title) : tr("common.task");
@@ -2438,18 +2438,14 @@ function handleOpenAttendanceDeepLink() {
     showToast(tr("attendance.attendanceNavOff"), "warning");
     return;
   }
-  state.ownerView = "attendance";
-  renderListContentOnly();
-  renderOwnerMain();
+  navigateOwnerView("attendance");
 }
 
 function handleOpenDeadlineExtensionsDeepLink() {
   const params = new URLSearchParams(window.location.search);
   if (params.get("openDeadlineExtensions") !== "1" || state.user?.role !== "owner") return;
   window.history.replaceState({}, "", window.location.pathname);
-  state.ownerView = "deadline-extensions";
-  renderListContentOnly();
-  renderOwnerMain();
+  navigateOwnerView("deadline-extensions");
 }
 
 async function refreshDeadlineExtensionNavBadge() {
@@ -2873,10 +2869,7 @@ function wireAdminHeaderProfileMenu(root) {
         showToast(tr("owner.ownerDashboardOwnersOnly"), "warning");
         return;
       }
-      state.ownerView = "company-profile";
-      renderListContentOnly();
-      renderOwnerMain();
-      dismissAdminMobileNav();
+      navigateOwnerView("company-profile");
     });
   });
 
@@ -2897,14 +2890,11 @@ function wireSettingsOpen(root = document) {
     btn.dataset.wired = "1";
     btn.addEventListener("click", () => {
       if (state.user?.role === "owner") {
-        state.ownerView = "settings";
-        renderListContentOnly();
-        renderOwnerMain();
-        dismissAdminMobileNav();
+        navigateOwnerView("settings");
       } else {
+        dismissEmpMobileNav();
         state.empView = "settings";
         renderEmployeeMain();
-        dismissEmpMobileNav();
       }
     });
   });
@@ -6830,6 +6820,7 @@ async function syncOwnerDashboard({ forceRender = false } = {}) {
     if (!forceRender && fp === ownerTasksFingerprint) return;
     ownerTasksFingerprint = fp;
     state.tasks = tasks;
+    ownerTasksCache.set(state.activeListId, tasks);
     renderOwnerMain();
     restoreOwnerUiState(ui);
   } catch {
@@ -6866,10 +6857,11 @@ function startOwnerAutoSync() {
   window.addEventListener("focus", onOwnerFocusSync);
 }
 
-async function loadAllOwnerTasks() {
+async function loadAllOwnerTasks({ awaitTranslation = false } = {}) {
   if (!state.lists.length) {
     state.tasks = [];
     updateOwnerTasksFingerprint();
+    ownerTasksCache.set(OWNER_ALL_TASKS_LIST_ID, []);
     return;
   }
   const batches = await Promise.all(
@@ -6888,23 +6880,51 @@ async function loadAllOwnerTasks() {
   );
   state.tasks = batches.flat();
   updateOwnerTasksFingerprint();
-  await ensureStateContentTranslations(state);
+  ownerTasksCache.set(OWNER_ALL_TASKS_LIST_ID, state.tasks);
+  const runTranslation = async () => {
+    const updated = await ensureStateContentTranslations(state);
+    if (
+      updated &&
+      state.user?.role === "owner" &&
+      state.ownerView === "dashboard" &&
+      isAllTasksList(state.activeListId)
+    ) {
+      renderOwnerMain();
+      initListSortable();
+    }
+  };
+  if (awaitTranslation) await runTranslation();
+  else void runTranslation();
 }
 
-async function loadTasks(listId) {
+async function loadTasks(listId, { awaitTranslation = false } = {}) {
   if (!listId) {
     state.tasks = [];
     updateOwnerTasksFingerprint();
     return;
   }
   if (isAllTasksList(listId)) {
-    await loadAllOwnerTasks();
+    await loadAllOwnerTasks({ awaitTranslation });
     return;
   }
   const { tasks } = await api(`/api/tasks/lists/${listId}`);
   state.tasks = tasks;
+  ownerTasksCache.set(listId, tasks);
   updateOwnerTasksFingerprint();
-  await ensureStateContentTranslations(state);
+  const runTranslation = async () => {
+    const updated = await ensureStateContentTranslations(state);
+    if (
+      updated &&
+      state.user?.role === "owner" &&
+      state.ownerView === "dashboard" &&
+      state.activeListId === listId
+    ) {
+      renderOwnerMain();
+      initListSortable();
+    }
+  };
+  if (awaitTranslation) await runTranslation();
+  else void runTranslation();
 }
 
 async function loadAssignees() {
@@ -6914,6 +6934,103 @@ async function loadAssignees() {
     if (monthlyBudgetMinutes != null) state.monthlyBudgetMinutes = monthlyBudgetMinutes;
   } catch {
     state.assignees = [];
+  }
+}
+
+function updateOwnerSidebarActiveState() {
+  const onDashboard = state.ownerView === "dashboard";
+  document.querySelectorAll("[data-list-id]").forEach((btn) => {
+    const listId = btn.getAttribute("data-list-id");
+    const active = onDashboard && listId === state.activeListId;
+    btn.classList.toggle("active", active);
+    if (btn.dataset.systemPinned === "1") {
+      const actions = btn.querySelector(".owner-list-item-actions");
+      if (!actions) return;
+      const chevron = actions.querySelector(".admin-nav-chevron");
+      if (active && !chevron) {
+        actions.insertAdjacentHTML("afterbegin", adminMsIcon("chevron_right", "admin-nav-chevron"));
+      } else if (!active && chevron) {
+        chevron.remove();
+      }
+    }
+  });
+  document.querySelectorAll(".js-owner-reports-nav").forEach((btn) => {
+    btn.classList.toggle("admin-sidebar-nav-item--active", state.ownerView === "reports");
+  });
+  document.querySelectorAll(".js-owner-attendance-nav").forEach((btn) => {
+    btn.classList.toggle("admin-sidebar-nav-item--active", state.ownerView === "attendance");
+  });
+  document.querySelectorAll(".js-owner-deadline-extensions-nav").forEach((btn) => {
+    btn.classList.toggle("admin-sidebar-nav-item--active", state.ownerView === "deadline-extensions");
+  });
+}
+
+function navigateOwnerView(view) {
+  dismissAdminMobileNav();
+  state.ownerView = view;
+  ownerMainLoading = false;
+  updateOwnerSidebarActiveState();
+  renderOwnerMain();
+}
+
+async function selectOwnerList(listId) {
+  if (!listId) return;
+  dismissAdminMobileNav();
+  state.ownerView = "dashboard";
+  clearAdminReportsCache();
+  if (!isAllTasksList(listId)) {
+    state.allTasksEmployeeFilter = "all";
+  }
+  state.activeListId = listId;
+  state.ownerTaskFilter = "active";
+  updateOwnerSidebarActiveState();
+
+  const cached = ownerTasksCache.get(listId);
+  if (cached) {
+    ownerMainLoading = false;
+    state.tasks = cached;
+    updateOwnerTasksFingerprint();
+    renderOwnerMain();
+    initListSortable();
+    void refreshOwnerListTasksInBackground(listId);
+    return;
+  }
+
+  ownerMainLoading = true;
+  state.tasks = [];
+  updateOwnerTasksFingerprint();
+  renderOwnerMain();
+
+  try {
+    await loadTasks(listId);
+    if (state.activeListId === listId && state.ownerView === "dashboard") {
+      ownerMainLoading = false;
+      renderOwnerMain();
+      initListSortable();
+    }
+  } catch (err) {
+    ownerMainLoading = false;
+    if (state.activeListId === listId && state.ownerView === "dashboard") {
+      renderOwnerMain();
+    }
+    showToast(err.message, "danger");
+  }
+}
+
+async function refreshOwnerListTasksInBackground(listId) {
+  try {
+    const before = ownerTasksFingerprint;
+    await loadTasks(listId);
+    if (
+      state.activeListId === listId &&
+      state.ownerView === "dashboard" &&
+      ownerTasksFingerprint !== before
+    ) {
+      renderOwnerMain();
+      initListSortable();
+    }
+  } catch {
+    /* background refresh */
   }
 }
 
@@ -6935,18 +7052,10 @@ function bindListNavHandlers() {
           if (listId) void deleteTaskList(listId);
         });
       });
-      btn.addEventListener("click", async (e) => {
+      btn.addEventListener("click", (e) => {
         if (e.target.closest(".grip-handle, .js-list-delete")) return;
         const listId = btn.getAttribute("data-list-id");
-        state.ownerView = "dashboard";
-        clearAdminReportsCache();
-        state.activeListId = listId;
-        state.ownerTaskFilter = "active";
-        await loadTasks(state.activeListId);
-        renderOwnerMain();
-        renderListContentOnly();
-        initListSortable();
-        dismissAdminMobileNav();
+        if (listId) void selectOwnerList(listId);
       });
       btn.querySelector(".list-title-edit")?.addEventListener("dblclick", async (ev) => {
         ev.stopPropagation();
@@ -7065,6 +7174,7 @@ async function deleteTaskList(listId) {
   if (!ok) return;
   try {
     await api(`/api/lists/${listId}`, { method: "DELETE" });
+    ownerTasksCache.delete(listId);
     const wasActive = state.activeListId === listId;
     await loadLists();
     if (wasActive) {
@@ -7172,15 +7282,7 @@ function renderListContentOnly() {
   document.querySelectorAll(".js-all-tasks-host").forEach((host) => {
     host.innerHTML = allTasksHtml;
   });
-  document.querySelectorAll(".js-owner-reports-nav").forEach((btn) => {
-    btn.classList.toggle("admin-sidebar-nav-item--active", state.ownerView === "reports");
-  });
-  document.querySelectorAll(".js-owner-attendance-nav").forEach((btn) => {
-    btn.classList.toggle("admin-sidebar-nav-item--active", state.ownerView === "attendance");
-  });
-  document.querySelectorAll(".js-owner-deadline-extensions-nav").forEach((btn) => {
-    btn.classList.toggle("admin-sidebar-nav-item--active", state.ownerView === "deadline-extensions");
-  });
+  updateOwnerSidebarActiveState();
   bindListNavHandlers();
   wireOwnerReportsNav();
   wireOwnerAttendanceNav();
@@ -7514,7 +7616,7 @@ function renderOwnerMain() {
   if (state.ownerView === "owner-dashboard") {
     if (!state.user?.isOwner) {
       state.ownerView = "dashboard";
-      renderListContentOnly();
+      updateOwnerSidebarActiveState();
     } else {
       destroyTaskSortables();
       openOwnerDashboardView();
@@ -7534,7 +7636,7 @@ function renderOwnerMain() {
   if (state.ownerView === "company-profile") {
     if (!state.user?.isOwner) {
       state.ownerView = "dashboard";
-      renderListContentOnly();
+      updateOwnerSidebarActiveState();
     } else {
       destroyTaskSortables();
       openOwnerCompanyProfileView();
@@ -7554,7 +7656,7 @@ function renderOwnerMain() {
   if (state.ownerView === "attendance") {
     if (!ownerAttendanceNavVisible()) {
       state.ownerView = "dashboard";
-      renderListContentOnly();
+      updateOwnerSidebarActiveState();
     } else {
       destroyTaskSortables();
       openOwnerAttendanceView();
@@ -7579,11 +7681,20 @@ function renderOwnerMain() {
     : tr("common.welcome", { name: adminWelcomeName });
 
   const filteredTasks = ownerFilteredTasks();
-  const showOverdueLegend = shouldShowTaskOverdueColorLegend({ ownerFilter: state.ownerTaskFilter });
+  const showOverdueLegend = shouldShowTaskOverdueColorLegend({
+    ownerFilter: state.ownerTaskFilter,
+    allTasksView,
+  });
   let visibleTasks = sortOwnerTasksForDisplay(filteredTasks);
+  if (allTasksView && state.allTasksEmployeeFilter !== "all") {
+    visibleTasks = filterTasksByAllTasksEmployee(visibleTasks, state.allTasksEmployeeFilter);
+  }
   if (showOverdueLegend) {
     visibleTasks = filterTasksByOverdueColor(visibleTasks, state.overdueColorFilter, ownerTaskOverdueTier);
   }
+  const allTasksFiltersActive =
+    allTasksView &&
+    (state.allTasksEmployeeFilter !== "all" || state.overdueColorFilter !== "all");
 
   const tbodyInner = visibleTasks.map((task) => ownerTaskGroupTbody(task)).join("");
 
@@ -7668,6 +7779,13 @@ function renderOwnerMain() {
   const tableBlock =
     !list
       ? emptyMessage
+      : ownerMainLoading && list
+        ? `<div class="owner-dashboard-loading py-5 text-center text-muted">
+          ${adminMsIcon("hourglass_top")}
+          <p class="mb-0 mt-2">${tr("common.loading")}</p>
+        </div>`
+      : filteredTasks.length > 0 && visibleTasks.length === 0 && allTasksFiltersActive
+        ? allTasksFiltersEmptyMessageHtml()
       : filteredTasks.length > 0 && visibleTasks.length === 0 && showOverdueLegend && state.overdueColorFilter !== "all"
         ? overdueFilterEmptyMessageHtml()
         : visibleTasks.length === 0
@@ -7707,7 +7825,7 @@ function renderOwnerMain() {
     </header>
     ${kpiRow}
     <section class="owner-task-panel" aria-label="${tr("owner.tasksPanel")}">
-      ${showOverdueLegend ? taskOverdueColorLegendHtml() : ""}
+      ${showOverdueLegend ? (allTasksView ? allTasksFilterBarHtml() : taskOverdueColorLegendHtml()) : ""}
       ${tableBlock}
     </section>
     </div>
@@ -7743,6 +7861,7 @@ function renderOwnerMain() {
 
   bindOwnerDescriptionPopups(main);
   wireOverdueColorFilter(main);
+  wireAllTasksEmployeeFilter(main);
   bindAssignmentAttachmentViewers(main, (taskId) => findTaskById(taskId));
 
   main.querySelectorAll(".owner-mark-done-open").forEach((btn) => {
@@ -8034,10 +8153,7 @@ function wireOwnerDashboardOpen(root = document) {
         showToast(tr("owner.ownerDashboardOwnersOnly"), "warning");
         return;
       }
-      state.ownerView = "owner-dashboard";
-      renderListContentOnly();
-      renderOwnerMain();
-      dismissAdminMobileNav();
+      navigateOwnerView("owner-dashboard");
     });
   });
 }
@@ -8047,10 +8163,7 @@ function wireOwnerDeadlineExtensionsNav() {
     if (btn.dataset.deadlineExtWired === "1") return;
     btn.dataset.deadlineExtWired = "1";
     btn.addEventListener("click", () => {
-      state.ownerView = "deadline-extensions";
-      renderListContentOnly();
-      renderOwnerMain();
-      dismissAdminMobileNav();
+      navigateOwnerView("deadline-extensions");
     });
   });
 }
@@ -8060,10 +8173,7 @@ function wireOwnerAttendanceNav() {
     if (btn.dataset.attendanceWired === "1") return;
     btn.dataset.attendanceWired = "1";
     btn.addEventListener("click", () => {
-      state.ownerView = "attendance";
-      renderListContentOnly();
-      renderOwnerMain();
-      dismissAdminMobileNav();
+      navigateOwnerView("attendance");
     });
   });
 }
@@ -8073,10 +8183,7 @@ function wireOwnerReportsNav() {
     if (btn.dataset.reportsWired === "1") return;
     btn.dataset.reportsWired = "1";
     btn.addEventListener("click", () => {
-      state.ownerView = "reports";
-      renderListContentOnly();
-      renderOwnerMain();
-      dismissAdminMobileNav();
+      navigateOwnerView("reports");
     });
   });
 }
@@ -8122,7 +8229,7 @@ function wireChromeNav() {
         state.ownerView === "deadline-extensions"
       ) {
         state.ownerView = "dashboard";
-        renderListContentOnly();
+        updateOwnerSidebarActiveState();
       }
       openOwnerCreateTaskModal();
     });
@@ -8146,10 +8253,7 @@ function wireOwnerDashboardAnnouncementListener() {
       showToast(tr("owner.ownerDashboardOwnersOnly"), "warning");
       return;
     }
-    state.ownerView = "owner-dashboard";
-    renderListContentOnly();
-    renderOwnerMain();
-    dismissAdminMobileNav();
+    navigateOwnerView("owner-dashboard");
   });
   window.addEventListener("taskmgr:open-attendance", () => {
     if (state.user?.role !== "owner") return;
@@ -8157,17 +8261,11 @@ function wireOwnerDashboardAnnouncementListener() {
       showToast(tr("attendance.attendanceNavOff"), "warning");
       return;
     }
-    state.ownerView = "attendance";
-    renderListContentOnly();
-    renderOwnerMain();
-    dismissAdminMobileNav();
+    navigateOwnerView("attendance");
   });
   window.addEventListener("taskmgr:open-deadline-extensions", () => {
     if (state.user?.role !== "owner") return;
-    state.ownerView = "deadline-extensions";
-    renderListContentOnly();
-    renderOwnerMain();
-    dismissAdminMobileNav();
+    navigateOwnerView("deadline-extensions");
   });
 }
 
@@ -8229,22 +8327,13 @@ function renderOwnerChrome() {
         showToast(tr("owner.ownerDashboardOwnersOnly"), "warning");
         return;
       }
-      state.ownerView = "company-profile";
-      renderListContentOnly();
-      renderOwnerMain();
-      dismissAdminMobileNav();
+      navigateOwnerView("company-profile");
     },
     onOpenManageEmployees: () => {
-      state.ownerView = "manage-employees";
-      renderListContentOnly();
-      renderOwnerMain();
-      dismissAdminMobileNav();
+      navigateOwnerView("manage-employees");
     },
     onOpenManageLocations: () => {
-      state.ownerView = "manage-locations";
-      renderListContentOnly();
-      renderOwnerMain();
-      dismissAdminMobileNav();
+      navigateOwnerView("manage-locations");
     },
     onToggleTheme: toggleAdminTheme,
     getUser: () => state.user,
@@ -8438,6 +8527,74 @@ function filterTasksByOverdueColor(tasks, filter, getTier) {
   return tasks.filter((task) => getTier(task) === filter);
 }
 
+function allTasksEmployeeFilterOptions() {
+  const listIds = new Set();
+  for (const task of state.tasks ?? []) {
+    if (task.ownerAllTasksListId) listIds.add(task.ownerAllTasksListId);
+  }
+  return sortUserLists(state.lists.filter((l) => listIds.has(l.id) && !isEmployeeAssignmentsList(l)));
+}
+
+function filterTasksByAllTasksEmployee(tasks, listId) {
+  if (!listId || listId === "all") return tasks;
+  return tasks.filter((task) => task.ownerAllTasksListId === listId);
+}
+
+function overdueColorFilterSelectHtml(selectId, filter, { labelKey = "common.overdueColorFilterLabel" } = {}) {
+  const value = filter || "all";
+  return `<div class="task-overdue-legend-filter">
+      <label class="task-overdue-legend-filter-label" for="${selectId}">${escapeHtml(tr(labelKey))}</label>
+      <select id="${selectId}" class="task-overdue-legend-select form-select form-select-sm" aria-label="${escapeHtml(tr(labelKey))}">
+        <option value="all"${value === "all" ? " selected" : ""}>${escapeHtml(tr("common.overdueColorFilterAll"))}</option>
+        <option value="1-2"${value === "1-2" ? " selected" : ""}>${escapeHtml(tr("common.overdueColor1to2"))}</option>
+        <option value="3-5"${value === "3-5" ? " selected" : ""}>${escapeHtml(tr("common.overdueColor3to5"))}</option>
+        <option value="6plus"${value === "6plus" ? " selected" : ""}>${escapeHtml(tr("common.overdueColor6plus"))}</option>
+      </select>
+    </div>`;
+}
+
+function allTasksFilterBarHtml() {
+  const employeeFilter = state.allTasksEmployeeFilter || "all";
+  const employees = allTasksEmployeeFilterOptions();
+  const employeeOptions = employees
+    .map(
+      (list) =>
+        `<option value="${escapeHtml(list.id)}"${employeeFilter === list.id ? " selected" : ""}>${escapeHtml(dt(list.title))}</option>`
+    )
+    .join("");
+  return `<div class="task-overdue-legend task-all-tasks-filters" role="note" aria-label="${escapeHtml(tr("common.overdueColorLegendTitle"))}">
+    <div class="task-overdue-legend-main">
+      <p class="task-overdue-legend-intro mb-0">${escapeHtml(tr("common.overdueColorLegendIntro"))}</p>
+      <ul class="task-overdue-legend-list mb-0">
+        <li class="task-overdue-legend-item">
+          <span class="task-overdue-legend-swatch task-overdue-legend-swatch--1-2" aria-hidden="true"></span>
+          ${escapeHtml(tr("common.overdueColor1to2"))}
+        </li>
+        <li class="task-overdue-legend-item">
+          <span class="task-overdue-legend-swatch task-overdue-legend-swatch--3-5" aria-hidden="true"></span>
+          ${escapeHtml(tr("common.overdueColor3to5"))}
+        </li>
+        <li class="task-overdue-legend-item">
+          <span class="task-overdue-legend-swatch task-overdue-legend-swatch--6plus" aria-hidden="true"></span>
+          ${escapeHtml(tr("common.overdueColor6plus"))}
+        </li>
+      </ul>
+    </div>
+    <div class="task-overdue-legend-filters">
+      <div class="task-overdue-legend-filter">
+        <label class="task-overdue-legend-filter-label" for="all-tasks-employee-filter">${escapeHtml(tr("owner.allTasksEmployeeFilterLabel"))}</label>
+        <select id="all-tasks-employee-filter" class="task-overdue-legend-select form-select form-select-sm" aria-label="${escapeHtml(tr("owner.allTasksEmployeeFilterLabel"))}">
+          <option value="all"${employeeFilter === "all" ? " selected" : ""}>${escapeHtml(tr("owner.allTasksEmployeeFilterAll"))}</option>
+          ${employeeOptions}
+        </select>
+      </div>
+      ${overdueColorFilterSelectHtml("task-overdue-color-filter", state.overdueColorFilter, {
+        labelKey: "owner.allTasksDeadlineFilterLabel",
+      })}
+    </div>
+  </div>`;
+}
+
 function taskOverdueColorLegendHtml() {
   const filter = state.overdueColorFilter || "all";
   return `<div class="task-overdue-legend" role="note" aria-label="${escapeHtml(tr("common.overdueColorLegendTitle"))}">
@@ -8458,16 +8615,17 @@ function taskOverdueColorLegendHtml() {
         </li>
       </ul>
     </div>
-    <div class="task-overdue-legend-filter">
-      <label class="task-overdue-legend-filter-label" for="task-overdue-color-filter">${escapeHtml(tr("common.overdueColorFilterLabel"))}</label>
-      <select id="task-overdue-color-filter" class="task-overdue-legend-select form-select form-select-sm" aria-label="${escapeHtml(tr("common.overdueColorFilterLabel"))}">
-        <option value="all"${filter === "all" ? " selected" : ""}>${escapeHtml(tr("common.overdueColorFilterAll"))}</option>
-        <option value="1-2"${filter === "1-2" ? " selected" : ""}>${escapeHtml(tr("common.overdueColor1to2"))}</option>
-        <option value="3-5"${filter === "3-5" ? " selected" : ""}>${escapeHtml(tr("common.overdueColor3to5"))}</option>
-        <option value="6plus"${filter === "6plus" ? " selected" : ""}>${escapeHtml(tr("common.overdueColor6plus"))}</option>
-      </select>
-    </div>
+    ${overdueColorFilterSelectHtml("task-overdue-color-filter", filter)}
   </div>`;
+}
+
+function wireAllTasksEmployeeFilter(root) {
+  const select = root?.querySelector("#all-tasks-employee-filter");
+  if (!select) return;
+  select.addEventListener("change", () => {
+    state.allTasksEmployeeFilter = select.value || "all";
+    renderOwnerMain();
+  });
 }
 
 function wireOverdueColorFilter(root) {
@@ -8482,6 +8640,14 @@ function wireOverdueColorFilter(root) {
   });
 }
 
+function allTasksFiltersEmptyMessageHtml() {
+  return `<div class="owner-empty-state py-5 px-3">
+    <i class="bi bi-funnel owner-empty-icon text-primary" aria-hidden="true"></i>
+    <p class="owner-empty-title mb-1">${escapeHtml(tr("owner.allTasksFilterNone"))}</p>
+    <p class="owner-empty-desc text-muted small mb-0">${escapeHtml(tr("owner.allTasksFilterNoneHint"))}</p>
+  </div>`;
+}
+
 function overdueFilterEmptyMessageHtml() {
   return `<div class="owner-empty-state py-5 px-3">
     <i class="bi bi-funnel owner-empty-icon text-primary" aria-hidden="true"></i>
@@ -8490,7 +8656,8 @@ function overdueFilterEmptyMessageHtml() {
   </div>`;
 }
 
-function shouldShowTaskOverdueColorLegend({ ownerFilter, empFilter } = {}) {
+function shouldShowTaskOverdueColorLegend({ ownerFilter, empFilter, allTasksView } = {}) {
+  if (allTasksView) return ownerFilter === "active" || ownerFilter === "in_review";
   if (ownerFilter != null) return ownerFilter === "active" || ownerFilter === "in_review";
   if (empFilter != null) return empFilter === "active";
   return false;
@@ -9322,6 +9489,17 @@ function renderEmpMobileFilters() {
   /* Mobile filters use admin KPI cards in renderEmployeeMain */
 }
 
+function updateEmpNavActiveState() {
+  const onDashboard = state.empView !== "attendance";
+  document.querySelectorAll(".js-emp-nav-host [data-emp-filter]").forEach((btn) => {
+    const filter = btn.getAttribute("data-emp-filter");
+    btn.classList.toggle("active", onDashboard && state.empFilter === filter);
+  });
+  document.querySelectorAll(".js-emp-nav-host [data-emp-view='attendance']").forEach((btn) => {
+    btn.classList.toggle("active", state.empView === "attendance");
+  });
+}
+
 function renderEmpListContentOnly() {
   const metrics = employeeDashboardMetrics();
   const assignedMetrics = employeeAssignedByMeMetrics();
@@ -9346,25 +9524,30 @@ function renderEmpListContentOnly() {
   document.querySelectorAll(".js-emp-nav-host").forEach((host) => {
     host.innerHTML = html;
   });
+  updateEmpNavActiveState();
   bindEmpNavHandlers();
 }
 
 function bindEmpNavHandlers() {
   document.querySelectorAll(".js-emp-nav-host [data-emp-filter]").forEach((btn) => {
+    if (btn.dataset.empNavWired === "1") return;
+    btn.dataset.empNavWired = "1";
     btn.addEventListener("click", () => {
+      dismissEmpMobileNav();
       state.empFilter = btn.getAttribute("data-emp-filter") || "active";
       state.empView = "dashboard";
-      renderEmpListContentOnly();
+      updateEmpNavActiveState();
       renderEmployeeMain();
-      dismissEmpMobileNav();
     });
   });
   document.querySelectorAll(".js-emp-nav-host [data-emp-view]").forEach((btn) => {
+    if (btn.dataset.empNavWired === "1") return;
+    btn.dataset.empNavWired = "1";
     btn.addEventListener("click", () => {
-      state.empView = btn.getAttribute("data-emp-view") || "dashboard";
-      renderEmpListContentOnly();
-      renderEmployeeMain();
       dismissEmpMobileNav();
+      state.empView = btn.getAttribute("data-emp-view") || "dashboard";
+      updateEmpNavActiveState();
+      renderEmployeeMain();
     });
   });
 }
@@ -9735,7 +9918,7 @@ async function render() {
   await refreshCompanyTrial();
   await loadLists();
   await loadAssignees();
-  await loadTasks(state.activeListId);
+  await loadTasks(state.activeListId, { awaitTranslation: true });
   renderOwnerChrome();
   maybeShowOwnerTrialMessageModal();
   maybePromptLegalAnnouncement(state.user);
@@ -9764,7 +9947,14 @@ async function startup() {
   initContentTranslate(api);
   onContentTranslationsUpdated(() => {
     rerenderChatTranslatedContent();
-    void render();
+    if (!state.user) return;
+    if (state.user.role === "owner") {
+      updateOwnerSidebarActiveState();
+      renderOwnerMain();
+    } else if (state.user.role === "employee") {
+      updateEmpNavActiveState();
+      renderEmployeeMain();
+    }
   });
   setLanguageChangeHandler(async () => {
     await ensureStateContentTranslations(state);

@@ -1285,11 +1285,21 @@ export async function refreshAdminAttendance({ keepSelection = false, forceFull 
       return;
     }
   }
+  const main = document.getElementById("main-column");
+  const pageExists = document.querySelector(".admin-attendance-page");
+  if (!pageExists && main) {
+    main.innerHTML = `<div class="admin-main-scroll d-flex flex-column">
+      <div class="admin-attendance-loading p-5 text-center text-muted">
+        ${adminMsIconFn?.("hourglass_top") ?? ""}
+        <p class="mb-0 mt-2">${escapeHtmlFn?.(tr("common.loading")) ?? "Loading…"}</p>
+      </div>
+    </div>`;
+  }
+
   const data = await apiFn("/api/attendance/live");
   liveData = data;
   if (!keepSelection) selectedEmployeeId = null;
 
-  const pageExists = document.querySelector(".admin-attendance-page");
   const provider = await ensureMapLibrary();
 
   if (pageExists && keepSelection) {

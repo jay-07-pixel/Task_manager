@@ -355,6 +355,14 @@ async function loadPendingRequests() {
 export async function refreshDeadlineExtensionsPage() {
   const main = document.getElementById("main-column");
   if (!main) return;
+  if (!main.querySelector(".admin-deadline-ext-page")) {
+    main.innerHTML = `<div class="admin-main-scroll d-flex flex-column">
+      <div class="admin-deadline-ext-loading p-5 text-center text-muted">
+        ${adminMsIconFn?.("hourglass_top") ?? ""}
+        <p class="mb-0 mt-2">${escapeHtmlFn?.(tr("common.loading")) ?? "Loading…"}</p>
+      </div>
+    </div>`;
+  }
   await loadPendingRequests();
   main.innerHTML = pageHtml();
   wirePage(main);

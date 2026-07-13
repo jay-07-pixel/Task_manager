@@ -55,6 +55,11 @@
     background: rgba(255, 255, 255, 0.35) !important;
     color: #451a03 !important;
   }
+
+  .owner-task-list-badge {
+    background: rgba(0, 0, 0, 0.12) !important;
+    color: #451a03 !important;
+  }
 }
 
 .owner-task-row--overdue-3-5,
@@ -111,6 +116,11 @@
 
   .admin-recurrence-pill--none {
     background: rgba(255, 255, 255, 0.32) !important;
+    color: #431407 !important;
+  }
+
+  .owner-task-list-badge {
+    background: rgba(0, 0, 0, 0.14) !important;
     color: #431407 !important;
   }
 }
@@ -228,6 +238,11 @@
     background: rgba(255, 251, 235, 0.16) !important;
     color: rgba(255, 251, 235, 0.88) !important;
   }
+
+  .owner-task-list-badge {
+    background: rgba(255, 251, 235, 0.24) !important;
+    color: #fffbeb !important;
+  }
 }
 
 @media (max-width: 767.98px) {
@@ -276,6 +291,24 @@
   gap: 0.45rem;
   flex-shrink: 0;
   margin-left: auto;
+}
+
+.task-overdue-legend-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.65rem 1rem;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.task-all-tasks-filters .task-overdue-legend-filter {
+  margin-left: 0;
+}
+
+.task-all-tasks-filters .task-overdue-legend-select {
+  min-width: 10.5rem;
 }
 
 .task-overdue-legend-filter-label {
@@ -356,6 +389,18 @@
   .task-overdue-legend-filter {
     width: 100%;
     margin-left: 0;
+  }
+
+  .task-overdue-legend-filters {
+    width: 100%;
+    margin-left: 0;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .task-all-tasks-filters .task-overdue-legend-select {
+    min-width: 0;
+    width: 100%;
   }
 
   .task-overdue-legend-select {
