@@ -8579,16 +8579,24 @@ function filterTasksByOverdueColor(tasks, filter, getTier) {
 }
 
 function allTasksEmployeeFilterOptions() {
-  const listIds = new Set();
+  const byId = new Map();
   for (const task of state.tasks ?? []) {
-    if (task.ownerAllTasksListId) listIds.add(task.ownerAllTasksListId);
+    for (const assignee of task.assignees ?? []) {
+      if (!assignee?.id || byId.has(assignee.id)) continue;
+      byId.set(assignee.id, {
+        id: assignee.id,
+        displayName: assignee.displayName || assignee.email || tr("common.employee"),
+      });
+    }
   }
-  return sortUserLists(state.lists.filter((l) => listIds.has(l.id) && !isEmployeeAssignmentsList(l)));
+  return [...byId.values()].sort((a, b) =>
+    String(a.displayName || "").localeCompare(String(b.displayName || ""), undefined, { sensitivity: "base" })
+  );
 }
 
-function filterTasksByAllTasksEmployee(tasks, listId) {
-  if (!listId || listId === "all") return tasks;
-  return tasks.filter((task) => task.ownerAllTasksListId === listId);
+function filterTasksByAllTasksEmployee(tasks, userId) {
+  if (!userId || userId === "all") return tasks;
+  return tasks.filter((task) => (task.assignees ?? []).some((assignee) => assignee.id === userId));
 }
 
 function localCalendarDayKey(date = new Date()) {
@@ -8673,13 +8681,17 @@ function overdueColorFilterSelectHtml(selectId, filter) {
 }
 
 function allTasksFilterBarHtml() {
-  const employeeFilter = state.allTasksEmployeeFilter || "all";
-  const overdueFilter = state.overdueColorFilter || "all";
   const employees = allTasksEmployeeFilterOptions();
+  let employeeFilter = state.allTasksEmployeeFilter || "all";
+  if (employeeFilter !== "all" && !employees.some((employee) => employee.id === employeeFilter)) {
+    employeeFilter = "all";
+    state.allTasksEmployeeFilter = "all";
+  }
+  const overdueFilter = state.overdueColorFilter || "all";
   const employeeOptions = employees
     .map(
-      (list) =>
-        `<option value="${escapeHtml(list.id)}"${employeeFilter === list.id ? " selected" : ""}>${escapeHtml(dt(list.title))}</option>`
+      (employee) =>
+        `<option value="${escapeHtml(employee.id)}"${employeeFilter === employee.id ? " selected" : ""}>${escapeHtml(dt(employee.displayName))}</option>`
     )
     .join("");
   return `<div class="all-tasks-filter-bar" aria-label="${escapeHtml(tr("owner.allTasksFiltersAria"))}">
