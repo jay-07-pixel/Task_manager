@@ -1867,12 +1867,37 @@ router.get("/:id/submission", requireAuth, async (req, res) => {
       `/api/tasks/${task.id}/completion-proof/${assigneeUserId}${proofArchived ? "?archived=1" : ""}`,
     ];
   }
+
+  /** @type {{ url: string, available: boolean }[]} */
+  const completionProofs = [];
+  if (proofRows.length) {
+    for (const p of proofRows) {
+      completionProofs.push({
+        url: buildProofFileUrl(task.id, assigneeUserId, p.id, proofArchived),
+        available: Boolean(proofAbsolutePath(p.filePath)),
+      });
+    }
+  } else if (view.proofPath) {
+    completionProofs.push({
+      url: completionProofUrls[0],
+      available: Boolean(proofAbsolutePath(view.proofPath)),
+    });
+  }
+
+  const mediaAvailable = completionProofs.some((p) => p.available);
+  const hadMedia = completionProofs.length > 0;
+  const mediaMissing = hadMedia && !mediaAvailable;
+
   res.json({
     taskTitle: task.title,
     assigneeUserId,
     submissionText: view.submissionText,
     completionProofUrl: completionProofUrls[0] ?? null,
     completionProofUrls,
+    completionProofs,
+    hadMedia,
+    mediaAvailable,
+    mediaMissing,
     submittedAt:
       view.submittedAt instanceof Date ? view.submittedAt.toISOString() : (view.submittedAt ?? null),
     archived: view.archived,
@@ -1923,11 +1948,15 @@ async function serveAssigneeProofFile(req, res) {
     }
   }
   if (!proofPath) {
-    return res.status(404).send("Not found");
+    return res.status(404).json({ error: "Not found", code: "NOT_FOUND" });
   }
   const full = proofAbsolutePath(proofPath);
   if (!full) {
-    return res.status(404).send("Not found");
+    // Row/path still exists (submission history kept) but bytes were freed from storage.
+    return res.status(410).json({
+      error: "Media file not available",
+      code: "MEDIA_MISSING",
+    });
   }
   res.type(proofContentType(proofPath));
   res.sendFile(full);

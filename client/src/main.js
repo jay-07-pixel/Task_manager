@@ -1070,6 +1070,11 @@ async function loadAttachmentResource(item) {
   if (!res.ok) {
     if (res.status === 401) throw new Error(tr("validation.signInForFiles"));
     if (res.status === 403) throw new Error(tr("validation.noPermissionSubmission"));
+    if (res.status === 410) {
+      const err = new Error(tr("owner.submissionMediaUnavailable"));
+      err.code = "MEDIA_MISSING";
+      throw err;
+    }
     if (res.status === 404) throw new Error(tr("validation.submissionNotFound"));
     throw new Error(`Could not load file (${res.status}).`);
   }
@@ -1094,6 +1099,11 @@ async function fetchProofResource(proofUrl) {
   if (!res.ok) {
     if (res.status === 401) throw new Error(tr("validation.signInForFiles"));
     if (res.status === 403) throw new Error(tr("validation.noPermissionSubmission"));
+    if (res.status === 410) {
+      const err = new Error(tr("owner.submissionMediaUnavailable"));
+      err.code = "MEDIA_MISSING";
+      throw err;
+    }
     if (res.status === 404) throw new Error(tr("validation.submissionNotFound"));
     throw new Error(`Could not load submission file (${res.status}).`);
   }
@@ -4373,6 +4383,7 @@ function submissionDetailModalHtml() {
             </div>
             <div id="submission-detail-file-wrap" class="submission-detail-file-wrap d-none">
               <p id="submission-detail-file-label" class="small text-uppercase text-secondary fw-semibold mb-2">${tr("common.attachments")}</p>
+              <div id="submission-detail-media-missing" class="submission-detail-media-missing alert alert-warning py-2 px-3 small d-none mb-2" role="status"></div>
               <div id="submission-detail-gallery" class="submission-detail-gallery d-none"></div>
               <button type="button" id="submission-detail-image-frame" class="submission-detail-image-frame submission-detail-media-open js-submission-media-open d-none" data-media-index="0" aria-label="${tr("chat.viewImageFullScreen")}">
                 <img id="submission-detail-img" src="" class="w-100 submission-detail-img-preview" alt="${tr("common.submissionImage")}" />
@@ -5541,6 +5552,11 @@ function clearSubmissionDetailMedia() {
   submissionDetailMediaItems = [];
   submissionLightboxIndex = 0;
   closeSubmissionMediaLightbox();
+  const missingEl = document.getElementById("submission-detail-media-missing");
+  if (missingEl) {
+    missingEl.classList.add("d-none");
+    missingEl.textContent = "";
+  }
   const img = document.getElementById("submission-detail-img");
   const video = document.getElementById("submission-detail-video");
   const pdf = document.getElementById("submission-detail-pdf");
@@ -5650,13 +5666,22 @@ function appendSubmissionDetailGalleryAudio(gallery, resource) {
   gallery.appendChild(wrap);
 }
 
-async function openSubmissionDetailModal({ title, submissionText, proofUrl, proofUrls, attachmentItems }) {
+async function openSubmissionDetailModal({
+  title,
+  submissionText,
+  proofUrl,
+  proofUrls,
+  attachmentItems,
+  submittedAt = null,
+  mediaMissing = false,
+}) {
   const modalEl = document.getElementById("submissionDetailModal");
   const titleEl = document.getElementById("submissionDetailTitle");
   const textWrap = document.getElementById("submission-detail-text-wrap");
   const textEl = document.getElementById("submission-detail-text");
   const fileWrap = document.getElementById("submission-detail-file-wrap");
   const fileLabel = document.getElementById("submission-detail-file-label");
+  const missingEl = document.getElementById("submission-detail-media-missing");
   const imageFrame = document.getElementById("submission-detail-image-frame");
   const videoWrap = document.getElementById("submission-detail-video-wrap");
   const pdfWrap = document.getElementById("submission-detail-pdf-wrap");
@@ -5670,6 +5695,7 @@ async function openSubmissionDetailModal({ title, submissionText, proofUrl, proo
 
   const text = (submissionText || "").trim();
   const hasText = text.length > 0;
+  const when = submittedAt ? formatProgressUpdateTime(submittedAt) : "";
   const items = attachmentItems?.length
     ? attachmentItems
     : (proofUrls?.length ? proofUrls : proofUrl ? [proofUrl] : []).map((url) => ({ url, kind: null }));
@@ -5677,6 +5703,10 @@ async function openSubmissionDetailModal({ title, submissionText, proofUrl, proo
 
   titleEl.textContent = title || tr("modals.submission");
   clearSubmissionDetailMedia();
+  if (missingEl) {
+    missingEl.classList.add("d-none");
+    missingEl.textContent = "";
+  }
 
   if (hasText) {
     textWrap.classList.remove("d-none");
@@ -5686,13 +5716,41 @@ async function openSubmissionDetailModal({ title, submissionText, proofUrl, proo
     textEl.textContent = "";
   }
 
+  const showMissingNotice = (missingCount = items.length) => {
+    if (!missingEl) return;
+    const base = when
+      ? tr("owner.submissionMediaUnavailableWithDate", { date: when })
+      : tr("owner.submissionMediaUnavailable");
+    missingEl.textContent =
+      missingCount > 1
+        ? `${base} (${tr("owner.submissionMediaMissingCount", { count: missingCount })})`
+        : base;
+    missingEl.classList.remove("d-none");
+    fileWrap.classList.remove("d-none");
+    fileLabel.textContent = tr("common.attachments");
+  };
+
   if (hasFile) {
     fileWrap.classList.remove("d-none");
   } else {
     fileWrap.classList.add("d-none");
   }
 
-  emptyEl.classList.toggle("d-none", hasText || hasFile);
+  if (mediaMissing && hasFile) {
+    showMissingNotice(items.length);
+    emptyEl.classList.add("d-none");
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modal.show();
+    return;
+  }
+
+  emptyEl.classList.toggle("d-none", hasText || hasFile || Boolean(when));
+  if (!hasText && !hasFile && when && emptyEl) {
+    emptyEl.textContent = tr("owner.submissionRecordedOn", { date: when });
+    emptyEl.classList.remove("d-none");
+  } else if (emptyEl && (hasText || hasFile)) {
+    emptyEl.textContent = tr("modals.noSubmissionContent");
+  }
 
   const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
   modal.show();
@@ -5733,25 +5791,42 @@ async function openSubmissionDetailModal({ title, submissionText, proofUrl, proo
 
     fileLabel.textContent = tr("tasks.attachmentCount", { count: items.length });
     gallery.classList.remove("d-none");
+    let missingCount = 0;
     for (const item of items) {
-      const resource = attachmentItems?.length
-        ? await loadAttachmentResource(item)
-        : await fetchProofResource(item.url || item);
-      if (resource.kind === "pdf") {
+      try {
+        const resource = attachmentItems?.length
+          ? await loadAttachmentResource(item)
+          : await fetchProofResource(item.url || item);
+        if (resource.kind === "pdf") {
+          const mediaIndex = pushSubmissionDetailMediaItem(resource);
+          pdf.src = resource.url;
+          pdfWrap.dataset.mediaIndex = String(mediaIndex);
+          pdfWrap.classList.remove("d-none");
+          continue;
+        }
+        if (resource.kind === "audio") {
+          appendSubmissionDetailGalleryAudio(gallery, resource);
+          continue;
+        }
         const mediaIndex = pushSubmissionDetailMediaItem(resource);
-        pdf.src = resource.url;
-        pdfWrap.dataset.mediaIndex = String(mediaIndex);
-        pdfWrap.classList.remove("d-none");
-        continue;
+        appendSubmissionDetailGalleryItem(gallery, resource, mediaIndex);
+      } catch (err) {
+        if (err?.code === "MEDIA_MISSING" || /media file not available/i.test(err?.message || "")) {
+          missingCount += 1;
+          continue;
+        }
+        throw err;
       }
-      if (resource.kind === "audio") {
-        appendSubmissionDetailGalleryAudio(gallery, resource);
-        continue;
-      }
-      const mediaIndex = pushSubmissionDetailMediaItem(resource);
-      appendSubmissionDetailGalleryItem(gallery, resource, mediaIndex);
+    }
+    if (missingCount > 0) showMissingNotice(missingCount);
+    if (missingCount === items.length) {
+      gallery.classList.add("d-none");
     }
   } catch (err) {
+    if (err?.code === "MEDIA_MISSING" || /media file not available/i.test(err?.message || "")) {
+      showMissingNotice();
+      return;
+    }
     modal.hide();
     showToast(err.message || tr("toast.couldNotLoadSubmissionFile"), "danger");
   }
@@ -5770,7 +5845,9 @@ async function openSubmissionDetailForAssignee(taskId, userId, { archived = fals
       : `?assigneeUserId=${encodeURIComponent(userId)}${archived ? "&archived=1" : ""}`;
   const data = await api(`/api/tasks/${taskId}/submission${q}`);
   const when = data.submittedAt ? formatProgressUpdateTime(data.submittedAt) : "";
-  const title = data.archived && when ? `${data.taskTitle} — submitted ${when}` : data.taskTitle;
+  const title = when
+    ? tr("owner.submissionTitleWithDate", { title: data.taskTitle || tr("modals.submission"), date: when })
+    : data.taskTitle || tr("modals.submission");
   const proofUrls =
     data.completionProofUrls?.length > 0
       ? data.completionProofUrls
@@ -5781,6 +5858,8 @@ async function openSubmissionDetailForAssignee(taskId, userId, { archived = fals
     title,
     submissionText: data.submissionText,
     proofUrls,
+    submittedAt: data.submittedAt || null,
+    mediaMissing: Boolean(data.mediaMissing),
   });
 }
 
@@ -6401,8 +6480,8 @@ function ownerMockAssigneeSubmissionHtml(taskId, assignee) {
       : "";
   return `<div class="admin-expand-col-block admin-expand-col-block--submission">
     <span class="admin-expand-col-label">${tr("modals.submission")}</span>
+    ${when ? `<p class="admin-expand-submission-meta tabular-nums mb-1">${escapeHtml(tr("owner.submittedOn", { date: when }))}</p>` : ""}
     <div class="d-flex flex-wrap gap-2 align-items-center">${currentBtn}${archivedBtn}</div>
-    ${when ? `<span class="admin-expand-submission-meta tabular-nums">${escapeHtml(when)}</span>` : ""}
     ${reassignBtn}
   </div>`;
 }

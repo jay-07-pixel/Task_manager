@@ -580,27 +580,12 @@ export async function deleteUserStorageFile(userId, fileId) {
     });
     if (!row) throw Object.assign(new Error("File not found."), { status: 404 });
     const abs = resolveUploadPath(completionProofsRoot, row.filePath);
-    await prisma.taskSubmissionProof.delete({ where: { id: row.id } });
+    // Keep the DB row so the task still shows as submitted with date; only remove the bytes.
     if (abs && fs.existsSync(abs)) {
       try {
         fs.unlinkSync(abs);
       } catch {
         /* ignore */
-      }
-    }
-    // Clear legacy columns if they pointed at the same file
-    const assignee = await prisma.taskAssignee.findUnique({
-      where: { taskId_userId: { taskId: row.taskId, userId } },
-    });
-    if (assignee) {
-      const data = {};
-      if (assignee.completionProofPath === row.filePath) data.completionProofPath = null;
-      if (assignee.lastCompletionProofPath === row.filePath) data.lastCompletionProofPath = null;
-      if (Object.keys(data).length) {
-        await prisma.taskAssignee.update({
-          where: { taskId_userId: { taskId: row.taskId, userId } },
-          data,
-        });
       }
     }
     return { ok: true };
@@ -621,10 +606,7 @@ export async function deleteUserStorageFile(userId, fileId) {
       slot === "current" ? assignee.completionProofPath : assignee.lastCompletionProofPath;
     if (!stored) throw Object.assign(new Error("File not found."), { status: 404 });
     const abs = resolveUploadPath(completionProofsRoot, stored);
-    await prisma.taskAssignee.update({
-      where: { taskId_userId: { taskId, userId } },
-      data: slot === "current" ? { completionProofPath: null } : { lastCompletionProofPath: null },
-    });
+    // Keep path/flags on assignee so submission history remains; delete bytes only.
     if (abs && fs.existsSync(abs)) {
       try {
         fs.unlinkSync(abs);
