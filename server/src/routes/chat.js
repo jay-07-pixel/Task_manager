@@ -19,6 +19,7 @@ import {
   messagePreviewLabel,
   parseOutgoingChatMessage,
   resolveAttachmentContentType,
+  removeChatAttachmentFile,
   serializeChatMessage,
   serializeLastMessage,
   serveChatAttachment,
@@ -158,16 +159,6 @@ function serializeTypingUsers(threadType, threadId, meId) {
     id: u.userId,
     displayName: u.displayName,
   }));
-}
-
-function removeChatAttachmentFile(storedName) {
-  if (!storedName) return;
-  try {
-    const filePath = attachmentFilePath(storedName);
-    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-  } catch {
-    /* ignore */
-  }
 }
 
 async function validateDmReply(conversationId, replyToMessageId) {

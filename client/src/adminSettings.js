@@ -1,4 +1,5 @@
 import { tr } from "./i18n/index.js";
+import * as bootstrap from "bootstrap";
 import {
   attendanceSettingsToggleHtml,
   wireAttendanceSettingsToggle,
@@ -131,20 +132,279 @@ function storageBreakdownHtml(storage) {
   const cats = storage?.byCategory || {};
   const taskBytes = (cats.taskProofs || 0) + (cats.progressUpdates || 0);
   const rows = [
-    { label: tr("settings.storageCategoryTasks"), bytes: taskBytes },
-    { label: tr("settings.storageCategoryChat"), bytes: cats.chat || 0 },
-    { label: tr("settings.storageCategoryProfile"), bytes: cats.profile || 0 },
-    { label: tr("settings.storageCategoryAssignment"), bytes: cats.assignmentAttachments || 0 },
+    { category: "tasks", label: tr("settings.storageCategoryTasks"), bytes: taskBytes },
+    { category: "chat", label: tr("settings.storageCategoryChat"), bytes: cats.chat || 0 },
+    { category: "profile", label: tr("settings.storageCategoryProfile"), bytes: cats.profile || 0 },
+    {
+      category: "assignment",
+      label: tr("settings.storageCategoryAssignment"),
+      bytes: cats.assignmentAttachments || 0,
+    },
   ].filter((r) => r.bytes > 0);
 
   if (!rows.length) return "";
   return `<ul class="admin-settings-storage-breakdown">
     ${rows
       .map(
-        (r) => `<li><span>${esc(r.label)}</span><span class="tabular-nums">${esc(formatStorageBytes(r.bytes))}</span></li>`
+        (r) => `<li>
+          <button type="button" class="admin-settings-storage-cat-btn js-open-storage-category" data-storage-category="${esc(
+            r.category
+          )}">
+            <span class="admin-settings-storage-cat-label">${esc(r.label)}</span>
+            <span class="admin-settings-storage-cat-meta">
+              <span class="tabular-nums">${esc(formatStorageBytes(r.bytes))}</span>
+              ${adminMsIconFn?.("chevron_right", "admin-settings-storage-cat-chevron") ?? ""}
+            </span>
+          </button>
+        </li>`
       )
       .join("")}
   </ul>`;
+}
+
+/** @type {string[]} */
+const storageBlobUrls = [];
+
+function revokeStorageBlobs() {
+  while (storageBlobUrls.length) {
+    try {
+      URL.revokeObjectURL(storageBlobUrls.pop());
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+function storageCategoryTitle(category) {
+  switch (category) {
+    case "tasks":
+      return tr("settings.storageCategoryTasks");
+    case "chat":
+      return tr("settings.storageCategoryChat");
+    case "profile":
+      return tr("settings.storageCategoryProfile");
+    case "assignment":
+      return tr("settings.storageCategoryAssignment");
+    default:
+      return tr("settings.storageTitle");
+  }
+}
+
+function ensureStorageFilesModal() {
+  let modalEl = document.getElementById("storageFilesModal");
+  if (modalEl) return modalEl;
+  const wrap = document.createElement("div");
+  wrap.innerHTML = `
+    <div class="modal fade" id="storageFilesModal" tabindex="-1" aria-labelledby="storageFilesModalTitle" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable modal-fullscreen-sm-down">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h2 class="modal-title h5 mb-0" id="storageFilesModalTitle">${tr("settings.storageFilesTitle")}</h2>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="${tr("common.close")}"></button>
+          </div>
+          <div class="modal-body">
+            <p class="small text-muted" id="storage-files-hint">${tr("settings.storageFilesHint")}</p>
+            <div id="storage-files-list" class="storage-files-list"></div>
+            <div id="storage-files-preview" class="storage-files-preview d-none"></div>
+            <p id="storage-files-empty" class="text-muted small mb-0 d-none">${tr("settings.storageFilesEmpty")}</p>
+            <p id="storage-files-error" class="text-danger small mb-0 d-none"></p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">${tr("common.close")}</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  modalEl = wrap.firstElementChild;
+  document.body.appendChild(modalEl);
+  modalEl.addEventListener("hidden.bs.modal", () => {
+    revokeStorageBlobs();
+    const preview = document.getElementById("storage-files-preview");
+    if (preview) {
+      preview.classList.add("d-none");
+      preview.innerHTML = "";
+    }
+  });
+  return modalEl;
+}
+
+/**
+ * @param {any} file
+ */
+function storageFileKindIcon(kind) {
+  if (kind === "audio") return "mic";
+  if (kind === "pdf") return "picture_as_pdf";
+  if (kind === "video") return "videocam";
+  if (kind === "image") return "image";
+  return "attach_file";
+}
+
+/**
+ * @param {any[]} files
+ * @param {string} category
+ */
+function renderStorageFilesList(files, category) {
+  const list = document.getElementById("storage-files-list");
+  const empty = document.getElementById("storage-files-empty");
+  const preview = document.getElementById("storage-files-preview");
+  const err = document.getElementById("storage-files-error");
+  if (!list || !empty) return;
+  if (err) {
+    err.classList.add("d-none");
+    err.textContent = "";
+  }
+  preview?.classList.add("d-none");
+  if (preview) preview.innerHTML = "";
+  revokeStorageBlobs();
+
+  if (!files.length) {
+    list.innerHTML = "";
+    empty.classList.remove("d-none");
+    return;
+  }
+  empty.classList.add("d-none");
+  const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
+  list.innerHTML = files
+    .map((f) => {
+      const when = f.createdAt
+        ? new Date(f.createdAt).toLocaleString(undefined, {
+            year: "numeric",
+            month: "short",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+        : "";
+      return `<article class="storage-file-row" data-file-id="${esc(f.id)}">
+        <button type="button" class="storage-file-open js-storage-file-open" data-file-id="${esc(f.id)}" data-file-url="${esc(
+          f.url
+        )}" data-file-kind="${esc(f.kind)}" data-file-name="${esc(f.name)}">
+          ${adminMsIconFn?.(storageFileKindIcon(f.kind)) ?? ""}
+          <span class="storage-file-meta">
+            <span class="storage-file-name">${esc(f.name)}</span>
+            <span class="storage-file-sub text-muted">${esc(
+              [f.subtitle, when, formatStorageBytes(f.sizeBytes)].filter(Boolean).join(" · ")
+            )}</span>
+          </span>
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-danger js-storage-file-delete" data-file-id="${esc(
+          f.id
+        )}" data-storage-category="${esc(category)}" aria-label="${esc(tr("settings.storageDeleteFile"))}">${esc(
+          tr("common.delete")
+        )}</button>
+      </article>`;
+    })
+    .join("");
+}
+
+async function loadStorageFilePreview(url, kind, name) {
+  const preview = document.getElementById("storage-files-preview");
+  if (!preview || !apiFn) return;
+  revokeStorageBlobs();
+  preview.classList.remove("d-none");
+  preview.innerHTML = `<p class="small text-muted mb-2">${escapeHtmlFn?.(tr("common.loading")) ?? "…"}</p>`;
+  try {
+    const res = await fetch(url, { credentials: "include" });
+    if (!res.ok) throw new Error(tr("settings.storagePreviewFailed"));
+    const buf = await res.arrayBuffer();
+    const mime = (res.headers.get("content-type") || "").split(";")[0].trim() || "application/octet-stream";
+    const blob = new Blob([buf], { type: mime });
+    const blobUrl = URL.createObjectURL(blob);
+    storageBlobUrls.push(blobUrl);
+    const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
+    let media = "";
+    if (kind === "image" || mime.startsWith("image/")) {
+      media = `<img src="${blobUrl}" alt="${esc(name)}" class="storage-file-preview-media" />`;
+    } else if (kind === "video" || mime.startsWith("video/")) {
+      media = `<video src="${blobUrl}" class="storage-file-preview-media" controls playsinline></video>`;
+    } else if (kind === "audio" || mime.startsWith("audio/")) {
+      media = `<audio src="${blobUrl}" class="w-100" controls></audio>`;
+    } else if (kind === "pdf" || mime === "application/pdf") {
+      media = `<iframe src="${blobUrl}" title="${esc(name)}" class="storage-file-preview-pdf"></iframe>`;
+    } else {
+      media = `<p class="small mb-2">${esc(tr("settings.storagePreviewUnsupported"))}</p>
+        <a class="btn btn-sm btn-outline-primary" href="${blobUrl}" download="${esc(name)}">${esc(
+          tr("settings.storageDownload")
+        )}</a>`;
+    }
+    preview.innerHTML = `<p class="small fw-semibold mb-2">${esc(name)}</p>${media}`;
+    preview.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  } catch (err) {
+    preview.innerHTML = `<p class="small text-danger mb-0">${escapeHtmlFn?.(err?.message || tr("settings.storagePreviewFailed"))}</p>`;
+  }
+}
+
+async function openStorageCategoryBrowser(category, root) {
+  const modalEl = ensureStorageFilesModal();
+  const titleEl = document.getElementById("storageFilesModalTitle");
+  const list = document.getElementById("storage-files-list");
+  const empty = document.getElementById("storage-files-empty");
+  const err = document.getElementById("storage-files-error");
+  if (titleEl) titleEl.textContent = storageCategoryTitle(category);
+  if (list) list.innerHTML = `<p class="small text-muted mb-0">${escapeHtmlFn?.(tr("common.loading")) ?? ""}</p>`;
+  empty?.classList.add("d-none");
+  if (err) {
+    err.classList.add("d-none");
+    err.textContent = "";
+  }
+  bootstrap.Modal.getOrCreateInstance(modalEl).show();
+
+  try {
+    const data = await apiFn(`/api/users/storage/files?category=${encodeURIComponent(category)}`);
+    const files = data.files || [];
+    renderStorageFilesList(files, category);
+
+    list?.querySelectorAll(".js-storage-file-open").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        void loadStorageFilePreview(
+          btn.getAttribute("data-file-url") || "",
+          btn.getAttribute("data-file-kind") || "file",
+          btn.getAttribute("data-file-name") || "File"
+        );
+      });
+    });
+
+    list?.querySelectorAll(".js-storage-file-delete").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const fileId = btn.getAttribute("data-file-id");
+        const cat = btn.getAttribute("data-storage-category") || category;
+        if (!fileId) return;
+        if (!window.confirm(tr("settings.storageDeleteConfirm"))) return;
+        void (async () => {
+          btn.disabled = true;
+          try {
+            await apiFn(`/api/users/storage/files/${encodeURIComponent(fileId)}`, {
+              method: "DELETE",
+            });
+            showToastFn?.(tr("settings.storageDeleted"), "success");
+            await openStorageCategoryBrowser(cat, root);
+            void loadAndRenderStorageCard(root || document);
+          } catch (e) {
+            showToastFn?.(e?.message || tr("settings.storageDeleteFailed"), "danger");
+            btn.disabled = false;
+          }
+        })();
+      });
+    });
+  } catch (e) {
+    if (list) list.innerHTML = "";
+    if (err) {
+      err.textContent = e?.message || tr("settings.storageLoadFailed");
+      err.classList.remove("d-none");
+    }
+  }
+}
+
+function wireStorageCardActions(root) {
+  root.querySelectorAll(".js-open-storage-category").forEach((btn) => {
+    if (btn.dataset.wired === "1") return;
+    btn.dataset.wired = "1";
+    btn.addEventListener("click", () => {
+      const category = btn.getAttribute("data-storage-category");
+      if (!category) return;
+      void openStorageCategoryBrowser(category, root);
+    });
+  });
 }
 
 /** @param {any} storage */
@@ -206,6 +466,7 @@ async function loadAndRenderStorageCard(root) {
       throw new Error(tr("settings.storageLoadFailed"));
     }
     replaceStorageCard(root, storageUsageCardHtml(storage));
+    wireStorageCardActions(root?.querySelector?.(".admin-settings-page") || root || document);
   } catch {
     replaceStorageCard(root, storageUsageCardHtml(null));
   }

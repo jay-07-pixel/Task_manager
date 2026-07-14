@@ -26,8 +26,11 @@ import {
   USER_PROFILE_DOC_MAX_BYTES,
 } from "../lib/userProfileDocs.js";
 import {
+  deleteUserStorageFile,
   getStorageUsageForUsers,
   getUserStorageUsage,
+  listUserStorageFiles,
+  STORAGE_FILE_CATEGORIES,
   USER_STORAGE_QUOTA_BYTES,
 } from "../services/userStorageService.js";
 
@@ -236,6 +239,35 @@ router.get("/storage", requireAuth, async (req, res) => {
   } catch (err) {
     console.error("[user-storage]", err);
     res.status(500).json({ error: "Could not calculate storage usage." });
+  }
+});
+
+router.get("/storage/files", requireAuth, async (req, res) => {
+  try {
+    const category = typeof req.query.category === "string" ? req.query.category.trim() : "";
+    if (!STORAGE_FILE_CATEGORIES.includes(category)) {
+      return res.status(400).json({
+        error: `category must be one of: ${STORAGE_FILE_CATEGORIES.join(", ")}`,
+      });
+    }
+    const files = await listUserStorageFiles(req.session.userId, category);
+    res.json({ category, files });
+  } catch (err) {
+    console.error("[user-storage-files]", err);
+    res.status(500).json({ error: "Could not list storage files." });
+  }
+});
+
+router.delete("/storage/files/:fileId", requireAuth, async (req, res) => {
+  try {
+    const fileId = decodeURIComponent(req.params.fileId || "");
+    await deleteUserStorageFile(req.session.userId, fileId);
+    const storage = await getUserStorageUsage(req.session.userId);
+    res.json({ ok: true, storage });
+  } catch (err) {
+    const status = err?.status || 500;
+    if (status >= 500) console.error("[user-storage-delete]", err);
+    res.status(status).json({ error: err?.message || "Could not delete file." });
   }
 });
 

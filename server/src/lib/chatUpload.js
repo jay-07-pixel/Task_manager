@@ -123,6 +123,17 @@ export function attachmentFilePath(storedName) {
   return path.join(chatUploadsRoot, path.basename(storedName));
 }
 
+/** Delete a chat attachment from disk if present. */
+export function removeChatAttachmentFile(storedName) {
+  if (!storedName) return;
+  try {
+    const filePath = attachmentFilePath(storedName);
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  } catch {
+    /* ignore */
+  }
+}
+
 /** Copy a stored chat attachment into a new file for another thread. */
 export function copyChatAttachment(storedName, threadId, userId) {
   if (!storedName) return null;

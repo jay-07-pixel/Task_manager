@@ -244,3 +244,112 @@
   color: var(--admin-error, #ba1a1a);
   font-weight: 600;
 }
+
+.admin-settings-storage-cat-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.35rem 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover .admin-settings-storage-cat-label,
+  &:focus-visible .admin-settings-storage-cat-label {
+    color: var(--admin-primary, #006972);
+    text-decoration: underline;
+  }
+}
+
+.admin-settings-storage-cat-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  color: var(--admin-on-surface-variant, #3e494a);
+}
+
+.admin-settings-storage-cat-chevron {
+  font-size: 1rem !important;
+}
+
+.storage-files-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.storage-file-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--bs-border-color);
+  border-radius: 0.5rem;
+}
+
+.storage-file-open {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  color: inherit;
+  padding: 0;
+  cursor: pointer;
+
+  .material-symbols-outlined {
+    font-size: 1.25rem;
+    color: var(--admin-primary, #006972);
+    flex-shrink: 0;
+  }
+}
+
+.storage-file-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.storage-file-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.storage-file-sub {
+  font-size: 0.75rem;
+}
+
+.storage-files-preview {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--bs-border-color);
+}
+
+.storage-file-preview-media {
+  display: block;
+  width: 100%;
+  max-height: min(50vh, 420px);
+  object-fit: contain;
+  border-radius: 0.375rem;
+  background: #111;
+}
+
+.storage-file-preview-pdf {
+  display: block;
+  width: 100%;
+  min-height: 16rem;
+  height: min(50vh, 420px);
+  border: 1px solid var(--bs-border-color);
+  border-radius: 0.375rem;
+  background: #fff;
+}
