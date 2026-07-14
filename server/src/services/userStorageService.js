@@ -133,18 +133,22 @@ export async function getStorageUsageForUsers(userIds) {
     prisma.chatMessage.findMany({
       where: {
         senderId: { in: ids },
-        attachmentPath: { not: null },
+        NOT: { attachmentPath: null },
       },
       select: { senderId: true, attachmentPath: true },
     }),
     prisma.chatGroupMessage.findMany({
       where: {
         senderId: { in: ids },
-        attachmentPath: { not: null },
+        NOT: { attachmentPath: null },
       },
       select: { senderId: true, attachmentPath: true },
     }),
     prisma.taskAssignmentAttachment.findMany({
+      where:
+        ids.length === 1
+          ? { filePath: { contains: `-${ids[0]}-` } }
+          : undefined,
       select: { filePath: true },
     }),
   ]);

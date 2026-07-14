@@ -148,11 +148,16 @@ function storageBreakdownHtml(storage) {
 }
 
 /** @param {any} storage */
-export function storageUsageCardHtml(storage) {
+export function storageUsageCardHtml(storage, { loading = false } = {}) {
   const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
-  if (!storage) {
+  if (loading) {
     return `<div class="admin-settings-storage-card" data-storage-card>
       <p class="admin-settings-storage-loading mb-0">${esc(tr("common.loading"))}</p>
+    </div>`;
+  }
+  if (!storage || typeof storage.usedBytes !== "number") {
+    return `<div class="admin-settings-storage-card" data-storage-card>
+      <p class="admin-settings-storage-loading text-danger mb-0">${esc(tr("settings.storageLoadFailed"))}</p>
     </div>`;
   }
   const used = formatStorageBytes(storage.usedBytes);
@@ -179,19 +184,30 @@ export function storageUsageCardHtml(storage) {
   </div>`;
 }
 
+function replaceStorageCard(root, html) {
+  const page = root?.querySelector?.(".admin-settings-page") || root;
+  const card = page?.querySelector?.("[data-storage-card]") || document.querySelector(".admin-settings-page [data-storage-card]");
+  if (!card) return;
+  const wrap = document.createElement("div");
+  wrap.innerHTML = html;
+  const next = wrap.firstElementChild;
+  if (next) card.replaceWith(next);
+}
+
 async function loadAndRenderStorageCard(root) {
-  const card = root?.querySelector("[data-storage-card]");
-  if (!card || !apiFn) return;
+  if (!apiFn) {
+    replaceStorageCard(root, storageUsageCardHtml(null));
+    return;
+  }
   try {
-    const { storage } = await apiFn("/api/users/storage");
-    const wrap = document.createElement("div");
-    wrap.innerHTML = storageUsageCardHtml(storage);
-    const next = wrap.firstElementChild;
-    if (next) card.replaceWith(next);
+    const data = await apiFn("/api/users/storage");
+    const storage = data?.storage;
+    if (!storage || typeof storage.usedBytes !== "number") {
+      throw new Error(tr("settings.storageLoadFailed"));
+    }
+    replaceStorageCard(root, storageUsageCardHtml(storage));
   } catch {
-    card.innerHTML = `<p class="admin-settings-storage-loading text-danger mb-0">${
-      escapeHtmlFn?.(tr("settings.storageLoadFailed")) ?? tr("settings.storageLoadFailed")
-    }</p>`;
+    replaceStorageCard(root, storageUsageCardHtml(null));
   }
 }
 
@@ -343,7 +359,7 @@ function settingsPageHtml(role) {
     ${chromeHeader}
     <div class="admin-settings-page">
       <p class="admin-settings-intro">${escapeHtmlFn?.(tr("settings.intro")) ?? ""}</p>
-      ${storageUsageCardHtml(null)}
+      ${storageUsageCardHtml(null, { loading: true })}
       <nav class="admin-settings-list" aria-label="${escapeHtmlFn?.(tr("settings.title")) ?? "Settings"}">
         ${rows}
       </nav>
@@ -559,13 +575,14 @@ function openSettingsView(role) {
   if (!main) return;
 
   main.innerHTML = settingsPageHtml(role);
-  wireSettingsPage(main, role);
 
   if (role === "owner") {
     wireOwnerChromeHeaderFn?.(main);
   } else {
     wireEmployeeChromeHeaderFn?.(main);
   }
+
+  wireSettingsPage(main, role);
 }
 
 export function openOwnerSettingsView() {

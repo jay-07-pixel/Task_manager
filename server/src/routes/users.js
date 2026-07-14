@@ -230,31 +230,46 @@ router.get("/team", requireOwner, async (req, res) => {
 });
 
 router.get("/storage", requireAuth, async (req, res) => {
-  const storage = await getUserStorageUsage(req.session.userId);
-  res.json({ storage });
+  try {
+    const storage = await getUserStorageUsage(req.session.userId);
+    res.json({ storage });
+  } catch (err) {
+    console.error("[user-storage]", err);
+    res.status(500).json({ error: "Could not calculate storage usage." });
+  }
 });
 
 router.get("/storage/team", requireOwner, async (req, res) => {
-  const users = await prisma.user.findMany({
-    select: { id: true },
-    orderBy: { displayName: "asc" },
-  });
-  const rows = await getStorageUsageForUsers(users.map((u) => u.id));
-  const byUserId = Object.fromEntries(rows.map((row) => [row.userId, row]));
-  res.json({
-    quotaBytes: USER_STORAGE_QUOTA_BYTES,
-    byUserId,
-  });
+  try {
+    const users = await prisma.user.findMany({
+      select: { id: true },
+      orderBy: { displayName: "asc" },
+    });
+    const rows = await getStorageUsageForUsers(users.map((u) => u.id));
+    const byUserId = Object.fromEntries(rows.map((row) => [row.userId, row]));
+    res.json({
+      quotaBytes: USER_STORAGE_QUOTA_BYTES,
+      byUserId,
+    });
+  } catch (err) {
+    console.error("[user-storage-team]", err);
+    res.status(500).json({ error: "Could not calculate team storage usage." });
+  }
 });
 
 router.get("/:id/storage", requireOwner, async (req, res) => {
-  const target = await prisma.user.findUnique({
-    where: { id: req.params.id },
-    select: { id: true },
-  });
-  if (!target) return res.status(404).json({ error: "User not found." });
-  const storage = await getUserStorageUsage(target.id);
-  res.json({ storage });
+  try {
+    const target = await prisma.user.findUnique({
+      where: { id: req.params.id },
+      select: { id: true },
+    });
+    if (!target) return res.status(404).json({ error: "User not found." });
+    const storage = await getUserStorageUsage(target.id);
+    res.json({ storage });
+  } catch (err) {
+    console.error("[user-storage-id]", err);
+    res.status(500).json({ error: "Could not calculate storage usage." });
+  }
 });
 
 router.get("/profile", requireAuth, async (req, res) => {
