@@ -373,7 +373,8 @@
       "updateBadge": "अपडेट"
     },
     "pasteFromClipboard": "क्लिपबोर्ड से पेस्ट",
-    "submissionFilesOptional": "(अधिकतम {{max}} फ़ोटो/वीडियो, कोई भी आकार — या एक PDF 5 MB तक)",
+    "submissionFilesOptional": "(अधिकतम {{max}} फ़ोटो/वीडियो/ऑडियो, कोई भी आकार — या एक PDF 5 MB तक)",
+    "progressFilesOptional": "(वैकल्पिक — अधिकतम {{max}} छवियाँ, वीडियो या ऑडियो, या एक PDF)",
     "reminders": {
       "fallbackTaskTitle": "आपका कार्य"
     },
@@ -389,7 +390,7 @@
     "submittedTasks": "जमा किए कार्य",
     "allAssignedTasks": "सभी असाइन कार्य",
     "assignedByMeHint": "आपके द्वारा बनाए या असाइन किए कार्य। केवल स्थिति — अपडेट और जमा एडमिन को दिखते हैं।",
-    "activeTasksHint": "काम करते समय प्रगति अपडेट पोस्ट करें, फिर नोट्स और/या छवि के साथ जमा करें।",
+    "activeTasksHint": "काम करते समय नोट्स और फ़ाइलों के साथ प्रगति अपडेट पोस्ट करें, फिर पूरे होने पर जमा करें।",
     "criticalOverdueGateTitle": "अत्यावश्यक अतिदेय कार्य",
     "criticalOverdueGateIntro": "यह कार्य अंतिम तिथि से 6 या अधिक दिन देर से है। ऐप का उपयोग करने से पहले कार्य जमा करें या समय बढ़ाने का अनुरोध करें।",
     "criticalOverdueGateMustAct": "जारी रखने के लिए कार्य जमा करें या Postpone दबाएँ। यदि 24 घंटे में मंजूरी नहीं मिलती, यह स्क्रीन फिर दिखेगी।",
@@ -452,7 +453,8 @@
     "postTaskUpdate": "कार्य अपडेट पोस्ट करें",
     "reviewUpdates": "कार्य अपडेट समीक्षा",
     "allEmployeesActivity": "सभी कर्मचारी — पूर्ण गतिविधि",
-    "fullActivity": "पूर्ण कार्य गतिविधि"
+    "fullActivity": "पूर्ण कार्य गतिविधि",
+    "updateAttachments": "अटैचमेंट"
   },
   "profile": {
     "myProfile": "मेरी प्रोफ़ाइल",
@@ -626,6 +628,7 @@
     "clipboardReadFailed": "क्लिपबोर्ड पढ़ नहीं सका। पेस्ट अनुमति दें और पुनः प्रयास करें।",
     "taskSubmitted": "कार्य जमा किया।",
     "taskSubmittedNotify": "कार्य अपडेट: {{title}}",
+    "taskProgressUpdateNotify": "प्रगति अपडेट: {{title}}",
     "updatePosted": "अपडेट पोस्ट किया।",
     "createListFirst": "पहले सूची बनाएँ।",
     "enterTaskTitle": "कार्य शीर्षक दर्ज करें।",
@@ -670,14 +673,14 @@
     "nothingAssignedYetDesc": "सहकर्मी को कार्य असाइन करने के लिए <strong>कार्य बनाएँ और असाइन करें</strong> उपयोग करें।"
   },
   "validation": {
-    "submissionRequired": "जमा टेक्स्ट दें या कम से कम एक छवि/वीडियो अपलोड करें।",
+    "submissionRequired": "जमा टेक्स्ट दें या छवि, वीडियो, PDF या ऑडियो नोट अपलोड करें।",
     "imageTooLarge": "छवि या वीडियो बहुत बड़ा (अधिकतम {{max}} MB)। छोटी फ़ाइल या केवल टेक्स्ट जमा करें।",
     "uploadTooLarge": "अपलोड बहुत बड़ा। फ़ोटो/वीडियो {{max}} MB से छोटे होने चाहिए, या एडमिन से nginx client_max_body_size बढ़वाएँ।",
     "uploadTooLargeNginx": "सर्वर ने अपलोड रोक दिया (बहुत बड़ा)। एडमिन से nginx client_max_body_size 0 (असीमित) सेट करवाएँ।",
     "submissionFailed": "जमा विफल। कृपया पुनः प्रयास करें।",
-    "fileTypesAllowed": "केवल JPEG, PNG, GIF, WebP, MP4/WebM/MOV वीडियो या PDF अनुमत।",
+    "fileTypesAllowed": "केवल JPEG, PNG, GIF, WebP, वीडियो, PDF या ऑडियो नोट अनुमत।",
     "fileMaxSize": "प्रत्येक फ़ाइल {{max}} MB या छोटी होनी चाहिए।",
-    "pdfAloneOrMedia": "एक PDF अकेले जमा करें, या कई छवियाँ/वीडियो अपलोड करें।",
+    "pdfAloneOrMedia": "एक PDF अकेले जमा करें, या कई छवियाँ/वीडियो/ऑडियो अपलोड करें।",
     "signInForFiles": "जमा फ़ाइलें देखने के लिए पुनः साइन इन करें।",
     "noPermissionSubmission": "इस जमा को देखने की अनुमति नहीं।",
     "submissionNotFound": "जमा फ़ाइल सर्वर पर नहीं मिली।",
@@ -692,7 +695,8 @@
     "chooseEmployeeAssign": "कृपया असाइन करने के लिए कर्मचारी चुनें।",
     "createTaskFailed": "कार्य नहीं बन सका।",
     "chooseEmployee": "कृपया कर्मचारी चुनें।",
-    "assignTaskFailed": "कार्य असाइन नहीं हो सका।"
+    "assignTaskFailed": "कार्य असाइन नहीं हो सका।",
+    "enterUpdateOrAttachment": "कृपया अपडेट लिखें या फ़ाइल अटैच करें।"
   },
   "chat": {
     "subtitle": "अपनी टीम से चैट करें",

@@ -227,11 +227,28 @@ model TaskProgressUpdate {
   message    String                 @db.Text
   createdAt  DateTime               @default(now()) @map("created_at")
 
-  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task        Task                            @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user        User                            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  attachments TaskProgressUpdateAttachment[]
 
   @@index([taskId, userId])
   @@map("task_progress_update")
+}
+
+model TaskProgressUpdateAttachment {
+  id           String   @id @default(uuid())
+  updateId     String   @map("update_id")
+  filePath     String   @map("file_path") @db.VarChar(512)
+  mimeType     String   @map("mime_type") @db.VarChar(128)
+  kind         String   @map("kind") @db.VarChar(16)
+  originalName String?  @map("original_name") @db.VarChar(255)
+  sortOrder    Int      @default(0) @map("sort_order")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  update TaskProgressUpdate @relation(fields: [updateId], references: [id], onDelete: Cascade)
+
+  @@index([updateId])
+  @@map("task_progress_update_attachment")
 }
 
 model TaskProgressUpdateRead {

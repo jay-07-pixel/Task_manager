@@ -67,6 +67,14 @@ function formatNotificationCopy(payload) {
     };
   }
 
+  if (msgType === "task_progress_update") {
+    return {
+      title: payload.title || "Task update",
+      body: payload.body || "An employee posted a progress update on a task.",
+      data: { ...data, type: "task_progress_update" },
+    };
+  }
+
   if (msgType === "task_reopened") {
     return {
       title: payload.title || "Task reassigned",
@@ -122,6 +130,7 @@ async function showNotificationFromPayload(payload) {
   const { title, body, data } = formatNotificationCopy(payload);
   const isChat = data?.type === "chat_message";
   const isTaskSubmitted = data?.type === "task_submitted";
+  const isTaskProgressUpdate = data?.type === "task_progress_update";
   const isTaskReopened = data?.type === "task_reopened";
   const isLocationEvent =
     data?.type === "location_tracking_off" || data?.type === "location_tracking_on";
@@ -131,11 +140,13 @@ async function showNotificationFromPayload(payload) {
       ? `taskmgr-chat-${data.conversationId || "message"}`
       : isTaskSubmitted
         ? `taskmgr-submit-${data.taskId || "task"}`
-        : isTaskReopened
-          ? `taskmgr-reopen-${data.taskId || "task"}`
-          : isLocationEvent
-          ? `taskmgr-loc-${data.employeeId || "employee"}`
-          : `taskmgr-${data.taskId || "reminder"}-${data.slot || "alert"}`);
+        : isTaskProgressUpdate
+          ? `taskmgr-progress-${data.taskId || "task"}`
+          : isTaskReopened
+            ? `taskmgr-reopen-${data.taskId || "task"}`
+            : isLocationEvent
+            ? `taskmgr-loc-${data.employeeId || "employee"}`
+            : `taskmgr-${data.taskId || "reminder"}-${data.slot || "alert"}`);
 
   const locationUrl =
     data?.url && String(data.url).includes("openAttendance")
@@ -145,7 +156,7 @@ async function showNotificationFromPayload(payload) {
       : "/?openAttendance=1";
 
   const notifyUrl =
-    (isTaskSubmitted || isTaskReopened) && data?.url
+    (isTaskSubmitted || isTaskProgressUpdate || isTaskReopened) && data?.url
       ? data.url.startsWith("/")
         ? data.url
         : `/${data.url}`
@@ -199,7 +210,7 @@ self.addEventListener("push", (event) => {
       if (data?.type === "deadline_extension_request") {
         await notifyOpenClients({ type: "taskmgr-deadline-extension-request", detail: data });
       }
-      if (data?.type === "task_submitted") {
+      if (data?.type === "task_submitted" || data?.type === "task_progress_update") {
         await notifyOpenClients({ type: "taskmgr-open-task", detail: data });
       }
       if (data?.type === "task_reopened") {
@@ -217,6 +228,11 @@ self.addEventListener("notificationclick", (event) => {
     return;
   }
   if (data.type === "task_submitted" && data.url) {
+    const path = data.url.startsWith("/") ? data.url : `/${data.url}`;
+    event.waitUntil(openAppUrl(path));
+    return;
+  }
+  if (data.type === "task_progress_update" && data.url) {
     const path = data.url.startsWith("/") ? data.url : `/${data.url}`;
     event.waitUntil(openAppUrl(path));
     return;

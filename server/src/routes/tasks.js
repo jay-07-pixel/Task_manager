@@ -23,6 +23,7 @@ import {
   compareHighPriorityFirst,
 } from "../lib/taskRecurrenceSort.js";
 import { notifyAdminsTaskSubmitted } from "../services/taskCompletionNotificationService.js";
+import { notifyAdminsTaskProgressUpdate } from "../services/taskProgressUpdateNotificationService.js";
 import { notifyEmployeeTaskReopened } from "../services/taskReopenNotificationService.js";
 import { adminUserWhere, userHasAdminAccess } from "../lib/adminUsers.js";
 import { DEFAULT_REMINDER_BEFORE_MINUTES } from "../lib/reminderTiming.js";
@@ -30,22 +31,32 @@ import { DEFAULT_REMINDER_BEFORE_MINUTES } from "../lib/reminderTiming.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const uploadsRoot = path.join(__dirname, "..", "..", "uploads", "completion-proofs");
 const assignmentAttachmentsRoot = path.join(__dirname, "..", "..", "uploads", "task-assignment-attachments");
+const progressUpdateAttachmentsRoot = path.join(
+  __dirname,
+  "..",
+  "..",
+  "uploads",
+  "task-progress-update-attachments"
+);
 fs.mkdirSync(uploadsRoot, { recursive: true });
 fs.mkdirSync(assignmentAttachmentsRoot, { recursive: true });
+fs.mkdirSync(progressUpdateAttachmentsRoot, { recursive: true });
 
 const router = Router();
 
 const SUBMISSION_TEXT_MAX = 2000;
-const SUBMISSION_REQUIRED_MSG = "Please provide submission text or upload an image, video, or PDF.";
+const SUBMISSION_REQUIRED_MSG =
+  "Please provide submission text or upload an image, video, PDF, or audio note.";
 const MAX_SUBMISSION_PROOFS = 10;
 const MAX_ASSIGNMENT_ATTACHMENTS = 30;
+const MAX_PROGRESS_UPDATE_ATTACHMENTS = 10;
 const TASK_SUBMISSION_PDF_MAX_BYTES = 5 * 1024 * 1024;
 const PROGRESS_UPDATE_TEXT_MAX = 2000;
 
 const progressUpdateTypeSchema = z.enum(["started", "in_progress", "blocked", "update"]);
 const progressUpdateBodySchema = z.object({
   updateType: progressUpdateTypeSchema,
-  message: z.string().trim().min(1).max(PROGRESS_UPDATE_TEXT_MAX),
+  message: z.string().trim().max(PROGRESS_UPDATE_TEXT_MAX).optional().default(""),
 });
 
 /** @param {{ submissionText?: string | null, completionProofPath?: string | null, submissionProofs?: { archived?: boolean }[] } | null | undefined} row */
@@ -640,13 +651,25 @@ const PROOF_ALLOWED_EXTENSIONS = new Set([
   ".ogv",
   ".mpeg",
   ".mpg",
+  ".m4a",
+  ".mp3",
+  ".ogg",
+  ".wav",
+  ".aac",
 ]);
+
+function isAudioAttachment(mimetype, originalname) {
+  const mime = (mimetype || "").toLowerCase();
+  if (mime.startsWith("audio/")) return true;
+  return /\.(webm|m4a|mp3|ogg|wav|aac)$/i.test(originalname || "");
+}
 
 function isProofUploadAllowed(file) {
   if (/^image\/(jpeg|png|gif|webp)$/.test(file.mimetype) || file.mimetype === "application/pdf") {
     return true;
   }
-  return isVideoAttachment(file.mimetype, file.originalname);
+  if (isVideoAttachment(file.mimetype, file.originalname)) return true;
+  return isAudioAttachment(file.mimetype, file.originalname);
 }
 
 /** @param {{ mimetype: string, size: number }} file */
@@ -683,7 +706,9 @@ const proofUpload = multer({
       let ext = path.extname(file.originalname).toLowerCase();
       if (!PROOF_ALLOWED_EXTENSIONS.has(ext)) {
         if (isVideoAttachment(file.mimetype, file.originalname)) ext = ".mp4";
-        else if (file.mimetype === "application/pdf") ext = ".pdf";
+        else if (isAudioAttachment(file.mimetype, file.originalname)) {
+          ext = file.mimetype.includes("webm") ? ".webm" : ".m4a";
+        } else if (file.mimetype === "application/pdf") ext = ".pdf";
         else ext = ".jpg";
       }
       const uid = req.session?.userId || "anon";
@@ -695,7 +720,7 @@ const proofUpload = multer({
       cb(null, true);
       return;
     }
-    cb(new Error("Only JPEG, PNG, GIF, WebP images, MP4/WebM/MOV videos, or PDF files are allowed"));
+    cb(new Error("Only JPEG, PNG, GIF, WebP images, videos, PDFs, or audio notes are allowed"));
   },
 });
 
@@ -730,7 +755,7 @@ function handleProofUpload(req, res, next) {
       return res.status(400).json({ error: `You can upload up to ${MAX_SUBMISSION_PROOFS} images per submission.` });
     }
     const msg = err.message || "Upload failed";
-    if (/Only JPEG|images are allowed|videos are allowed|PDF files are allowed/i.test(msg)) {
+    if (/Only JPEG|images are allowed|videos are allowed|PDF files are allowed|audio notes are allowed/i.test(msg)) {
       return res.status(400).json({ error: msg });
     }
     return next(err);
@@ -850,6 +875,13 @@ async function attachProgressUpdateMeta(tasks, ownerId = null, { employeeViewerI
 }
 
 function serializeProgressUpdate(row) {
+  const attachments = (row.attachments ?? []).map((a) => ({
+    id: a.id,
+    kind: a.kind,
+    mimeType: a.mimeType,
+    originalName: a.originalName ?? null,
+    url: `/api/tasks/${row.taskId}/progress-updates/attachments/${a.id}`,
+  }));
   return {
     id: row.id,
     userId: row.userId,
@@ -857,7 +889,77 @@ function serializeProgressUpdate(row) {
     updateType: row.updateType,
     message: row.message,
     createdAt: row.createdAt.toISOString(),
+    attachments,
   };
+}
+
+function progressUpdateAttachmentAbsolutePath(storedName) {
+  if (!storedName || /[\\/]/.test(storedName)) return null;
+  const full = path.join(progressUpdateAttachmentsRoot, path.basename(storedName));
+  return fs.existsSync(full) ? full : null;
+}
+
+function getProgressUpdateUploadFiles(req) {
+  if (req.file) return [req.file];
+  const files = req.files;
+  if (!files) return [];
+  if (Array.isArray(files)) {
+    return files.filter((f) => f.fieldname === "files" || f.fieldname === "file");
+  }
+  const collected = [];
+  if (files.files) collected.push(...(Array.isArray(files.files) ? files.files : [files.files]));
+  if (files.file) collected.push(...(Array.isArray(files.file) ? files.file : [files.file]));
+  return collected;
+}
+
+const progressUpdateAttachmentUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => {
+      cb(null, progressUpdateAttachmentsRoot);
+    },
+    filename: (req, file, cb) => {
+      let ext = path.extname(file.originalname).toLowerCase();
+      const kind = assignmentAttachmentKind(file.mimetype, file.originalname);
+      if (!ext || ext === ".") {
+        if (kind === "pdf") ext = ".pdf";
+        else if (kind === "voice") ext = file.mimetype.includes("webm") ? ".webm" : ".m4a";
+        else if (kind === "video") ext = ".mp4";
+        else ext = ".jpg";
+      }
+      const uid = req.session?.userId || "anon";
+      cb(null, `${req.params.id}-${uid}-${randomUUID()}${ext}`);
+    },
+  }),
+  fileFilter: (_req, file, cb) => {
+    if (isAssignmentAttachmentAllowed(file)) {
+      cb(null, true);
+      return;
+    }
+    cb(new Error("Only images, videos, PDFs, or voice recordings are allowed"));
+  },
+});
+
+function handleProgressUpdateUpload(req, res, next) {
+  progressUpdateAttachmentUpload.fields([{ name: "files", maxCount: MAX_PROGRESS_UPDATE_ATTACHMENTS }])(
+    req,
+    res,
+    (err) => {
+      if (!err) return next();
+      if (err.code === "LIMIT_FILE_SIZE") {
+        return res.status(400).json({ error: "Upload is too large for the server." });
+      }
+      if (err.code === "LIMIT_UNEXPECTED_FILE" || err.code === "LIMIT_FIELD_COUNT") {
+        return res
+          .status(400)
+          .json({ error: `You can attach up to ${MAX_PROGRESS_UPDATE_ATTACHMENTS} files per update.` });
+      }
+      const msg = err.message || "Upload failed";
+      if (/Only images|voice recordings are allowed/i.test(msg)) {
+        return res.status(400).json({ error: msg });
+      }
+      return next(err);
+    }
+  );
 }
 
 function serializeDelegation(row) {
@@ -1398,7 +1500,10 @@ router.get("/:id/progress-updates", requireAuth, async (req, res) => {
 
   let updates = await prisma.taskProgressUpdate.findMany({
     where: allUpdates ? { taskId: task.id } : { taskId: task.id, userId: assigneeUserId },
-    include: { user: { select: { id: true, displayName: true } } },
+    include: {
+      user: { select: { id: true, displayName: true } },
+      attachments: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] },
+    },
     orderBy: [{ createdAt: "desc" }],
   });
   if (assignee && isAssignee) {
@@ -1514,14 +1619,91 @@ router.post("/:id/delegate", requireAuth, async (req, res) => {
   res.json({ task: serializeTask(withDelegations) });
 });
 
-router.post("/:id/progress-updates", requireAuth, async (req, res) => {
+router.get("/:id/progress-updates/attachments/:attachmentId", requireAuth, async (req, res) => {
+  const attachment = await prisma.taskProgressUpdateAttachment.findFirst({
+    where: { id: req.params.attachmentId },
+    include: {
+      update: {
+        include: {
+          task: {
+            include: {
+              list: true,
+              assignments: { select: { userId: true } },
+            },
+          },
+        },
+      },
+    },
+  });
+  if (!attachment || attachment.update.taskId !== req.params.id) {
+    return res.status(404).json({ error: "Attachment not found" });
+  }
+
+  const task = attachment.update.task;
+  const isOwner = task.list.ownerId === req.session.userId;
+  const isAssignee =
+    req.session.role === "employee" && task.assignments.some((a) => a.userId === req.session.userId);
+  const isAuthor = attachment.update.userId === req.session.userId;
+  let allowed = isOwner || isAssignee || isAuthor;
+  if (!allowed && req.session.role === "owner") {
+    const user = await prisma.user.findUnique({
+      where: { id: req.session.userId },
+      select: { isAdmin: true, role: true },
+    });
+    allowed = userHasAdminAccess(user);
+  }
+  if (!allowed) return res.status(403).json({ error: "Not allowed" });
+
+  const full = progressUpdateAttachmentAbsolutePath(attachment.filePath);
+  if (!full || !fs.existsSync(full)) {
+    return res.status(404).json({ error: "File not found" });
+  }
+  let mime = (attachment.mimeType || proofContentType(attachment.filePath) || "").split(";")[0].trim();
+  if (attachment.kind === "voice" && !mime.startsWith("audio/")) {
+    mime = attachment.filePath?.endsWith(".m4a") || attachment.filePath?.endsWith(".mp4")
+      ? "audio/mp4"
+      : attachment.filePath?.endsWith(".ogg")
+        ? "audio/ogg"
+        : "audio/webm";
+  }
+  res.setHeader("Content-Type", mime || "application/octet-stream");
+  res.setHeader("Content-Disposition", `inline; filename="${path.basename(full)}"`);
+  res.setHeader("Cache-Control", "private, max-age=60");
+  res.sendFile(full);
+});
+
+router.post("/:id/progress-updates", requireAuth, handleProgressUpdateUpload, async (req, res) => {
   if (req.session.role !== "employee") {
     return res.status(403).json({ error: "Employees only" });
   }
 
-  const parsed = progressUpdateBodySchema.safeParse(req.body);
+  const updateTypeRaw = typeof req.body?.updateType === "string" ? req.body.updateType : "update";
+  const messageRaw = typeof req.body?.message === "string" ? req.body.message : "";
+  const parsed = progressUpdateBodySchema.safeParse({
+    updateType: updateTypeRaw,
+    message: messageRaw,
+  });
   if (!parsed.success) {
     return res.status(400).json({ error: parsed.error.flatten() });
+  }
+
+  const files = getProgressUpdateUploadFiles(req);
+  const message = (parsed.data.message || "").trim();
+  if (!message && !files.length) {
+    return res.status(400).json({ error: "Please write an update or attach a file." });
+  }
+  if (files.length > MAX_PROGRESS_UPDATE_ATTACHMENTS) {
+    return res
+      .status(400)
+      .json({ error: `You can attach up to ${MAX_PROGRESS_UPDATE_ATTACHMENTS} files per update.` });
+  }
+  const pdfCount = files.filter((f) => f.mimetype === "application/pdf").length;
+  if (pdfCount > 0 && files.length > 1) {
+    return res.status(400).json({ error: "Attach one PDF alone, or upload multiple images, videos, and audio notes." });
+  }
+  for (const f of files) {
+    const sizeErr = proofFileSizeError(f);
+    if (sizeErr) return res.status(400).json({ error: sizeErr });
   }
 
   const task = await prisma.task.findFirst({
@@ -1532,17 +1714,59 @@ router.post("/:id/progress-updates", requireAuth, async (req, res) => {
     return res.status(404).json({ error: "Task not found" });
   }
 
-  const row = await prisma.taskProgressUpdate.create({
-    data: {
-      taskId: task.id,
-      userId: req.session.userId,
-      updateType: parsed.data.updateType,
-      message: parsed.data.message,
-    },
-    include: { user: { select: { id: true, displayName: true } } },
-  });
+  try {
+    const row = await prisma.$transaction(async (tx) => {
+      const created = await tx.taskProgressUpdate.create({
+        data: {
+          taskId: task.id,
+          userId: req.session.userId,
+          updateType: parsed.data.updateType,
+          message: message || (files.length ? "(Attachment)" : ""),
+        },
+      });
+      if (files.length) {
+        await tx.taskProgressUpdateAttachment.createMany({
+          data: files.map((file, index) => ({
+            updateId: created.id,
+            filePath: file.filename,
+            mimeType: file.mimetype,
+            kind: assignmentAttachmentKind(file.mimetype, file.originalname) || "image",
+            originalName: file.originalname?.slice(0, 255) || null,
+            sortOrder: index,
+          })),
+        });
+      }
+      return tx.taskProgressUpdate.findFirst({
+        where: { id: created.id },
+        include: {
+          user: { select: { id: true, displayName: true } },
+          attachments: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] },
+        },
+      });
+    });
 
-  res.status(201).json({ update: serializeProgressUpdate(row) });
+    void notifyAdminsTaskProgressUpdate({
+      taskId: task.id,
+      taskTitle: task.title,
+      listId: task.listId,
+      employeeId: req.session.userId,
+      employeeName: row?.user?.displayName || "Employee",
+      updateType: parsed.data.updateType,
+      message: row?.message || message,
+      attachmentCount: files.length,
+    }).catch((err) => console.error("[task-progress-notify]", err));
+
+    res.status(201).json({ update: serializeProgressUpdate(row) });
+  } catch (err) {
+    for (const f of files) {
+      try {
+        if (f.path) fs.unlinkSync(f.path);
+      } catch {
+        /* ignore */
+      }
+    }
+    throw err;
+  }
 });
 
 const progressUpdateMarkReadSchema = z.object({
@@ -1733,7 +1957,7 @@ router.post("/:id/completion-proof", requireAuth, handleProofUpload, async (req,
     }
     const pdfCount = proofFiles.filter((f) => f.mimetype === "application/pdf").length;
     if (pdfCount > 0 && proofFiles.length > 1) {
-      return res.status(400).json({ error: "Submit one PDF alone, or upload multiple images and videos." });
+      return res.status(400).json({ error: "Submit one PDF alone, or upload multiple images, videos, and audio notes." });
     }
     for (const f of proofFiles) {
       const sizeErr = proofFileSizeError(f);

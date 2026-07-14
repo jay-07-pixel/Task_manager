@@ -493,6 +493,13 @@ let taskModalVoiceChunks = [];
 let taskModalVoiceTimer = null;
 /** @type {number} */
 let taskModalVoiceStartedAt = 0;
+/** @type {{ btnId: string, statusId: string, onSave: (file: File) => void } | null} */
+let activeVoiceRecordTarget = null;
+const ASSIGNMENT_VOICE_TARGET = {
+  btnId: "modal-assignment-voice-btn",
+  statusId: "modal-assignment-voice-status",
+  onSave: (file) => addModalPendingAssignmentFiles([file]),
+};
 function empSubmissionRequiredMsg() {
   return tr("validation.submissionRequired");
 }
@@ -557,7 +564,14 @@ function isEmpSubmissionPdfFile(file) {
   return /^application\/pdf$/i.test(file.type) || /\.pdf$/i.test(file.name || "");
 }
 
+function isEmpSubmissionAudioFile(file) {
+  if (/^video\//i.test(file.type)) return false;
+  if (/^audio\//i.test(file.type)) return true;
+  return /\.(m4a|mp3|ogg|wav|aac)$/i.test(file.name || "");
+}
+
 function isEmpSubmissionVideoFile(file) {
+  if (/^audio\//i.test(file.type)) return false;
   return /^video\//i.test(file.type) || /\.(mp4|m4v|webm|mov|mkv|avi|3gp|3g2|ogv|mpeg|mpg)$/i.test(file.name || "");
 }
 
@@ -570,7 +584,8 @@ function validateEmpSubmissionFile(file) {
   const isImage = isEmpSubmissionImageFile(file);
   const isPdf = isEmpSubmissionPdfFile(file);
   const isVideo = isEmpSubmissionVideoFile(file);
-  if (!isImage && !isPdf && !isVideo) {
+  const isAudio = isEmpSubmissionAudioFile(file);
+  if (!isImage && !isPdf && !isVideo && !isAudio) {
     return tr("validation.fileTypesAllowed");
   }
   if (isPdf && file.size > EMP_SUBMISSION_PDF_MAX_BYTES) {
@@ -851,9 +866,9 @@ function formatVoiceRecordingElapsed(ms) {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-function updateTaskModalVoiceButtonUi(recording) {
-  const btn = document.getElementById("modal-assignment-voice-btn");
-  const status = document.getElementById("modal-assignment-voice-status");
+function updateVoiceButtonUi(recording, target = activeVoiceRecordTarget || ASSIGNMENT_VOICE_TARGET) {
+  const btn = document.getElementById(target.btnId);
+  const status = document.getElementById(target.statusId);
   const label = btn?.querySelector("span:last-child");
   if (!btn) return;
   if (recording) {
@@ -874,6 +889,10 @@ function updateTaskModalVoiceButtonUi(recording) {
       status.textContent = "";
     }
   }
+}
+
+function updateTaskModalVoiceButtonUi(recording) {
+  updateVoiceButtonUi(recording, ASSIGNMENT_VOICE_TARGET);
 }
 
 function clearTaskModalVoiceTimer() {
@@ -897,8 +916,9 @@ function voiceRecordingFileMeta(recorderMime) {
   return { mime, ext };
 }
 
-function stopTaskModalVoiceRecording(process = true) {
+function stopVoiceRecording(process = true) {
   clearTaskModalVoiceTimer();
+  const target = activeVoiceRecordTarget || ASSIGNMENT_VOICE_TARGET;
   if (taskModalVoiceRecorder && taskModalVoiceRecorder.state !== "inactive") {
     const recorder = taskModalVoiceRecorder;
     recorder.onstop = () => {
@@ -908,7 +928,7 @@ function stopTaskModalVoiceRecording(process = true) {
         const blob = new Blob(taskModalVoiceChunks, { type: mime });
         if (blob.size > 0) {
           const file = new File([blob], `voice-note${ext}`, { type: mime });
-          addModalPendingAssignmentFiles([file]);
+          target.onSave?.(file);
           saved = true;
         }
       }
@@ -916,7 +936,8 @@ function stopTaskModalVoiceRecording(process = true) {
       taskModalVoiceRecorder = null;
       taskModalVoiceStream?.getTracks().forEach((t) => t.stop());
       taskModalVoiceStream = null;
-      updateTaskModalVoiceButtonUi(false);
+      updateVoiceButtonUi(false, target);
+      activeVoiceRecordTarget = null;
       if (process) {
         showToast(
           saved ? tr("tasks.recordingStopped") : tr("tasks.recordingTooShort"),
@@ -936,15 +957,22 @@ function stopTaskModalVoiceRecording(process = true) {
   taskModalVoiceStream = null;
   taskModalVoiceRecorder = null;
   taskModalVoiceChunks = [];
-  updateTaskModalVoiceButtonUi(false);
+  updateVoiceButtonUi(false, target);
+  activeVoiceRecordTarget = null;
 }
 
-async function toggleTaskModalVoiceRecording() {
-  const btn = document.getElementById("modal-assignment-voice-btn");
-  if (!btn) return;
+function stopTaskModalVoiceRecording(process = true) {
+  stopVoiceRecording(process);
+}
+
+async function toggleVoiceRecording(target) {
+  if (!target?.btnId) return;
   if (taskModalVoiceRecorder && taskModalVoiceRecorder.state === "recording") {
-    stopTaskModalVoiceRecording(true);
-    return;
+    if (activeVoiceRecordTarget?.btnId === target.btnId) {
+      stopVoiceRecording(true);
+      return;
+    }
+    stopVoiceRecording(false);
   }
   if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
     showToast(tr("tasks.voiceNotSupported"), "warning");
@@ -958,6 +986,7 @@ async function toggleTaskModalVoiceRecording() {
         channelCount: 1,
       },
     });
+    activeVoiceRecordTarget = target;
     taskModalVoiceStream = stream;
     taskModalVoiceChunks = [];
     const mime = voiceRecordingMimeType();
@@ -968,18 +997,23 @@ async function toggleTaskModalVoiceRecording() {
     recorder.start(200);
     taskModalVoiceRecorder = recorder;
     taskModalVoiceStartedAt = Date.now();
-    updateTaskModalVoiceButtonUi(true);
+    updateVoiceButtonUi(true, target);
     clearTaskModalVoiceTimer();
     taskModalVoiceTimer = window.setInterval(() => {
       if (taskModalVoiceRecorder?.state === "recording") {
-        updateTaskModalVoiceButtonUi(true);
+        updateVoiceButtonUi(true, target);
       }
     }, 500);
     showToast(tr("tasks.recordingStarted"), "info");
   } catch {
     showToast(tr("tasks.voicePermissionDenied"), "warning");
-    updateTaskModalVoiceButtonUi(false);
+    updateVoiceButtonUi(false, target);
+    activeVoiceRecordTarget = null;
   }
+}
+
+async function toggleTaskModalVoiceRecording() {
+  await toggleVoiceRecording(ASSIGNMENT_VOICE_TARGET);
 }
 
 function wireModalAssignmentAttachments() {
@@ -2208,6 +2242,10 @@ function wireChatNotifyHandlers() {
           listId: detail.listId || "",
           employeeId: detail.employeeId || "",
           allAssigneesDone: detail.allAssigneesDone === true || detail.allAssigneesDone === "1",
+          openProgress:
+            detail.openProgress === true ||
+            detail.openProgress === "1" ||
+            detail.type === "task_progress_update",
         });
         return;
       }
@@ -2237,6 +2275,7 @@ function wireChatNotifyHandlers() {
             listId: params.get("listId") || "",
             employeeId: params.get("employeeId") || "",
             allAssigneesDone: params.get("allAssigneesDone") === "1",
+            openProgress: params.get("openProgress") === "1",
           });
           return;
         }
@@ -2331,6 +2370,7 @@ function getOwnerNotifyParams() {
     listId: params.get("listId") || "",
     employeeId: params.get("employeeId") || "",
     allAssigneesDone: params.get("allAssigneesDone") === "1",
+    openProgress: params.get("openProgress") === "1",
   };
 }
 
@@ -2391,7 +2431,12 @@ async function focusOwnerTaskFromNotify(notify) {
   renderOwnerMain();
 
   const title = task?.title ? dt(task.title) : tr("common.task");
-  showToast(tr("toast.taskSubmittedNotify", { title }), "success");
+  showToast(
+    notify.openProgress
+      ? tr("toast.taskProgressUpdateNotify", { title })
+      : tr("toast.taskSubmittedNotify", { title }),
+    "success"
+  );
 
   const taskId = notify.taskId;
   const cssTaskId =
@@ -2417,7 +2462,20 @@ async function focusOwnerTaskFromNotify(notify) {
     }
   });
 
-  if (notify.employeeId) {
+  if (notify.openProgress && notify.employeeId) {
+    try {
+      const assignee =
+        task?.assignees?.find((a) => a.id === notify.employeeId) ||
+        ({ displayName: tr("common.employee") });
+      await openProgressUpdatesForAssignee(
+        notify.taskId,
+        notify.employeeId,
+        assignee.displayName || tr("common.employee")
+      );
+    } catch (err) {
+      showToast(err?.message || tr("toast.couldNotLoadActivity"), "warning");
+    }
+  } else if (notify.employeeId) {
     try {
       await openSubmissionDetailForAssignee(notify.taskId, notify.employeeId);
     } catch (err) {
@@ -4397,6 +4455,21 @@ function progressUpdateModalHtml() {
               <div class="d-flex justify-content-end mt-1">
                 <span id="progress-update-count" class="admin-emp-modal-counter tabular-nums">0 / ${PROGRESS_UPDATE_TEXT_MAX}</span>
               </div>
+              <hr class="admin-emp-modal-divider" />
+              <label class="admin-emp-modal-label" for="progress-update-file-input">${tr("modals.updateAttachments")} <span class="admin-emp-modal-label-optional">${tr("employee.progressFilesOptional", { max: EMP_SUBMISSION_MAX_IMAGES })}</span></label>
+              <div class="d-flex flex-wrap gap-2 mb-2">
+                <input
+                  type="file"
+                  class="d-none"
+                  id="progress-update-file-input"
+                  accept="image/jpeg,image/png,image/gif,image/webp,video/*,application/pdf,audio/*,.pdf,.mp4,.webm,.mov,.m4a,.mp3,.ogg,.wav"
+                  multiple
+                />
+                <button type="button" class="btn btn-sm btn-outline-primary" id="progress-update-pick-btn">${adminMsIcon("upload_file")}<span>${tr("tasks.addFiles")}</span></button>
+                <button type="button" class="btn btn-sm btn-outline-secondary admin-task-modal-voice-btn" id="progress-update-voice-btn" aria-pressed="false">${adminMsIcon("mic")}<span>${tr("tasks.recordVoiceNote")}</span></button>
+              </div>
+              <p class="admin-emp-modal-hint small mb-2" id="progress-update-voice-status" role="status" aria-live="polite"></p>
+              <div id="progress-update-preview-wrap" class="emp-submission-preview-grid mt-2 d-none"></div>
               <p id="progress-update-error" class="admin-emp-modal-error d-none" role="alert"></p>
             </div>
             <div id="progress-update-history-wrap" class="mt-3">
@@ -4485,13 +4558,18 @@ function empSubmissionModalHtml() {
             <p id="emp-submission-error" class="admin-emp-modal-error d-none" role="alert"></p>
             <hr class="admin-emp-modal-divider" />
             <label class="admin-emp-modal-label" for="emp-submission-image">${tr("modals.submissionFiles")} <span class="admin-emp-modal-label-optional">${tr("employee.submissionFilesOptional", { max: EMP_SUBMISSION_MAX_IMAGES })}</span></label>
-            <input
-              type="file"
-              class="admin-emp-modal-file"
-              id="emp-submission-image"
-              accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm,video/quicktime,video/3gpp,application/pdf,.pdf,.mp4,.webm,.mov"
-              multiple
-            />
+            <div class="d-flex flex-wrap gap-2 mb-2">
+              <input
+                type="file"
+                class="d-none"
+                id="emp-submission-image"
+                accept="image/jpeg,image/png,image/gif,image/webp,video/*,application/pdf,audio/*,.pdf,.mp4,.webm,.mov,.m4a,.mp3,.ogg,.wav"
+                multiple
+              />
+              <button type="button" class="btn btn-sm btn-outline-primary" id="emp-submission-pick-btn">${adminMsIcon("upload_file")}<span>${tr("tasks.addFiles")}</span></button>
+              <button type="button" class="btn btn-sm btn-outline-secondary admin-task-modal-voice-btn" id="emp-submission-voice-btn" aria-pressed="false">${adminMsIcon("mic")}<span>${tr("tasks.recordVoiceNote")}</span></button>
+            </div>
+            <p class="admin-emp-modal-hint small mb-2 d-none" id="emp-submission-voice-status" role="status" aria-live="polite"></p>
             <div id="emp-submission-preview-wrap" class="emp-submission-preview-grid mt-2 d-none"></div>
           </div>
           ${adminEmpModalFooterHtml(tr("common.cancel"), "emp-submission-submit", tr("common.submit"))}
@@ -5858,12 +5936,19 @@ function wireEmpSubmissionModal() {
   const ta = document.getElementById("emp-submission-text");
   const pasteBtn = document.getElementById("emp-submission-paste");
   const fileInput = document.getElementById("emp-submission-image");
+  const pickBtn = document.getElementById("emp-submission-pick-btn");
+  const voiceBtn = document.getElementById("emp-submission-voice-btn");
   const submitBtn = document.getElementById("emp-submission-submit");
   const previewWrap = document.getElementById("emp-submission-preview-wrap");
 
   ta?.addEventListener("input", syncEmpSubmissionCharCount);
 
   let selectedProofFiles = [];
+  const submissionVoiceTarget = {
+    btnId: "emp-submission-voice-btn",
+    statusId: "emp-submission-voice-status",
+    onSave: (file) => addEmpSubmissionFiles([file]),
+  };
 
   function syncEmpSubmissionFileInput() {
     if (!fileInput) return;
@@ -5904,11 +5989,19 @@ function wireEmpSubmissionModal() {
         empSubmissionPreviewUrls.set(file, url);
         const tile = document.createElement("div");
         tile.className = "emp-submission-preview-item";
-        const media = isEmpSubmissionVideoFile(file)
-          ? `<video src="${url}" class="emp-submission-preview-thumb" muted playsinline preload="metadata"></video>`
-          : `<img src="${url}" alt="" class="emp-submission-preview-thumb" />`;
-        tile.innerHTML = `${media}
-          <button type="button" class="emp-submission-preview-remove" data-remove-proof-index="${index}" aria-label="${tr("common.removeFile")}">&times;</button>`;
+        if (isEmpSubmissionAudioFile(file)) {
+          tile.innerHTML = `<div class="d-flex flex-column gap-1 p-2 w-100">
+            <span class="small text-break">${escapeHtml(file.name || tr("tasks.voiceNote"))}</span>
+            <audio src="${url}" controls preload="metadata" class="w-100"></audio>
+            <button type="button" class="btn btn-sm btn-outline-danger align-self-end" data-remove-proof-index="${index}">${tr("common.remove")}</button>
+          </div>`;
+        } else {
+          const media = isEmpSubmissionVideoFile(file)
+            ? `<video src="${url}" class="emp-submission-preview-thumb" muted playsinline preload="metadata"></video>`
+            : `<img src="${url}" alt="" class="emp-submission-preview-thumb" />`;
+          tile.innerHTML = `${media}
+            <button type="button" class="emp-submission-preview-remove" data-remove-proof-index="${index}" aria-label="${tr("common.removeFile")}">&times;</button>`;
+        }
         previewWrap.appendChild(tile);
       });
     }
@@ -6021,6 +6114,11 @@ function wireEmpSubmissionModal() {
     }
   });
 
+  pickBtn?.addEventListener("click", () => fileInput?.click());
+  voiceBtn?.addEventListener("click", () => {
+    void toggleVoiceRecording(submissionVoiceTarget);
+  });
+
   fileInput?.addEventListener("change", () => {
     const files = [...(fileInput.files ?? [])];
     if (!files.length) return;
@@ -6087,6 +6185,7 @@ function wireEmpSubmissionModal() {
   });
 
   modalEl.addEventListener("hidden.bs.modal", () => {
+    stopVoiceRecording(false);
     selectedProofFiles = [];
     resetEmpSubmissionPreview();
     if (ta) ta.value = "";
@@ -6377,6 +6476,27 @@ async function markTaskProgressUpdatesRead(taskId) {
   }
 }
 
+function progressUpdateAttachmentsHtml(attachments) {
+  if (!attachments?.length) return "";
+  const chips = attachments
+    .map((a) => {
+      const kind = a.kind === "voice" ? "audio" : a.kind;
+      const label =
+        kind === "audio"
+          ? tr("tasks.voiceNote")
+          : kind === "pdf"
+            ? a.originalName || "PDF"
+            : kind === "video"
+              ? a.originalName || "Video"
+              : a.originalName || "Image";
+      const icon =
+        kind === "audio" ? "mic" : kind === "pdf" ? "picture_as_pdf" : kind === "video" ? "videocam" : "image";
+      return `<button type="button" class="btn btn-sm btn-outline-secondary progress-update-attach-chip js-progress-update-attachment" data-attachment-url="${escapeHtml(a.url)}" data-attachment-kind="${escapeHtml(kind)}" data-attachment-mime="${escapeHtml(a.mimeType || "")}" data-attachment-name="${escapeHtml(a.originalName || label)}">${adminMsIcon(icon)} ${escapeHtml(label)}</button>`;
+    })
+    .join("");
+  return `<div class="progress-update-attachments d-flex flex-wrap gap-2 mt-2">${chips}</div>`;
+}
+
 function renderProgressUpdateTimeline(updates, { showAuthor = false } = {}) {
   if (!updates?.length) return "";
   return updates
@@ -6386,6 +6506,8 @@ function renderProgressUpdateTimeline(updates, { showAuthor = false } = {}) {
         showAuthor && u.displayName
           ? `<span class="small fw-semibold text-body-secondary">${escapeHtml(dt(u.displayName))}</span>`
           : "";
+      const msg = (u.message || "").trim();
+      const hidePlaceholder = msg === "(Attachment)" && (u.attachments?.length ?? 0) > 0;
       return `<article class="progress-update-item">
         <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
           ${author}
@@ -6394,7 +6516,8 @@ function renderProgressUpdateTimeline(updates, { showAuthor = false } = {}) {
         formatProgressUpdateTime(u.createdAt)
       )}</time>
         </div>
-        <p class="progress-update-item-message small mb-0">${escapeHtml(dt(u.message))}</p>
+        ${hidePlaceholder ? "" : `<p class="progress-update-item-message small mb-0">${escapeHtml(dt(msg))}</p>`}
+        ${progressUpdateAttachmentsHtml(u.attachments)}
       </article>`;
     })
     .join("");
@@ -6564,6 +6687,107 @@ function wireProgressUpdateModal() {
   const chipsHost = document.getElementById("progress-update-type-chips");
   const ta = document.getElementById("progress-update-message");
   const submitBtn = document.getElementById("progress-update-submit");
+  const fileInput = document.getElementById("progress-update-file-input");
+  const pickBtn = document.getElementById("progress-update-pick-btn");
+  const voiceBtn = document.getElementById("progress-update-voice-btn");
+  const previewWrap = document.getElementById("progress-update-preview-wrap");
+
+  /** @type {File[]} */
+  let selectedProgressFiles = [];
+  /** @type {Map<File, string>} */
+  const progressPreviewUrls = new Map();
+
+  const progressVoiceTarget = {
+    btnId: "progress-update-voice-btn",
+    statusId: "progress-update-voice-status",
+    onSave: (file) => addProgressUpdateFiles([file]),
+  };
+
+  function clearProgressPreviewUrls() {
+    for (const url of progressPreviewUrls.values()) URL.revokeObjectURL(url);
+    progressPreviewUrls.clear();
+  }
+
+  function resetProgressUpdateFiles() {
+    stopVoiceRecording(false);
+    selectedProgressFiles = [];
+    clearProgressPreviewUrls();
+    if (fileInput) fileInput.value = "";
+    renderProgressUpdatePreview();
+  }
+
+  function renderProgressUpdatePreview() {
+    if (!previewWrap) return;
+    clearProgressPreviewUrls();
+    previewWrap.innerHTML = "";
+    if (!selectedProgressFiles.length) {
+      previewWrap.classList.add("d-none");
+      return;
+    }
+    previewWrap.classList.remove("d-none");
+    selectedProgressFiles.forEach((file, index) => {
+      const tile = document.createElement("div");
+      tile.className = "emp-submission-preview-item";
+      if (isEmpSubmissionPdfFile(file)) {
+        tile.innerHTML = `<div class="admin-emp-modal-preview-pdf d-flex align-items-center gap-2 w-100 p-2">
+          <i class="bi bi-file-earmark-pdf text-danger fs-4" aria-hidden="true"></i>
+          <span class="small text-break">${escapeHtml(file.name || "document.pdf")}</span>
+          <button type="button" class="btn btn-sm btn-outline-danger ms-auto" data-remove-progress-file="${index}" aria-label="${tr("common.remove")}">${tr("common.remove")}</button>
+        </div>`;
+      } else if (isEmpSubmissionAudioFile(file)) {
+        const url = URL.createObjectURL(file);
+        progressPreviewUrls.set(file, url);
+        tile.innerHTML = `<div class="d-flex flex-column gap-1 p-2 w-100">
+          <span class="small text-break">${escapeHtml(file.name || tr("tasks.voiceNote"))}</span>
+          <audio src="${url}" controls preload="metadata" class="w-100"></audio>
+          <button type="button" class="btn btn-sm btn-outline-danger align-self-end" data-remove-progress-file="${index}">${tr("common.remove")}</button>
+        </div>`;
+      } else {
+        const url = URL.createObjectURL(file);
+        progressPreviewUrls.set(file, url);
+        const media = isEmpSubmissionVideoFile(file)
+          ? `<video src="${url}" class="emp-submission-preview-thumb" muted playsinline preload="metadata"></video>`
+          : `<img src="${url}" alt="" class="emp-submission-preview-thumb" />`;
+        tile.innerHTML = `${media}
+          <button type="button" class="emp-submission-preview-remove" data-remove-progress-file="${index}" aria-label="${tr("common.removeFile")}">&times;</button>`;
+      }
+      previewWrap.appendChild(tile);
+    });
+    previewWrap.querySelectorAll("[data-remove-progress-file]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const idx = Number(btn.getAttribute("data-remove-progress-file"));
+        if (Number.isNaN(idx)) return;
+        selectedProgressFiles.splice(idx, 1);
+        renderProgressUpdatePreview();
+      });
+    });
+  }
+
+  function addProgressUpdateFiles(incoming) {
+    const next = [...selectedProgressFiles];
+    for (const file of incoming ?? []) {
+      if (!file) continue;
+      const candidate = isEmpSubmissionPdfFile(file) ? [file] : [...next.filter((f) => !isEmpSubmissionPdfFile(f)), file];
+      const err = validateEmpSubmissionFileSet(candidate);
+      if (err) {
+        showToast(err, "warning");
+        continue;
+      }
+      if (isEmpSubmissionPdfFile(file)) {
+        next.length = 0;
+        next.push(file);
+        break;
+      }
+      if (next.some(isEmpSubmissionPdfFile)) continue;
+      if (next.length >= EMP_SUBMISSION_MAX_IMAGES) {
+        showToast(tr("toast.maxAttachments", { max: EMP_SUBMISSION_MAX_IMAGES }), "warning");
+        break;
+      }
+      next.push(file);
+    }
+    selectedProgressFiles = next;
+    renderProgressUpdatePreview();
+  }
 
   ta?.addEventListener("input", syncProgressUpdateCharCount);
 
@@ -6581,6 +6805,35 @@ function wireProgressUpdateModal() {
     }
   });
 
+  pickBtn?.addEventListener("click", () => fileInput?.click());
+  fileInput?.addEventListener("change", (e) => {
+    addProgressUpdateFiles(e.target.files);
+    e.target.value = "";
+  });
+  voiceBtn?.addEventListener("click", () => {
+    void toggleVoiceRecording(progressVoiceTarget);
+  });
+
+  modalEl.addEventListener("click", (e) => {
+    const chip = e.target.closest?.(".js-progress-update-attachment");
+    if (!chip) return;
+    const url = chip.getAttribute("data-attachment-url");
+    if (!url) return;
+    void openSubmissionDetailModal({
+      title: chip.getAttribute("data-attachment-name") || tr("tasks.attachments"),
+      submissionText: null,
+      attachmentItems: [
+        {
+          id: url,
+          url,
+          kind: chip.getAttribute("data-attachment-kind") || "image",
+          mimeType: chip.getAttribute("data-attachment-mime") || "",
+          originalName: chip.getAttribute("data-attachment-name") || null,
+        },
+      ],
+    });
+  });
+
   submitBtn?.addEventListener("click", async () => {
     const idInput = document.getElementById("progress-update-task-id");
     const errEl = document.getElementById("progress-update-error");
@@ -6593,8 +6846,8 @@ function wireProgressUpdateModal() {
     errEl.classList.add("d-none");
     errEl.textContent = "";
 
-    if (!message) {
-      errEl.textContent = tr("validation.enterUpdateMessage");
+    if (!message && !selectedProgressFiles.length) {
+      errEl.textContent = tr("validation.enterUpdateOrAttachment");
       errEl.classList.remove("d-none");
       return;
     }
@@ -6606,13 +6859,36 @@ function wireProgressUpdateModal() {
 
     submitBtn.disabled = true;
     try {
-      await api(`/api/tasks/${taskId}/progress-updates`, {
+      const fd = new FormData();
+      fd.append("updateType", updateType);
+      fd.append("message", message);
+      for (const file of selectedProgressFiles) {
+        fd.append("files", file, file.name);
+      }
+      const res = await fetch(`/api/tasks/${taskId}/progress-updates`, {
         method: "POST",
-        body: JSON.stringify({ updateType, message }),
+        credentials: "include",
+        body: fd,
       });
+      const text = await res.text();
+      if (!res.ok) {
+        if (res.status === 401) {
+          state.user = null;
+          renderAuthForm();
+          throw new Error(tr("toast.sessionExpired"));
+        }
+        let msg = text;
+        try {
+          msg = JSON.parse(text)?.error ?? msg;
+        } catch {
+          /* ignore */
+        }
+        throw new Error(typeof msg === "string" ? msg : tr("validation.postUpdateFailed"));
+      }
       bootstrap.Modal.getInstance(modalEl)?.hide();
       showToast(tr("toast.updatePosted"), "success");
       ta.value = "";
+      resetProgressUpdateFiles();
       syncProgressUpdateCharCount();
       const userId = state.user?.id;
       if (userId) await loadProgressUpdateHistory(taskId, userId);
@@ -6631,6 +6907,7 @@ function wireProgressUpdateModal() {
   modalEl.addEventListener("hidden.bs.modal", () => {
     if (ta) ta.value = "";
     syncProgressUpdateCharCount();
+    resetProgressUpdateFiles();
     const errEl = document.getElementById("progress-update-error");
     if (errEl) {
       errEl.textContent = "";

@@ -5,7 +5,7 @@
 **Production example:** [https://sugandhshoppee.kalpanik.in](https://sugandhshoppee.kalpanik.in)  
 **Source:** [jay-07-pixel/Task_manager](https://github.com/jay-07-pixel/Task_manager)
 
-Full-stack workforce task management for **company owners**, **admins**, and **employees**. Teams assign work, attach files and voice notes, collect proof, chat, track **live attendance / location**, run **geofenced daily check-in**, approve **deadline extensions**, manage **company profile**, and receive reminders on **web** and **Android**.
+Full-stack workforce task management for **company owners**, **admins**, and **employees**. Teams assign work across **lists**, use an **All Tasks** aggregate view (list / employee / deadline / overdue filters), attach files and voice notes, collect proof, chat, track **live attendance / location**, run **geofenced daily check-in**, highlight **overdue work by color tiers**, approve **deadline extensions**, manage **company profile**, and receive reminders on **web** and **Android**.
 
 Each customer site is a **separate deployment** (own domain, database, and uploads). The same product codebase powers every instance.
 
@@ -20,27 +20,29 @@ Each customer site is a **separate deployment** (own domain, database, and uploa
 3. [Personal data inventory](#personal-data-inventory)
 4. [Roles & permissions](#roles--permissions)
 5. [Features (complete)](#features-complete)
-6. [Deadline extensions & critical overdue gate](#deadline-extensions--critical-overdue-gate)
-7. [Attendance: live location & daily check-in](#attendance-live-location--daily-check-in)
-8. [Company profile, employees & work locations](#company-profile-employees--work-locations)
-9. [Task lifecycle: submissions, reopen & recurrence](#task-lifecycle-submissions-reopen--recurrence)
-10. [Team chat](#team-chat)
-11. [Third-party services](#third-party-services)
-12. [Tech stack](#tech-stack)
-13. [Local development](#local-development)
-14. [Admin access & dual login](#admin-access--dual-login)
-15. [Task assignment attachments](#task-assignment-attachments)
-16. [Owner dashboard & reports](#owner-dashboard--reports)
-17. [Android app (Kalpanik Reminder)](#android-app-kalpanik-reminder)
-18. [File uploads & limits](#file-uploads--limits)
-19. [Push notifications](#push-notifications)
-20. [Internationalization](#internationalization)
-21. [PWA, legal & support](#pwa-legal--support)
-22. [Project structure](#project-structure)
-23. [API overview](#api-overview)
-24. [Production deployment (VPS)](#production-deployment-vps)
-25. [Nginx configuration](#nginx-configuration)
-26. [Troubleshooting](#troubleshooting)
+6. [All Tasks view](#all-tasks-view)
+7. [Overdue color coding](#overdue-color-coding)
+8. [Deadline extensions & critical overdue gate](#deadline-extensions--critical-overdue-gate)
+9. [Attendance: live location & daily check-in](#attendance-live-location--daily-check-in)
+10. [Company profile, employees & work locations](#company-profile-employees--work-locations)
+11. [Task lifecycle: submissions, reopen & recurrence](#task-lifecycle-submissions-reopen--recurrence)
+12. [Team chat](#team-chat)
+13. [Third-party services](#third-party-services)
+14. [Tech stack](#tech-stack)
+15. [Local development](#local-development)
+16. [Admin access & dual login](#admin-access--dual-login)
+17. [Task assignment attachments](#task-assignment-attachments)
+18. [Owner dashboard & reports](#owner-dashboard--reports)
+19. [Android app (Kalpanik Reminder)](#android-app-kalpanik-reminder)
+20. [File uploads & limits](#file-uploads--limits)
+21. [Push notifications](#push-notifications)
+22. [Internationalization](#internationalization)
+23. [PWA, legal & support](#pwa-legal--support)
+24. [Project structure](#project-structure)
+25. [API overview](#api-overview)
+26. [Production deployment (VPS)](#production-deployment-vps)
+27. [Nginx configuration](#nginx-configuration)
+28. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -48,8 +50,8 @@ Each customer site is a **separate deployment** (own domain, database, and uploa
 
 | Role | Where they work | What they do |
 |------|-----------------|--------------|
-| **Employee (user)** | Website user dashboard or **Android app** | Share live location (when required), geofenced check-in/out (when enabled), view assigned tasks + admin attachments, submit/update proof, progress updates, delegate, request deadline extensions, team chat |
-| **Admin** | Website admin dashboard (+ optional user view) | Lists, tasks, attachments, assignees, reports, **Attendance** (live map + daily reports), **Deadline extensions**, team chat, manage admins, manage employees, manage locations, salary fields |
+| **Employee (user)** | Website user dashboard or **Android app** | Share live location (when required), geofenced check-in/out (when enabled), view assigned tasks + admin attachments, submit/update proof, progress updates, delegate, request deadline extensions, team chat, see overdue color tiers / critical overdue gate |
+| **Admin** | Website admin dashboard (+ optional user view) | Lists, **All Tasks**, overdue color legend/filters, tasks, attachments, assignees, reports, **Attendance** (live map + daily reports), **Deadline extensions**, team chat, manage admins, manage employees, manage locations, salary fields |
 | **Company owner** | Same as admin, plus Owner dashboard | Everything an admin can do, plus **Owner dashboard** (capacity & performance), **Company profile** (GST, contacts), and promote/revoke other owners (**max 2 owners** per company instance) |
 | **Admin + employee** | Both views | Same account; switch admin / user from profile menu |
 
@@ -77,7 +79,10 @@ Use this section as the factual basis for **Terms of Service**, **Privacy Policy
 
 Kalpanik Task Manager is a **B2B / employer-operated** SaaS-style application hosted per customer (or per brand site). It helps an organization:
 
-- Create and assign tasks to employees (including recurring tasks, due dates, priorities, duration, and reminders)
+- Create **lists** (projects / sites / departments) and assign tasks to employees (including recurring tasks, due dates, priorities, duration, and reminders)
+- Review every open task in one place via **All Tasks** (sorted by nearest deadline), with filters for **list**, **employee (assignee)**, **deadline date**, and **overdue severity**
+- Show per-row **list name** and **assignee name** badges on All Tasks (or **Unassigned** when nobody is assigned)
+- Color-code overdue tasks by how late they are (**1–2 days**, **3–5 days**, **6+ days**) on admin and employee tables
 - Attach instructions (images, video, PDF, voice notes)
 - Collect completion notes and **proof files** (photos, videos, PDFs); allow employees to **update submissions** or admins to **reopen** completed work for resubmission
 - Track progress updates and task delegation between colleagues
@@ -133,6 +138,7 @@ Also supported:
 - **Login** with email + password (session cookie)
 - **Forgot password** (email OTP via Brevo, then set new password)
 - **Role switch** for admins: admin dashboard (`owner` session role) vs employee tasks (`employee` session role)
+- **Android CAPTCHA bypass** — Kalpanik Reminder may skip Turnstile when the request identifies as the Android client (`X-Kalpanik-Client: SugandhReminder-Android` or User-Agent containing `in.kalpanik.sugandhreminder`). Web browsers still require Turnstile when configured.
 - **No self-service account deletion** in the product today — account removal requires operator/support action (state this clearly in Privacy Policy / Terms)
 
 ### Company trial
@@ -333,6 +339,7 @@ Privacy Policy should state how users request deletion (e.g. contact **support@k
 | Geofenced check-in/out (when enabled) | ✓ | — | — |
 | Upload profile photo & ID proof | ✓ | ✓ | ✓ |
 | Create/edit lists & tasks | — | ✓ | ✓ |
+| **All Tasks** aggregate view + filters | — | ✓ | ✓ |
 | View all assignees / submissions / reopen assignees | — | ✓ | ✓ |
 | Attendance live map, daily & monthly reports | — | ✓ | ✓ |
 | Approve deadline extensions | — | ✓ | ✓ |
@@ -364,13 +371,14 @@ Privacy Policy should state how users request deletion (e.g. contact **support@k
 ### Authentication & onboarding
 
 - **Sign in** — email + password, show/hide password
-- **Register** — display name, email, phone (10 digits), password
-- **Cloudflare Turnstile** CAPTCHA on register and forgot-password
-- **Email OTP** — send, resend with countdown, 6-digit verify before account creation
-- **Forgot password** — CAPTCHA → OTP → verify → set new password
+- **Register** — display name, email, phone (10 digits), password (minimum length enforced)
+- **Cloudflare Turnstile** CAPTCHA on register and forgot-password (web); Android client may skip when headers match Kalpanik Reminder
+- **Email OTP** — send, resend with countdown, 6-digit verify before account creation (Brevo; rate-limited)
+- **Forgot password** — CAPTCHA → OTP → verify → set new password (generic success if email unknown)
+- **Trial gate** — login/register may be blocked when the company free trial has expired
 - **Session expiry** — toast + redirect to auth
 - **Account view picker** (admins) — choose Admin dashboard vs My tasks on login; preference saved in localStorage
-- **Switch view anytime** — Profile → Switch to admin view / Switch to user view
+- **Switch view anytime** — Profile → Switch to admin view / Switch to user view (`POST /api/auth/switch-role`)
 
 ### Admin dashboard (website)
 
@@ -380,24 +388,27 @@ Privacy Policy should state how users request deletion (e.g. contact **support@k
 - **Messages** — team chat offcanvas
 - **Reports** — org analytics
 - **Attendance** — live map + daily/monthly reports (when company settings allow)
-- **Deadline extensions** — pending postpone requests with nav badge count
+- **Deadline extensions** — pending postpone requests with nav badge count (polls ~30s)
 - **Your Lists** — create, rename (double-click), delete, pin/unpin (hold-to-pin), drag reorder
 - **Employee assignments** — system list (pinned) for peer-delegated tasks
-- **Mobile offcanvas** sidebar
+- **All Tasks** — virtual nav item under Your Lists; aggregates every list’s tasks sorted by **nearest deadline** (see [All Tasks view](#all-tasks-view))
+- **Mobile offcanvas** sidebar (scrollable nav so long list names stay usable)
 - **Trial banner** — days remaining / expired (owners/admins)
 - **Theme toggle** — light / dark
 - **Language selector** — EN / HI / MR / TA
 - **Notifications bell** — product announcements + unread badge
 - **Profile menu** — Owner dashboard, Settings, Contact us, Sign out
+- **Instant list navigation** — cached task sets + background refresh so switching lists feels immediate
+- **Owner auto-sync** — background task refresh (~12s) while the dashboard is open
 
-#### Task dashboard
+#### Task dashboard (per list)
 
 - **KPI filter cards** — Active, In Review, Completed, Employee Assigned (click to filter)
-- **Task table** — type icon, title, deadline, recurrence, expandable rows
-- **High-priority tasks** — red styling, pinned to top of list
-- **Overdue color legend & filter** — 1–2 days / 3–5 days / 6+ days overdue
+- **Task table** — type icon, title, deadline, recurrence, expandable rows, drag handle
+- **High-priority tasks** — red styling, pinned toward the top of the list
+- **Overdue row coloring** — full-row backgrounds by days overdue (see [Overdue color coding](#overdue-color-coding))
+- **Overdue color legend & Show filter** — on normal lists: intro text + clickable color swatches + **Show** dropdown (All / 1–2 / 3–5 / 6+)
 - **Drag-to-reorder** active incomplete tasks within a list
-- **Auto-sync** — background task refresh (~12s) while dashboard open
 - **Empty states** per filter and list type
 
 #### Per-task admin actions
@@ -406,10 +417,11 @@ Privacy Policy should state how users request deletion (e.g. contact **support@k
 - **Edit / delete task** (confirm on delete)
 - **Mark assignees done** modal — search employees, mark individual assignees submitted
 - **View submission** — current and archived (previous) submissions per assignee
-- **Reassign / reopen** — reopen a submitted assignee so they can resubmit; archives prior submission
+- **Reassign / reopen** — reopen a submitted assignee so they can resubmit; archives prior submission; push notifies employee
 - **View progress updates** — per assignee or all activity; unread dot until expanded (auto mark-read)
 - **View assignment attachments** — images, video, PDF, voice playback (authenticated blob URLs)
 - **Clear completed** — bulk clear completed tasks in a list
+- **Move task** to another list from edit modal
 
 #### Task create/edit modal
 
@@ -418,7 +430,7 @@ Privacy Policy should state how users request deletion (e.g. contact **support@k
 - **Duration** — minutes / hours / days (for capacity planning)
 - **Reminder before deadline** — optional: 30 min, 1 h, 2 h, 4 h, 1 day, 2 days, 3 days
 - **Recurrence** — none, daily, weekly, monthly, yearly, **custom** (interval, end never / on date / after N occurrences)
-- **Assignment attachments** — upload files, **record voice note** in-browser
+- **Assignment attachments** — upload files, **record voice note** in-browser (max 30 per task)
 - **Assignee picker** — search, multi-select chips, monthly minute budget hints per employee
 - Move task to another list
 - Save / delete
@@ -456,13 +468,15 @@ Privacy Policy should state how users request deletion (e.g. contact **support@k
 #### Task work
 
 - **Location gate** — blocks app until precise GPS shared (when `liveLocationRequired`)
-- **Critical overdue gate** — blocks app when any task is **6+ days overdue** until submitted or extension requested
+- **Critical overdue gate** — blocks app when any task is **6+ days overdue** until submitted or extension requested (Postpone)
+- **24-hour postpone grace** — after requesting an extension, gate dismissed for that task for 24h (`localStorage` + server `expiresAt`)
 - View **assignment attachments** (images, video, PDF, voice)
 - **Progress updates** — Started, In progress, Blocked, Update
 - **Submit** — notes + proof files (images, video, PDF; clipboard paste; preview)
 - **Update submission** — resubmit after already submitted (archives prior submission)
 - **View / View previous submission**
-- **Overdue badge** — “Overdue by X days” with color tiers
+- **Overdue badge** — “Overdue by X days” with the same color tiers as admin
+- **Overdue legend & Show filter** — on Active / All assigned when applicable
 - **Recurring tasks** — resubmit flow when series rolls forward
 
 #### Employee settings & profile
@@ -483,6 +497,78 @@ Privacy Policy should state how users request deletion (e.g. contact **support@k
 - **Service worker** — push handling, background navigation to tasks/chat/attendance/extensions
 - **PWA** — installable, hostname-based app name, splash screen in standalone mode
 - **Contact us modal** — authenticated support email to Kalpanik
+- **HTTP compression** — gzip responses from the API for faster loads
+- **DB query indexes** — list owner, task list+completed, assignee assigned-by indexes for All Tasks / dashboard performance
+
+---
+
+## All Tasks view
+
+**Who:** Admin / company owner (admin dashboard)  
+**Where:** Sidebar → under **Your Lists** → **All Tasks**  
+**Purpose:** One screen for every open task across all lists, sorted by **nearest deadline first**.
+
+### Loading & caching
+
+- Primary API: `GET /api/tasks/owner-all` (single request for all lists owned by the session user)
+- Fallback: if the bulk endpoint fails, the UI loads each list’s tasks in parallel via `GET /api/tasks/lists/:id`
+- Client cache (`ownerTasksCache`) + sidebar navigation optimizations so revisiting All Tasks is fast
+- Each task is stamped with `ownerAllTasksListId` / `ownerAllTasksListTitle` so row badges and the List filter work
+
+### Filter bar (four columns)
+
+| Control | Options | Behavior |
+|---------|---------|----------|
+| **List** | All lists + every list that has tasks in the aggregate | Filters by the task’s source list (project / site name) |
+| **Employee** | All employees + unique **assignee display names** from loaded tasks | Filters tasks where that person is an assignee (not list titles) |
+| **Deadline** | HTML date picker | Shows tasks due on that calendar day; clear the date to show all deadlines |
+| **Show** | All tasks / 1–2 days overdue / 3–5 days overdue / 6+ days overdue | Same overdue tiers as the legend on regular lists |
+
+Filters combine with **AND** logic. Empty filter result shows copy explaining how to clear List / Employee / Deadline / Show.
+
+Leaving All Tasks for a normal list resets List / Employee / Deadline filters to **all**.
+
+### Row badges (under task title)
+
+| Badge | Content |
+|-------|---------|
+| **List** (teal pill) | Source list title (e.g. “Prince - Elite”) |
+| **Employee** (purple pill) | Assignee name(s), comma-separated if multiple |
+| **Unassigned** (red pill) | Shown when the task has **no assignees** |
+
+Created timestamp and assignment-attachment badges still appear as on normal list rows. Expand / edit / mark-done / reopen behavior matches the rest of the admin dashboard.
+
+### KPI cards on All Tasks
+
+Same Active / In Review / Completed / Employee Assigned filters apply on top of the aggregate dataset (Employee Assigned filters the virtual “employee assignments” style work within All Tasks context where applicable).
+
+---
+
+## Overdue color coding
+
+Tasks past their deadline (and not completed) get a **full-row highlight** on admin and employee tables.
+
+| Days past deadline | Visual | Filter value |
+|--------------------|--------|--------------|
+| **1–2 days** | Amber / yellow row | `1-2` |
+| **3–5 days** | Orange row | `3-5` |
+| **6+ days** | Dark brown row | `6plus` |
+
+### Legend & filter UX
+
+- **Normal list view (admin)** — legend text (“Tasks past their deadline are highlighted”) + three clickable color swatches + **Show** dropdown  
+- **All Tasks** — no legend strip; overdue filtering is only via the **Show** dropdown in the four-column filter bar  
+- **Employee Active / relevant views** — overdue badge text plus matching row colors; Show filter when the overdue legend is shown  
+- Clicking an already-active swatch clears the overdue filter back to **All**
+
+### Priority vs overdue
+
+- **High priority** uses red emphasis and sort boost on incomplete tasks  
+- When a task is both high-priority and overdue, **overdue row coloring takes visual priority** on the table row (priority still affects sort/pinning)
+
+### Critical overdue (6+)
+
+Separately from row color, **6+ days overdue** incomplete assigned work triggers the employee **critical overdue gate** (submit or Postpone / deadline extension). See the next section.
 
 ---
 
@@ -718,19 +804,28 @@ No payment gateway is integrated in-app.
 
 | Layer | Technology |
 |-------|------------|
-| Frontend | Vite 6, Bootstrap 5, Sass, SortableJS, Chart.js, Inter, Material Symbols |
+| Frontend | Vite 6, Bootstrap 5, Sass, SortableJS, Chart.js, Inter, Material Symbols / Bootstrap Icons |
 | Maps | Google Maps JavaScript API + Geocoding API (attendance); Leaflet fallback |
-| Backend | Node.js, Express, Zod |
-| Database | MySQL 8+, Prisma ORM (25 models) |
-| Auth | `express-session` + file store |
+| Backend | Node.js, Express, Zod, **compression** (gzip HTTP responses) |
+| Database | MySQL 8+, Prisma ORM (**26** models) |
+| Auth | `express-session` + file store (`taskmgr.sid`) |
 | Email OTP | Brevo Transactional API |
-| CAPTCHA | Cloudflare Turnstile |
+| CAPTCHA | Cloudflare Turnstile (web; Android client may skip) |
 | Browser push | `web-push` + VAPID |
 | Android push | Firebase Cloud Messaging (FCM) |
 | Chat realtime | Server-Sent Events (SSE) |
 | Translation | `POST /api/translate` (MyMemory + Google fallback) |
 | PWA | Web manifest (hostname-aware), service worker |
 | Android app | Kotlin/Java — separate repo `SugandhReminder` (`in.kalpanik.sugandhreminder`) |
+
+### Notable performance pieces
+
+| Piece | Where | Purpose |
+|-------|--------|---------|
+| HTTP compression middleware | `server/src/index.js` | Faster JSON/HTML over the wire |
+| `GET /api/tasks/owner-all` | Tasks routes | Single bulk load for All Tasks |
+| Perf indexes migration `20260713120000_perf_query_indexes` | Prisma | Indexes on `TaskList(owner_id)`, `Task(list_id, completed)`, `task_assignee(assigned_by_user_id)` |
+| Client task cache + nav busy flag | `client/src/main.js` | Instant list / All Tasks switching |
 
 ---
 
@@ -946,6 +1041,7 @@ Package: `in.kalpanik.sugandhreminder`
 - Same REST API as web (`/api/tasks/assigned`, completion-proof, assignment attachments, etc.)
 - Should parse `assignmentAttachments` on tasks and download files with the session cookie
 - Device registration via `POST /api/push/devices/register`
+- **Forgot-password / CAPTCHA:** when the client sends `X-Kalpanik-Client: SugandhReminder-Android` (or UA contains `in.kalpanik.sugandhreminder`), the API may **skip Turnstile** so OTP reset works from the APK while the website still requires CAPTCHA
 
 ### Build APK (Windows)
 
@@ -1051,7 +1147,7 @@ Delivery: **FCM** (Android) and/or **Web Push** (browser). In-tab toast + option
 
 ### In-app admin announcements
 
-Bell icon lists product announcements (legal, overdue colors, APK updates, attendance, voice attachments, owner dashboard, team chat, etc.). Unread badge clears when panel opened. Read state in localStorage.
+Bell icon lists product announcements (Privacy & Terms, overdue color tiers + APK, attendance, voice attachments, Owner dashboard filters, translation, chat reply/delete, team chat, APK download, etc.). Unread badge clears when panel opened. Read state in localStorage. Audience can be all users vs privileged/owner-only.
 
 ### Test FCM (browser console, logged in)
 
@@ -1068,6 +1164,8 @@ fetch("/api/push/test", { method: "POST", credentials: "include" }).then((r) => 
 - Language-change overlay during switch
 - Dynamic content (task titles, descriptions, chat): `POST /api/translate` with `{ texts, to: "en"|"hi"|"mr"|"ta" }`
 - Chat voice-to-text: EN / HI / MR / TA via Web Speech API
+- Locale namespaces include: `app`, `language`, `common`, `auth`, `nav`, `owner`, `lists`, `employee`, `modals`, `profile`, `settings`, `tasks`, `contact`, `toast`, `empty`, `validation`, `chat`, `reports`, `notifications`, `legal`, `errors`, `reminders`, `attendance`, `deadlineExtensions`
+- All Tasks filter labels (List / Employee / Deadline / Show) and overdue / **Unassigned** strings live under `owner.*` and `common.*`
 
 ---
 
@@ -1099,7 +1197,7 @@ fetch("/api/push/test", { method: "POST", credentials: "include" }).then((r) => 
 Task Manager/
 ├── client/
 │   ├── src/
-│   │   ├── main.js                      # Admin + employee UI, tasks, modals, gates
+│   │   ├── main.js                      # Admin + employee UI, All Tasks filters, overdue tiers, gates
 │   │   ├── attendance.js                # Employee live location gate + tracking
 │   │   ├── attendanceCheckIn.js         # Employee geofenced check-in/out
 │   │   ├── attendanceCheckInReminder.js # Check-in/out reminder modals
@@ -1119,7 +1217,8 @@ Task Manager/
 │   │   ├── pwaBranding.js / pwaSplash.js
 │   │   ├── legal/                       # Privacy & Terms modal + content
 │   │   ├── i18n/                        # Locales + content translation
-│   │   └── scss/                        # Admin theme, attendance, chat, etc.
+│   │   ├── locales/                     # en / hi / mr / ta JSON
+│   │   └── scss/                        # Admin theme, overdue colors, All Tasks filters, chat, etc.
 │   ├── public/
 │   │   ├── downloads/sugandh-reminder.apk
 │   │   ├── sw.js                        # Service worker (push + navigation)
@@ -1128,10 +1227,11 @@ Task Manager/
 │   └── dist/                            # Build output (not in git)
 ├── server/
 │   ├── prisma/
-│   │   ├── schema.prisma                # 25 models
-│   │   └── migrations/
+│   │   ├── schema.prisma                # 26 models
+│   │   └── migrations/                  # includes perf_query_indexes + feature migrations
 │   ├── src/
-│   │   ├── routes/                      # auth, lists, tasks, users, push, chat,
+│   │   ├── index.js                     # Express app, compression, static dist, session
+│   │   ├── routes/                      # auth, lists, tasks (incl. owner-all), users, push, chat,
 │   │   │                                # reports, attendance, deadline-extensions,
 │   │   │                                # translate, support, company
 │   │   ├── services/                    # attendance, geocode, FCM, notifications,
@@ -1157,7 +1257,7 @@ Base path: `/api`. Authenticated routes use session cookie (`credentials: "inclu
 |------|----------------|
 | **Auth** | `POST /login`, `/register`, `/logout`, `GET /me`, `POST /switch-role`, forgot-password, Turnstile site key, OTP send/verify |
 | **Lists** | `GET/POST /lists`, `PATCH /lists/:id`, pin, delete, reorder |
-| **Tasks** | `GET /assigned`, `/assigned-by-me`, `POST /employee-create`, `GET/POST /lists/:listId`, `PATCH /:id` (edit, reopen, reassign), `DELETE /:id`, move, reorder, clear-completed |
+| **Tasks** | `GET /owner-all` (All Tasks bulk), `GET /assigned`, `/assigned-by-me`, `POST /employee-create`, `GET/POST /lists/:listId`, `PATCH /:id` (edit, reopen, reassign), `DELETE /:id`, move, reorder, clear-completed |
 | **Task proofs & progress** | `POST /:id/completion-proof`, `GET /:id/submission`, progress-updates CRUD, `POST /:id/delegate` |
 | **Assignment attachments** | `GET/POST/DELETE /tasks/:id/assignment-attachments[...]` |
 | **Deadline extensions** | `POST /deadline-extensions`, `GET /deadline-extensions`, `POST /deadline-extensions/:id/approve` |
@@ -1218,6 +1318,8 @@ pm2 restart taskmanager safari ss2n acs tacs
 ```
 
 `client/dist` is **not** in git — always run `npm run build` after `git pull`.
+
+`npm run db:migrate:deploy` applies schema changes (including **perf indexes** used by All Tasks / dashboard queries). Skipping migrate can leave the app slow or broken after a pull.
 
 ### After pushing a new APK
 
@@ -1334,6 +1436,9 @@ See also: `deploy/nginx-upload-limit.conf.example`, `deploy/fix-nginx-proxy-all-
 | Owner dashboard missing | User needs `isOwner`; log out/in after promote; max 2 owners |
 | Company profile not saving | User must be `isOwner`; complete required fields |
 | Critical overdue gate won’t dismiss | Submit task or request extension; grace is 24h per request |
+| All Tasks missing / slow | Rebuild client; run `db:migrate:deploy` (perf indexes); confirm `GET /api/tasks/owner-all` |
+| All Tasks Employee filter wrong | Latest client lists **assignee names**, not list titles; List filter is separate |
+| Unassigned not shown on All Tasks | Latest client shows red **Unassigned** pill when a task has no assignees |
 | Deadline extensions page empty | No pending requests within 24h grace window |
 | Employee can’t update submission | Task must be in submitted state; deploy latest server |
 | Reopen / resubmit not working | Admin uses Reassign on assignee card; employee gets `task_reopened` push |

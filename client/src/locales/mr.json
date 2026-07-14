@@ -373,7 +373,7 @@
       "updateBadge": "अपडेट"
     },
     "pasteFromClipboard": "क्लिपबोर्डवरून पेस्ट",
-    "submissionFilesOptional": "(जास्तीत जास्त {{max}} फोटो/व्हिडिओ, कोणताही आकार — किंवा एक PDF 5 MB पर्यंत)",
+    "submissionFilesOptional": "(जास्तीत जास्त {{max}} फोटो/व्हिडिओ/ऑडिओ, कोणताही आकार — किंवा एक PDF 5 MB पर्यंत)",
     "reminders": {
       "fallbackTaskTitle": "तुमचे कार्य"
     },
@@ -389,7 +389,7 @@
     "submittedTasks": "सबमिट केलेली कार्ये",
     "allAssignedTasks": "सर्व नियुक्त कार्ये",
     "assignedByMeHint": "तुम्ही तयार केलेली किंवा नियुक्त केलेली कार्ये. फक्त स्थिती — अपडेट आणि सबमिशन अॅडमिनला दिसतात.",
-    "activeTasksHint": "काम करताना प्रगती अपडेट पोस्ट करा, नंतर नोट्स आणि/किंवा प्रतिमेसह सबमिट करा.",
+    "activeTasksHint": "काम करताना नोट्स आणि फाइल्ससह प्रगती अपडेट पोस्ट करा, नंतर पूर्ण झाल्यावर सबमिट करा.",
     "criticalOverdueGateTitle": "तातडीचे मुदत ओलांडलेले कार्य",
     "criticalOverdueGateIntro": "हे कार्य अंतिम मुदतीपासून 6 किंवा अधिक दिवसांनी उशीरा आहे. अॅप वापरण्यापूर्वी कार्य सबमिट करा किंवा Postpone विनंती करा.",
     "criticalOverdueGateMustAct": "पुढे जाण्यासाठी कार्य सबमिट करा किंवा Postpone दाबा. 24 तासांत मंजुरी न मिळाल्यास ही स्क्रीन परत येईल.",
@@ -401,7 +401,8 @@
     "taskReopenedToast": "कृपया पुन्हा सबमिट करा: {{title}}",
     "viewPreviousSubmission": "मागील सबमिशन",
     "updateSubmission": "सबमिशन अपडेट करा",
-    "resubmitRequiredHint": "अॅडमिनने नवीन सबमिशन मागितले आहे. तुमचे जुने काम जतन आहे."
+    "resubmitRequiredHint": "अॅडमिनने नवीन सबमिशन मागितले आहे. तुमचे जुने काम जतन आहे.",
+    "progressFilesOptional": "(पर्यायी — जास्तीत जास्त {{max}} प्रतिमा, व्हिडिओ किंवा ऑडिओ, किंवा एक PDF)"
   },
   "modals": {
     "listName": "यादीचे नाव",
@@ -452,7 +453,8 @@
     "postTaskUpdate": "कार्य अपडेट पोस्ट करा",
     "reviewUpdates": "कार्य अपडेट पुनरावलोकन",
     "allEmployeesActivity": "सर्व कर्मचारी — संपूर्ण क्रियाकलाप",
-    "fullActivity": "संपूर्ण कार्य क्रियाकलाप"
+    "fullActivity": "संपूर्ण कार्य क्रियाकलाप",
+    "updateAttachments": "अटॅचमेंट्स"
   },
   "profile": {
     "myProfile": "माझी प्रोफाइल",
@@ -626,6 +628,7 @@
     "clipboardReadFailed": "क्लिपबोर्ड वाचता आला नाही. पेस्ट परवानगी द्या आणि पुन्हा प्रयत्न करा.",
     "taskSubmitted": "कार्य सबमिट केले.",
     "taskSubmittedNotify": "कार्य अपडेट: {{title}}",
+    "taskProgressUpdateNotify": "प्रगती अपडेट: {{title}}",
     "updatePosted": "अपडेट पोस्ट केले.",
     "createListFirst": "प्रथम यादी तयार करा.",
     "enterTaskTitle": "कार्य शीर्षक प्रविष्ट करा.",
@@ -670,14 +673,14 @@
     "nothingAssignedYetDesc": "सहकार्याला कार्य नियुक्त करण्यासाठी <strong>कार्य तयार आणि नियुक्त</strong> वापरा."
   },
   "validation": {
-    "submissionRequired": "सबमिशन मजकूर द्या किंवा किमान एक प्रतिमा/व्हिडिओ अपलोड करा.",
+    "submissionRequired": "सबमिशन मजकूर द्या किंवा प्रतिमा, व्हिडिओ, PDF किंवा ऑडिओ नोट अपलोड करा.",
     "imageTooLarge": "प्रतिमा किंवा व्हिडिओ खूप मोठा (जास्तीत जास्त {{max}} MB). लहान फाइल किंवा फक्त मजकूर सबमिट करा.",
     "uploadTooLarge": "अपलोड खूप मोठा. फोटो/व्हिडिओ {{max}} MB पेक्षा लहान असावेत, किंवा अॅडमिनला nginx client_max_body_size वाढवण्यास सांगा.",
     "uploadTooLargeNginx": "सर्व्हरने अपलोड थांबवला (खूप मोठा). अॅडमिनला nginx client_max_body_size 0 (अमर्यादित) सेट करण्यास सांगा.",
     "submissionFailed": "सबमिशन अयशस्वी. कृपया पुन्हा प्रयत्न करा.",
-    "fileTypesAllowed": "फक्त JPEG, PNG, GIF, WebP, MP4/WebM/MOV व्हिडिओ किंवा PDF परवानगी.",
+    "fileTypesAllowed": "फक्त JPEG, PNG, GIF, WebP, व्हिडिओ, PDF किंवा ऑडिओ नोट परवानगी.",
     "fileMaxSize": "प्रत्येक फाइल {{max}} MB किंवा लहान असावी.",
-    "pdfAloneOrMedia": "एक PDF एकटा सबमिट करा, किंवा अनेक प्रतिमा/व्हिडिओ अपलोड करा.",
+    "pdfAloneOrMedia": "एक PDF एकटा सबमिट करा, किंवा अनेक प्रतिमा/व्हिडिओ/ऑडिओ अपलोड करा.",
     "signInForFiles": "सबमिशन फाइल्स पाहण्यासाठी पुन्हा साइन इन करा.",
     "noPermissionSubmission": "हे सबमिशन पाहण्याची परवानगी नाही.",
     "submissionNotFound": "सबमिशन फाइल सर्व्हरवर सापडली नाही.",
@@ -692,7 +695,8 @@
     "chooseEmployeeAssign": "कृपया नियुक्त करण्यासाठी कर्मचारी निवडा.",
     "createTaskFailed": "कार्य तयार होऊ शकले नाही.",
     "chooseEmployee": "कृपया कर्मचारी निवडा.",
-    "assignTaskFailed": "कार्य नियुक्त होऊ शकले नाही."
+    "assignTaskFailed": "कार्य नियुक्त होऊ शकले नाही.",
+    "enterUpdateOrAttachment": "कृपया अपडेट लिहा किंवा फाइल जोडा."
   },
   "chat": {
     "subtitle": "तुमच्या संघाशी चॅट करा",

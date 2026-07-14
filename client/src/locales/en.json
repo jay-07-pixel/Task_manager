@@ -373,7 +373,8 @@
       "updateBadge": "Update"
     },
     "pasteFromClipboard": "Paste from clipboard",
-    "submissionFilesOptional": "(up to {{max}} photos/videos, any size — or one PDF up to 5 MB)",
+    "submissionFilesOptional": "(up to {{max}} photos/videos/audio, any size — or one PDF up to 5 MB)",
+    "progressFilesOptional": "(optional — up to {{max}} images, videos, or audio notes, or one PDF)",
     "reminders": {
       "fallbackTaskTitle": "Your task"
     },
@@ -389,7 +390,7 @@
     "submittedTasks": "Submitted tasks",
     "allAssignedTasks": "All assigned tasks",
     "assignedByMeHint": "Tasks you created or assigned to colleagues. Status only — updates and submissions are visible to admin.",
-    "activeTasksHint": "Post progress updates while you work, then submit with notes and/or an image when done.",
+    "activeTasksHint": "Post progress updates with notes and files while you work, then submit when done.",
     "criticalOverdueGateTitle": "Urgent overdue task",
     "criticalOverdueGateIntro": "This task is 6 or more days past its deadline. Submit your work or request a deadline extension before you can use the app.",
     "criticalOverdueGateMustAct": "Submit this task or request a postpone to continue. If your postpone is not approved within 24 hours, this screen will return.",
@@ -416,6 +417,7 @@
     "taskUpdate": "Task update",
     "updateType": "Update type",
     "yourUpdate": "Your update",
+    "updateAttachments": "Attachments",
     "updatePlaceholder": "Share what you are doing, any blockers, or progress on this task.",
     "updateHistory": "Update history",
     "noUpdatesYet": "No updates yet.",
@@ -626,6 +628,7 @@
     "clipboardReadFailed": "Could not read clipboard. Allow paste permission and try again.",
     "taskSubmitted": "Task submitted.",
     "taskSubmittedNotify": "Task update: {{title}}",
+    "taskProgressUpdateNotify": "Progress update: {{title}}",
     "updatePosted": "Update posted.",
     "createListFirst": "Create a list first.",
     "enterTaskTitle": "Enter a task title.",
@@ -670,14 +673,15 @@
     "nothingAssignedYetDesc": "Use <strong>Create & assign task</strong> to assign work to a colleague."
   },
   "validation": {
-    "submissionRequired": "Please provide submission text or upload at least one image or video.",
+    "submissionRequired": "Please provide submission text or upload an image, video, PDF, or audio note.",
     "imageTooLarge": "Image or video is too large (max {{max}} MB). Use a smaller file or submit text only.",
     "uploadTooLarge": "Upload is too large. Photos and videos must be under {{max}} MB, or ask your admin to raise nginx client_max_body_size.",
     "uploadTooLargeNginx": "Upload was blocked by the server (too large). Ask your admin to set nginx client_max_body_size to 0 (unlimited) and redeploy.",
     "submissionFailed": "Submission failed. Please try again.",
-    "fileTypesAllowed": "Only JPEG, PNG, GIF, WebP images, MP4/WebM/MOV videos, or PDF files are allowed.",
+    "fileTypesAllowed": "Only JPEG, PNG, GIF, WebP images, videos, PDFs, or audio notes are allowed.",
     "fileMaxSize": "Each file must be {{max}} MB or smaller.",
-    "pdfAloneOrMedia": "Submit one PDF alone, or upload multiple images and videos.",
+    "pdfAloneOrMedia": "Submit one PDF alone, or upload multiple images, videos, and audio notes.",
+    "enterUpdateOrAttachment": "Please write an update or attach a file.",
     "signInForFiles": "Sign in again to view submission files.",
     "noPermissionSubmission": "You do not have permission to view this submission.",
     "submissionNotFound": "Submission file not found on the server.",

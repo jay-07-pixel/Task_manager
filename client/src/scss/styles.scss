@@ -354,6 +354,17 @@ body {
   word-break: break-word;
 }
 
+.progress-update-attachments {
+  margin-top: 0.5rem;
+}
+
+.progress-update-attach-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  max-width: 100%;
+}
+
 .emp-task-actions .btn {
   min-width: 6.5rem;
 }
