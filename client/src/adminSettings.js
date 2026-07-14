@@ -113,6 +113,88 @@ function settingsRowHtml({ icon, label, extraClass = "", attrs = "", tag = "butt
   return `<button type="button" class="admin-settings-row ${extraClass}" ${attrs}>${inner}</button>`;
 }
 
+/** @param {number} bytes */
+export function formatStorageBytes(bytes) {
+  const n = Math.max(0, Number(bytes) || 0);
+  const gb = 1024 * 1024 * 1024;
+  const mb = 1024 * 1024;
+  const kb = 1024;
+  if (n >= gb) return `${(n / gb).toFixed(n >= 10 * gb ? 1 : 2)} GB`;
+  if (n >= mb) return `${(n / mb).toFixed(n >= 10 * mb ? 1 : 2)} MB`;
+  if (n >= kb) return `${(n / kb).toFixed(n >= 10 * kb ? 0 : 1)} KB`;
+  return `${Math.round(n)} B`;
+}
+
+/** @param {any} storage */
+function storageBreakdownHtml(storage) {
+  const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
+  const cats = storage?.byCategory || {};
+  const taskBytes = (cats.taskProofs || 0) + (cats.progressUpdates || 0);
+  const rows = [
+    { label: tr("settings.storageCategoryTasks"), bytes: taskBytes },
+    { label: tr("settings.storageCategoryChat"), bytes: cats.chat || 0 },
+    { label: tr("settings.storageCategoryProfile"), bytes: cats.profile || 0 },
+    { label: tr("settings.storageCategoryAssignment"), bytes: cats.assignmentAttachments || 0 },
+  ].filter((r) => r.bytes > 0);
+
+  if (!rows.length) return "";
+  return `<ul class="admin-settings-storage-breakdown">
+    ${rows
+      .map(
+        (r) => `<li><span>${esc(r.label)}</span><span class="tabular-nums">${esc(formatStorageBytes(r.bytes))}</span></li>`
+      )
+      .join("")}
+  </ul>`;
+}
+
+/** @param {any} storage */
+export function storageUsageCardHtml(storage) {
+  const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
+  if (!storage) {
+    return `<div class="admin-settings-storage-card" data-storage-card>
+      <p class="admin-settings-storage-loading mb-0">${esc(tr("common.loading"))}</p>
+    </div>`;
+  }
+  const used = formatStorageBytes(storage.usedBytes);
+  const quota = formatStorageBytes(storage.quotaBytes || 1024 * 1024 * 1024);
+  const pct = Math.min(100, Math.max(0, Number(storage.percentUsed) || 0));
+  const over = Boolean(storage.overQuota);
+  return `<div class="admin-settings-storage-card${over ? " admin-settings-storage-card--over" : ""}" data-storage-card>
+    <div class="admin-settings-storage-head">
+      ${adminMsIconFn?.("hard_drive") ?? ""}
+      <div class="admin-settings-storage-titles">
+        <p class="admin-settings-storage-title mb-0">${esc(tr("settings.storageTitle"))}</p>
+        <p class="admin-settings-storage-quota mb-0 tabular-nums">${esc(
+          tr("settings.storageQuotaLabel", { used, quota })
+        )}</p>
+      </div>
+    </div>
+    <div class="admin-settings-storage-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" aria-label="${esc(
+      tr("settings.storageTitle")
+    )}">
+      <span class="admin-settings-storage-bar-fill" style="width:${pct}%"></span>
+    </div>
+    <p class="admin-settings-storage-hint mb-0">${esc(tr("settings.storageHint"))}</p>
+    ${storageBreakdownHtml(storage)}
+  </div>`;
+}
+
+async function loadAndRenderStorageCard(root) {
+  const card = root?.querySelector("[data-storage-card]");
+  if (!card || !apiFn) return;
+  try {
+    const { storage } = await apiFn("/api/users/storage");
+    const wrap = document.createElement("div");
+    wrap.innerHTML = storageUsageCardHtml(storage);
+    const next = wrap.firstElementChild;
+    if (next) card.replaceWith(next);
+  } catch {
+    card.innerHTML = `<p class="admin-settings-storage-loading text-danger mb-0">${
+      escapeHtmlFn?.(tr("settings.storageLoadFailed")) ?? tr("settings.storageLoadFailed")
+    }</p>`;
+  }
+}
+
 function myProfileSettingsRowHtml() {
   const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
   return `<button type="button" class="admin-settings-row js-open-my-profile" data-my-profile-row="1">
@@ -261,6 +343,7 @@ function settingsPageHtml(role) {
     ${chromeHeader}
     <div class="admin-settings-page">
       <p class="admin-settings-intro">${escapeHtmlFn?.(tr("settings.intro")) ?? ""}</p>
+      ${storageUsageCardHtml(null)}
       <nav class="admin-settings-list" aria-label="${escapeHtmlFn?.(tr("settings.title")) ?? "Settings"}">
         ${rows}
       </nav>
@@ -413,6 +496,7 @@ function wireSettingsPage(main, role) {
   if (role === "employee") {
     wireAttendanceSettingsToggle(main);
   }
+  void loadAndRenderStorageCard(main);
   void refreshMyProfileSettingsBadge();
   if (role === "owner") {
     void refreshCompanyProfileSettingsBadge();

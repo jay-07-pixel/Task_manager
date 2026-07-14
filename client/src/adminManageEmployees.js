@@ -1,6 +1,7 @@
 import * as bootstrap from "bootstrap";
 import { tr, dateLocale } from "./i18n/index.js";
 import { dt } from "./i18n/contentTranslate.js";
+import { formatStorageBytes } from "./adminSettings.js";
 
 /** @type {((path: string, opts?: RequestInit) => Promise<any>) | null} */
 let apiFn = null;
@@ -111,6 +112,7 @@ export function employeeProfileModalHtml() {
                 <p class="small text-muted mb-2">${tr("profile.profileDocumentsIntro")}</p>
                 <div id="employee-profile-doc-rows"></div>
               </div>
+              <div id="employee-profile-storage" class="mb-3"></div>
               <p class="small text-muted mb-0" id="employee-profile-member-since"></p>
             </div>
             <div class="modal-footer profile-modal-footer">
@@ -155,6 +157,11 @@ function fillEmployeeProfileModal(profile) {
   document.getElementById("employee-profile-member-since").textContent = since
     ? tr("profile.memberSince", { date: since })
     : "";
+
+  const storageHost = document.getElementById("employee-profile-storage");
+  if (storageHost) {
+    storageHost.innerHTML = `<p class="small text-muted mb-0">${escapeHtmlFn?.(tr("common.loading")) ?? ""}</p>`;
+  }
 }
 
 export async function openEmployeeProfileModal(userId) {
@@ -162,8 +169,22 @@ export async function openEmployeeProfileModal(userId) {
   if (!modalEl || !apiFn) return;
   viewingEmployeeId = userId;
   try {
-    const { profile } = await apiFn(`/api/users/${userId}/profile`);
+    const [{ profile }, storageRes] = await Promise.all([
+      apiFn(`/api/users/${userId}/profile`),
+      apiFn(`/api/users/${userId}/storage`).catch(() => null),
+    ]);
     fillEmployeeProfileModal(profile);
+    const storageHost = document.getElementById("employee-profile-storage");
+    if (storageHost && storageRes?.storage) {
+      const s = storageRes.storage;
+      const used = formatStorageBytes(s.usedBytes);
+      const quota = formatStorageBytes(s.quotaBytes || 1024 * 1024 * 1024);
+      storageHost.innerHTML = `<p class="small mb-0${s.overQuota ? " text-danger fw-semibold" : " text-muted"}">${escapeHtmlFn?.(
+        `${tr("settings.storageTitle")}: ${tr("settings.storageUsedShort", { used, quota })}`
+      )}</p>`;
+    } else if (storageHost) {
+      storageHost.innerHTML = "";
+    }
     bootstrap.Modal.getOrCreateInstance(modalEl).show();
   } catch (err) {
     showToastFn?.(err.message || tr("profile.couldNotLoad"), "danger");
@@ -213,11 +234,21 @@ export function wireEmployeeProfileModal() {
   });
 }
 
-function employeeRowHtml(user) {
+function employeeRowHtml(user, storage = null) {
   const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
   const badges = [];
   if (user.isOwner) badges.push(`<span class="manage-employee-badge manage-employee-badge--owner">${esc(tr("owner.ownerBadge"))}</span>`);
   else if (user.isAdmin) badges.push(`<span class="manage-employee-badge manage-employee-badge--admin">${esc(tr("common.admin"))}</span>`);
+
+  let storageHtml = "";
+  if (storage) {
+    const used = formatStorageBytes(storage.usedBytes);
+    const quota = formatStorageBytes(storage.quotaBytes || 1024 * 1024 * 1024);
+    const overClass = storage.overQuota ? " manage-employee-storage--over" : "";
+    storageHtml = `<span class="manage-employee-storage${overClass}">${esc(
+      tr("settings.storageUsedShort", { used, quota })
+    )}</span>`;
+  }
 
   return `<div class="admin-settings-row manage-employee-row">
     <span class="manage-employee-row-left">
@@ -225,6 +256,7 @@ function employeeRowHtml(user) {
       <span class="admin-settings-row-label">
         <span class="manage-employee-name">${esc(dt(user.displayName))}</span>
         <span class="manage-employee-email">${esc(user.email)}</span>
+        ${storageHtml}
         ${badges.join("")}
       </span>
     </span>
@@ -237,12 +269,16 @@ async function renderManageEmployeesList() {
   if (!host || !apiFn) return;
   host.innerHTML = `<p class="admin-settings-intro mb-0">${escapeHtmlFn?.(tr("common.loading")) ?? tr("common.loading")}</p>`;
   try {
-    const { users } = await apiFn("/api/users/team");
+    const [{ users }, storagePayload] = await Promise.all([
+      apiFn("/api/users/team"),
+      apiFn("/api/users/storage/team").catch(() => null),
+    ]);
     if (!users.length) {
       host.innerHTML = `<p class="admin-settings-intro mb-0">${escapeHtmlFn?.(tr("modals.noTeamMembers")) ?? ""}</p>`;
       return;
     }
-    host.innerHTML = users.map((u) => employeeRowHtml(u)).join("");
+    const byUserId = storagePayload?.byUserId || {};
+    host.innerHTML = users.map((u) => employeeRowHtml(u, byUserId[u.id] || null)).join("");
     host.querySelectorAll(".manage-employee-view-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
         const id = btn.getAttribute("data-user-id");

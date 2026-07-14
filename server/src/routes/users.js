@@ -25,6 +25,11 @@ import {
   setUserProfilePhoto,
   USER_PROFILE_DOC_MAX_BYTES,
 } from "../lib/userProfileDocs.js";
+import {
+  getStorageUsageForUsers,
+  getUserStorageUsage,
+  USER_STORAGE_QUOTA_BYTES,
+} from "../services/userStorageService.js";
 
 const router = Router();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -222,6 +227,34 @@ router.get("/team", requireOwner, async (req, res) => {
     ownerCount,
     maxOwners: MAX_COMPANY_OWNERS,
   });
+});
+
+router.get("/storage", requireAuth, async (req, res) => {
+  const storage = await getUserStorageUsage(req.session.userId);
+  res.json({ storage });
+});
+
+router.get("/storage/team", requireOwner, async (req, res) => {
+  const users = await prisma.user.findMany({
+    select: { id: true },
+    orderBy: { displayName: "asc" },
+  });
+  const rows = await getStorageUsageForUsers(users.map((u) => u.id));
+  const byUserId = Object.fromEntries(rows.map((row) => [row.userId, row]));
+  res.json({
+    quotaBytes: USER_STORAGE_QUOTA_BYTES,
+    byUserId,
+  });
+});
+
+router.get("/:id/storage", requireOwner, async (req, res) => {
+  const target = await prisma.user.findUnique({
+    where: { id: req.params.id },
+    select: { id: true },
+  });
+  if (!target) return res.status(404).json({ error: "User not found." });
+  const storage = await getUserStorageUsage(target.id);
+  res.json({ storage });
 });
 
 router.get("/profile", requireAuth, async (req, res) => {

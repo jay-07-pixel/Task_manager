@@ -549,7 +549,16 @@
     "intro": "Manage your profile, appearance, and admin preferences.",
     "manageNotifications": "Manage notifications",
     "notificationsTurnedOn": "Notifications turned on.",
-    "notificationsTurnedOff": "Notifications turned off."
+    "notificationsTurnedOff": "Notifications turned off.",
+    "storageTitle": "Storage used",
+    "storageQuotaLabel": "{{used}} of {{quota}}",
+    "storageHint": "Files you upload on tasks and in chat count toward your 1 GB limit.",
+    "storageCategoryTasks": "Task submissions & updates",
+    "storageCategoryChat": "Chat attachments",
+    "storageCategoryProfile": "Profile documents",
+    "storageCategoryAssignment": "Assignment files you uploaded",
+    "storageLoadFailed": "Could not load storage usage.",
+    "storageUsedShort": "{{used}} / {{quota}}"
   },
   "tasks": {
     "assignmentAttachments": "Attachments for assignees",
