@@ -353,3 +353,38 @@
   border-radius: 0.375rem;
   background: #fff;
 }
+
+.storage-file-fullscreen-hint {
+  font-size: 0.7rem;
+  color: var(--admin-primary, #006972);
+  font-weight: 500;
+}
+
+.storage-file-fullscreen-icon {
+  font-size: 1.15rem !important;
+  color: var(--admin-primary, #006972);
+  flex-shrink: 0;
+  margin-left: auto;
+  align-self: center;
+}
+
+.storage-media-lightbox-audio {
+  position: relative;
+  z-index: 1;
+  width: min(92vw, 28rem);
+  padding: 1.25rem;
+  border-radius: 0.75rem;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.storage-media-lightbox-audio-title {
+  margin: 0 0 0.75rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  word-break: break-word;
+}
+
+#storage-media-lightbox {
+  z-index: 2100;
+}

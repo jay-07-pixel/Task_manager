@@ -560,7 +560,7 @@
     "storageLoadFailed": "Could not load storage usage.",
     "storageUsedShort": "{{used}} / {{quota}}",
     "storageFilesTitle": "Your files",
-    "storageFilesHint": "Tap a file to preview. Delete frees space from your 1 GB quota.",
+    "storageFilesHint": "Tap a file to open it full screen. Delete frees space from your 1 GB quota.",
     "storageFilesEmpty": "No files in this category.",
     "storageDeleteFile": "Delete file",
     "storageDeleteConfirm": "Delete this file permanently? This cannot be undone.",
@@ -568,7 +568,9 @@
     "storageDeleteFailed": "Could not delete file.",
     "storagePreviewFailed": "Could not open file preview.",
     "storagePreviewUnsupported": "Preview is not available for this file type.",
-    "storageDownload": "Download"
+    "storageDownload": "Download",
+    "storageViewFullScreen": "View full screen",
+    "storageTapFullScreen": "Tap to view full screen"
   },
   "tasks": {
     "assignmentAttachments": "Attachments for assignees",
