@@ -6480,7 +6480,7 @@ function progressUpdateAttachmentsHtml(attachments) {
   if (!attachments?.length) return "";
   const chips = attachments
     .map((a) => {
-      const kind = a.kind === "voice" ? "audio" : a.kind;
+      const kind = a.kind === "voice" ? "audio" : a.kind || "image";
       const label =
         kind === "audio"
           ? tr("tasks.voiceNote")
@@ -6491,10 +6491,150 @@ function progressUpdateAttachmentsHtml(attachments) {
               : a.originalName || "Image";
       const icon =
         kind === "audio" ? "mic" : kind === "pdf" ? "picture_as_pdf" : kind === "video" ? "videocam" : "image";
-      return `<button type="button" class="btn btn-sm btn-outline-secondary progress-update-attach-chip js-progress-update-attachment" data-attachment-url="${escapeHtml(a.url)}" data-attachment-kind="${escapeHtml(kind)}" data-attachment-mime="${escapeHtml(a.mimeType || "")}" data-attachment-name="${escapeHtml(a.originalName || label)}">${adminMsIcon(icon)} ${escapeHtml(label)}</button>`;
+      return `<button
+        type="button"
+        class="btn btn-sm btn-outline-secondary progress-update-attach-chip js-progress-update-attachment"
+        data-attachment-url="${escapeHtml(a.url)}"
+        data-attachment-kind="${escapeHtml(kind)}"
+        data-attachment-mime="${escapeHtml(a.mimeType || "")}"
+        data-attachment-name="${escapeHtml(a.originalName || label)}"
+      >${adminMsIcon(icon)} <span>${escapeHtml(label)}</span></button>`;
     })
     .join("");
-  return `<div class="progress-update-attachments d-flex flex-wrap gap-2 mt-2">${chips}</div>`;
+  return `<div class="progress-update-attachments">
+    <div class="d-flex flex-wrap gap-2">${chips}</div>
+    <div class="progress-update-attach-inline mt-2 d-none" aria-live="polite"></div>
+  </div>`;
+}
+
+async function hydrateProgressUpdateAttachments(root) {
+  if (!root) return;
+  for (const wrap of root.querySelectorAll(".progress-update-attachments")) {
+    const chips = [...wrap.querySelectorAll(".js-progress-update-attachment")];
+    if (!chips.length) continue;
+    const inlineHost = wrap.querySelector(".progress-update-attach-inline");
+    if (!inlineHost) continue;
+    inlineHost.innerHTML = "";
+    inlineHost.classList.add("d-none");
+    for (const chip of chips) {
+      const item = {
+        url: chip.getAttribute("data-attachment-url") || "",
+        kind: chip.getAttribute("data-attachment-kind") || "image",
+        mimeType: chip.getAttribute("data-attachment-mime") || "",
+        originalName: chip.getAttribute("data-attachment-name") || "",
+      };
+      if (!item.url) continue;
+      try {
+        const resource = await loadAttachmentResource(item);
+        const block = document.createElement("div");
+        block.className = "progress-update-attach-inline-item";
+        if (resource.kind === "audio") {
+          const label = document.createElement("p");
+          label.className = "small fw-semibold mb-1";
+          label.textContent = item.originalName || tr("tasks.voiceNote");
+          const audio = document.createElement("audio");
+          audio.controls = true;
+          audio.preload = "metadata";
+          audio.className = "w-100";
+          audio.src = resource.url;
+          prepareAssignmentAudioEl(audio);
+          block.appendChild(label);
+          block.appendChild(audio);
+        } else if (resource.kind === "image") {
+          const img = document.createElement("img");
+          img.src = resource.url;
+          img.alt = item.originalName || tr("tasks.imageAttachment");
+          img.className = "progress-update-attach-inline-image";
+          img.loading = "lazy";
+          block.appendChild(img);
+        } else if (resource.kind === "video") {
+          const video = document.createElement("video");
+          video.src = resource.url;
+          video.controls = true;
+          video.playsInline = true;
+          video.preload = "metadata";
+          video.className = "progress-update-attach-inline-video";
+          block.appendChild(video);
+        } else if (resource.kind === "pdf") {
+          const frame = document.createElement("iframe");
+          frame.src = resource.url;
+          frame.title = item.originalName || "PDF";
+          frame.className = "progress-update-attach-inline-pdf";
+          block.appendChild(frame);
+        } else {
+          continue;
+        }
+        inlineHost.appendChild(block);
+        inlineHost.classList.remove("d-none");
+      } catch (err) {
+        const fail = document.createElement("p");
+        fail.className = "small text-danger mb-1";
+        fail.textContent = err?.message || tr("toast.couldNotLoadSubmissionFile");
+        inlineHost.appendChild(fail);
+        inlineHost.classList.remove("d-none");
+      }
+    }
+  }
+}
+
+async function openProgressUpdateAttachmentViewer(item) {
+  const progressEl = document.getElementById("progressUpdateModal");
+  const detailEl = document.getElementById("submissionDetailModal");
+  if (!detailEl) return;
+
+  const restoreProgress = Boolean(progressEl?.classList.contains("show"));
+  const progressWasReadonly = document.getElementById("progress-update-readonly")?.value === "1";
+  const progressTaskId = document.getElementById("progress-update-task-id")?.value || "";
+  const progressUserId = document.getElementById("progress-update-user-id")?.value || "";
+  const progressAssigneeLabel = document.getElementById("progress-update-assignee-label")?.textContent || "";
+
+  // Bootstrap does not support nested modals — close progress review first, then open the viewer.
+  if (restoreProgress && progressEl) {
+    progressEl.dataset.keepHistoryOnHide = "1";
+    await new Promise((resolve) => {
+      const onHidden = () => {
+        progressEl.removeEventListener("hidden.bs.modal", onHidden);
+        resolve();
+      };
+      progressEl.addEventListener("hidden.bs.modal", onHidden);
+      bootstrap.Modal.getInstance(progressEl)?.hide();
+    });
+  }
+
+  try {
+    await openSubmissionDetailModal({
+      title: item.originalName || tr("tasks.attachments"),
+      submissionText: null,
+      attachmentItems: [item],
+    });
+  } catch (err) {
+    showToast(err?.message || tr("toast.couldNotLoadSubmissionFile"), "danger");
+    if (restoreProgress && progressEl) {
+      delete progressEl.dataset.keepHistoryOnHide;
+      bootstrap.Modal.getOrCreateInstance(progressEl).show();
+      setProgressUpdateModalReadOnly(progressWasReadonly);
+    }
+    return;
+  }
+
+  const onDetailHidden = () => {
+    detailEl.removeEventListener("hidden.bs.modal", onDetailHidden);
+    if (!restoreProgress || !progressEl) return;
+    delete progressEl.dataset.keepHistoryOnHide;
+    bootstrap.Modal.getOrCreateInstance(progressEl).show();
+    setProgressUpdateModalReadOnly(progressWasReadonly);
+    if (progressWasReadonly && progressTaskId && progressUserId) {
+      void loadProgressUpdateHistory(progressTaskId, progressUserId).catch(() => {});
+    } else if (progressWasReadonly && progressTaskId && !progressUserId) {
+      void loadProgressUpdateHistory(progressTaskId, "", { all: true }).catch(() => {});
+    }
+    const assigneeLabel = document.getElementById("progress-update-assignee-label");
+    if (assigneeLabel && progressAssigneeLabel) {
+      assigneeLabel.textContent = progressAssigneeLabel;
+      assigneeLabel.classList.remove("d-none");
+    }
+  };
+  detailEl.addEventListener("hidden.bs.modal", onDetailHidden);
 }
 
 function renderProgressUpdateTimeline(updates, { showAuthor = false } = {}) {
@@ -6586,6 +6726,7 @@ async function loadProgressUpdateHistory(taskId, userId, { all = false } = {}) {
   const hasContent = updates.length > 0 || (all && (data.delegations ?? []).length > 0);
   emptyEl.classList.toggle("d-none", hasContent);
   historyEl.classList.toggle("d-none", !hasContent);
+  await hydrateProgressUpdateAttachments(historyEl);
   return data;
 }
 
@@ -6817,20 +6958,16 @@ function wireProgressUpdateModal() {
   modalEl.addEventListener("click", (e) => {
     const chip = e.target.closest?.(".js-progress-update-attachment");
     if (!chip) return;
+    e.preventDefault();
+    e.stopPropagation();
     const url = chip.getAttribute("data-attachment-url");
     if (!url) return;
-    void openSubmissionDetailModal({
-      title: chip.getAttribute("data-attachment-name") || tr("tasks.attachments"),
-      submissionText: null,
-      attachmentItems: [
-        {
-          id: url,
-          url,
-          kind: chip.getAttribute("data-attachment-kind") || "image",
-          mimeType: chip.getAttribute("data-attachment-mime") || "",
-          originalName: chip.getAttribute("data-attachment-name") || null,
-        },
-      ],
+    void openProgressUpdateAttachmentViewer({
+      id: url,
+      url,
+      kind: chip.getAttribute("data-attachment-kind") || "image",
+      mimeType: chip.getAttribute("data-attachment-mime") || "",
+      originalName: chip.getAttribute("data-attachment-name") || null,
     });
   });
 
@@ -6905,6 +7042,8 @@ function wireProgressUpdateModal() {
   });
 
   modalEl.addEventListener("hidden.bs.modal", () => {
+    // Temporarily closing so an attachment viewer can open — keep review state.
+    if (modalEl.dataset.keepHistoryOnHide === "1") return;
     if (ta) ta.value = "";
     syncProgressUpdateCharCount();
     resetProgressUpdateFiles();

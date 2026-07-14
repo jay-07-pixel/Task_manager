@@ -1461,15 +1461,18 @@ router.get("/:id/progress-updates", requireAuth, async (req, res) => {
     include: {
       list: true,
       assignments: { include: { user: { select: { id: true, displayName: true } } } },
+      createdBy: { select: { id: true } },
     },
   });
   if (!task) {
     return res.status(404).json({ error: "Task not found" });
   }
 
-  const isOwner = task.list.ownerId === req.session.userId;
   const isAssignee =
     req.session.role === "employee" && taskIsAssignedToUser(task, req.session.userId);
+  const canReview =
+    !isAssignee &&
+    (await userCanAccessTaskAttachments(task, req.session.userId, req.session.role));
 
   const assigneeUserId =
     req.session.role === "employee"
@@ -1478,13 +1481,13 @@ router.get("/:id/progress-updates", requireAuth, async (req, res) => {
         ? req.query.assigneeUserId
         : null;
 
-  if (!isOwner && !isAssignee) {
+  if (!canReview && !isAssignee) {
     return res.status(403).json({ error: "Not allowed" });
   }
 
-  const allUpdates = isOwner && req.query.all === "1";
+  const allUpdates = canReview && req.query.all === "1";
 
-  if (isOwner && !assigneeUserId && !allUpdates) {
+  if (canReview && !assigneeUserId && !allUpdates) {
     return res.status(400).json({
       error: "assigneeUserId query parameter is required, or pass all=1 for full history",
     });
@@ -1510,7 +1513,7 @@ router.get("/:id/progress-updates", requireAuth, async (req, res) => {
     updates = progressUpdatesAfterOccurrenceCutoff(updates, assignee, task.recurrence);
   }
 
-  const delegations = isOwner
+  const delegations = canReview
     ? await prisma.taskDelegation.findMany({
         where: { taskId: task.id },
         include: {
@@ -1629,6 +1632,7 @@ router.get("/:id/progress-updates/attachments/:attachmentId", requireAuth, async
             include: {
               list: true,
               assignments: { select: { userId: true } },
+              createdBy: { select: { id: true } },
             },
           },
         },
@@ -1640,18 +1644,9 @@ router.get("/:id/progress-updates/attachments/:attachmentId", requireAuth, async
   }
 
   const task = attachment.update.task;
-  const isOwner = task.list.ownerId === req.session.userId;
-  const isAssignee =
-    req.session.role === "employee" && task.assignments.some((a) => a.userId === req.session.userId);
   const isAuthor = attachment.update.userId === req.session.userId;
-  let allowed = isOwner || isAssignee || isAuthor;
-  if (!allowed && req.session.role === "owner") {
-    const user = await prisma.user.findUnique({
-      where: { id: req.session.userId },
-      select: { isAdmin: true, role: true },
-    });
-    allowed = userHasAdminAccess(user);
-  }
+  const allowed =
+    isAuthor || (await userCanAccessTaskAttachments(task, req.session.userId, req.session.role));
   if (!allowed) return res.status(403).json({ error: "Not allowed" });
 
   const full = progressUpdateAttachmentAbsolutePath(attachment.filePath);
@@ -1666,8 +1661,12 @@ router.get("/:id/progress-updates/attachments/:attachmentId", requireAuth, async
         ? "audio/ogg"
         : "audio/webm";
   }
+  if (attachment.kind === "pdf" && !mime) mime = "application/pdf";
   res.setHeader("Content-Type", mime || "application/octet-stream");
-  res.setHeader("Content-Disposition", `inline; filename="${path.basename(full)}"`);
+  res.setHeader(
+    "Content-Disposition",
+    `inline; filename="${path.basename(attachment.originalName || full)}"`
+  );
   res.setHeader("Cache-Control", "private, max-age=60");
   res.sendFile(full);
 });

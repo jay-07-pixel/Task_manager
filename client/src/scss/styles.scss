@@ -365,6 +365,37 @@ body {
   max-width: 100%;
 }
 
+.progress-update-attach-inline {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.progress-update-attach-inline-item {
+  min-width: 0;
+}
+
+.progress-update-attach-inline-image,
+.progress-update-attach-inline-video {
+  display: block;
+  width: 100%;
+  max-height: min(40vh, 360px);
+  object-fit: contain;
+  border-radius: 0.375rem;
+  border: 1px solid var(--bs-border-color);
+  background: #111;
+}
+
+.progress-update-attach-inline-pdf {
+  display: block;
+  width: 100%;
+  min-height: 16rem;
+  height: min(40vh, 420px);
+  border: 1px solid var(--bs-border-color);
+  border-radius: 0.375rem;
+  background: #fff;
+}
+
 .emp-task-actions .btn {
   min-width: 6.5rem;
 }
