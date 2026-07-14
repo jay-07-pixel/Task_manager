@@ -6248,21 +6248,34 @@ function ownerLatestUpdateSnippet(message, max = 96) {
 function ownerAssigneeUpdatesHtml(taskId, assignee) {
   const latest = assignee.latestProgressUpdate;
   const total = assignee.progressUpdateCount ?? 0;
-  if (!total || !latest?.message) {
+  const attachCount =
+    assignee.progressAttachmentCount ?? latest?.attachmentCount ?? 0;
+  if (!total) {
     return `<span class="owner-assignee-empty-hint text-muted small">${tr("modals.noUpdatesYet")}</span>`;
   }
-  const snippet = ownerLatestUpdateSnippet(latest.message);
+  const rawMsg = (latest?.message || "").trim();
+  const snippet =
+    !rawMsg || rawMsg === "(Attachment)"
+      ? attachCount
+        ? tr("owner.updateHasAttachment")
+        : tr("modals.noUpdatesYet")
+      : ownerLatestUpdateSnippet(rawMsg);
   const badge = ownerProgressUpdateBadgeHtml(assignee);
+  const attachIcon =
+    attachCount > 0
+      ? `<span class="owner-assignee-attach-icon" aria-hidden="true">${adminMsIcon("attach_file")}</span>`
+      : "";
   return `<button
       type="button"
       class="owner-assignee-update-preview owner-view-progress-btn"
       data-view-progress-task-id="${taskId}"
       data-view-progress-user-id="${escapeHtml(assignee.id)}"
       data-view-progress-user-name="${escapeHtml(dt(assignee.displayName))}"
-      title="${escapeHtml(dt((latest.message || "").trim()))}"
+      title="${escapeHtml(tr("owner.viewAllUpdatesFor", { name: dt(assignee.displayName) }))}"
       aria-label="${tr("owner.viewAllUpdatesFor", { name: escapeHtml(dt(assignee.displayName)) })}"
     >
       ${badge}
+      ${attachIcon}
       <span class="owner-assignee-update-text">${escapeHtml(snippet)}</span>
     </button>`;
 }
@@ -6290,24 +6303,40 @@ function ownerDelegationHistoryHtml(task) {
 function ownerMockAssigneeUpdatesHtml(taskId, assignee) {
   const total = assignee.progressUpdateCount ?? 0;
   const latest = assignee.latestProgressUpdate;
+  const attachCount =
+    assignee.progressAttachmentCount ?? latest?.attachmentCount ?? 0;
   const badge =
     total > 0
       ? `<span class="admin-expand-count-badge tabular-nums" aria-label="${total} update${total === 1 ? "" : "s"}">${total}</span>`
       : "";
-  if (!total || !latest?.message) {
+  if (!total) {
     return `<div class="admin-expand-col-block">
       <div class="admin-expand-col-head"><span class="admin-expand-col-label">${tr("owner.updatesCol")}</span></div>
       <p class="admin-expand-empty">${tr("owner.noUpdates")}</p>
     </div>`;
   }
-  const snippet = ownerLatestUpdateSnippet(latest.message, 72);
+  const rawMsg = (latest?.message || "").trim();
+  const snippet =
+    !rawMsg || rawMsg === "(Attachment)"
+      ? attachCount
+        ? tr("owner.updateHasAttachment")
+        : tr("owner.noUpdates")
+      : ownerLatestUpdateSnippet(rawMsg, 72);
+  const attachHint =
+    attachCount > 0
+      ? `<span class="admin-expand-attach-hint">${adminMsIcon("attach_file")} ${escapeHtml(
+          attachCount === 1 ? tr("owner.hasAttachment") : tr("owner.hasAttachments", { count: attachCount })
+        )}</span>`
+      : "";
   return `<div class="admin-expand-col-block">
     <div class="admin-expand-col-head">
       <span class="admin-expand-col-label">${tr("owner.updatesCol")}</span>
       ${badge}
     </div>
-    <button type="button" class="admin-expand-snippet-btn owner-view-progress-btn" data-view-progress-task-id="${taskId}" data-view-progress-user-id="${escapeHtml(assignee.id)}" data-view-progress-user-name="${escapeHtml(dt(assignee.displayName))}" title="${escapeHtml(dt((latest.message || "").trim()))}">
+    <button type="button" class="admin-expand-snippet-btn owner-view-progress-btn" data-view-progress-task-id="${taskId}" data-view-progress-user-id="${escapeHtml(assignee.id)}" data-view-progress-user-name="${escapeHtml(dt(assignee.displayName))}" title="${escapeHtml(tr("owner.viewAllUpdatesFor", { name: dt(assignee.displayName) }))}">
       <span class="admin-expand-snippet">"${escapeHtml(snippet)}"</span>
+      ${attachHint}
+      <span class="admin-expand-open-hint">${escapeHtml(tr("owner.tapToViewUpdates"))}</span>
     </button>
   </div>`;
 }

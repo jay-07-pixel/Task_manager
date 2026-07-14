@@ -332,6 +332,10 @@
     "assignmentHistory": "Assignment history",
     "delegationAssigned": "{{from}} assigned to {{to}}",
     "viewAllUpdates": "View all updates",
+    "tapToViewUpdates": "Tap to open full updates & attachments",
+    "hasAttachment": "1 attachment",
+    "hasAttachments": "{{count}} attachments",
+    "updateHasAttachment": "Attachment",
     "lastSubmittedWhen": "Last submitted {{when}}"
   },
   "lists": {

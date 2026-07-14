@@ -818,6 +818,7 @@ async function attachProgressUpdateMeta(tasks, ownerId = null, { employeeViewerI
       message: true,
       updateType: true,
       createdAt: true,
+      _count: { select: { attachments: true } },
     },
   });
   const updatesByTaskUser = new Map();
@@ -858,15 +859,21 @@ async function attachProgressUpdateMeta(tasks, ownerId = null, { employeeViewerI
         scopedUpdates = progressUpdatesAfterOccurrenceCutoff(scopedUpdates, a, t.recurrence);
       }
       const latest = scopedUpdates[0] ?? null;
+      const progressAttachmentCount = scopedUpdates.reduce(
+        (sum, u) => sum + (u._count?.attachments ?? 0),
+        0
+      );
       return {
         ...a,
         progressUpdateCount: scopedUpdates.length,
         unreadProgressUpdateCount: ownerId ? (unreadMap.get(key) ?? 0) : 0,
+        progressAttachmentCount,
         latestProgressUpdate: latest
           ? {
               message: latest.message,
               updateType: latest.updateType,
               createdAt: latest.createdAt.toISOString(),
+              attachmentCount: latest._count?.attachments ?? 0,
             }
           : null,
       };
@@ -1040,6 +1047,7 @@ export function serializeTask(t) {
     completionProofUrls: proofUrls,
     progressUpdateCount: a.progressUpdateCount ?? 0,
     unreadProgressUpdateCount: a.unreadProgressUpdateCount ?? 0,
+    progressAttachmentCount: a.progressAttachmentCount ?? 0,
     latestProgressUpdate: a.latestProgressUpdate ?? null,
     assignedBy: a.assignedBy
       ? { id: a.assignedBy.id, displayName: a.assignedBy.displayName, role: a.assignedBy.role }

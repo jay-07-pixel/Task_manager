@@ -1318,6 +1318,16 @@ body.submission-media-lightbox-open {
   color: var(--bs-primary);
 }
 
+.owner-assignee-attach-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--bs-primary);
+
+  .material-symbols-outlined {
+    font-size: 1rem;
+  }
+}
+
 .owner-assignee-update-text {
   font-size: 0.8rem;
   line-height: 1.35;
