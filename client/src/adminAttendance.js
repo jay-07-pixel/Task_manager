@@ -761,8 +761,9 @@ function dailyReportTimingHtml(timingStatus) {
 }
 
 function dailyReportStats(rows) {
-  const total = rows.length;
-  const present = rows.filter((row) => row.checkIn).length;
+  const applicable = rows.filter((row) => !row.notApplicable);
+  const total = applicable.length;
+  const present = applicable.filter((row) => row.checkIn).length;
   return { total, present, absent: total - present };
 }
 
@@ -788,6 +789,9 @@ function dailySummaryHtml(present, total, absent) {
 
 function dailyReportStatusBadgeHtml(row) {
   const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
+  if (row.notApplicable) {
+    return `<span class="admin-attendance-daily-badge admin-attendance-daily-badge--na">${esc(tr("attendance.notApplicableBadge"))}</span>`;
+  }
   if (row.isCheckedIn) {
     return `<span class="admin-attendance-daily-badge admin-attendance-daily-badge--in">${esc(tr("attendance.checkedInBadge"))}</span>`;
   }
@@ -851,13 +855,28 @@ function dailyReportMobileCardHtml(row) {
   </article>`;
 }
 
-function renderDailyReportContent(rows) {
+function renderDailyReportContent(rows, reportMeta = {}) {
   const summaryEl = document.getElementById("admin-attendance-daily-summary");
   const body = document.getElementById("admin-attendance-daily-body");
   const cardsEl = document.getElementById("admin-attendance-daily-cards");
+  const noticeEl = document.getElementById("admin-attendance-daily-start-notice");
   const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
 
-  const stats = dailyReportStats(rows);
+  if (noticeEl) {
+    if (reportMeta.beforeStartDate && reportMeta.attendanceStartDate) {
+      noticeEl.classList.remove("d-none");
+      noticeEl.textContent = tr("attendance.beforeAttendanceStart", {
+        date: reportMeta.attendanceStartDate,
+      });
+    } else {
+      noticeEl.classList.add("d-none");
+      noticeEl.textContent = "";
+    }
+  }
+
+  const stats = reportMeta.beforeStartDate
+    ? { total: 0, present: 0, absent: 0 }
+    : dailyReportStats(rows);
   if (summaryEl) {
     summaryEl.innerHTML = dailySummaryHtml(stats.present, stats.total, stats.absent);
   }
@@ -894,6 +913,7 @@ async function renderDailyAttendancePage() {
           </div>
         </div>
         <p class="admin-attendance-intro admin-attendance-daily-intro">${escapeHtmlFn?.(tr("attendance.dailyReportIntro")) ?? ""}</p>
+        <p id="admin-attendance-daily-start-notice" class="alert alert-info py-2 px-3 small d-none" role="status"></p>
         <div id="admin-attendance-daily-summary" class="admin-attendance-daily-summary">
           ${dailySummaryHtml(0, 0, 0)}
         </div>
@@ -948,7 +968,10 @@ async function loadDailyReport() {
       if (keyDiff !== 0) return keyDiff;
       return String(a.displayName ?? "").localeCompare(String(b.displayName ?? ""), undefined, { sensitivity: "base" });
     });
-    renderDailyReportContent(rows);
+    renderDailyReportContent(rows, {
+      beforeStartDate: !!report.beforeStartDate,
+      attendanceStartDate: report.attendanceStartDate ?? null,
+    });
   } catch (err) {
     const msg = escapeHtmlFn?.(err.message) ?? err.message;
     if (body) body.innerHTML = `<tr><td colspan="5" class="text-danger">${msg}</td></tr>`;

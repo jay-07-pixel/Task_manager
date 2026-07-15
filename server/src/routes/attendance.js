@@ -77,6 +77,9 @@ const checkCoordsSchema = z.object({
 const dailyScheduleSchema = z.object({
   checkInTime: z.string().nullable().optional(),
   checkOutTime: z.string().nullable().optional(),
+  attendanceStartDate: z
+    .union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.null(), z.literal("")])
+    .optional(),
 });
 
 router.get("/status", requireAuth, async (req, res) => {
@@ -333,7 +336,11 @@ router.patch("/daily-schedule", requireOwner, async (req, res) => {
     return res.status(400).json({ error: "Invalid schedule data." });
   }
   try {
-    const schedule = await setDailyAttendanceSchedule(parsed.data);
+    const body = { ...parsed.data };
+    if (body.attendanceStartDate === "") {
+      body.attendanceStartDate = null;
+    }
+    const schedule = await setDailyAttendanceSchedule(body);
     res.json({ ok: true, ...schedule });
   } catch (err) {
     res.status(400).json({ error: err.message || "Could not save schedule." });

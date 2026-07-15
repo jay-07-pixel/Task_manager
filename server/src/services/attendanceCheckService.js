@@ -3,6 +3,7 @@ import { findNearestWorkLocation, validateCoordinates } from "../lib/geofence.js
 import { getActiveWorkLocations } from "./workLocationService.js";
 import {
   getDailyAttendanceSchedule,
+  isAttendanceDayApplicable,
   isCompanyAttendanceEnabled,
 } from "./companyAttendanceSettings.js";
 import {
@@ -211,12 +212,35 @@ export async function performCheck(userId, type, latitude, longitude) {
 export async function getDailyAttendanceReport(dateStr) {
   const { start, end } = startOfDayLocal(dateStr);
   const schedule = await getDailyAttendanceSchedule();
+  const localDateKey = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}-${String(start.getDate()).padStart(2, "0")}`;
+  const beforeStartDate = !isAttendanceDayApplicable(
+    localDateKey,
+    schedule.attendanceStartDate
+  );
 
   const employees = await prisma.user.findMany({
     where: { role: "employee" },
     select: { id: true, displayName: true, email: true },
     orderBy: { displayName: "asc" },
   });
+
+  if (beforeStartDate) {
+    return {
+      date: localDateKey,
+      beforeStartDate: true,
+      attendanceStartDate: schedule.attendanceStartDate,
+      employees: employees.map((emp) => ({
+        userId: emp.id,
+        displayName: emp.displayName,
+        email: emp.email,
+        checkIn: null,
+        checkOut: null,
+        isCheckedIn: false,
+        notApplicable: true,
+        allChecks: [],
+      })),
+    };
+  }
 
   const checks = await prisma.attendanceCheck.findMany({
     where: { recordedAt: { gte: start, lt: end } },
@@ -231,7 +255,9 @@ export async function getDailyAttendanceReport(dateStr) {
   }
 
   return {
-    date: start.toISOString().slice(0, 10),
+    date: localDateKey,
+    beforeStartDate: false,
+    attendanceStartDate: schedule.attendanceStartDate,
     employees: employees.map((emp) => {
       const userChecks = byUser.get(emp.id) ?? [];
       const summary = summarizeDayChecks(userChecks, schedule);
@@ -242,6 +268,7 @@ export async function getDailyAttendanceReport(dateStr) {
         checkIn: summary.checkIn,
         checkOut: summary.checkOut,
         isCheckedIn: summary.isCheckedIn,
+        notApplicable: false,
         allChecks: userChecks.map((c) => serializeCheck(c, schedule)),
       };
     }),
@@ -290,7 +317,9 @@ export async function getMonthlyAttendanceReport(year, month) {
   }
 
   const schedule = await getDailyAttendanceSchedule();
-  const workingDayKeys = listWorkingDayKeysInMonth(year, month);
+  const workingDayKeys = listWorkingDayKeysInMonth(year, month).filter((dayKey) =>
+    isAttendanceDayApplicable(dayKey, schedule.attendanceStartDate)
+  );
   const workingDays = workingDayKeys.length;
 
   const firstKey = `${year}-${String(month).padStart(2, "0")}-01`;
@@ -324,6 +353,7 @@ export async function getMonthlyAttendanceReport(year, month) {
     year,
     month,
     workingDays,
+    attendanceStartDate: schedule.attendanceStartDate,
     employees: employees.map((emp) => {
       const userDays = byUserDay.get(emp.id) ?? new Map();
       let present = 0;
@@ -362,6 +392,9 @@ export async function getMyAttendanceHistory(userId, { days = 14 } = {}) {
     const d = new Date(todayStart);
     d.setDate(d.getDate() - i);
     const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    if (!isAttendanceDayApplicable(dateStr, schedule.attendanceStartDate)) {
+      continue;
+    }
     const { start, end } = startOfDayLocal(dateStr);
     const checks = await getChecksForDay(userId, start, end);
     const summary = summarizeDayChecks(checks, schedule);
@@ -373,5 +406,8 @@ export async function getMyAttendanceHistory(userId, { days = 14 } = {}) {
     });
   }
 
-  return { history };
+  return {
+    history,
+    attendanceStartDate: schedule.attendanceStartDate,
+  };
 }

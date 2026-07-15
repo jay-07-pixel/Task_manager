@@ -505,6 +505,11 @@
     color: var(--admin-error, #ba1a1a);
     background: rgba(186, 26, 26, 0.12);
   }
+
+  &--na {
+    color: #5f6368;
+    background: rgba(95, 99, 104, 0.12);
+  }
 }
 
 .admin-attendance-timing {

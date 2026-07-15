@@ -227,6 +227,11 @@ function manageLocationsPageHtml() {
                 <label class="form-label" for="daily-check-out-time">${esc(tr("attendance.dailyCheckOutTime"))}</label>
                 <input type="time" class="form-control" id="daily-check-out-time" step="60" />
               </div>
+              <div class="col-sm-6 col-md-4">
+                <label class="form-label" for="attendance-start-date">${esc(tr("attendance.attendanceStartDate"))}</label>
+                <input type="date" class="form-control" id="attendance-start-date" />
+                <p class="form-text small text-muted mb-0 mt-1">${esc(tr("attendance.attendanceStartDateHint"))}</p>
+              </div>
               <div class="col-sm-12 col-md-4">
                 <button type="submit" class="profile-modal-btn-save w-100">${esc(tr("attendance.saveSchedule"))}</button>
               </div>
@@ -248,8 +253,10 @@ async function loadDailyScheduleForm() {
     const schedule = await apiFn("/api/attendance/daily-schedule");
     const checkInEl = document.getElementById("daily-check-in-time");
     const checkOutEl = document.getElementById("daily-check-out-time");
+    const startDateEl = document.getElementById("attendance-start-date");
     if (checkInEl) checkInEl.value = schedule.checkInTime ?? "";
     if (checkOutEl) checkOutEl.value = schedule.checkOutTime ?? "";
+    if (startDateEl) startDateEl.value = schedule.attendanceStartDate ?? "";
   } catch {
     /* ignore */
   }
@@ -260,10 +267,12 @@ async function saveDailySchedule(e) {
   if (!apiFn) return;
   const checkInTime = document.getElementById("daily-check-in-time")?.value?.trim() || null;
   const checkOutTime = document.getElementById("daily-check-out-time")?.value?.trim() || null;
+  const attendanceStartDate =
+    document.getElementById("attendance-start-date")?.value?.trim() || null;
   try {
     await apiFn("/api/attendance/daily-schedule", {
       method: "PATCH",
-      body: JSON.stringify({ checkInTime, checkOutTime }),
+      body: JSON.stringify({ checkInTime, checkOutTime, attendanceStartDate }),
     });
     showToastFn?.(tr("attendance.scheduleSaved"), "success");
   } catch (err) {

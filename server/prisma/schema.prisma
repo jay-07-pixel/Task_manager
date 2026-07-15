@@ -516,6 +516,7 @@ model CompanySettings {
   attendanceEnabled    Boolean  @default(false) @map("attendance_enabled")
   dailyCheckInTime     String?  @map("daily_check_in_time") @db.VarChar(5)
   dailyCheckOutTime    String?  @map("daily_check_out_time") @db.VarChar(5)
+  attendanceStartDate  String?  @map("attendance_start_date") @db.VarChar(10)
   companyName          String?  @map("company_name") @db.VarChar(200)
   companyAddress       String?  @map("company_address") @db.Text
   companyState         String?  @map("company_state") @db.VarChar(64)

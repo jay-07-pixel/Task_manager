@@ -49,19 +49,54 @@ export async function getDailyAttendanceSchedule() {
   try {
     const row = await prisma.companySettings.findUnique({
       where: { id: COMPANY_SETTINGS_ID },
-      select: { dailyCheckInTime: true, dailyCheckOutTime: true },
+      select: {
+        dailyCheckInTime: true,
+        dailyCheckOutTime: true,
+        attendanceStartDate: true,
+      },
     });
     return {
       checkInTime: row?.dailyCheckInTime ?? null,
       checkOutTime: row?.dailyCheckOutTime ?? null,
+      attendanceStartDate: row?.attendanceStartDate ?? null,
     };
   } catch {
-    return { checkInTime: null, checkOutTime: null };
+    return { checkInTime: null, checkOutTime: null, attendanceStartDate: null };
   }
 }
 
 /**
- * @param {{ checkInTime?: string | null, checkOutTime?: string | null }} data
+ * @param {string | null | undefined} value
+ * @returns {string | null}
+ */
+export function normalizeAttendanceStartDate(value) {
+  if (value == null || value === "") return null;
+  const trimmed = String(value).trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return null;
+  const [y, m, d] = trimmed.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  if (
+    Number.isNaN(dt.getTime()) ||
+    dt.getFullYear() !== y ||
+    dt.getMonth() !== m - 1 ||
+    dt.getDate() !== d
+  ) {
+    return null;
+  }
+  return trimmed;
+}
+
+/**
+ * @param {string} dateKey YYYY-MM-DD
+ * @param {string | null | undefined} startDate YYYY-MM-DD
+ */
+export function isAttendanceDayApplicable(dateKey, startDate) {
+  if (!startDate) return true;
+  return String(dateKey) >= String(startDate);
+}
+
+/**
+ * @param {{ checkInTime?: string | null, checkOutTime?: string | null, attendanceStartDate?: string | null }} data
  */
 export async function setDailyAttendanceSchedule(data) {
   await syncCompanyTrialSettings();
@@ -77,6 +112,10 @@ export async function setDailyAttendanceSchedule(data) {
       : data.checkOutTime
         ? normalizeTimeHHmm(data.checkOutTime)
         : null;
+  const attendanceStartDate =
+    data.attendanceStartDate === undefined
+      ? undefined
+      : normalizeAttendanceStartDate(data.attendanceStartDate);
 
   if (data.checkInTime && checkInTime === null) {
     throw new Error("Invalid check-in time. Use HH:mm format.");
@@ -84,19 +123,36 @@ export async function setDailyAttendanceSchedule(data) {
   if (data.checkOutTime && checkOutTime === null) {
     throw new Error("Invalid check-out time. Use HH:mm format.");
   }
+  if (
+    data.attendanceStartDate !== undefined &&
+    data.attendanceStartDate !== null &&
+    data.attendanceStartDate !== "" &&
+    attendanceStartDate === null
+  ) {
+    throw new Error("Invalid attendance start date. Use YYYY-MM-DD.");
+  }
 
   const updated = await prisma.companySettings.update({
     where: { id: COMPANY_SETTINGS_ID },
     data: {
       ...(checkInTime !== undefined ? { dailyCheckInTime: checkInTime } : {}),
       ...(checkOutTime !== undefined ? { dailyCheckOutTime: checkOutTime } : {}),
+      ...(attendanceStartDate !== undefined
+        ? { attendanceStartDate }
+        : {}),
     },
-    select: { dailyCheckInTime: true, dailyCheckOutTime: true, updatedAt: true },
+    select: {
+      dailyCheckInTime: true,
+      dailyCheckOutTime: true,
+      attendanceStartDate: true,
+      updatedAt: true,
+    },
   });
 
   return {
     checkInTime: updated.dailyCheckInTime,
     checkOutTime: updated.dailyCheckOutTime,
+    attendanceStartDate: updated.attendanceStartDate,
     updatedAt: updated.updatedAt.toISOString(),
   };
 }
