@@ -55,6 +55,7 @@ async function refreshHistory() {
 function timingLabel(status) {
   if (status === "late") return tr("attendance.timingLate");
   if (status === "early") return tr("attendance.timingEarly");
+  if (status === "overtime") return tr("attendance.timingOvertime");
   if (status === "on_time") return tr("attendance.timingOnTime");
   return "";
 }
@@ -62,6 +63,7 @@ function timingLabel(status) {
 function timingClass(status) {
   if (status === "late") return "text-danger fw-semibold";
   if (status === "early") return "text-warning fw-semibold";
+  if (status === "overtime") return "text-primary fw-semibold";
   if (status === "on_time") return "text-success";
   return "";
 }
@@ -256,7 +258,11 @@ export async function performAttendanceCheck(type) {
       type === "check_in" ? tr("attendance.checkInSuccess") : tr("attendance.checkOutSuccess");
     if (timing === "late") toastMsg = tr("attendance.checkInLateToast");
     else if (timing === "early") toastMsg = tr("attendance.checkOutEarlyToast");
-    showToastFn?.(toastMsg, timing === "late" ? "warning" : timing === "early" ? "warning" : "success");
+    else if (timing === "overtime") toastMsg = tr("attendance.checkOutOvertimeToast");
+    showToastFn?.(
+      toastMsg,
+      timing === "late" || timing === "early" || timing === "overtime" ? "warning" : "success"
+    );
     return true;
   } catch (err) {
     showToastFn?.(err.message || tr("errors.requestFailed"), "danger");

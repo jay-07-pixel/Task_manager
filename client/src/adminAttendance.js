@@ -757,6 +757,9 @@ function dailyReportTimingHtml(timingStatus) {
   if (timingStatus === "early") {
     return ` <span class="admin-attendance-timing admin-attendance-timing--early">${escapeHtmlFn?.(tr("attendance.timingEarly")) ?? "Early"}</span>`;
   }
+  if (timingStatus === "overtime") {
+    return ` <span class="admin-attendance-timing admin-attendance-timing--overtime">${escapeHtmlFn?.(tr("attendance.timingOvertime")) ?? "Overtime"}</span>`;
+  }
   return "";
 }
 
@@ -1058,6 +1061,7 @@ function monthlySummaryHtml(stats, monthLabel) {
 function monthlyReportRowHtml(row) {
   const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
   const minutes = formatTotalMinutes(row.totalMinutes);
+  const overtime = formatTotalMinutes(row.overtimeMinutes ?? 0);
   const salary = formatSalaryAmount(row.salary);
   return `<tr>
     <td class="admin-attendance-daily-employee">${esc(row.displayName)}</td>
@@ -1065,6 +1069,7 @@ function monthlyReportRowHtml(row) {
     <td class="text-center tabular-nums admin-attendance-monthly-absent">${row.absent ?? 0}</td>
     <td class="text-center tabular-nums">${row.workingDays ?? 0}</td>
     <td class="text-end fw-semibold tabular-nums admin-attendance-daily-working">${esc(minutes)}</td>
+    <td class="text-end tabular-nums admin-attendance-monthly-overtime">${esc(overtime)}</td>
     <td class="text-end tabular-nums admin-attendance-monthly-salary">${esc(salary)}</td>
   </tr>`;
 }
@@ -1072,6 +1077,7 @@ function monthlyReportRowHtml(row) {
 function monthlyReportMobileCardHtml(row) {
   const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
   const minutes = formatTotalMinutes(row.totalMinutes);
+  const overtime = formatTotalMinutes(row.overtimeMinutes ?? 0);
   const salary = formatSalaryAmount(row.salary);
   return `<article class="admin-attendance-daily-card admin-attendance-monthly-card">
     <div class="admin-attendance-daily-card-head">
@@ -1096,6 +1102,10 @@ function monthlyReportMobileCardHtml(row) {
         <dd class="tabular-nums fw-semibold">${esc(minutes)}</dd>
       </div>
       <div class="admin-attendance-daily-card-row">
+        <dt>${esc(tr("attendance.monthlyOvertimeColumn"))}</dt>
+        <dd class="tabular-nums fw-semibold admin-attendance-monthly-overtime">${esc(overtime)}</dd>
+      </div>
+      <div class="admin-attendance-daily-card-row">
         <dt>${esc(tr("profile.salary"))}</dt>
         <dd class="tabular-nums fw-semibold admin-attendance-monthly-salary">${esc(salary)}</dd>
       </div>
@@ -1117,7 +1127,7 @@ function renderMonthlyReportContent(rows, meta) {
 
   if (!rows.length) {
     const empty = `<p class="admin-attendance-daily-empty">${esc(tr("attendance.noEmployees"))}</p>`;
-    if (body) body.innerHTML = `<tr><td colspan="6" class="text-muted">${esc(tr("attendance.noEmployees"))}</td></tr>`;
+    if (body) body.innerHTML = `<tr><td colspan="7" class="text-muted">${esc(tr("attendance.noEmployees"))}</td></tr>`;
     if (cardsEl) cardsEl.innerHTML = empty;
     return;
   }
@@ -1159,11 +1169,12 @@ async function renderMonthlyReportPage() {
                 <th class="text-center">${escapeHtmlFn?.(tr("attendance.monthlyAbsentColumn")) ?? "Absent"}</th>
                 <th class="text-center">${escapeHtmlFn?.(tr("attendance.monthlyWorkingDaysColumn")) ?? "Working days"}</th>
                 <th class="text-end">${escapeHtmlFn?.(tr("attendance.monthlyMinutesColumn")) ?? "Minutes worked"}</th>
+                <th class="text-end">${escapeHtmlFn?.(tr("attendance.monthlyOvertimeColumn")) ?? "Overtime"}</th>
                 <th class="text-end">${escapeHtmlFn?.(tr("profile.salary")) ?? "Salary"}</th>
               </tr>
             </thead>
             <tbody id="admin-attendance-monthly-body">
-              <tr><td colspan="6" class="text-muted">${escapeHtmlFn?.(tr("common.loading")) ?? ""}</td></tr>
+              <tr><td colspan="7" class="text-muted">${escapeHtmlFn?.(tr("common.loading")) ?? ""}</td></tr>
             </tbody>
           </table>
         </div>
@@ -1191,7 +1202,7 @@ async function loadMonthlyReport() {
   if (!apiFn) return;
 
   const loading = escapeHtmlFn?.(tr("common.loading")) ?? "";
-  if (body) body.innerHTML = `<tr><td colspan="6" class="text-muted">${loading}</td></tr>`;
+  if (body) body.innerHTML = `<tr><td colspan="7" class="text-muted">${loading}</td></tr>`;
   if (cardsEl) cardsEl.innerHTML = `<p class="admin-attendance-daily-empty text-muted">${loading}</p>`;
 
   try {
@@ -1213,7 +1224,7 @@ async function loadMonthlyReport() {
     });
   } catch (err) {
     const msg = escapeHtmlFn?.(err.message) ?? err.message;
-    if (body) body.innerHTML = `<tr><td colspan="6" class="text-danger">${msg}</td></tr>`;
+    if (body) body.innerHTML = `<tr><td colspan="7" class="text-danger">${msg}</td></tr>`;
     if (cardsEl) cardsEl.innerHTML = `<p class="admin-attendance-daily-empty text-danger">${msg}</p>`;
   }
 }

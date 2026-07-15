@@ -9,6 +9,7 @@ import {
 import {
   evaluateCheckInTiming,
   evaluateCheckOutTiming,
+  overtimeMinutesAfterCheckOut,
 } from "../lib/attendanceSchedule.js";
 
 function startOfDayLocal(dateStr) {
@@ -358,6 +359,7 @@ export async function getMonthlyAttendanceReport(year, month) {
       const userDays = byUserDay.get(emp.id) ?? new Map();
       let present = 0;
       let totalMinutes = 0;
+      let overtimeMinutes = 0;
 
       for (const dayKey of workingDayKeys) {
         const dayChecks = userDays.get(dayKey) ?? [];
@@ -365,6 +367,12 @@ export async function getMonthlyAttendanceReport(year, month) {
         if (summary.checkIn) {
           present += 1;
           totalMinutes += minutesFromDaySummary(summary, dayKey);
+        }
+        if (summary.checkOut?.recordedAt) {
+          overtimeMinutes += overtimeMinutesAfterCheckOut(
+            summary.checkOut.recordedAt,
+            schedule.checkOutTime
+          );
         }
       }
 
@@ -377,6 +385,7 @@ export async function getMonthlyAttendanceReport(year, month) {
         absent: workingDays - present,
         workingDays,
         totalMinutes,
+        overtimeMinutes,
       };
     }),
   };

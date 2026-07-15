@@ -50,7 +50,7 @@ export function evaluateCheckInTiming(recordedAt, checkInTime) {
 /**
  * @param {Date | string} recordedAt
  * @param {string | null | undefined} checkOutTime
- * @returns {"early" | "on_time" | null}
+ * @returns {"early" | "on_time" | "overtime" | null}
  */
 export function evaluateCheckOutTiming(recordedAt, checkOutTime) {
   const parsed = parseTimeHHmm(checkOutTime);
@@ -59,5 +59,22 @@ export function evaluateCheckOutTiming(recordedAt, checkOutTime) {
   if (Number.isNaN(at.getTime())) return null;
   const recordedMins = minutesSinceLocalMidnight(at);
   const targetMins = parsed.hours * 60 + parsed.minutes;
-  return recordedMins < targetMins ? "early" : "on_time";
+  if (recordedMins < targetMins) return "early";
+  if (recordedMins > targetMins) return "overtime";
+  return "on_time";
+}
+
+/**
+ * Minutes worked past the scheduled check-out time (0 if early/on time / unknown).
+ * @param {Date | string} recordedAt
+ * @param {string | null | undefined} checkOutTime
+ */
+export function overtimeMinutesAfterCheckOut(recordedAt, checkOutTime) {
+  const parsed = parseTimeHHmm(checkOutTime);
+  if (!parsed) return 0;
+  const at = recordedAt instanceof Date ? recordedAt : new Date(recordedAt);
+  if (Number.isNaN(at.getTime())) return 0;
+  const recordedMins = minutesSinceLocalMidnight(at);
+  const targetMins = parsed.hours * 60 + parsed.minutes;
+  return recordedMins > targetMins ? recordedMins - targetMins : 0;
 }
