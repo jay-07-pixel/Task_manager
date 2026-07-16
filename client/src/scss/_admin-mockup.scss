@@ -1822,6 +1822,26 @@
     }
   }
 
+  .admin-expand-mark-reviewed {
+    border: none;
+    background: linear-gradient(135deg, #00535b 0%, #006972 100%);
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 500;
+    padding: 0.65rem 1rem;
+    border-radius: 0.75rem;
+    box-shadow: 0 4px 14px rgba(0, 83, 91, 0.25);
+    white-space: nowrap;
+
+    &:hover {
+      color: #fff;
+    }
+
+    &:active {
+      transform: scale(0.98);
+    }
+  }
+
   .admin-expand-icon-actions {
     display: flex;
     align-items: center;
@@ -1848,15 +1868,6 @@
 
       &:hover {
         background: rgba(186, 26, 26, 0.08);
-      }
-    }
-
-    &--review {
-      color: var(--admin-primary, #0d7377);
-
-      &:hover {
-        background: rgba(169, 236, 229, 0.35);
-        color: var(--admin-primary, #0a5c5f);
       }
     }
   }

@@ -8177,7 +8177,7 @@ function ownerTaskGroupTbody(task) {
 
   const assigneeMarkDoneControl = `<button type="button" class="admin-expand-mark-done owner-mark-done-open" data-task-id="${task.id}" aria-haspopup="dialog" aria-controls="ownerMarkDoneModal">${tr("owner.markAssigneesDone")}</button>`;
   const markReviewedBtn = awaitingOwnerReview
-    ? `<button type="button" class="admin-expand-icon-btn admin-expand-icon-btn--review" data-mark-reviewed-id="${task.id}" title="${tr("owner.markReviewed")}" aria-label="${tr("owner.markReviewed")}">${adminMsIcon("fact_check")}</button>`
+    ? `<button type="button" class="admin-expand-mark-reviewed" data-mark-reviewed-id="${task.id}">${tr("owner.markReviewed")}</button>`
     : "";
 
   const progressBadge =
