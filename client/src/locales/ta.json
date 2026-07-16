@@ -219,6 +219,7 @@
     "teamProgress": "குழு முன்னேற்றம்",
     "markAssigneesDone": "ஒதுக்கப்பட்டவர்களை முடிந்தது என குறி",
     "markReviewed": "மதிப்பாய்வு செய்யப்பட்டதாக குறி",
+    "taskDetailsAwaitingReview": "பணி விவரங்கள் — உங்கள் மதிப்பாய்வுக்காக காத்திருக்கிறது",
     "noAssigneesYet": "இன்னும் யாரும் ஒதுக்கப்படவில்லை. பணியை திருத்தி நபர்களை சேர்க்கவும்.",
     "trialEnded": "இலவச சோதனை முடிந்தது ({{date}}). <a href=\"mailto:support@kalpanik.in\">ஆதரவைக் தொடர்பு கொள்ளவும்</a>",
     "trialEnds": "இலவச சோதனை <strong>{{days}}</strong> {{dayLabel}} இல் முடியும் ({{date}}). <a href=\"mailto:support@kalpanik.in\">ஆதரவைக் தொடர்பு கொள்ளவும்</a>",

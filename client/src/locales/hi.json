@@ -219,6 +219,7 @@
     "teamProgress": "टीम प्रगति",
     "markAssigneesDone": "असाइनी पूर्ण चिह्नित करें",
     "markReviewed": "समीक्षित चिह्नित करें",
+    "taskDetailsAwaitingReview": "कार्य विवरण — आपकी समीक्षा की प्रतीक्षा",
     "noAssigneesYet": "अभी कोई असाइनी नहीं। लोग जोड़ने के लिए कार्य संपादित करें।",
     "trialEnded": "मुफ़्त ट्रायल समाप्त ({{date}})। <a href=\"mailto:support@kalpanik.in\">सहायता से संपर्क करें</a>",
     "trialEnds": "मुफ़्त ट्रायल <strong>{{days}}</strong> {{dayLabel}} में समाप्त ({{date}})। <a href=\"mailto:support@kalpanik.in\">सहायता से संपर्क करें</a>",

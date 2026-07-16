@@ -219,6 +219,7 @@
     "teamProgress": "Team Progress",
     "markAssigneesDone": "Mark assignees done",
     "markReviewed": "Mark as reviewed",
+    "taskDetailsAwaitingReview": "Task details — awaiting your review",
     "noAssigneesYet": "No assignees yet. Edit the task to add people.",
     "trialEnded": "Free trial ended ({{date}}). <a href=\"mailto:support@kalpanik.in\">Contact Support</a>",
     "trialEnds": "Free trial ends in <strong>{{days}}</strong> {{dayLabel}} ({{date}}). <a href=\"mailto:support@kalpanik.in\">Contact Support</a>",

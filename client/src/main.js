@@ -8171,10 +8171,12 @@ function ownerTaskGroupTbody(task) {
       : assignees.map((a) => ownerMockAssigneeCardHtml(task, a, { isEmpAssignList })).join("");
 
   const hasUnreadUpdates = assignees.some((a) => (a.unreadProgressUpdateCount ?? 0) > 0);
-  const expandUnreadClass = hasUnreadUpdates ? " owner-task-expand-btn--unread" : "";
+  const awaitingOwnerReview = taskIsSubmittedAwaitingOwner(task);
+  const showExpandAttention = hasUnreadUpdates || awaitingOwnerReview;
+  const expandUnreadClass = showExpandAttention ? " owner-task-expand-btn--unread" : "";
 
   const assigneeMarkDoneControl = `<button type="button" class="admin-expand-mark-done owner-mark-done-open" data-task-id="${task.id}" aria-haspopup="dialog" aria-controls="ownerMarkDoneModal">${tr("owner.markAssigneesDone")}</button>`;
-  const markReviewedBtn = taskIsSubmittedAwaitingOwner(task)
+  const markReviewedBtn = awaitingOwnerReview
     ? `<button type="button" class="admin-expand-icon-btn admin-expand-icon-btn--review" data-mark-reviewed-id="${task.id}" title="${tr("owner.markReviewed")}" aria-label="${tr("owner.markReviewed")}">${adminMsIcon("fact_check")}</button>`
     : "";
 
@@ -8213,9 +8215,15 @@ function ownerTaskGroupTbody(task) {
           data-bs-target="#${detailId}"
           aria-expanded="false"
           aria-controls="${detailId}"
-          aria-label="${hasUnreadUpdates ? tr("common.taskDetailsUnread") : tr("common.taskDetails")}"
+          aria-label="${
+            awaitingOwnerReview
+              ? tr("owner.taskDetailsAwaitingReview")
+              : hasUnreadUpdates
+                ? tr("common.taskDetailsUnread")
+                : tr("common.taskDetails")
+          }"
         >
-          ${hasUnreadUpdates ? `<span class="owner-task-expand-unread-dot" aria-hidden="true"></span>` : ""}
+          ${showExpandAttention ? `<span class="owner-task-expand-unread-dot" aria-hidden="true"></span>` : ""}
           <span class="admin-task-expand-icon">${adminMsIcon("expand_more")}</span>
         </button>
       </td>
