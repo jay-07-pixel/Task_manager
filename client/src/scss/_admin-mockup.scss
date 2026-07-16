@@ -1850,6 +1850,15 @@
         background: rgba(186, 26, 26, 0.08);
       }
     }
+
+    &--review {
+      color: var(--admin-primary, #0d7377);
+
+      &:hover {
+        background: rgba(169, 236, 229, 0.35);
+        color: var(--admin-primary, #0a5c5f);
+      }
+    }
   }
 
   .owner-task-row--expanded {

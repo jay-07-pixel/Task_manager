@@ -762,6 +762,11 @@ function handleProofUpload(req, res, next) {
   });
 }
 
+/**
+ * Keep task.completed in sync only when work is no longer fully submitted.
+ * Full assignee submission leaves completed=false (Submitted / awaiting owner review).
+ * Owner must explicitly PATCH completed=true (Reviewed).
+ */
 async function syncTaskCompletedFromAssignments(taskId) {
   const rows = await prisma.taskAssignee.findMany({
     where: { taskId },
@@ -769,10 +774,12 @@ async function syncTaskCompletedFromAssignments(taskId) {
   });
   if (rows.length === 0) return;
   const allDone = rows.every((r) => r.assigneeDone);
-  await prisma.task.update({
-    where: { id: taskId },
-    data: { completed: allDone },
-  });
+  if (!allDone) {
+    await prisma.task.update({
+      where: { id: taskId },
+      data: { completed: false },
+    });
+  }
 }
 
 async function notifyAdminsIfEmployeeSubmitted(task, employeeUserId, _wasAlreadyDone) {
@@ -2036,13 +2043,6 @@ router.post("/:id/completion-proof", requireAuth, handleProofUpload, async (req,
     });
     await syncTaskCompletedFromAssignments(task.id);
     void notifyAdminsIfEmployeeSubmitted(task, req.session.userId, wasAlreadyDone);
-    const fresh = await prisma.task.findFirst({
-      where: { id: task.id },
-      include: { ...taskAssigneeInclude, ...taskListSelect },
-    });
-    if (fresh && !wasAlreadyDone) {
-      await maybeRollRecurringAfterEmployeeComplete(fresh, req.session.userId);
-    }
     const updated = await prisma.task.findUnique({
       where: { id: task.id },
       include: { ...taskAssigneeInclude, ...taskListSelect },
@@ -2421,13 +2421,6 @@ router.patch("/:id", requireAuth, async (req, res) => {
     if (d.completed === true) {
       void notifyAdminsIfEmployeeSubmitted(task, req.session.userId, wasAlreadyDone);
     }
-    const fresh = await prisma.task.findFirst({
-      where: { id: task.id },
-      include: { ...taskAssigneeInclude, ...taskListSelect },
-    });
-    if (fresh && d.completed === true && !wasAlreadyDone) {
-      await maybeRollRecurringAfterEmployeeComplete(fresh, req.session.userId);
-    }
     const afterAssignee = await prisma.task.findUnique({
       where: { id: task.id },
       include: { ...taskAssigneeInclude, ...taskListSelect },
@@ -2460,6 +2453,16 @@ router.patch("/:id", requireAuth, async (req, res) => {
 
   if (isOwner && parsed.data.assigneeIds !== undefined) {
     await syncTaskCompletedFromAssignments(task.id);
+    updated =
+      (await prisma.task.findUnique({
+        where: { id: task.id },
+        include: taskAssigneeInclude,
+      })) ?? updated;
+  }
+
+  // Owner marked Reviewed — roll recurring series after this occurrence is closed.
+  if (isOwner && parsed.data.completed === true) {
+    await maybeRollRecurringAfterEmployeeComplete(updated, req.session.userId);
     updated =
       (await prisma.task.findUnique({
         where: { id: task.id },

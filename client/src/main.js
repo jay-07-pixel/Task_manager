@@ -2429,10 +2429,12 @@ async function focusOwnerTaskFromNotify(notify) {
     task = await tryLoadList(notify.listId);
   }
 
-  if (task?.completed || notify.allAssigneesDone) {
+  if (task?.completed) {
     state.ownerTaskFilter = "completed";
-  } else if (task && taskIsInReview(task)) {
-    state.ownerTaskFilter = "in_review";
+  } else if (task && taskIsSubmittedAwaitingOwner(task)) {
+    state.ownerTaskFilter = "submitted";
+  } else if (task && taskIsInProgress(task)) {
+    state.ownerTaskFilter = "in_progress";
   } else {
     state.ownerTaskFilter = "active";
   }
@@ -2754,11 +2756,24 @@ function taskHasUnreadProgressUpdates(task) {
   return (task.assignees ?? []).some((a) => (a.unreadProgressUpdateCount ?? 0) > 0);
 }
 
-/** In review = employee posted a progress update and has not submitted the task yet. */
-function taskIsInReview(task) {
+/** In progress = employee posted a progress update and has not submitted yet. */
+function taskIsInProgress(task) {
   return (task.assignees ?? []).some(
     (a) => (a.progressUpdateCount ?? 0) > 0 && !a.assigneeDone
   );
+}
+
+/** @deprecated use taskIsInProgress */
+function taskIsInReview(task) {
+  return taskIsInProgress(task);
+}
+
+/** Employee finished from their side; waiting for owner to review / close. */
+function taskIsSubmittedAwaitingOwner(task) {
+  if (task?.completed) return false;
+  const assignees = task?.assignees ?? [];
+  if (!assignees.length) return false;
+  return assignees.every((a) => a.assigneeDone);
 }
 
 /** Task where an employee assigned work to another employee. */
@@ -2769,14 +2784,15 @@ function taskHasEmployeeAssignment(task) {
 
 function ownerDashboardMetrics() {
   const tasks = state.tasks;
-  const activeList = state.lists.find((l) => l.id === state.activeListId);
-  const inReview = tasks.filter(taskIsInReview).length;
+  const submitted = tasks.filter(taskIsSubmittedAwaitingOwner).length;
+  const inProgress = tasks.filter(
+    (t) => !t.completed && !taskIsSubmittedAwaitingOwner(t) && taskIsInProgress(t)
+  ).length;
   const done = tasks.filter((t) => t.completed).length;
-  const active = tasks.filter((t) => !t.completed && !taskIsInReview(t)).length;
-  const employeeAssigned = isEmployeeAssignmentsList(activeList)
-    ? tasks.length
-    : tasks.filter(taskHasEmployeeAssignment).length;
-  return { total: tasks.length, active, done, inReview, employeeAssigned };
+  const active = tasks.filter(
+    (t) => !t.completed && !taskIsSubmittedAwaitingOwner(t) && !taskIsInProgress(t)
+  ).length;
+  return { total: tasks.length, active, inProgress, submitted, done };
 }
 
 function ownerProfileInitials() {
@@ -3258,22 +3274,30 @@ function ownerKpiCardHtml(filterKey, label, msIcon, count, total, activeClass = 
 }
 
 function ownerFilteredTasks() {
-  const activeList = state.lists.find((l) => l.id === state.activeListId);
+  // Normalize removed / renamed filters left in memory from older sessions
+  if (state.ownerTaskFilter === "employee_assigned") state.ownerTaskFilter = "active";
+  if (state.ownerTaskFilter === "in_review") state.ownerTaskFilter = "in_progress";
+
   const tasks = state.tasks;
   if (isAllTasksList(state.activeListId) && state.ownerTaskFilter === "active") {
-    return tasks.filter((t) => !t.completed);
+    return tasks.filter(
+      (t) => !t.completed && !taskIsSubmittedAwaitingOwner(t) && !taskIsInProgress(t)
+    );
   }
   if (state.ownerTaskFilter === "completed") {
     return tasks.filter((t) => t.completed);
   }
-  if (state.ownerTaskFilter === "in_review") {
-    return tasks.filter(taskIsInReview);
+  if (state.ownerTaskFilter === "submitted") {
+    return tasks.filter(taskIsSubmittedAwaitingOwner);
   }
-  if (state.ownerTaskFilter === "employee_assigned") {
-    if (isEmployeeAssignmentsList(activeList)) return tasks;
-    return tasks.filter(taskHasEmployeeAssignment);
+  if (state.ownerTaskFilter === "in_progress") {
+    return tasks.filter(
+      (t) => !t.completed && !taskIsSubmittedAwaitingOwner(t) && taskIsInProgress(t)
+    );
   }
-  return tasks.filter((t) => !t.completed && !taskIsInReview(t));
+  return tasks.filter(
+    (t) => !t.completed && !taskIsSubmittedAwaitingOwner(t) && !taskIsInProgress(t)
+  );
 }
 
 function sortOwnerTasksForDisplay(tasks) {
@@ -3294,11 +3318,15 @@ function setOwnerTaskFilter(filter) {
   if (
     filter !== "active" &&
     filter !== "completed" &&
-    filter !== "in_review" &&
-    filter !== "employee_assigned"
+    filter !== "in_progress" &&
+    filter !== "submitted" &&
+    filter !== "in_review" && // legacy
+    filter !== "employee_assigned" // legacy (removed KPI)
   ) {
     return;
   }
+  if (filter === "in_review") filter = "in_progress";
+  if (filter === "employee_assigned") filter = "active";
   state.ownerTaskFilter = filter;
   markOwnerNavBusy(350);
   requestAnimationFrame(() => renderOwnerMain());
@@ -6440,11 +6468,47 @@ async function reopenAssigneeForTask(taskId, userId, employeeName) {
     });
     const idx = state.tasks.findIndex((t) => t.id === taskId);
     if (idx >= 0) state.tasks[idx] = task;
-    if (state.ownerTaskFilter === "completed" && !task.completed) {
-      state.ownerTaskFilter = "active";
+    if (
+      (state.ownerTaskFilter === "completed" || state.ownerTaskFilter === "submitted") &&
+      !task.completed
+    ) {
+      if (taskIsSubmittedAwaitingOwner(task)) state.ownerTaskFilter = "submitted";
+      else if (taskIsInProgress(task)) state.ownerTaskFilter = "in_progress";
+      else state.ownerTaskFilter = "active";
     }
     renderOwnerMain();
     showToast(tr("toast.taskReassigned"), "success");
+  } catch (err) {
+    showToast(err.message, "danger");
+  }
+}
+
+async function markTaskReviewedByOwner(taskId) {
+  if (!taskId) return;
+  const task = findTaskById(taskId);
+  if (!task || !taskIsSubmittedAwaitingOwner(task)) {
+    showToast(tr("toast.taskNotAwaitingReview"), "warning");
+    return;
+  }
+  try {
+    const { task: updated } = await api(`/api/tasks/${taskId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ completed: true }),
+    });
+    const idx = state.tasks.findIndex((t) => t.id === taskId);
+    if (idx >= 0) state.tasks[idx] = updated;
+    else if (updated) state.tasks.push(updated);
+    // Refresh list so recurring spawn (if any) appears
+    if (state.activeListId) {
+      try {
+        await loadTasks(state.activeListId);
+      } catch {
+        /* keep local update */
+      }
+    }
+    state.ownerTaskFilter = "completed";
+    renderOwnerMain();
+    showToast(tr("toast.taskMarkedReviewed"), "success");
   } catch (err) {
     showToast(err.message, "danger");
   }
@@ -8110,6 +8174,9 @@ function ownerTaskGroupTbody(task) {
   const expandUnreadClass = hasUnreadUpdates ? " owner-task-expand-btn--unread" : "";
 
   const assigneeMarkDoneControl = `<button type="button" class="admin-expand-mark-done owner-mark-done-open" data-task-id="${task.id}" aria-haspopup="dialog" aria-controls="ownerMarkDoneModal">${tr("owner.markAssigneesDone")}</button>`;
+  const markReviewedBtn = taskIsSubmittedAwaitingOwner(task)
+    ? `<button type="button" class="admin-expand-icon-btn admin-expand-icon-btn--review" data-mark-reviewed-id="${task.id}" title="${tr("owner.markReviewed")}" aria-label="${tr("owner.markReviewed")}">${adminMsIcon("fact_check")}</button>`
+    : "";
 
   const progressBadge =
     nAssigned === 0
@@ -8174,6 +8241,7 @@ function ownerTaskGroupTbody(task) {
             <div class="admin-expand-actions">
               ${assigneeMarkDoneControl}
               <div class="admin-expand-icon-actions">
+                ${markReviewedBtn}
                 <button type="button" class="admin-expand-icon-btn" data-open-id="${task.id}" title="${tr("common.editTask")}" aria-label="${tr("common.editTask")}">${adminMsIcon("edit")}</button>
                 <button type="button" class="admin-expand-icon-btn admin-expand-icon-btn--danger" data-delete-id="${task.id}" title="${tr("common.deleteTask")}" aria-label="${tr("common.deleteTask")}">${adminMsIcon("delete")}</button>
               </div>
@@ -8293,32 +8361,20 @@ function renderOwnerMain() {
   const tbodyInner = visibleTasks.map((task) => ownerTaskGroupTbody(task)).join("");
 
   const isEmpAssignList = allTasksView ? false : isEmployeeAssignmentsList(list);
-  const useEmpAssignColumns = isEmpAssignList || state.ownerTaskFilter === "employee_assigned";
+  const useEmpAssignColumns = isEmpAssignList;
 
   const metrics = ownerDashboardMetrics();
   const activeKpiClass = state.ownerTaskFilter === "active" ? " admin-kpi-card--active" : "";
-  const inReviewKpiClass = state.ownerTaskFilter === "in_review" ? " admin-kpi-card--active" : "";
-  const empAssignedKpiClass =
-    state.ownerTaskFilter === "employee_assigned" ? " admin-kpi-card--active" : "";
+  const inProgressKpiClass = state.ownerTaskFilter === "in_progress" ? " admin-kpi-card--active" : "";
+  const submittedKpiClass = state.ownerTaskFilter === "submitted" ? " admin-kpi-card--active" : "";
   const completedKpiClass = state.ownerTaskFilter === "completed" ? " admin-kpi-card--active" : "";
   const kpiTotal = Math.max(metrics.total, 1);
   const kpiRow = list
     ? `<div class="admin-kpi-grid">
           ${ownerKpiCardHtml("active", tr("owner.kpiActive"), "bolt", metrics.active, kpiTotal, activeKpiClass)}
-          ${ownerKpiCardHtml("in_review", tr("owner.kpiInReview"), "rate_review", metrics.inReview, kpiTotal, inReviewKpiClass)}
-          ${ownerKpiCardHtml("completed", tr("owner.kpiCompleted"), "check_circle", metrics.done, kpiTotal, completedKpiClass)}
-          ${
-            isEmpAssignList
-              ? ""
-              : ownerKpiCardHtml(
-                  "employee_assigned",
-                  tr("owner.kpiEmployeeAssigned"),
-                  "group",
-                  metrics.employeeAssigned,
-                  kpiTotal,
-                  empAssignedKpiClass
-                )
-          }
+          ${ownerKpiCardHtml("in_progress", tr("owner.kpiInProgress"), "pending", metrics.inProgress, kpiTotal, inProgressKpiClass)}
+          ${ownerKpiCardHtml("submitted", tr("owner.kpiSubmitted"), "upload_file", metrics.submitted, kpiTotal, submittedKpiClass)}
+          ${ownerKpiCardHtml("completed", tr("owner.kpiReviewed"), "fact_check", metrics.done, kpiTotal, completedKpiClass)}
         </div>`
     : "";
 
@@ -8348,26 +8404,26 @@ function renderOwnerMain() {
           </div>`
       : state.ownerTaskFilter === "completed"
         ? `<div class="owner-empty-state py-5 px-3">
-            <i class="bi bi-check-circle owner-empty-icon text-success" aria-hidden="true"></i>
-            <p class="owner-empty-title mb-1">${tr("empty.noCompleted")}</p>
-            <p class="owner-empty-desc text-muted small mb-0">Tasks appear here after every assigned employee has submitted.</p>
+            <i class="bi bi-check2-square owner-empty-icon text-success" aria-hidden="true"></i>
+            <p class="owner-empty-title mb-1">${tr("empty.noReviewed")}</p>
+            <p class="owner-empty-desc text-muted small mb-0">${tr("empty.noReviewedDesc")}</p>
           </div>`
-        : state.ownerTaskFilter === "in_review"
+        : state.ownerTaskFilter === "submitted"
           ? `<div class="owner-empty-state py-5 px-3">
-              <i class="bi bi-chat-left-dots owner-empty-icon text-danger" aria-hidden="true"></i>
-              <p class="owner-empty-title mb-1">${tr("empty.nothingInReview")}</p>
-              <p class="owner-empty-desc text-muted small mb-0">Tasks appear here when an employee posts a progress update and has not submitted yet.</p>
+              <i class="bi bi-upload owner-empty-icon text-primary" aria-hidden="true"></i>
+              <p class="owner-empty-title mb-1">${tr("empty.noSubmitted")}</p>
+              <p class="owner-empty-desc text-muted small mb-0">${tr("empty.noSubmittedDesc")}</p>
             </div>`
-          : state.ownerTaskFilter === "employee_assigned"
+          : state.ownerTaskFilter === "in_progress"
             ? `<div class="owner-empty-state py-5 px-3">
-                <i class="bi bi-person-lines-fill owner-empty-icon text-info" aria-hidden="true"></i>
-                <p class="owner-empty-title mb-1">${tr("empty.noEmpAssignmentsFilter")}</p>
-                <p class="owner-empty-desc text-muted small mb-0">Tasks appear here when an employee creates or assigns work to a colleague. Check the <strong>Employee assignments</strong> list.</p>
-      </div>`
-    : `<div class="owner-empty-state py-5 px-3">
+              <i class="bi bi-hourglass-split owner-empty-icon text-warning" aria-hidden="true"></i>
+              <p class="owner-empty-title mb-1">${tr("empty.nothingInProgress")}</p>
+              <p class="owner-empty-desc text-muted small mb-0">${tr("empty.nothingInProgressDesc")}</p>
+            </div>`
+            : `<div class="owner-empty-state py-5 px-3">
               <i class="bi bi-check2-all owner-empty-icon text-success" aria-hidden="true"></i>
               <p class="owner-empty-title mb-1">${tr("empty.noActiveTasks")}</p>
-              <p class="owner-empty-desc text-muted small mb-0">All caught up. Click <strong>Completed</strong> above to review finished tasks.</p>
+              <p class="owner-empty-desc text-muted small mb-0">${tr("empty.noActiveTasksDesc")}</p>
       </div>`;
 
   const tableBlock =
@@ -8464,6 +8520,13 @@ function renderOwnerMain() {
     btn.addEventListener("click", () => {
       const id = btn.getAttribute("data-task-id");
       if (id) openOwnerMarkDoneModal(id);
+    });
+  });
+
+  main.querySelectorAll("[data-mark-reviewed-id]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const id = btn.getAttribute("data-mark-reviewed-id");
+      if (id) void markTaskReviewedByOwner(id);
     });
   });
 
@@ -9383,8 +9446,8 @@ function overdueFilterEmptyMessageHtml() {
 }
 
 function shouldShowTaskOverdueColorLegend({ ownerFilter, empFilter, allTasksView } = {}) {
-  if (allTasksView) return ownerFilter === "active" || ownerFilter === "in_review";
-  if (ownerFilter != null) return ownerFilter === "active" || ownerFilter === "in_review";
+  if (allTasksView) return ownerFilter === "active" || ownerFilter === "in_progress";
+  if (ownerFilter != null) return ownerFilter === "active" || ownerFilter === "in_progress";
   if (empFilter != null) return empFilter === "active";
   return false;
 }
