@@ -363,9 +363,25 @@ export async function refreshDeadlineExtensionsPage() {
       </div>
     </div>`;
   }
-  await loadPendingRequests();
-  main.innerHTML = pageHtml();
-  wirePage(main);
+  try {
+    await loadPendingRequests();
+    main.innerHTML = pageHtml();
+    wirePage(main);
+  } catch (err) {
+    const msg = err?.message || tr("deadlineExtensions.loadFailed");
+    main.innerHTML = `<div class="admin-main-scroll d-flex flex-column">
+      <div class="owner-empty-state py-5 px-3">
+        <span class="material-symbols-outlined owner-empty-icon text-danger" aria-hidden="true">error</span>
+        <p class="owner-empty-title mb-1">${escapeHtmlFn?.(tr("deadlineExtensions.loadFailedTitle")) ?? "Could not load requests"}</p>
+        <p class="owner-empty-desc text-muted small mb-3">${escapeHtmlFn?.(msg) ?? msg}</p>
+        <button type="button" class="btn btn-sm btn-outline-primary js-deadline-ext-retry">${escapeHtmlFn?.(tr("common.retry")) ?? "Retry"}</button>
+      </div>
+    </div>`;
+    main.querySelector(".js-deadline-ext-retry")?.addEventListener("click", () => {
+      void refreshDeadlineExtensionsPage();
+    });
+    showToastFn?.(msg, "danger");
+  }
 }
 
 export function openOwnerDeadlineExtensionsView() {

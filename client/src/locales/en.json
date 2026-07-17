@@ -28,6 +28,7 @@
     "phone": "Phone",
     "name": "Name",
     "loading": "Loading…",
+    "retry": "Retry",
     "optional": "(optional)",
     "view": "View",
     "submit": "Submit",

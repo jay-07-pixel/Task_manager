@@ -76,31 +76,47 @@ export async function dismissStaleDeadlineExtensions() {
   });
   const staleIds = pending.filter((row) => !isActionablePendingExtension(row)).map((r) => r.id);
   if (!staleIds.length) return 0;
-  const result = await prisma.taskDeadlineExtensionRequest.updateMany({
-    where: { id: { in: staleIds }, status: "pending" },
-    data: { status: "cancelled" },
-  });
-  return result.count;
+  try {
+    const result = await prisma.taskDeadlineExtensionRequest.updateMany({
+      where: { id: { in: staleIds }, status: "pending" },
+      data: { status: "cancelled" },
+    });
+    return result.count;
+  } catch (err) {
+    // Enum migrate not applied yet, or DB busy — still filter in memory on GET.
+    console.error("[deadline-ext] dismiss stale failed:", err?.message || err);
+    return 0;
+  }
 }
 
 /** Cancel pending postpone requests for a task (e.g. after owner marks reviewed). */
 export async function cancelPendingDeadlineExtensionsForTask(taskId) {
   if (!taskId) return 0;
-  const result = await prisma.taskDeadlineExtensionRequest.updateMany({
-    where: { taskId, status: "pending" },
-    data: { status: "cancelled" },
-  });
-  return result.count;
+  try {
+    const result = await prisma.taskDeadlineExtensionRequest.updateMany({
+      where: { taskId, status: "pending" },
+      data: { status: "cancelled" },
+    });
+    return result.count;
+  } catch (err) {
+    console.error("[deadline-ext] cancel for task failed:", err?.message || err);
+    return 0;
+  }
 }
 
 /** Cancel pending postpone for one assignee on a task (e.g. after they submit). */
 export async function cancelPendingDeadlineExtensionsForAssignee(taskId, employeeUserId) {
   if (!taskId || !employeeUserId) return 0;
-  const result = await prisma.taskDeadlineExtensionRequest.updateMany({
-    where: { taskId, employeeUserId, status: "pending" },
-    data: { status: "cancelled" },
-  });
-  return result.count;
+  try {
+    const result = await prisma.taskDeadlineExtensionRequest.updateMany({
+      where: { taskId, employeeUserId, status: "pending" },
+      data: { status: "cancelled" },
+    });
+    return result.count;
+  } catch (err) {
+    console.error("[deadline-ext] cancel for assignee failed:", err?.message || err);
+    return 0;
+  }
 }
 
 async function assertEmployeeCriticalOverdueTask(taskId, userId) {
@@ -196,7 +212,11 @@ router.post("/", requireAuth, async (req, res) => {
 
 /** Admin: list actionable pending extension requests. */
 router.get("/", requireOwner, async (_req, res) => {
-  await dismissStaleDeadlineExtensions();
+  try {
+    await dismissStaleDeadlineExtensions();
+  } catch (err) {
+    console.error("[deadline-ext] dismiss on list failed:", err?.message || err);
+  }
 
   const rows = await prisma.taskDeadlineExtensionRequest.findMany({
     where: { status: "pending" },

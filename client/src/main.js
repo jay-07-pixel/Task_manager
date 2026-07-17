@@ -10715,8 +10715,10 @@ async function render() {
   await refreshCompanyTrial();
   await loadLists();
   await loadAssignees();
-  await loadTasks(state.activeListId, { awaitTranslation: true });
+  // Don't block first paint on translating every task title (can hang on large lists).
+  await loadTasks(state.activeListId, { awaitTranslation: false });
   renderOwnerChrome();
+  void ensureStateContentTranslations(state);
   maybeShowOwnerTrialMessageModal();
   maybePromptLegalAnnouncement(state.user);
   wireChatNotifyHandlers();
