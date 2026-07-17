@@ -103,6 +103,23 @@ export async function reconcileLegacyRolledRecurringTask(task) {
   );
   if (!prevDue) return false;
 
+  // Avoid creating a second card for a due day that already exists in this series.
+  const dayStart = new Date(prevDue);
+  dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(prevDue);
+  dayEnd.setHours(23, 59, 59, 999);
+  const already = await prisma.task.findFirst({
+    where: {
+      listId: task.listId,
+      title: task.title,
+      recurrence: task.recurrence,
+      dueAt: { gte: dayStart, lte: dayEnd },
+      NOT: { id: task.id },
+    },
+    select: { id: true },
+  });
+  if (already) return false;
+
   await createCompletedOccurrenceTask(task, prevDue, rolled);
 
   for (const a of rolled) {
