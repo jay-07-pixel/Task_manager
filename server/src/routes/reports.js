@@ -270,21 +270,34 @@ router.get("/summary", async (req, res) => {
       task.list.title === EMPLOYEE_ASSIGNMENTS_LIST_TITLE ? "Employee assignments" : task.list.title;
     byList.set(listTitle, (byList.get(listTitle) || 0) + 1);
 
-    if (task.completed) {
+    const assignees = task.assignments ?? [];
+    const allAssigneesSubmitted =
+      assignees.length > 0 && assignees.every((a) => a.assigneeDone);
+
+    // Fully submitted (awaiting owner review) counts as completed for Reports overview,
+    // not Active/Overdue — otherwise reopened history inflates those KPIs.
+    if (task.completed || allAssigneesSubmitted) {
       completed += 1;
     } else {
-      const taskInReview = task.assignments.some(
+      const taskInReview = assignees.some(
         (a) => task.progressUpdates.some((u) => u.userId === a.userId) && !a.assigneeDone
       );
       if (taskInReview) inReview += 1;
       else active += 1;
     }
 
-    if (task.dueAt && !task.completed && task.dueAt < now) overdue += 1;
+    if (
+      task.dueAt &&
+      !task.completed &&
+      !allAssigneesSubmitted &&
+      task.dueAt < now
+    ) {
+      overdue += 1;
+    }
 
-    if (task.assignments.length > 0) withAssignees += 1;
+    if (assignees.length > 0) withAssignees += 1;
 
-    for (const a of task.assignments) {
+    for (const a of assignees) {
       const name = a.user.displayName || "Employee";
       const row = byEmployee.get(a.userId) || {
         name,
