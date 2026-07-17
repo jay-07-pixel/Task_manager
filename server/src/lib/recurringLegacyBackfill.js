@@ -10,18 +10,16 @@ function assigneeHasSubmissionContent(row) {
   return text.length > 0 || !!row.completionProofPath;
 }
 
-/** Old in-place roll: archived submission, active row awaiting fresh occurrence. */
+/**
+ * Old in-place roll only: archived submission on last_* fields, current row not done.
+ * Do NOT treat "all assignees submitted, awaiting owner Mark as reviewed" as legacy —
+ * that modern state was spawning duplicate past-due cards on every restart.
+ */
 function isLegacyRolledAssignee(row) {
   if (!row || row.assigneeDone) return false;
   if (!row.lastSubmittedAt) return false;
   if (assigneeHasSubmissionContent(row)) return false;
   return !!((row.lastSubmissionText ?? "").trim() || row.lastCompletionProofPath);
-}
-
-/** Old roll stuck: submission still on current fields but task never marked completed. */
-function isLegacyStuckSubmittedAssignee(row) {
-  if (!row?.assigneeDone) return false;
-  return assigneeHasSubmissionContent(row);
 }
 
 async function createCompletedOccurrenceTask(activeTask, prevDue, assigneeRows) {
@@ -32,11 +30,8 @@ async function createCompletedOccurrenceTask(activeTask, prevDue, assigneeRows) 
   const sortOrder = (maxOrder._max.sortOrder ?? -1) + 1;
 
   const assigneeCreates = assigneeRows.map((a) => {
-    const fromArchive = isLegacyRolledAssignee(a);
-    const text = fromArchive
-      ? (a.lastSubmissionText ?? "").trim() || null
-      : (a.submissionText ?? "").trim() || null;
-    const proof = fromArchive ? a.lastCompletionProofPath : a.completionProofPath;
+    const text = (a.lastSubmissionText ?? "").trim() || null;
+    const proof = a.lastCompletionProofPath;
     return {
       userId: a.userId,
       assignedByUserId: a.assignedByUserId ?? null,
@@ -92,14 +87,13 @@ export async function reconcileLegacyRolledRecurringTask(task) {
   if (!task?.recurrence || task.recurrence === "none" || task.completed) return false;
   if (!shouldRollOnEmployeeComplete(task.recurrence, task.recurrenceRule)) return false;
 
-  const rolled = (task.assignments ?? []).filter(isLegacyRolledAssignee);
-  const stuck = (task.assignments ?? []).filter(isLegacyStuckSubmittedAssignee);
-  const splitRows = rolled.length ? rolled : stuck;
-  if (!splitRows.length) return false;
-
-  if (stuck.length && !task.assignments.every((a) => a.assigneeDone)) {
+  // Never split modern "submitted awaiting owner review" (all assignees done on current fields).
+  if ((task.assignments ?? []).length > 0 && (task.assignments ?? []).every((a) => a.assigneeDone)) {
     return false;
   }
+
+  const rolled = (task.assignments ?? []).filter(isLegacyRolledAssignee);
+  if (!rolled.length) return false;
 
   const prevDue = computePreviousDueAt(
     task.dueAt,
@@ -109,9 +103,9 @@ export async function reconcileLegacyRolledRecurringTask(task) {
   );
   if (!prevDue) return false;
 
-  await createCompletedOccurrenceTask(task, prevDue, splitRows);
+  await createCompletedOccurrenceTask(task, prevDue, rolled);
 
-  for (const a of splitRows) {
+  for (const a of rolled) {
     await clearActiveOccurrenceAssignee(task.id, a.userId);
   }
 
