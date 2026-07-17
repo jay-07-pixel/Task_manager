@@ -14,7 +14,7 @@ import {
   shouldRollOnEmployeeComplete,
 } from "../lib/recurrenceRoll.js";
 import { requireAuth, requireOwner } from "../middleware/auth.js";
-import { attachPendingDeadlineExtensions } from "./deadlineExtensions.js";
+import { attachPendingDeadlineExtensions, cancelPendingDeadlineExtensionsForAssignee, cancelPendingDeadlineExtensionsForTask } from "./deadlineExtensions.js";
 import { isVideoAttachment } from "../lib/chatUpload.js";
 import {
   compareCompletedTasksRecentFirst,
@@ -2042,6 +2042,9 @@ router.post("/:id/completion-proof", requireAuth, handleProofUpload, async (req,
       },
     });
     await syncTaskCompletedFromAssignments(task.id);
+    void cancelPendingDeadlineExtensionsForAssignee(task.id, req.session.userId).catch((err) =>
+      console.error("[deadline-ext-cancel]", err)
+    );
     void notifyAdminsIfEmployeeSubmitted(task, req.session.userId, wasAlreadyDone);
     const updated = await prisma.task.findUnique({
       where: { id: task.id },
@@ -2419,6 +2422,9 @@ router.patch("/:id", requireAuth, async (req, res) => {
     }
     await syncTaskCompletedFromAssignments(task.id);
     if (d.completed === true) {
+      void cancelPendingDeadlineExtensionsForAssignee(task.id, req.session.userId).catch((err) =>
+        console.error("[deadline-ext-cancel]", err)
+      );
       void notifyAdminsIfEmployeeSubmitted(task, req.session.userId, wasAlreadyDone);
     }
     const afterAssignee = await prisma.task.findUnique({
@@ -2462,6 +2468,9 @@ router.patch("/:id", requireAuth, async (req, res) => {
 
   // Owner marked Reviewed — roll recurring series after this occurrence is closed.
   if (isOwner && parsed.data.completed === true) {
+    void cancelPendingDeadlineExtensionsForTask(task.id).catch((err) =>
+      console.error("[deadline-ext-cancel]", err)
+    );
     await maybeRollRecurringAfterEmployeeComplete(updated, req.session.userId);
     updated =
       (await prisma.task.findUnique({

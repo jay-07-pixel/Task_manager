@@ -37,6 +37,7 @@ enum AttendanceCheckType {
 enum TaskDeadlineExtensionStatus {
   pending
   approved
+  cancelled
 }
 
 model User {

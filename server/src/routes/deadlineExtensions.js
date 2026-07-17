@@ -40,15 +40,74 @@ function serializeExtensionRequest(row) {
           title: row.task.title,
           dueAt: row.task.dueAt?.toISOString?.() ?? null,
           listId: row.task.listId,
+          completed: row.task.completed === true,
         }
       : null,
   };
+}
+
+/**
+ * Pending postpone is only actionable while the employee still has unfinished,
+ * critically overdue work on that task.
+ */
+function isActionablePendingExtension(row) {
+  const task = row.task;
+  if (!task || task.completed) return false;
+  if (!task.dueAt || taskOverdueDayCount(task.dueAt) < CRITICAL_OVERDUE_MIN_DAYS) return false;
+  const assignment = (task.assignments ?? []).find((a) => a.userId === row.employeeUserId);
+  if (!assignment || assignment.assigneeDone) return false;
+  return true;
+}
+
+/** Cancel pending extension requests that are no longer actionable. */
+export async function dismissStaleDeadlineExtensions() {
+  const pending = await prisma.taskDeadlineExtensionRequest.findMany({
+    where: { status: "pending" },
+    include: {
+      task: {
+        select: {
+          id: true,
+          completed: true,
+          dueAt: true,
+          assignments: { select: { userId: true, assigneeDone: true } },
+        },
+      },
+    },
+  });
+  const staleIds = pending.filter((row) => !isActionablePendingExtension(row)).map((r) => r.id);
+  if (!staleIds.length) return 0;
+  const result = await prisma.taskDeadlineExtensionRequest.updateMany({
+    where: { id: { in: staleIds }, status: "pending" },
+    data: { status: "cancelled" },
+  });
+  return result.count;
+}
+
+/** Cancel pending postpone requests for a task (e.g. after owner marks reviewed). */
+export async function cancelPendingDeadlineExtensionsForTask(taskId) {
+  if (!taskId) return 0;
+  const result = await prisma.taskDeadlineExtensionRequest.updateMany({
+    where: { taskId, status: "pending" },
+    data: { status: "cancelled" },
+  });
+  return result.count;
+}
+
+/** Cancel pending postpone for one assignee on a task (e.g. after they submit). */
+export async function cancelPendingDeadlineExtensionsForAssignee(taskId, employeeUserId) {
+  if (!taskId || !employeeUserId) return 0;
+  const result = await prisma.taskDeadlineExtensionRequest.updateMany({
+    where: { taskId, employeeUserId, status: "pending" },
+    data: { status: "cancelled" },
+  });
+  return result.count;
 }
 
 async function assertEmployeeCriticalOverdueTask(taskId, userId) {
   const task = await prisma.task.findFirst({
     where: {
       id: taskId,
+      completed: false,
       assignments: { some: { userId, assigneeDone: false } },
     },
     include: {
@@ -135,17 +194,30 @@ router.post("/", requireAuth, async (req, res) => {
   res.status(201).json({ request: serializeExtensionRequest(request) });
 });
 
-/** Admin: list pending extension requests. */
+/** Admin: list actionable pending extension requests. */
 router.get("/", requireOwner, async (_req, res) => {
+  await dismissStaleDeadlineExtensions();
+
   const rows = await prisma.taskDeadlineExtensionRequest.findMany({
     where: { status: "pending" },
     include: {
       employee: { select: { id: true, displayName: true, email: true } },
-      task: { select: { id: true, title: true, dueAt: true, listId: true } },
+      task: {
+        select: {
+          id: true,
+          title: true,
+          dueAt: true,
+          listId: true,
+          completed: true,
+          assignments: { select: { userId: true, assigneeDone: true } },
+        },
+      },
     },
     orderBy: { requestedAt: "asc" },
   });
-  res.json({ requests: rows.map(serializeExtensionRequest) });
+
+  const actionable = rows.filter(isActionablePendingExtension);
+  res.json({ requests: actionable.map(serializeExtensionRequest) });
 });
 
 /** Admin: approve request and set new deadline. */
@@ -193,7 +265,15 @@ router.post("/:id/approve", requireOwner, async (req, res) => {
     where: { id: updatedRequest.id },
     include: {
       employee: { select: { id: true, displayName: true, email: true } },
-      task: { select: { id: true, title: true, dueAt: true, listId: true } },
+      task: {
+        select: {
+          id: true,
+          title: true,
+          dueAt: true,
+          listId: true,
+          completed: true,
+        },
+      },
     },
   });
 
