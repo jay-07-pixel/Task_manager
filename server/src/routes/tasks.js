@@ -9,6 +9,7 @@ import { prisma } from "../lib/prisma.js";
 import {
   bumpedRecurrenceRuleJson,
   computeNextDueAt,
+  findExistingSeriesOccurrence,
   recurrenceEndsAfterThisCompletion,
   recurrenceNextDueExceedsEndOn,
   shouldRollOnEmployeeComplete,
@@ -298,6 +299,16 @@ async function spawnNextRecurringTask(completedTask, nextRecurrenceRuleJson = nu
   );
   if (!nextDue) return null;
 
+  // Idempotent: never create a second card for the same series + due day.
+  const existing = await findExistingSeriesOccurrence(prisma, {
+    listId: completedTask.listId,
+    title: completedTask.title,
+    recurrence: completedTask.recurrence,
+    dueAt: nextDue,
+    excludeTaskId: completedTask.id,
+  });
+  if (existing) return null;
+
   const assigneeCreates = (completedTask.assignments ?? []).map((a) => ({
     userId: a.userId,
     assignedByUserId: a.assignedByUserId ?? null,
@@ -342,6 +353,8 @@ async function maybeRollRecurringAfterEmployeeComplete(task, _userId) {
     include: taskAssigneeInclude,
   });
   if (!fresh) return;
+  // Already rolled / reviewed — do not spawn another next card.
+  if (fresh.completed) return;
 
   const allAssigneesDone = fresh.assignments.length > 0 && fresh.assignments.every((a) => a.assigneeDone);
   if (!allAssigneesDone) return;

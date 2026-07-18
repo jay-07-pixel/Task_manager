@@ -1,13 +1,15 @@
 import { prisma } from "./prisma.js";
 import {
   computePreviousDueAt,
+  findExistingSeriesOccurrence,
   shouldRollOnEmployeeComplete,
 } from "./recurrenceRoll.js";
 
 function assigneeHasSubmissionContent(row) {
   if (!row) return false;
   const text = (row.submissionText ?? "").trim();
-  return text.length > 0 || !!row.completionProofPath;
+  const proofCount = (row.submissionProofs ?? []).filter((p) => !p.archived).length;
+  return text.length > 0 || !!row.completionProofPath || proofCount > 0;
 }
 
 /**
@@ -104,19 +106,12 @@ export async function reconcileLegacyRolledRecurringTask(task) {
   if (!prevDue) return false;
 
   // Avoid creating a second card for a due day that already exists in this series.
-  const dayStart = new Date(prevDue);
-  dayStart.setHours(0, 0, 0, 0);
-  const dayEnd = new Date(prevDue);
-  dayEnd.setHours(23, 59, 59, 999);
-  const already = await prisma.task.findFirst({
-    where: {
-      listId: task.listId,
-      title: task.title,
-      recurrence: task.recurrence,
-      dueAt: { gte: dayStart, lte: dayEnd },
-      NOT: { id: task.id },
-    },
-    select: { id: true },
+  const already = await findExistingSeriesOccurrence(prisma, {
+    listId: task.listId,
+    title: task.title,
+    recurrence: task.recurrence,
+    dueAt: prevDue,
+    excludeTaskId: task.id,
   });
   if (already) return false;
 
@@ -142,7 +137,9 @@ export async function reconcileAllLegacyRolledRecurringTasks() {
       recurrence: { not: "none" },
     },
     include: {
-      assignments: true,
+      assignments: {
+        include: { submissionProofs: { select: { archived: true } } },
+      },
     },
   });
 

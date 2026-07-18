@@ -139,3 +139,50 @@ export function computePreviousDueAt(dueAt, recurrence, allDay, recurrenceRuleJs
 
   return prev;
 }
+
+export function appTimeZone() {
+  return (process.env.APP_TIMEZONE || process.env.REMINDER_TIMEZONE || "Asia/Kolkata").trim() || "Asia/Kolkata";
+}
+
+/** Calendar day YYYY-MM-DD in the company timezone (matches dedupe scripts). */
+export function dueCalendarDayKey(dueAt, timeZone = appTimeZone()) {
+  if (!dueAt) return "none";
+  const d = dueAt instanceof Date ? dueAt : new Date(dueAt);
+  if (Number.isNaN(d.getTime())) return "none";
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
+}
+
+/**
+ * Find an existing series occurrence on the same list/title/recurrence/due day.
+ * Used to prevent duplicate cards from double Mark Reviewed or restart backfill.
+ */
+export async function findExistingSeriesOccurrence(
+  prisma,
+  { listId, title, recurrence, dueAt, excludeTaskId = null }
+) {
+  if (!listId || !title || !dueAt) return null;
+  const targetDay = dueCalendarDayKey(dueAt);
+  if (targetDay === "none") return null;
+
+  const due = dueAt instanceof Date ? dueAt : new Date(dueAt);
+  const windowStart = new Date(due.getTime() - 36 * 60 * 60 * 1000);
+  const windowEnd = new Date(due.getTime() + 36 * 60 * 60 * 1000);
+
+  const candidates = await prisma.task.findMany({
+    where: {
+      listId,
+      title,
+      recurrence,
+      dueAt: { gte: windowStart, lte: windowEnd },
+      ...(excludeTaskId ? { NOT: { id: excludeTaskId } } : {}),
+    },
+    select: { id: true, dueAt: true, completed: true },
+  });
+
+  return candidates.find((row) => dueCalendarDayKey(row.dueAt) === targetDay) ?? null;
+}
