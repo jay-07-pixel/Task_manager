@@ -5451,7 +5451,7 @@ function employeeAwaitingFreshOccurrence(task, assigneeRow = employeeMyAssignee(
 function empTaskRowDisplayMode(task, me) {
   if (state.empFilter === "submitted") return "submitted";
   if (employeeAwaitingFreshOccurrence(task, me)) return "active";
-  if (employeeAssigneeShowsAsSubmitted(task, me) && me?.assigneeDone) return "submitted";
+  if (employeeAssigneeShowsAsSubmitted(task, me)) return "submitted";
   return "active";
 }
 
@@ -9161,10 +9161,21 @@ function employeeMyAssignee(task) {
 /** Submitted tab: this occurrence is done (each recurring day is its own task card). */
 function employeeAssigneeShowsAsSubmitted(task, assigneeRow = employeeMyAssignee(task)) {
   if (!assigneeRow) return false;
+  // New occurrence after a recurring roll belongs in Active, not Submitted.
+  if (employeeAwaitingFreshOccurrence(task, assigneeRow)) return false;
   if (assigneeRow.assigneeDone) return true;
-  // Legacy: same task id was rolled in-place before spawn-per-occurrence.
-  const recurrence = task.recurrence ?? "none";
-  return recurrence !== "none" && !!assigneeRow.lastSubmittedAt && !employeeHasCurrentSubmission(assigneeRow);
+  // Submitted and awaiting owner review (completed stays false until Mark reviewed).
+  if (employeeHasCurrentSubmission(assigneeRow)) return true;
+  return false;
+}
+
+/** Active tab: open work the employee still needs to submit. */
+function employeeTaskIsActiveOpen(task) {
+  if (!task || task.completed) return false;
+  const me = employeeMyAssignee(task);
+  if (!me) return false;
+  if (employeeAssigneeShowsAsSubmitted(task, me)) return false;
+  return true;
 }
 
 function formatEmpDue(iso) {
@@ -10064,11 +10075,11 @@ function wireEmpDelegateModal() {
 
 function employeeDashboardMetrics() {
   const tasks = state.empTasks;
-  const active = tasks.filter((t) => !employeeMyAssignee(t)?.assigneeDone).length;
+  const active = tasks.filter((t) => employeeTaskIsActiveOpen(t)).length;
   const done = tasks.filter((t) => employeeAssigneeShowsAsSubmitted(t)).length;
   const now = Date.now();
   const dueSoon = tasks.filter((t) => {
-    if (!t.dueAt || employeeMyAssignee(t)?.assigneeDone) return false;
+    if (!t.dueAt || !employeeTaskIsActiveOpen(t)) return false;
     const due = new Date(t.dueAt).getTime();
     return Number.isFinite(due) && due > now && due - now < 24 * 60 * 60 * 1000;
   }).length;
@@ -10166,7 +10177,7 @@ function empFilteredTasks() {
   } else if (state.empFilter === "all") {
     tasks = state.empTasks;
   } else {
-    tasks = state.empTasks.filter((t) => !employeeMyAssignee(t)?.assigneeDone);
+    tasks = state.empTasks.filter((t) => employeeTaskIsActiveOpen(t));
   }
   return sortEmpTasksForDisplay(tasks);
 }
