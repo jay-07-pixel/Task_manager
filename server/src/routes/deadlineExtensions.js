@@ -138,11 +138,7 @@ export async function cancelPendingDeadlineExtensionsForAssignee(taskId, employe
 
 async function assertEmployeeCriticalOverdueTask(taskId, userId) {
   const task = await prisma.task.findFirst({
-    where: {
-      id: taskId,
-      completed: false,
-      assignments: { some: { userId, assigneeDone: false } },
-    },
+    where: { id: taskId },
     include: {
       assignments: {
         where: { userId },
@@ -159,7 +155,10 @@ async function assertEmployeeCriticalOverdueTask(taskId, userId) {
     return { error: "Task not found or not assigned to you", status: 404 };
   }
   const mine = task.assignments?.[0];
-  if (!assignmentHasOpenCriticalWork(mine)) {
+  if (!mine) {
+    return { error: "Task not found or not assigned to you", status: 404 };
+  }
+  if (task.completed || !assignmentHasOpenCriticalWork(mine)) {
     return { error: "This task is already submitted", status: 400 };
   }
   if (!task.dueAt || taskOverdueDayCount(task.dueAt) < CRITICAL_OVERDUE_MIN_DAYS) {
