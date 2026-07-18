@@ -402,6 +402,8 @@
     "criticalOverdueGateSubmit": "कार्य सबमिट करा",
     "criticalOverdueGatePostponeSent": "Postpone विनंती प्रशासकाला पाठवली. मंजुरीची वाट पाहताना 24 तास अॅप वापरू शकता.",
     "criticalOverdueGatePostponeFailed": "Postpone विनंती पाठवता आली नाही.",
+    "notifyTaskGone": "ते काम आता उपलब्ध नाही (कदाचित हटवले असेल).",
+    "notifyTaskAlreadySubmitted": "आधीच सबमिट: {{title}}",
     "taskReopenedNotify": "पुन्हा सबमिट करा",
     "taskReopenedToast": "कृपया पुन्हा सबमिट करा: {{title}}",
     "viewPreviousSubmission": "मागील सबमिशन",

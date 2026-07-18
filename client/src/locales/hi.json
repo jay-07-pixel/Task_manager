@@ -403,6 +403,8 @@
     "criticalOverdueGateSubmit": "कार्य जमा करें",
     "criticalOverdueGatePostponeSent": "Postpone अनुरोध एडमिन को भेजा गया। मंजूरी की प्रतीक्षा में 24 घंटे तक ऐप उपयोग कर सकते हैं।",
     "criticalOverdueGatePostponeFailed": "Postpone अनुरोध भेजा नहीं जा सका।",
+    "notifyTaskGone": "वह कार्य अब उपलब्ध नहीं है (शायद हटा दिया गया हो)।",
+    "notifyTaskAlreadySubmitted": "पहले से जमा: {{title}}",
     "taskReopenedNotify": "फिर जमा करें",
     "taskReopenedToast": "कृपया फिर जमा करें: {{title}}",
     "viewPreviousSubmission": "पिछली जमा",

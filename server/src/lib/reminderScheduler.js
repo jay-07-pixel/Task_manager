@@ -277,6 +277,7 @@ export async function runReminderTick() {
           reminderBeforeMinutes: true,
         },
       },
+      submissionProofs: { select: { archived: true }, take: 5 },
     },
   });
 
@@ -285,6 +286,14 @@ export async function runReminderTick() {
   for (const row of rows) {
     const dueAt = row.task.dueAt;
     if (!dueAt) continue;
+
+    const text = (row.submissionText ?? "").trim();
+    const hasProof =
+      !!row.completionProofPath || (row.submissionProofs ?? []).some((p) => !p.archived);
+    if (text || hasProof) {
+      dbg("row skip: already has submission", { taskId: row.taskId, userId: row.userId });
+      continue;
+    }
 
     const due = dueAt.getTime();
     if (!Number.isFinite(due)) continue;

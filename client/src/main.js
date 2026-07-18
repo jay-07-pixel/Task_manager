@@ -280,7 +280,9 @@ function employeeHasActivePostponeGrace(task) {
 
 function employeeHasActedOnCriticalOverdue(task, me = employeeMyAssignee(task)) {
   if (!task?.dueAt || !me) return false;
+  if (task.completed) return true;
   if (empCriticalOverdueSatisfiedIds.has(task.id)) return true;
+  if (me.assigneeDone || employeeHasCurrentSubmission(me)) return true;
   if (employeeAssigneeShowsAsSubmitted(task, me)) return true;
   if (employeeHasActivePostponeGrace(task)) return true;
 
@@ -2324,20 +2326,39 @@ async function focusEmployeeTaskFromNotify(notify) {
   }
 
   const task = state.empTasks.find((t) => t.id === notify.taskId);
-  if (notify.reopened) {
-    state.empFilter = "active";
-  } else if (task && employeeAssigneeShowsAsSubmitted(task) && !employeeAwaitingFreshOccurrence(task)) {
-    state.empFilter = "submitted";
-  } else if (!task) {
-    state.empFilter = "all";
-  } else {
-    state.empFilter = "active";
+  if (!task) {
+    removeEmployeeOverdueGate();
+    renderEmpListContentOnly();
+    renderEmployeeMain();
+    syncEmployeeOverdueGate();
+    showToast(tr("employee.notifyTaskGone"), "warning");
+    return;
   }
+
+  const me = employeeMyAssignee(task);
+  if (
+    task.completed ||
+    me?.assigneeDone ||
+    employeeHasCurrentSubmission(me) ||
+    (employeeAssigneeShowsAsSubmitted(task, me) && !employeeAwaitingFreshOccurrence(task, me))
+  ) {
+    empCriticalOverdueSatisfiedIds.add(task.id);
+    clearPostponeGraceForTask(task.id);
+    state.empFilter = "submitted";
+    renderEmpListContentOnly();
+    renderEmployeeMain();
+    syncEmployeeOverdueGate();
+    showToast(tr("employee.notifyTaskAlreadySubmitted", { title: notify.title || task.title }), "success");
+    return;
+  }
+
+  state.empFilter = "active";
 
   renderEmpListContentOnly();
   renderEmployeeMain();
+  syncEmployeeOverdueGate();
 
-  const title = notify.title || task?.title || "Your task";
+  const title = notify.title || task.title || "Your task";
   const slotLabel = notify.reopened
     ? tr("employee.taskReopenedNotify")
     : notify.slot?.startsWith("followup")
@@ -2361,7 +2382,7 @@ async function focusEmployeeTaskFromNotify(notify) {
 
   showToast(
     notify.reopened ? tr("employee.taskReopenedToast", { title }) : `${slotLabel}: ${title}`,
-    notify.reopened ? "warning" : "warning"
+    "warning"
   );
 }
 
@@ -9461,9 +9482,11 @@ function shouldShowTaskOverdueColorLegend({ ownerFilter, empFilter, allTasksView
 }
 
 function isEmployeeCriticalOverdueTask(task) {
-  if (!task?.dueAt) return false;
+  if (!task?.dueAt || task.completed) return false;
   const me = employeeMyAssignee(task);
-  if (!me || employeeAssigneeShowsAsSubmitted(task, me)) return false;
+  if (!me || me.assigneeDone) return false;
+  if (employeeHasCurrentSubmission(me)) return false;
+  if (employeeAssigneeShowsAsSubmitted(task, me)) return false;
   if (employeeAwaitingFreshOccurrence(task, me)) return false;
   return taskOverdueDayCount(task.dueAt) >= EMP_CRITICAL_OVERDUE_MIN_DAYS;
 }
@@ -9570,9 +9593,19 @@ function wireEmployeeOverdueGate(gateEl) {
         schedulePostponeGraceRecheck();
       } catch (err) {
         clearPostponeGraceForTask(taskId);
-        empCriticalOverdueSatisfiedIds.delete(taskId);
-        const liveTask = state.empTasks.find((t) => t.id === taskId);
-        if (liveTask) liveTask.pendingDeadlineExtension = null;
+        const msg = String(err?.message || "");
+        const goneOrDone =
+          /not found|not assigned|not critically overdue|already submitted/i.test(msg);
+        if (goneOrDone) {
+          empCriticalOverdueSatisfiedIds.add(taskId);
+          if (/not found|not assigned/i.test(msg)) {
+            state.empTasks = state.empTasks.filter((t) => t.id !== taskId);
+          }
+        } else {
+          empCriticalOverdueSatisfiedIds.delete(taskId);
+          const liveTask = state.empTasks.find((t) => t.id === taskId);
+          if (liveTask) liveTask.pendingDeadlineExtension = null;
+        }
         syncEmployeeOverdueGate();
         showToast(err.message || tr("employee.criticalOverdueGatePostponeFailed"), "warning");
       }
@@ -9582,7 +9615,12 @@ function wireEmployeeOverdueGate(gateEl) {
   gateEl.querySelector(".emp-gate-submit-task")?.addEventListener("click", () => {
     const taskId = gateEl.getAttribute("data-task-id");
     const task = state.empTasks.find((t) => t.id === taskId);
-    if (!task) return;
+    if (!task) {
+      if (taskId) dismissCriticalOverdueGateForTask(taskId);
+      syncEmployeeOverdueGate();
+      showToast(tr("employee.notifyTaskGone"), "warning");
+      return;
+    }
     dismissCriticalOverdueGateForTask(taskId);
     openEmpSubmissionModal(task);
   });
@@ -9748,11 +9786,32 @@ function empActiveRecurrenceLinesHtml(task) {
   return `<div class="emp-recurrence-lines small text-muted mt-1"><div class="emp-recurrence-pattern">${escapeHtml(pattern)}</div></div>`;
 }
 
+function prunePostponeGraceAgainstEmpTasks() {
+  const map = pruneExpiredPostponeGrace();
+  const liveIds = new Set((state.empTasks ?? []).map((t) => t.id));
+  let changed = false;
+  for (const taskId of Object.keys(map)) {
+    if (!liveIds.has(taskId)) {
+      delete map[taskId];
+      changed = true;
+      continue;
+    }
+    const task = state.empTasks.find((t) => t.id === taskId);
+    const me = employeeMyAssignee(task);
+    if (!task || task.completed || me?.assigneeDone || employeeHasCurrentSubmission(me)) {
+      delete map[taskId];
+      changed = true;
+    }
+  }
+  if (changed) writePostponeGraceMap(map);
+}
+
 function reconcileCriticalOverdueGateFromServer() {
+  prunePostponeGraceAgainstEmpTasks();
   for (const task of state.empTasks) {
     const me = employeeMyAssignee(task);
     if (!task?.dueAt || !me) continue;
-    if (employeeAssigneeShowsAsSubmitted(task, me)) {
+    if (task.completed || me.assigneeDone || employeeHasCurrentSubmission(me) || employeeAssigneeShowsAsSubmitted(task, me)) {
       empCriticalOverdueSatisfiedIds.add(task.id);
       continue;
     }
@@ -9766,6 +9825,12 @@ function reconcileCriticalOverdueGateFromServer() {
       if (!Number.isNaN(submittedMs) && submittedMs >= threshold) {
         empCriticalOverdueSatisfiedIds.add(task.id);
       }
+    }
+  }
+  // Drop satisfied ids for tasks that no longer exist (deleted).
+  for (const taskId of [...empCriticalOverdueSatisfiedIds]) {
+    if (!state.empTasks.some((t) => t.id === taskId)) {
+      empCriticalOverdueSatisfiedIds.delete(taskId);
     }
   }
   schedulePostponeGraceRecheck();

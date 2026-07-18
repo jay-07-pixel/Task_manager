@@ -402,6 +402,8 @@
     "criticalOverdueGateSubmit": "பணியைச் சமர்ப்பி",
     "criticalOverdueGatePostponeSent": "Postpone கோரிக்கை நிர்வாகிக்கு அனுப்பப்பட்டது. அனுமதிக்காக காத்திருக்கும் 24 மணி நேரம் பயன்பாட்டைப் பயன்படுத்தலாம்.",
     "criticalOverdueGatePostponeFailed": "Postpone கோரிக்கை அனுப்ப முடியவில்லை.",
+    "notifyTaskGone": "அந்த பணி இப்போது இல்லை (நீக்கப்பட்டிருக்கலாம்).",
+    "notifyTaskAlreadySubmitted": "ஏற்கனவே சமர்ப்பிக்கப்பட்டது: {{title}}",
     "taskReopenedNotify": "மீண்டும் சமர்ப்பிக்கவும்",
     "taskReopenedToast": "மீண்டும் சமர்ப்பிக்கவும்: {{title}}",
     "viewPreviousSubmission": "முந்தைய சமர்ப்பிப்பு",

@@ -9,9 +9,22 @@ import {
   warmupPushInfrastructure,
 } from "./sw-register.js";
 
-/** @typedef {{ id: string, title: string, dueAt: string | null, reminderBeforeMinutes?: number | null, assignees?: { id: string, assigneeDone?: boolean }[] }} ReminderTask */
+/** @typedef {{ id: string, title: string, dueAt: string | null, completed?: boolean, reminderBeforeMinutes?: number | null, assignees?: { id: string, assigneeDone?: boolean, submissionText?: string | null, completionProofUrls?: string[], completionProofUrl?: string | null }[] }} ReminderTask */
 
 const DEFAULT_REMINDER_BEFORE_MS = 30 * 60 * 1000;
+/** @type {(() => ReminderTask[]) | null} */
+let reminderGetTasks = null;
+/** @type {((task: ReminderTask) => { assigneeDone?: boolean, submissionText?: string | null, completionProofUrls?: string[], completionProofUrl?: string | null } | null) | null} */
+let reminderGetMyAssignment = null;
+
+function assigneeHasOpenWork(me, task) {
+  if (!me || me.assigneeDone) return false;
+  if (task?.completed) return false;
+  if (typeof me.submissionText === "string" && me.submissionText.trim()) return false;
+  if (Array.isArray(me.completionProofUrls) && me.completionProofUrls.length) return false;
+  if (me.completionProofUrl) return false;
+  return true;
+}
 /** Second reminder if still not submitted — 1 hour after due time. */
 const FOLLOWUP_AFTER_DUE_MS = 60 * 60 * 1000;
 const CHECK_INTERVAL_MS = 15 * 1000;
@@ -221,11 +234,17 @@ function fireDueReminder(task, plan, fired, showToast) {
 
 /** Play alarm in open tab when a server push arrives (site may be in background). */
 export function handlePushReminderMessage(payload, showToast) {
-  if (!payload) return;
+  if (!payload?.taskId) return;
+
+  const live = reminderGetTasks?.().find((t) => t.id === payload.taskId) ?? null;
+  if (!live) return;
+  const me = reminderGetMyAssignment?.(live) ?? null;
+  if (!assigneeHasOpenWork(me, live)) return;
+
   const task = {
-    id: payload.taskId || "",
-    title: payload.title || tr("employee.reminders.fallbackTaskTitle"),
-    dueAt: payload.dueAt || null,
+    id: live.id,
+    title: live.title || payload.title || tr("employee.reminders.fallbackTaskTitle"),
+    dueAt: live.dueAt || payload.dueAt || null,
   };
   const slot = payload.slot?.startsWith("followup") ? SLOT_FOLLOWUP : payload.slot || "before30";
   if (isBeforeSlot(slot) === false && slot !== SLOT_FOLLOWUP) return;
@@ -243,7 +262,7 @@ export function checkDueReminders(tasks, getMyAssignment, showToast) {
   for (const task of tasks) {
     if (!task.dueAt) continue;
     const me = getMyAssignment(task);
-    if (!me || me.assigneeDone) continue;
+    if (!assigneeHasOpenWork(me, task)) continue;
 
     const plan = dueReminderToFire(task, now, fired);
     if (!plan) continue;
@@ -283,6 +302,8 @@ function wireEmployeeInteractionOnce(apiFetch, showToast) {
 
 export function startEmployeeReminders(reloadTasks, getTasks, getMyAssignment, showToast, getUserId, apiFetch) {
   stopEmployeeReminders();
+  reminderGetTasks = getTasks;
+  reminderGetMyAssignment = getMyAssignment;
   wireEmployeeInteractionOnce(apiFetch, showToast);
 
   if (!startEmployeeReminders._swMessage && "serviceWorker" in navigator) {
@@ -345,6 +366,8 @@ export function stopEmployeeReminders() {
     pollTimer = null;
   }
   pollTickFn = null;
+  reminderGetTasks = null;
+  reminderGetMyAssignment = null;
   pushSyncedToServer = false;
   const fn = startEmployeeReminders._onVisibility;
   if (fn) document.removeEventListener("visibilitychange", fn);

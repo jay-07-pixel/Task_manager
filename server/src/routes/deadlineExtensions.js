@@ -50,13 +50,22 @@ function serializeExtensionRequest(row) {
  * Pending postpone is only actionable while the employee still has unfinished,
  * critically overdue work on that task.
  */
+function assignmentHasOpenCriticalWork(assignment) {
+  if (!assignment || assignment.assigneeDone) return false;
+  const text = (assignment.submissionText ?? "").trim();
+  if (text) return false;
+  if (assignment.completionProofPath) return false;
+  const proofs = assignment.submissionProofs ?? [];
+  if (proofs.some((p) => !p.archived)) return false;
+  return true;
+}
+
 function isActionablePendingExtension(row) {
   const task = row.task;
   if (!task || task.completed) return false;
   if (!task.dueAt || taskOverdueDayCount(task.dueAt) < CRITICAL_OVERDUE_MIN_DAYS) return false;
   const assignment = (task.assignments ?? []).find((a) => a.userId === row.employeeUserId);
-  if (!assignment || assignment.assigneeDone) return false;
-  return true;
+  return assignmentHasOpenCriticalWork(assignment);
 }
 
 /** Cancel pending extension requests that are no longer actionable. */
@@ -69,7 +78,15 @@ export async function dismissStaleDeadlineExtensions() {
           id: true,
           completed: true,
           dueAt: true,
-          assignments: { select: { userId: true, assigneeDone: true } },
+          assignments: {
+            select: {
+              userId: true,
+              assigneeDone: true,
+              submissionText: true,
+              completionProofPath: true,
+              submissionProofs: { select: { archived: true } },
+            },
+          },
         },
       },
     },
@@ -127,11 +144,23 @@ async function assertEmployeeCriticalOverdueTask(taskId, userId) {
       assignments: { some: { userId, assigneeDone: false } },
     },
     include: {
-      assignments: { where: { userId }, select: { assigneeDone: true } },
+      assignments: {
+        where: { userId },
+        select: {
+          assigneeDone: true,
+          submissionText: true,
+          completionProofPath: true,
+          submissionProofs: { select: { archived: true } },
+        },
+      },
     },
   });
   if (!task) {
     return { error: "Task not found or not assigned to you", status: 404 };
+  }
+  const mine = task.assignments?.[0];
+  if (!assignmentHasOpenCriticalWork(mine)) {
+    return { error: "This task is already submitted", status: 400 };
   }
   if (!task.dueAt || taskOverdueDayCount(task.dueAt) < CRITICAL_OVERDUE_MIN_DAYS) {
     return { error: "This task is not critically overdue", status: 400 };
@@ -229,7 +258,15 @@ router.get("/", requireOwner, async (_req, res) => {
           dueAt: true,
           listId: true,
           completed: true,
-          assignments: { select: { userId: true, assigneeDone: true } },
+          assignments: {
+            select: {
+              userId: true,
+              assigneeDone: true,
+              submissionText: true,
+              completionProofPath: true,
+              submissionProofs: { select: { archived: true } },
+            },
+          },
         },
       },
     },

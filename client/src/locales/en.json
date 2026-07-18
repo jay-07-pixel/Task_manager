@@ -414,6 +414,8 @@
     "criticalOverdueGateSubmit": "Submit task",
     "criticalOverdueGatePostponeSent": "Postpone request sent to admin. You can use the app for 24 hours while waiting for approval.",
     "criticalOverdueGatePostponeFailed": "Could not send postpone request.",
+    "notifyTaskGone": "That task is no longer available (it may have been deleted).",
+    "notifyTaskAlreadySubmitted": "Already submitted: {{title}}",
     "taskReopenedNotify": "Resubmit required",
     "taskReopenedToast": "Please resubmit: {{title}}",
     "viewPreviousSubmission": "View previous",
@@ -1163,6 +1165,8 @@
     "approveFailed": "Could not approve request.",
     "approvedToast": "Deadline updated and request approved.",
     "pendingCount": "{{count}} pending",
+    "loadFailedTitle": "Could not load requests",
+    "loadFailed": "Could not load deadline extension requests.",
     "adminNotifyTitle": "Deadline extension request",
     "adminNotifyBody": "{{name}} asked to postpone \"{{task}}\"."
   }
