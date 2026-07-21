@@ -24,6 +24,20 @@ export const ADMIN_ANNOUNCEMENTS = [
     action: { labelKey: "legal.readFullDocument", type: "open-legal" },
   },
   {
+    id: "feature-apk-update-20260721",
+    date: "21-07-26",
+    title: "Update Kalpanik Reminder app (APK)",
+    icon: "bi-android2",
+    audience: "all",
+    body:
+      "A new Kalpanik Reminder APK is available. Please download and install it from your dashboard (Profile → Download app, or the button below). Uninstall the old app first if install is blocked. This build includes overdue-gate fixes (submitted/deleted tasks no longer block you), Active vs Submitted tab fixes, and other task updates.",
+    action: {
+      labelKey: "notifications.downloadApk",
+      href: (import.meta.env.VITE_APK_DOWNLOAD_URL || "").trim() || "/downloads/sugandh-reminder.apk",
+      download: true,
+    },
+  },
+  {
     id: "feature-overdue-colors-apk-20260706",
     date: "06-07-26",
     title: "Overdue task colors & new app (APK)",
