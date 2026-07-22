@@ -7,7 +7,9 @@
 
 Full-stack workforce task management for **company owners**, **admins**, and **employees**. Teams assign work across **lists**, use an **All Tasks** aggregate view (list / employee / deadline / overdue filters), attach files and voice notes, collect proof, chat, track **live attendance / location**, run **geofenced daily check-in**, highlight **overdue work by color tiers**, approve **deadline extensions**, manage **company profile**, and receive reminders on **web** and **Android**.
 
-Each customer site is a **separate deployment** (own domain, database, and uploads). The same product codebase powers every instance.
+**Core workflow:** employees submit proof → tasks sit in **Submitted** (awaiting owner) → owner **Mark as reviewed** → recurring series **spawns the next due card**. **6+ day overdue** work is gated until submit or postpone. The same rules apply on website and Kalpanik Reminder.
+
+Each customer site is a **separate deployment** (own domain, database, uploads, PM2 process, and trial dates). One GitHub codebase powers every instance.
 
 > **For Terms of Service & Privacy Policy authors:** start with [Product description for legal documents](#product-description-for-legal-documents) and [Personal data inventory](#personal-data-inventory). Those sections list every feature, role, data category, and third party the product uses today.
 
@@ -16,33 +18,34 @@ Each customer site is a **separate deployment** (own domain, database, and uploa
 ## Table of contents
 
 1. [Overview](#overview)
-2. [Product description for legal documents](#product-description-for-legal-documents)
-3. [Personal data inventory](#personal-data-inventory)
-4. [Roles & permissions](#roles--permissions)
-5. [Features (complete)](#features-complete)
-6. [All Tasks view](#all-tasks-view)
-7. [Overdue color coding](#overdue-color-coding)
-8. [Deadline extensions & critical overdue gate](#deadline-extensions--critical-overdue-gate)
-9. [Attendance: live location & daily check-in](#attendance-live-location--daily-check-in)
-10. [Company profile, employees & work locations](#company-profile-employees--work-locations)
-11. [Task lifecycle: submissions, reopen & recurrence](#task-lifecycle-submissions-reopen--recurrence)
-12. [Team chat](#team-chat)
-13. [Third-party services](#third-party-services)
-14. [Tech stack](#tech-stack)
-15. [Local development](#local-development)
-16. [Admin access & dual login](#admin-access--dual-login)
-17. [Task assignment attachments](#task-assignment-attachments)
-18. [Owner dashboard & reports](#owner-dashboard--reports)
-19. [Android app (Kalpanik Reminder)](#android-app-kalpanik-reminder)
-20. [File uploads & limits](#file-uploads--limits)
-21. [Push notifications](#push-notifications)
-22. [Internationalization](#internationalization)
-23. [PWA, legal & support](#pwa-legal--support)
-24. [Project structure](#project-structure)
-25. [API overview](#api-overview)
-26. [Production deployment (VPS)](#production-deployment-vps)
-27. [Nginx configuration](#nginx-configuration)
-28. [Troubleshooting](#troubleshooting)
+2. [Architecture & product approach](#architecture--product-approach)
+3. [Product description for legal documents](#product-description-for-legal-documents)
+4. [Personal data inventory](#personal-data-inventory)
+5. [Roles & permissions](#roles--permissions)
+6. [Features (complete)](#features-complete)
+7. [All Tasks view](#all-tasks-view)
+8. [Overdue color coding](#overdue-color-coding)
+9. [Deadline extensions & critical overdue gate](#deadline-extensions--critical-overdue-gate)
+10. [Attendance: live location & daily check-in](#attendance-live-location--daily-check-in)
+11. [Company profile, employees & work locations](#company-profile-employees--work-locations)
+12. [Task lifecycle: submissions, reopen & recurrence](#task-lifecycle-submissions-reopen--recurrence)
+13. [Team chat](#team-chat)
+14. [Third-party services](#third-party-services)
+15. [Tech stack](#tech-stack)
+16. [Local development](#local-development)
+17. [Admin access & dual login](#admin-access--dual-login)
+18. [Task assignment attachments](#task-assignment-attachments)
+19. [Owner dashboard & reports](#owner-dashboard--reports)
+20. [Android app (Kalpanik Reminder)](#android-app-kalpanik-reminder)
+21. [File uploads & limits](#file-uploads--limits)
+22. [Push notifications](#push-notifications)
+23. [Internationalization](#internationalization)
+24. [PWA, legal & support](#pwa-legal--support)
+25. [Project structure](#project-structure)
+26. [API overview](#api-overview)
+27. [Production deployment (VPS)](#production-deployment-vps)
+28. [Nginx configuration](#nginx-configuration)
+29. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -59,15 +62,93 @@ Everyone **registers as an employee**. Admins are promoted via **Manage Admin**.
 
 ### Production VPS layout
 
-| Directory on server | PM2 process | Typical domain |
-|---------------------|-------------|----------------|
-| `~/Task_manager` | `taskmanager` | `sugandhshoppee.kalpanik.in` |
-| `~/Task_manager_safari` | `safari` | safari subdomain |
-| `~/Task_manager_ss2n` | `ss2n` | `ss2n.kalpanik.in` |
-| `~/Task_manager_acs` | `acs` | `acs.kalpanik.in` |
-| `~/Task_manager_tacs` | `tacs` | `tacs.kalpanik.in` |
+| Directory on server | PM2 process | MySQL database (typical) | Typical domain |
+|---------------------|-------------|--------------------------|----------------|
+| `~/Task_manager` | `taskmanager` | `taskmanager` | `sugandhshoppee.kalpanik.in` |
+| `~/Task_manager_safari` | `safari` | `taskmanager_safari` | safari subdomain |
+| `~/Task_manager_ss2n` | `ss2n` | `taskmanager_ss2n` | `ss2n.kalpanik.in` |
+| `~/Task_manager_acs` | `acs` | `taskmanager_acs` | `acs.kalpanik.in` |
+| `~/Task_manager_tacs` | `tacs` | `taskmanager_tacs` | `tacs.kalpanik.in` |
+| `~/Task_manager_ensens` | `ensens` | `taskmanager_ensens` | `ensens.kalpanik.in` |
+| `~/Task_manager_edunest` | `edunest` | `taskmanager_edunest` | edunest subdomain |
 
-Each instance has its own `server/.env`, MySQL database, session store, and file uploads. All deploy from the same GitHub repo. **Data is not shared across customer instances.**
+Each instance has its own `server/.env`, MySQL database, session store, file uploads, and optional **company trial** dates. All deploy from the same GitHub repo. **Data is not shared across customer instances.**
+
+Some sites (e.g. ensens, edunest) serve the SPA from **`/var/www/<site>`** while Node only handles `/api`. After `npm run build`, copy `client/dist` to that www root or the browser keeps an old UI. See [Production deployment](#production-deployment-vps).
+
+---
+
+## Architecture & product approach
+
+How the product is designed and operated (all companies share this model).
+
+### Multi-tenant = many folders, one repo
+
+| Approach | Why |
+|----------|-----|
+| **One GitHub repo** (`Task_manager`) | Same features for every customer |
+| **One VPS folder + PM2 app + DB per company** | Isolation of data, sessions, uploads, branding, trial |
+| **Per-site `server/.env`** | Ports, `DATABASE_URL`, trial dates, maps keys, VAPID/FCM |
+| **Hostname-aware PWA** | Each domain can show its own install name / branding |
+
+Never share one MySQL database between two customer sites.
+
+### Task status model (owner review)
+
+| Stage | Employee sees | Owner / admin sees | `Task.completed` | Assignee `assigneeDone` |
+|-------|---------------|--------------------|------------------|-------------------------|
+| Open / working | **Active** | **Active** or **In progress** | `false` | `false` |
+| Employee finished | **Submitted** | **Submitted** (awaiting review) | `false` | `true` |
+| Owner finished review | — (or next recurrence card) | **Reviewed** / completed | `true` | `true` |
+
+- Submitting proof sets **`assigneeDone`**, not `completed`.
+- Owner uses **Mark as reviewed** (`PATCH` `completed: true`) to close the card.
+- Reports treat “all assignees submitted” like completed for Active/Overdue counts so history does not inflate open work.
+
+### Recurring tasks = one card per due day
+
+| Approach | Detail |
+|----------|--------|
+| **Spawn-per-occurrence** | After owner reviews a recurring task, server creates a **new** open task for the next due date; submission stays on the completed card |
+| **Not in-place roll** | Old model reused one row and caused confusion; legacy rows are reconciled once on server start |
+| **Idempotent spawn** | Will not create a second card for the same list + title + recurrence + **calendar due day** (`APP_TIMEZONE`) |
+| **Dedupe script** | `server/scripts/delete-duplicate-recurring-tasks.js` removes leftover same-day duplicates (dry-run with `DRY_RUN=1`) |
+
+Seeing the same **title** twice with **different due dates** is normal (yesterday’s submitted card + today’s open card).
+
+### Critical overdue gate (web + Android)
+
+| Rule | Behavior |
+|------|----------|
+| Trigger | Assigned work **≥ 6 days** past due, still open for that employee |
+| Actions | **Submit** or **Postpone** (deadline extension request) |
+| Grace | **24 hours** after postpone (`localStorage` / SharedPreferences + server `expiresAt`) |
+| Must skip | Already submitted, has current proof/text, owner-reviewed (`completed`), deleted / not assigned |
+| Parity | Website gate and Android `TaskOverdueGateActivity` follow the same API and dismiss rules |
+
+Stale postpone requests are **cancelled** when the employee submits, owner reviews, or the task is no longer critically overdue. Admin badge only counts actionable pending requests.
+
+### Company free trial
+
+| Approach | Detail |
+|----------|--------|
+| Env | `COMPANY_TRIAL_START` / `COMPANY_TRIAL_END` as `YYYY-MM-DD` in that site’s `server/.env` |
+| Sync | On PM2 restart, env dates write into `company_settings` |
+| UI | Trial banner; login/register may block when expired |
+| Examples | See `deploy/company-trial-env.example` |
+
+Extend a site by editing **that site’s** `.env` and `pm2 restart <name> --update-env` — no code change required.
+
+### Static UI vs API (nginx)
+
+| Pattern | Sites | Deploy note |
+|---------|-------|-------------|
+| Proxy everything to Node | e.g. main sugandhshoppee, safari | `npm run build` + `pm2 restart` is enough |
+| Static `root /var/www/...` + API proxy | e.g. **ensens**, edunest, some ACS/TACS setups | Also **`rsync client/dist` → `/var/www/<site>/`** or UI stays old |
+
+### Android companion
+
+Separate Android Studio project (`SugandhReminder`), same REST API and session cookies. Publish APK via `npm run sync-apk` → `client/public/downloads/sugandh-reminder.apk` → build client → deploy (and rsync www if needed). Employees download from Profile / announcements.
 
 ---
 
@@ -143,7 +224,7 @@ Also supported:
 
 ### Company trial
 
-Per-instance optional **free trial** (`COMPANY_TRIAL_START` / `COMPANY_TRIAL_END` or `CompanySettings` in database). UI shows trial banners and may restrict continued use after expiry until the plan is renewed via support.
+Per-instance optional **free trial** via `COMPANY_TRIAL_START` / `COMPANY_TRIAL_END` in that site’s `server/.env` (synced into `CompanySettings` on restart). UI shows trial banners and may restrict continued use after expiry until the plan is renewed via support. See `deploy/company-trial-env.example` and [Architecture & product approach](#architecture--product-approach).
 
 ### Support contact
 
@@ -403,7 +484,8 @@ Privacy Policy should state how users request deletion (e.g. contact **support@k
 
 #### Task dashboard (per list)
 
-- **KPI filter cards** — Active, In Review, Completed, Employee Assigned (click to filter)
+- **KPI filter cards** — **Active** → **In Progress** → **Submitted** (employee finished, awaiting owner) → **Reviewed** (owner marked completed)
+- **Mark as reviewed** — text action on expanded submitted tasks; sets `completed: true` and rolls recurring series
 - **Task table** — type icon, title, deadline, recurrence, expandable rows, drag handle
 - **High-priority tasks** — red styling, pinned toward the top of the list
 - **Overdue row coloring** — full-row backgrounds by days overdue (see [Overdue color coding](#overdue-color-coding))
@@ -460,7 +542,10 @@ Privacy Policy should state how users request deletion (e.g. contact **support@k
 #### Navigation & filters
 
 - **Create & assign task** — assign work to a colleague
-- **My work** — Active, Submitted, All assigned (KPI cards + sidebar, with counts)
+- **My work** — **Active**, **Submitted**, **All assigned** (KPI cards + sidebar, with counts)
+  - **Active** — only open work (not submitted; no current proof/text). New recurring days after a roll stay here
+  - **Submitted** — this occurrence finished (`assigneeDone` or current submission), awaiting owner review
+  - **All assigned** — everything assigned to the employee
 - **Assigned by me** — tasks delegated to others
 - **My attendance** — check-in/out + history (when company attendance enabled)
 - **Messages** — team chat
@@ -468,16 +553,16 @@ Privacy Policy should state how users request deletion (e.g. contact **support@k
 #### Task work
 
 - **Location gate** — blocks app until precise GPS shared (when `liveLocationRequired`)
-- **Critical overdue gate** — blocks app when any task is **6+ days overdue** until submitted or extension requested (Postpone)
+- **Critical overdue gate** — blocks app when any task is **6+ days overdue** and still open until submitted or extension requested (Postpone). Skips submitted, deleted, and completed work
 - **24-hour postpone grace** — after requesting an extension, gate dismissed for that task for 24h (`localStorage` + server `expiresAt`)
 - View **assignment attachments** (images, video, PDF, voice)
 - **Progress updates** — Started, In progress, Blocked, Update
-- **Submit** — notes + proof files (images, video, PDF; clipboard paste; preview)
+- **Submit** — notes + proof files (images, video, PDF; clipboard paste; preview); sets assignee done, keeps task `completed: false` until owner reviews
 - **Update submission** — resubmit after already submitted (archives prior submission)
 - **View / View previous submission**
 - **Overdue badge** — “Overdue by X days” with the same color tiers as admin
 - **Overdue legend & Show filter** — on Active / All assigned when applicable
-- **Recurring tasks** — resubmit flow when series rolls forward
+- **Recurring tasks** — each due day is its own card after owner review
 
 #### Employee settings & profile
 
@@ -540,7 +625,7 @@ Created timestamp and assignment-attachment badges still appear as on normal lis
 
 ### KPI cards on All Tasks
 
-Same Active / In Review / Completed / Employee Assigned filters apply on top of the aggregate dataset (Employee Assigned filters the virtual “employee assignments” style work within All Tasks context where applicable).
+Same **Active / In Progress / Submitted / Reviewed** filters apply on top of the aggregate dataset.
 
 ---
 
@@ -574,33 +659,37 @@ Separately from row color, **6+ days overdue** incomplete assigned work triggers
 
 ## Deadline extensions & critical overdue gate
 
-When an employee has a task **6 or more days overdue** and not yet submitted, the app shows a **full-screen critical overdue gate** that blocks other work until they either:
+When an employee has a task **6 or more days overdue** and not yet submitted, the app shows a **full-screen critical overdue gate** (website and Android) that blocks other work until they either:
 
 1. **Submit** the task with proof, or  
 2. Tap **Postpone** to request a **deadline extension**
 
+Gate **does not** apply when the task is already submitted, has current proof/text, is owner-reviewed (`completed`), or is missing / not assigned. If Postpone returns “not found” / “already submitted”, the gate stays dismissed (does not loop).
+
 ### Employee flow
 
 - **Postpone** creates or refreshes a `TaskDeadlineExtensionRequest` on the server
-- **24-hour grace period** — after requesting, the gate stays dismissed for 24 hours (stored in `localStorage` + server `expiresAt`)
+- **24-hour grace period** — after requesting, the gate stays dismissed for 24 hours (web `localStorage` / Android SharedPreferences + server `expiresAt`)
 - If grace expires without admin approval, the gate returns for the next overdue task
-- After postpone, the gate immediately advances to the **next** 6+ day overdue task (if any)
+- After postpone, the gate advances to the **next** real 6+ day overdue task (if any)
 - Pending extension info is attached on `GET /api/tasks/assigned`
+- On submit or owner review, pending postpone for that task/assignee is set to **`cancelled`**
 
 ### Admin flow (Deadline extensions page)
 
-- Sidebar → **Deadline extensions** (badge shows pending count; auto-polls every 30s)
+- Sidebar → **Deadline extensions** (badge shows **actionable** pending count only; auto-polls ~30s)
+- Stale pending rows (submitted / completed / no longer 6+ overdue) are auto-dismissed to `cancelled`
 - Themed request cards: employee avatar, task name, overdue badge, deadline / requested / popup-return times
 - **Review & approve** — modal to pick a **new deadline date**; updates task `dueAt` and marks request approved
 - Push notification to admins on new request (`deadline_extension_request`, deep link `/?openDeadlineExtensions=1`)
-- Empty state when no pending requests
+- Empty / error / retry UI if dismiss migrate is missing — page must not stick on Loading forever
 
 ### APIs
 
 | Method | Path | Who |
 |--------|------|-----|
 | `POST` | `/api/deadline-extensions` | Employee — request postpone |
-| `GET` | `/api/deadline-extensions` | Admin — list pending requests |
+| `GET` | `/api/deadline-extensions` | Admin — list actionable pending requests |
 | `POST` | `/api/deadline-extensions/:id/approve` | Admin — `{ newDueAt }` approve + update deadline |
 
 ---
@@ -726,7 +815,9 @@ Push to admins when employee turns tracking **off** or **on** (`?openAttendance=
 
 - Employee submits **notes** + up to **10 media files** or **one PDF** (5 MB max for PDF)
 - Multiple proof files stored in `TaskSubmissionProof` table
+- Sets **`assigneeDone: true`**; task stays **`completed: false`** until owner **Mark as reviewed**
 - Admins view submissions in expand panel or submission detail modal (images, video, PDF lightbox)
+- Multi-assignee: each person keeps their own proof row (one person’s photo does not replace another’s)
 
 ### Employee update submission
 
@@ -741,6 +832,7 @@ Push to admins when employee turns tracking **off** or **on** (`?openAttendance=
 - Employee sees task back in Active with **Update submission** / resubmit flow
 - Admin can also **replace all assignees** via task edit (`assigneeIds`) — clears submissions
 - Admin can manually toggle assignee done state (`assigneeSetDone`)
+- Owner **Mark as reviewed** sets `completed: true` and triggers recurring roll when applicable
 
 ### Delegation & peer assignment
 
@@ -752,14 +844,16 @@ Push to admins when employee turns tracking **off** or **on** (`?openAttendance=
 
 - Types: none, daily, weekly, monthly, yearly, **custom** (JSON rule)
 - Custom supports: every N day/week/month/year; end never, on date, or after N occurrences
-- On employee complete: recurring task **rolls forward** — archives submission, computes next `dueAt`, spawns new occurrence (or ends series)
-- Legacy in-place recurring tasks backfilled on server start
+- **Spawn-per-occurrence:** after owner marks reviewed, server creates a **new open card** for the next `dueAt`; submission stays on the completed card
+- Roll is **idempotent** — will not spawn a second card for the same series due day
+- Startup **legacy backfill** only splits true old in-place rolls; never treats “awaiting owner review” as stuck (that used to duplicate cards on every PM2 restart)
+- Cleanup: `DRY_RUN=1 node scripts/delete-duplicate-recurring-tasks.js` then run without dry-run to delete same-day duplicates
 - Active tasks sorted by recurrence rank then created date
 
 ### Progress updates
 
 Types: `started`, `in_progress`, `blocked`, `update`  
-Admins see per-assignee threads with unread indicators; mark-read on expand.
+Admins see per-assignee threads with unread indicators; mark-read on expand. Progress updates (without submit) drive **In Progress** KPI for owners.
 
 ---
 
@@ -1019,6 +1113,7 @@ Visible only to users with **`isOwner: true`** (company owners, max 2).
 ### Reports (sidebar → Reports)
 
 - Org overview KPIs — total, active, in review, completed, overdue, submissions, employees, lists
+- Fully submitted (awaiting owner review) counts toward **completed**, not Active/Overdue
 - **Task status** doughnut chart
 - **Tasks by list** bar chart
 - **Employee workload** bar chart
@@ -1035,12 +1130,14 @@ Package: `in.kalpanik.sugandhreminder`
 
 ### What the app does
 
-- Login with same email/password as website
-- View assigned tasks, submit completion proof
-- FCM reminders and alarms (same reminder slots as web)
-- Same REST API as web (`/api/tasks/assigned`, completion-proof, assignment attachments, etc.)
-- Should parse `assignmentAttachments` on tasks and download files with the session cookie
+- Login with same email/password as website (shared session cookie API)
+- **Today / Upcoming / Completed** sections aligned with website Active vs Submitted rules
+- View assigned tasks, submit completion proof, progress updates, attachments
+- **6+ day critical overdue gate** (`TaskOverdueGateActivity`) — Submit or Postpone; same API as web
+- FCM reminders and alarms (same reminder slots as web); skips already-submitted work
 - Device registration via `POST /api/push/devices/register`
+- Attendance / check-in flows when enabled for that company
+- Team chat parity where implemented
 - **Forgot-password / CAPTCHA:** when the client sends `X-Kalpanik-Client: SugandhReminder-Android` (or UA contains `in.kalpanik.sugandhreminder`), the API may **skip Turnstile** so OTP reset works from the APK while the website still requires CAPTCHA
 
 ### Build APK (Windows)
@@ -1062,21 +1159,23 @@ Output: `app\build\outputs\apk\debug\app-debug.apk`
 cd "C:\Users\jayjo\OneDrive\Desktop\Task Manager"
 npm run sync-apk
 npm run build --prefix client
-git add client/public/downloads/sugandh-reminder.apk
+git add client/public/downloads/sugandh-reminder.apk client/src/adminAnnouncements.js
 git commit -m "Update Kalpanik Reminder APK for employee download."
 git push origin main
 ```
 
 `npm run sync-apk` copies from the default Android debug path (override with `APK_SOURCE`).  
-Vite copies `client/public/downloads/` into `client/dist/downloads/` on build.
+Vite copies `client/public/downloads/` into `client/dist/downloads/` on build.  
+Add / refresh an **admin announcement** with Download APK so staff see the update.
 
 ### Users install the app
 
 1. Open your deployed site and sign in as employee  
-2. Profile menu → **Download app (APK)**  
+2. Profile menu → **Download app (APK)** or bell announcement  
 3. Or direct link: **/downloads/sugandh-reminder.apk**  
 4. Allow “Install unknown apps” if prompted  
 5. If install is blocked, uninstall the old app first  
+6. On sites with `/var/www` static root, deploy must **rsync `client/dist`** or the download stays old
 
 Admins also get a **bell notification** with a **Download APK** action when a new build is published.
 
@@ -1286,64 +1385,102 @@ curl -s http://localhost:3000/api/health
 # Expect: "db":"connected"
 ```
 
-### Deploy all five instances (one command)
+### Deploy all company instances
 
 ```bash
-for dir in Task_manager Task_manager_safari Task_manager_ss2n Task_manager_acs Task_manager_tacs; do
+for dir in Task_manager Task_manager_safari Task_manager_ss2n Task_manager_acs Task_manager_tacs Task_manager_ensens Task_manager_edunest; do
+  [ -d ~/$dir ] || continue
   cd ~/$dir && git pull origin main
   npm install --prefix server
   npm run db:migrate:deploy --prefix server
+  npm run db:generate --prefix server
   npm install --prefix client && npm run build --prefix client
 done
-pm2 restart taskmanager safari ss2n acs tacs
+pm2 restart taskmanager safari ss2n acs tacs ensens edunest
 ```
 
-With Google Maps key on every site:
+Skip folders that do not exist on the VPS. Adjust the `pm2 restart` list to match `pm2 list`.
+
+### Deploy one site only (example: ensens)
 
 ```bash
-KEY='YOUR_GOOGLE_MAPS_API_KEY'
-for dir in Task_manager Task_manager_safari Task_manager_ss2n Task_manager_acs Task_manager_tacs; do
-  ENV=~/$dir/server/.env
-  if grep -q '^GOOGLE_MAPS_API_KEY=' "$ENV" 2>/dev/null; then
-    sed -i "s|^GOOGLE_MAPS_API_KEY=.*|GOOGLE_MAPS_API_KEY=\"$KEY\"|" "$ENV"
-  else
-    printf '\nGOOGLE_MAPS_API_KEY="%s"\n' "$KEY" >> "$ENV"
-  fi
-  cd ~/$dir && git pull origin main
-  npm install --prefix server
-  npm run db:migrate:deploy --prefix server
-  npm install --prefix client && npm run build --prefix client
-done
-pm2 restart taskmanager safari ss2n acs tacs
+cd ~/Task_manager_ensens
+git pull origin main
+npm install --prefix server
+npm run db:migrate:deploy --prefix server
+npm run db:generate --prefix server
+npm install --prefix client && npm run build --prefix client
+# Required when nginx root is /var/www/ensens:
+sudo rsync -a --delete ~/Task_manager_ensens/client/dist/ /var/www/ensens/
+sudo nginx -t && sudo systemctl reload nginx
+pm2 restart ensens
 ```
 
-`client/dist` is **not** in git — always run `npm run build` after `git pull`.
+### Static `/var/www` sites
 
-`npm run db:migrate:deploy` applies schema changes (including **perf indexes** used by All Tasks / dashboard queries). Skipping migrate can leave the app slow or broken after a pull.
+If `grep root /etc/nginx/sites-enabled/<site>` shows `/var/www/...`, always rsync after build:
+
+```bash
+sudo rsync -a --delete ~/Task_manager_ensens/client/dist/ /var/www/ensens/
+sudo rsync -a --delete ~/Task_manager_edunest/client/dist/ /var/www/edunest/
+# ss2n / acs / tacs if still on /var/www:
+# sudo bash ~/Task_manager/deploy/sync-static-to-var-www.sh
+```
+
+### New / empty-history database (Prisma P3005)
+
+If `migrate deploy` says **P3005 — schema is not empty** (tables exist, no `_prisma_migrations`):
+
+```bash
+cd ~/Task_manager_<site>/server
+npx prisma db push
+ls -1 prisma/migrations | while read name; do
+  [ -d "prisma/migrations/$name" ] || continue
+  npx prisma migrate resolve --applied "$name"
+done
+npx prisma migrate deploy
+npm run db:generate
+pm2 restart <pm2-name> --update-env
+```
+
+### Company trial dates
+
+Edit that site’s `server/.env` (`COMPANY_TRIAL_START` / `COMPANY_TRIAL_END`), then:
+
+```bash
+pm2 restart ensens --update-env
+```
+
+Examples: `deploy/company-trial-env.example`.
+
+### Deduplicate recurring cards (ops)
+
+```bash
+cd ~/Task_manager_<site>/server
+DRY_RUN=1 node scripts/delete-duplicate-recurring-tasks.js
+node scripts/delete-duplicate-recurring-tasks.js
+```
 
 ### After pushing a new APK
 
-Same deploy loop; APK is in `client/public/downloads/` and copied to `client/dist/downloads/` during build.
+Same deploy + build; APK lands in `client/dist/downloads/`. Rsync `/var/www` if that site uses static root.
 
-### Stale UI on ss2n / acs / tacs
+`client/dist` is **not** in git — always run `npm run build` after `git pull`.
 
-Some sites serve static files from `/var/www/` while the API is on Node. After deploy, if the UI is old:
-
-```bash
-sudo bash ~/Task_manager/deploy/fix-nginx-proxy-all-taskmgr.sh
-# or
-bash ~/Task_manager/deploy/diagnose-site-bundles.sh
-```
+`npm run db:migrate:deploy` applies schema changes (including **perf indexes**). Skipping migrate can leave the app slow or broken after a pull.
 
 ### `server/.env` checklist (production)
 
 ```env
-DATABASE_URL="mysql://USER:PASS@localhost:3306/taskmanager"
+DATABASE_URL="mysql://USER:PASS@localhost:3306/taskmanager_ensens"
 SESSION_SECRET="long-random-string"
-COOKIE_SECURE=false
+COOKIE_SECURE=true
 TRUST_PROXY=true
-APP_PUBLIC_URL="https://sugandhshoppee.kalpanik.in"
+APP_PUBLIC_URL="https://ensens.kalpanik.in"
 APP_TIMEZONE="Asia/Kolkata"
+
+COMPANY_TRIAL_START=2026-07-01
+COMPANY_TRIAL_END=2026-08-22
 
 BREVO_API_KEY="xkeysib-..."
 BREVO_SENDER_NAME="Task Manager"
@@ -1364,6 +1501,7 @@ GOOGLE_MAPS_API_KEY="AIza..."
 - `COOKIE_SECURE=false` on **HTTP** only; use `true` on HTTPS.
 - Turnstile: add every hostname in Cloudflare.
 - Brevo sender email must be verified.
+- Trial env wins over DB on restart — see [Architecture & product approach](#architecture--product-approach).
 
 ---
 
@@ -1390,6 +1528,8 @@ client_max_body_size 0;
 | `/etc/nginx/sites-enabled/ss2n` | `ss2n.kalpanik.in` | May use `/var/www` static root |
 | `/etc/nginx/sites-enabled/acs` | `acs.kalpanik.in` | May use `/var/www` static root |
 | `/etc/nginx/sites-enabled/tacs` | `tacs.kalpanik.in` | May use `/var/www` static root |
+| `/etc/nginx/sites-enabled/ensens` | `ensens.kalpanik.in` | **`root /var/www/ensens`** — rsync after build |
+| `/etc/nginx/sites-enabled/edunest` | edunest | **`root /var/www/edunest`** — rsync after build |
 
 ### Fix sugandhshoppee (one-liner)
 
@@ -1420,7 +1560,13 @@ See also: `deploy/nginx-upload-limit.conf.example`, `deploy/fix-nginx-proxy-all-
 | `401` on login | Wrong password or user not seeded on this server |
 | `403` on register | Complete OTP verify before Create account |
 | `413` on task submit | Nginx `client_max_body_size` too small — set `0` |
-| Old UI after deploy | `npm run build`; hard-refresh `Ctrl+Shift+R`; run nginx fix for ss2n/acs/tacs |
+| Old UI after deploy | `npm run build`; hard-refresh; if nginx `root /var/www/...`, **rsync `client/dist`** (ensens/edunest/etc.) |
+| Prisma **P3005** schema not empty | Baseline: `db push` + `migrate resolve --applied` for each migration, then `migrate deploy` |
+| Duplicate recurring tasks | Same title + same due day: run `delete-duplicate-recurring-tasks.js`; different due days are normal |
+| Submitted tasks in Active | Deploy latest client — Active excludes `assigneeDone` / current submission |
+| Critical overdue gate loops after Postpone | Deploy latest web + Android; gone/submitted must keep gate dismissed |
+| Deadline extensions stuck Loading | Deploy latest; cancel status migrate; page shows error/retry if dismiss fails |
+| Trial still expired after date change | Edit that site’s `.env` `COMPANY_TRIAL_END`; `pm2 restart <name> --update-env` |
 | Session lost on HTTP | `COOKIE_SECURE=false` in `.env` |
 | `500` / health `db:error` | MySQL down, wrong `DATABASE_URL`, or run `db:migrate:deploy` |
 | No OTP email | Brevo keys / verified sender; dev: read API console |
@@ -1439,12 +1585,13 @@ See also: `deploy/nginx-upload-limit.conf.example`, `deploy/fix-nginx-proxy-all-
 | All Tasks missing / slow | Rebuild client; run `db:migrate:deploy` (perf indexes); confirm `GET /api/tasks/owner-all` |
 | All Tasks Employee filter wrong | Latest client lists **assignee names**, not list titles; List filter is separate |
 | Unassigned not shown on All Tasks | Latest client shows red **Unassigned** pill when a task has no assignees |
-| Deadline extensions page empty | No pending requests within 24h grace window |
+| Deadline extensions page empty | No actionable pending requests (stale ones are cancelled) |
 | Employee can’t update submission | Task must be in submitted state; deploy latest server |
 | Reopen / resubmit not working | Admin uses Reassign on assignee card; employee gets `task_reopened` push |
-| APK download 404 | `npm run sync-apk` + `npm run build`; redeploy VPS |
+| APK download 404 / old APK | `npm run sync-apk` + build; rsync `/var/www` if used; hard-refresh |
 | nginx “conflicting server name” | Remove `*.bak*` from `sites-enabled/` |
 | Prisma EPERM (Windows) | Stop dev server; rerun `db:generate` |
+| Git push 403 wrong GitHub user | Per-repo credentials (`credential.useHttpPath`); sign in as repo owner |
 
 ### Confirm nginx is not blocking (should return 401, not 413)
 
