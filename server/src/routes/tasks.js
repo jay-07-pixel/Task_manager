@@ -765,7 +765,9 @@ function handleProofUpload(req, res, next) {
       return res.status(400).json({ error: "Upload is too large for the server." });
     }
     if (err.code === "LIMIT_UNEXPECTED_FILE" || err.code === "LIMIT_FIELD_COUNT") {
-      return res.status(400).json({ error: `You can upload up to ${MAX_SUBMISSION_PROOFS} images per submission.` });
+      return res.status(400).json({
+        error: `You can upload up to ${MAX_SUBMISSION_PROOFS} files per submission (images, PDFs, videos, or audio).`,
+      });
     }
     const msg = err.message || "Upload failed";
     if (/Only JPEG|images are allowed|videos are allowed|PDF files are allowed|audio notes are allowed/i.test(msg)) {
@@ -1724,10 +1726,6 @@ router.post("/:id/progress-updates", requireAuth, handleProgressUpdateUpload, as
       .status(400)
       .json({ error: `You can attach up to ${MAX_PROGRESS_UPDATE_ATTACHMENTS} files per update.` });
   }
-  const pdfCount = files.filter((f) => f.mimetype === "application/pdf").length;
-  if (pdfCount > 0 && files.length > 1) {
-    return res.status(400).json({ error: "Attach one PDF alone, or upload multiple images, videos, and audio notes." });
-  }
   for (const f of files) {
     const sizeErr = proofFileSizeError(f);
     if (sizeErr) return res.status(400).json({ error: sizeErr });
@@ -2009,11 +2007,9 @@ router.post("/:id/completion-proof", requireAuth, handleProofUpload, async (req,
       return res.status(400).json({ error: `Submission notes must be ${SUBMISSION_TEXT_MAX} characters or fewer.` });
     }
     if (proofFiles.length > MAX_SUBMISSION_PROOFS) {
-      return res.status(400).json({ error: `You can upload up to ${MAX_SUBMISSION_PROOFS} images per submission.` });
-    }
-    const pdfCount = proofFiles.filter((f) => f.mimetype === "application/pdf").length;
-    if (pdfCount > 0 && proofFiles.length > 1) {
-      return res.status(400).json({ error: "Submit one PDF alone, or upload multiple images, videos, and audio notes." });
+      return res.status(400).json({
+        error: `You can upload up to ${MAX_SUBMISSION_PROOFS} files per submission (images, PDFs, videos, or audio).`,
+      });
     }
     for (const f of proofFiles) {
       const sizeErr = proofFileSizeError(f);

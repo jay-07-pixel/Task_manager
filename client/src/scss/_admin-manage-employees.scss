@@ -71,10 +71,28 @@
   }
 }
 
-.manage-employee-view-btn {
+.manage-employee-actions {
+  display: flex;
   flex-shrink: 0;
-  font-weight: 600;
+  align-items: center;
   align-self: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+
+  @media (max-width: 767.98px) {
+    flex: 1 1 100%;
+    width: 100%;
+    align-self: stretch;
+
+    .btn {
+      flex: 1 1 auto;
+    }
+  }
+}
+
+.manage-employee-view-btn {
+  font-weight: 600;
   border: 1px solid #00535b !important;
   background: #ffffff !important;
   color: #00535b !important;
@@ -86,10 +104,11 @@
   &:hover {
     background: #e6f4f5 !important;
   }
+}
 
-  @media (max-width: 767.98px) {
-    flex: 1 1 100%;
-    width: 100%;
-    align-self: stretch;
-  }
+.manage-employee-delete-btn {
+  font-weight: 600;
+  font-size: 0.8125rem !important;
+  padding: 0.45rem 0.85rem !important;
+  border-radius: 0.5rem !important;
 }

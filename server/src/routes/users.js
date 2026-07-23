@@ -698,4 +698,96 @@ router.patch("/:id/company-owner", requireCompanyOwner, async (req, res) => {
   res.json({ user: serializeTeamUser(user) });
 });
 
+/**
+ * Permanently delete an employee. Reassigns list ownership and task authorship
+ * so cascading deletes do not wipe company lists/tasks. Removed users cannot log in.
+ */
+router.delete("/:id", requireOwner, async (req, res) => {
+  const targetId = req.params.id;
+  const actorId = req.session.userId;
+
+  if (targetId === actorId) {
+    return res.status(400).json({ error: "You cannot delete your own account." });
+  }
+
+  const [target, actor] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: targetId },
+      select: {
+        id: true,
+        email: true,
+        displayName: true,
+        role: true,
+        isAdmin: true,
+        isOwner: true,
+        profilePhotoPath: true,
+        idProofPath: true,
+      },
+    }),
+    prisma.user.findUnique({
+      where: { id: actorId },
+      select: { id: true, isAdmin: true, role: true, isOwner: true },
+    }),
+  ]);
+
+  if (!target) {
+    return res.status(404).json({ error: "User not found" });
+  }
+  if (!actor || !userHasAdminAccess(actor)) {
+    return res.status(403).json({ error: "Admin access required" });
+  }
+  if (userIsCompanyOwner(target)) {
+    return res.status(400).json({
+      error: "Cannot delete a company owner. Revoke owner access first.",
+    });
+  }
+  if (userHasAdminAccess(target) && !userIsCompanyOwner(actor)) {
+    return res.status(403).json({
+      error: "Only company owners can delete admins.",
+    });
+  }
+  if (userHasAdminAccess(target)) {
+    const adminCount = await prisma.user.count({ where: adminUserWhere });
+    if (adminCount <= 1) {
+      return res.status(400).json({
+        error: "Cannot delete the last admin. Promote another admin first.",
+      });
+    }
+  }
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      // TaskList.ownerId cascades — reassign so lists/tasks are not wiped.
+      await tx.taskList.updateMany({
+        where: { ownerId: targetId },
+        data: { ownerId: actorId },
+      });
+      // Task.createdBy has no onDelete — must reassign or delete fails.
+      await tx.task.updateMany({
+        where: { createdById: targetId },
+        data: { createdById: actorId },
+      });
+      // ChatGroup.createdBy cascades — reassign so groups are kept.
+      await tx.chatGroup.updateMany({
+        where: { createdById: targetId },
+        data: { createdById: actorId },
+      });
+      // ReminderSent has no FK; clean orphan rows.
+      await tx.reminderSent.deleteMany({ where: { userId: targetId } });
+      await tx.user.delete({ where: { id: targetId } });
+    });
+  } catch (err) {
+    console.error("[users] delete employee failed", err);
+    return res.status(500).json({ error: "Could not delete employee. Please try again." });
+  }
+
+  deleteStoredFile(profilePhotoUploadsRoot, target.profilePhotoPath);
+  deleteStoredFile(idProofUploadsRoot, target.idProofPath);
+
+  res.json({
+    ok: true,
+    deleted: { id: target.id, email: target.email, displayName: target.displayName },
+  });
+});
+
 export default router;

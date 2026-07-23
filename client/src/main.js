@@ -476,7 +476,9 @@ const proofBlobUrls = new Set();
 const EMP_SUBMISSION_TEXT_MAX = 2000;
 const EMP_SUBMISSION_PDF_MAX_BYTES = 5 * 1024 * 1024;
 const EMP_SUBMISSION_PDF_MAX_MB = 5;
-const EMP_SUBMISSION_MAX_IMAGES = 10;
+/** Max files per submission / progress update (images, PDFs, videos, audio mixed). */
+const EMP_SUBMISSION_MAX_FILES = 10;
+const EMP_SUBMISSION_MAX_IMAGES = EMP_SUBMISSION_MAX_FILES;
 const PROGRESS_UPDATE_TEXT_MAX = 2000;
 const MAX_ASSIGNMENT_ATTACHMENTS = 30;
 /** @type {{ id: string, file: File, kind: string, previewUrl?: string }[]} */
@@ -598,13 +600,8 @@ function validateEmpSubmissionFile(file) {
 
 function validateEmpSubmissionFileSet(files) {
   if (!files?.length) return null;
-  const pdfs = files.filter(isEmpSubmissionPdfFile);
-  if (pdfs.length > 0) {
-    if (files.length > 1) return tr("validation.pdfAloneOrMedia");
-    return validateEmpSubmissionFile(pdfs[0]);
-  }
-  if (files.length > EMP_SUBMISSION_MAX_IMAGES) {
-    return tr("toast.maxAttachments", { max: EMP_SUBMISSION_MAX_IMAGES });
+  if (files.length > EMP_SUBMISSION_MAX_FILES) {
+    return tr("toast.maxAttachments", { max: EMP_SUBMISSION_MAX_FILES });
   }
   for (const file of files) {
     const err = validateEmpSubmissionFile(file);
@@ -6149,21 +6146,15 @@ function wireEmpSubmissionModal() {
     const next = [...selectedProofFiles];
     for (const file of incoming) {
       if (!file) continue;
-      const candidate = isEmpSubmissionPdfFile(file) ? [file] : [...next.filter((f) => !isEmpSubmissionPdfFile(f)), file];
+      if (next.length >= EMP_SUBMISSION_MAX_FILES) {
+        showToast(tr("toast.maxAttachments", { max: EMP_SUBMISSION_MAX_FILES }), "warning");
+        break;
+      }
+      const candidate = [...next, file];
       const err = validateEmpSubmissionFileSet(candidate);
       if (err) {
         showToast(err, "warning");
         continue;
-      }
-      if (isEmpSubmissionPdfFile(file)) {
-        next.length = 0;
-        next.push(file);
-        break;
-      }
-      if (next.some(isEmpSubmissionPdfFile)) continue;
-      if (next.length >= EMP_SUBMISSION_MAX_IMAGES) {
-        showToast(tr("toast.maxAttachments", { max: EMP_SUBMISSION_MAX_IMAGES }), "warning");
-        break;
       }
       next.push(file);
     }
@@ -7101,21 +7092,15 @@ function wireProgressUpdateModal() {
     const next = [...selectedProgressFiles];
     for (const file of incoming ?? []) {
       if (!file) continue;
-      const candidate = isEmpSubmissionPdfFile(file) ? [file] : [...next.filter((f) => !isEmpSubmissionPdfFile(f)), file];
+      if (next.length >= EMP_SUBMISSION_MAX_FILES) {
+        showToast(tr("toast.maxAttachments", { max: EMP_SUBMISSION_MAX_FILES }), "warning");
+        break;
+      }
+      const candidate = [...next, file];
       const err = validateEmpSubmissionFileSet(candidate);
       if (err) {
         showToast(err, "warning");
         continue;
-      }
-      if (isEmpSubmissionPdfFile(file)) {
-        next.length = 0;
-        next.push(file);
-        break;
-      }
-      if (next.some(isEmpSubmissionPdfFile)) continue;
-      if (next.length >= EMP_SUBMISSION_MAX_IMAGES) {
-        showToast(tr("toast.maxAttachments", { max: EMP_SUBMISSION_MAX_IMAGES }), "warning");
-        break;
       }
       next.push(file);
     }
@@ -9069,6 +9054,7 @@ function renderOwnerChrome() {
     ownerChromeHeader: ownerManageEmployeesChromeHeaderHtml,
     wireOwnerChromeHeader: wireOwnerReportsChromeHeader,
     showToast,
+    getCurrentUser: () => state.user,
   });
   initManageLocations({
     api,

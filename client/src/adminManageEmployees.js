@@ -21,6 +21,9 @@ let wireOwnerChromeHeaderFn = null;
 /** @type {((msg: string, variant?: string) => void) | null} */
 let showToastFn = null;
 
+/** @type {(() => { id?: string, isOwner?: boolean, isAdmin?: boolean } | null) | null} */
+let getCurrentUserFn = null;
+
 /** @type {string | null} */
 let viewingEmployeeId = null;
 
@@ -31,6 +34,7 @@ export function initManageEmployees({
   ownerChromeHeader,
   wireOwnerChromeHeader,
   showToast,
+  getCurrentUser,
 }) {
   apiFn = api;
   escapeHtmlFn = escapeHtml;
@@ -38,6 +42,7 @@ export function initManageEmployees({
   ownerChromeHeaderFn = ownerChromeHeader ?? null;
   wireOwnerChromeHeaderFn = wireOwnerChromeHeader ?? null;
   showToastFn = showToast ?? null;
+  getCurrentUserFn = getCurrentUser ?? null;
 }
 
 function formatMemberSince(iso) {
@@ -234,6 +239,15 @@ export function wireEmployeeProfileModal() {
   });
 }
 
+function canDeleteEmployee(user) {
+  const me = getCurrentUserFn?.();
+  if (!me?.id || !user?.id) return false;
+  if (user.id === me.id) return false;
+  if (user.isOwner) return false;
+  if (user.isAdmin && !me.isOwner) return false;
+  return true;
+}
+
 function employeeRowHtml(user, storage = null) {
   const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
   const badges = [];
@@ -250,6 +264,10 @@ function employeeRowHtml(user, storage = null) {
     )}</span>`;
   }
 
+  const deleteBtn = canDeleteEmployee(user)
+    ? `<button type="button" class="btn btn-sm btn-outline-danger manage-employee-delete-btn" data-user-id="${esc(user.id)}" data-user-name="${esc(user.displayName || user.email)}">${esc(tr("owner.deleteEmployee"))}</button>`
+    : "";
+
   return `<div class="admin-settings-row manage-employee-row">
     <span class="manage-employee-row-left">
       ${adminMsIconFn?.("person") ?? ""}
@@ -260,8 +278,28 @@ function employeeRowHtml(user, storage = null) {
         ${badges.join("")}
       </span>
     </span>
-    <button type="button" class="btn btn-sm btn-outline-primary manage-employee-view-btn" data-user-id="${esc(user.id)}">${esc(tr("profile.viewProfile"))}</button>
+    <span class="manage-employee-actions">
+      <button type="button" class="btn btn-sm btn-outline-primary manage-employee-view-btn" data-user-id="${esc(user.id)}">${esc(tr("profile.viewProfile"))}</button>
+      ${deleteBtn}
+    </span>
   </div>`;
+}
+
+async function deleteEmployee(userId, displayName) {
+  if (!apiFn || !userId) return;
+  const name = displayName || tr("common.employee");
+  if (!window.confirm(tr("owner.deleteEmployeeConfirm", { name }))) return;
+  try {
+    await apiFn(`/api/users/${userId}`, { method: "DELETE" });
+    showToastFn?.(tr("owner.deleteEmployeeSuccess", { name }), "success");
+    if (viewingEmployeeId === userId) {
+      bootstrap.Modal.getInstance(document.getElementById("employeeProfileModal"))?.hide();
+      viewingEmployeeId = null;
+    }
+    void renderManageEmployeesList();
+  } catch (err) {
+    showToastFn?.(err.message || tr("owner.deleteEmployeeFailed"), "danger");
+  }
 }
 
 async function renderManageEmployeesList() {
@@ -283,6 +321,13 @@ async function renderManageEmployeesList() {
       btn.addEventListener("click", () => {
         const id = btn.getAttribute("data-user-id");
         if (id) void openEmployeeProfileModal(id);
+      });
+    });
+    host.querySelectorAll(".manage-employee-delete-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.getAttribute("data-user-id");
+        const name = btn.getAttribute("data-user-name") || "";
+        if (id) void deleteEmployee(id, name);
       });
     });
   } catch (err) {

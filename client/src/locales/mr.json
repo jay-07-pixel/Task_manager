@@ -185,7 +185,11 @@
     "themeToggle": "थीम बदला",
     "manageAdmin": "अॅडमिन व्यवस्थापन",
     "manageEmployees": "कर्मचारी व्यवस्थापन",
-    "manageEmployeesIntro": "टीम सदस्यांची प्रोफाइल पहा. फक्त पगार संपादित करता येतो; इतर तपशील फक्त वाचनीय.",
+    "manageEmployeesIntro": "टीम सदस्यांची प्रोफाइल पहा. पगार अपडेट करू शकता, किंवा कर्मचारी हटवून कंपनीतून काढू शकता. हटवलेले कर्मचारी लॉगिन करू शकत नाहीत.",
+    "deleteEmployee": "हटवा",
+    "deleteEmployeeConfirm": "{{name}} हटवायचे?\n\nते डेटाबेसमधून काढले जातील आणि लॉगिन करू शकणार नाहीत. त्यांच्या यादी आणि कार्ये तुमच्याकडे राहतील.",
+    "deleteEmployeeSuccess": "{{name}} हटवले.",
+    "deleteEmployeeFailed": "कर्मचारी हटवता आला नाही.",
     "switchToUserView": "यूजर दृश्यावर जा",
     "switchToAdminView": "अॅडमिन दृश्यावर जा",
     "ownerDashboard": "ओनर डॅशबोर्ड",
@@ -378,7 +382,7 @@
       "updateBadge": "अपडेट"
     },
     "pasteFromClipboard": "क्लिपबोर्डवरून पेस्ट",
-    "submissionFilesOptional": "(जास्तीत जास्त {{max}} फोटो/व्हिडिओ/ऑडिओ, कोणताही आकार — किंवा एक PDF 5 MB पर्यंत)",
+    "submissionFilesOptional": "(जास्तीत जास्त {{max}} फाइल्स — फोटो, PDF प्रत्येकी 5 MB पर्यंत, व्हिडिओ किंवा ऑडिओ मिक्स)",
     "reminders": {
       "fallbackTaskTitle": "तुमचे कार्य"
     },
@@ -409,7 +413,7 @@
     "viewPreviousSubmission": "मागील सबमिशन",
     "updateSubmission": "सबमिशन अपडेट करा",
     "resubmitRequiredHint": "अॅडमिनने नवीन सबमिशन मागितले आहे. तुमचे जुने काम जतन आहे.",
-    "progressFilesOptional": "(पर्यायी — जास्तीत जास्त {{max}} प्रतिमा, व्हिडिओ किंवा ऑडिओ, किंवा एक PDF)"
+    "progressFilesOptional": "(पर्यायी — जास्तीत जास्त {{max}} फाइल्स: फोटो, PDF, व्हिडिओ किंवा ऑडिओ)"
   },
   "modals": {
     "listName": "यादीचे नाव",
@@ -626,7 +630,7 @@
     "couldNotLoadUpdates": "अपडेट लोड होऊ शकले नाहीत.",
     "couldNotLoadActivity": "क्रियाकलाप लोड होऊ शकला नाही.",
     "couldNotLoadHistory": "अपडेट इतिहास लोड होऊ शकला नाही.",
-    "maxAttachments": "जास्तीत जास्त {{max}} प्रतिमा किंवा व्हिडिओ जोडू शकता.",
+    "maxAttachments": "जास्तीत जास्त {{max}} फाइल्स जोडू शकता.",
     "pastedFile": "सबमिशनमध्ये फाइल पेस्ट केली.",
     "clipboardNotSupported": "या ब्राउझरमध्ये क्लिपबोर्ड पेस्ट समर्थित नाही.",
     "clipboardEmpty": "क्लिपबोर्ड रिकामा.",
@@ -695,7 +699,7 @@
     "submissionFailed": "सबमिशन अयशस्वी. कृपया पुन्हा प्रयत्न करा.",
     "fileTypesAllowed": "फक्त JPEG, PNG, GIF, WebP, व्हिडिओ, PDF किंवा ऑडिओ नोट परवानगी.",
     "fileMaxSize": "प्रत्येक फाइल {{max}} MB किंवा लहान असावी.",
-    "pdfAloneOrMedia": "एक PDF एकटा सबमिट करा, किंवा अनेक प्रतिमा/व्हिडिओ/ऑडिओ अपलोड करा.",
+    "pdfAloneOrMedia": "एक सबमिशनमध्ये प्रतिमा, PDF, व्हिडिओ आणि ऑडिओ मिक्स करू शकता (फाइल मर्यादेपर्यंत).",
     "signInForFiles": "सबमिशन फाइल्स पाहण्यासाठी पुन्हा साइन इन करा.",
     "noPermissionSubmission": "हे सबमिशन पाहण्याची परवानगी नाही.",
     "submissionNotFound": "सबमिशन फाइल सर्व्हरवर सापडली नाही.",
