@@ -5,8 +5,10 @@ import { fileURLToPath } from "url";
 import multer from "multer";
 import { randomUUID } from "crypto";
 import { z } from "zod";
+import { prisma } from "../lib/prisma.js";
 import { requireCompanyOwner } from "../middleware/auth.js";
 import { getCompanyTrialStatus } from "../lib/companyTrial.js";
+import { resolvePwaInstanceName } from "../lib/pwaInstance.js";
 import {
   clearCompanyGstCertificate,
   getCompanyProfile,
@@ -96,6 +98,53 @@ router.get("/trial", requireCompanyOwner, async (_req, res) => {
     remainingDays: status.remainingDays,
     isExpired: status.isExpired,
     hasStarted: status.hasStarted,
+  });
+});
+
+/** Context passed to kalpanik.in/renew so billing + activation stay in sync. */
+router.get("/renewal-context", requireCompanyOwner, async (req, res) => {
+  const [status, profile, userCount, owner] = await Promise.all([
+    getCompanyTrialStatus(),
+    getCompanyProfile(),
+    prisma.user.count(),
+    prisma.user.findUnique({
+      where: { id: req.session.userId },
+      select: { email: true, displayName: true, phone: true },
+    }),
+  ]);
+
+  const host = String(req.headers.host || "").split(":")[0];
+  const instance = resolvePwaInstanceName(host);
+  const site =
+    process.env.APP_PUBLIC_URL?.trim() ||
+    `${req.protocol === "https" || req.headers["x-forwarded-proto"] === "https" ? "https" : "http"}://${req.headers.host || host}`;
+
+  const trialEndYmd = new Intl.DateTimeFormat("en-CA", {
+    timeZone: process.env.APP_TIMEZONE || "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(status.trialEndDate);
+
+  res.json({
+    instance,
+    site,
+    companyName: profile?.companyName || null,
+    email: profile?.directorEmail || owner?.email || null,
+    phone: profile?.directorPhone || owner?.phone || null,
+    ownerName: profile?.directorName || owner?.displayName || null,
+    userCount,
+    trialStartDate: status.trialStartDate.toISOString(),
+    trialEndDate: status.trialEndDate.toISOString(),
+    trialEndYmd,
+    remainingDays: status.remainingDays,
+    isExpired: status.isExpired,
+    renewBaseUrl: "https://kalpanik.in/renew",
+    plans: [
+      { id: "task_management", priceInr: 299, label: "Task Management" },
+      { id: "task_attendance", priceInr: 349, label: "Task + Attendance" },
+    ],
+    storage: { includedGbPerUser: 1, extraGbPriceInr: 100 },
   });
 });
 

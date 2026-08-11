@@ -19,6 +19,13 @@ import {
 } from "./adminManageLocations.js";
 import { initCompanyProfile, openOwnerCompanyProfileView } from "./companyProfile.js";
 import {
+  initOwnerPricing,
+  ownerPricingModalHtml,
+  wireOwnerPricingModal,
+  wireOwnerPricingCtas,
+  ownerPricingCtaHtml,
+} from "./ownerPricing.js";
+import {
   profileDocumentsSectionHtml,
   syncProfileDocumentsSectionVisibility,
   fillProfileDocumentsUi,
@@ -3198,13 +3205,24 @@ function formatTrialDate(date) {
 
 function ownerTrialTopBannerHtml() {
   const info = ownerTrialStatusInfo();
+  const cta = ownerPricingCtaHtml();
   if (info.isExpired) {
     const endStr = info.end.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-    return `<div class="admin-trial-banner admin-trial-banner--expired">${tr("owner.trialEnded", { date: endStr })}</div>`;
+    return `<div class="admin-trial-banner admin-trial-banner--expired">
+      <span class="admin-trial-banner-text">${tr("owner.trialEndedShort", { date: endStr })}</span>
+      ${cta}
+    </div>`;
   }
   if (!info.hasStarted) return "";
   const endStr = info.end.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-  return `<div class="admin-trial-banner">${tr("owner.trialEnds", { days: info.daysRemaining, dayLabel: info.daysRemaining === 1 ? tr("owner.day") : tr("owner.days"), date: endStr })}</div>`;
+  return `<div class="admin-trial-banner">
+    <span class="admin-trial-banner-text">${tr("owner.trialEndsShort", {
+      days: info.daysRemaining,
+      dayLabel: info.daysRemaining === 1 ? tr("owner.day") : tr("owner.days"),
+      date: endStr,
+    })}</span>
+    ${cta}
+  </div>`;
 }
 
 function empMobileNavToggleHtml() {
@@ -4686,8 +4704,10 @@ function ownerTrialMessageModalHtml() {
             <p class="mb-2">${ownerTrialNoticeBodyHtml()}</p>
             <p class="mb-0">${tr("owner.trialNoticeBody2")}</p>
           </div>
-          <div class="modal-footer border-0 pt-2">
-            <button type="button" class="btn btn-primary" data-bs-dismiss="modal">${tr("common.gotIt")}</button>
+          <div class="modal-footer border-0 pt-2 flex-wrap gap-2">
+            <button type="button" class="btn btn-outline-primary js-open-owner-pricing" data-bs-dismiss="modal">${tr("pricing.viewPlans")}</button>
+            <button type="button" class="btn btn-primary js-open-kalpanik-renew" data-bs-dismiss="modal">${tr("pricing.renewNow")}</button>
+            <button type="button" class="btn btn-light" data-bs-dismiss="modal">${tr("common.gotIt")}</button>
           </div>
         </div>
       </div>
@@ -4748,7 +4768,8 @@ function ownerTrialStatusChipHtml() {
   if (info.isExpired) {
     return `<div class="owner-trial-chip owner-trial-chip--expired small">
       <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
-      <span>${tr("owner.trialEndedOn", { end: endStr })}</span>
+      <span>${tr("owner.trialEndedOnShort", { end: endStr })}</span>
+      <button type="button" class="btn btn-link btn-sm p-0 ms-1 js-open-owner-pricing">${tr("pricing.viewPlans")}</button>
     </div>`;
   }
   return `<div class="owner-trial-chip owner-trial-chip--active small">
@@ -8499,6 +8520,7 @@ function renderOwnerMain() {
   ensureAdminHeaderProfileMenuDocListener();
   wireAdminHeaderProfileMenu(main);
   wireOwnerDashboardOpen(main);
+  wireOwnerPricingCtas(main);
 
   main.querySelectorAll(".js-owner-refresh-tasks").forEach((btn) => {
     btn.addEventListener("click", async () => {
@@ -8815,6 +8837,7 @@ function wireOwnerReportsChromeHeader(main) {
   wireAdminHeaderProfileMenu(main);
   wireLanguageSelector(main);
   wireOwnerDashboardOpen(main);
+  wireOwnerPricingCtas(main);
 }
 
 function wireOwnerDashboardOpen(root = document) {
@@ -8915,6 +8938,7 @@ function wireChromeNav() {
   wireOwnerReportsNav();
   wireOwnerAttendanceNav();
   wireOwnerDeadlineExtensionsNav();
+  wireOwnerPricingCtas(document);
 }
 
 function wireOwnerDashboardAnnouncementListener() {
@@ -8966,6 +8990,7 @@ function renderOwnerChrome() {
       ${progressUpdateModalHtml()}
       ${ownerMarkDoneModalHtml()}
       ${ownerTrialMessageModalHtml()}
+      ${ownerPricingModalHtml()}
       ${teamAdminModalHtml()}
       ${myProfileModalHtml()}
       ${employeeProfileModalHtml()}
@@ -9047,6 +9072,7 @@ function renderOwnerChrome() {
       refreshCompanyProfileSettingsBadge(!profile.companyProfileComplete);
     },
   });
+  initOwnerPricing({ api, escapeHtml, showToast });
   initManageEmployees({
     api,
     escapeHtml,
@@ -9101,6 +9127,8 @@ function renderOwnerChrome() {
   wireTeamAdminModal();
   wireMyProfileModal();
   wireEmployeeProfileModal();
+  wireOwnerPricingModal();
+  wireOwnerPricingCtas(document);
   wireManageLocationModal();
   wireContactUsModal();
   wireLegalModal();

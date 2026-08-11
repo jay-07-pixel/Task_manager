@@ -1,6 +1,7 @@
 import { Chart } from "chart.js/auto";
 import { tr, dateLocale, formatDateTime24 } from "./i18n/index.js";
 import { dt, ensureContentTranslations } from "./i18n/contentTranslate.js";
+import { ownerPricingCtaHtml, wireOwnerPricingCtas } from "./ownerPricing.js";
 
 /** @type {Record<string, Chart>} */
 const chartInstances = {};
@@ -939,9 +940,10 @@ function companyTrialSectionHtml(trial) {
     </div>
     ${
       trial.isExpired
-        ? `<p class="owner-dash-trial-expired-note mb-0">${escapeHtmlFn(tr("owner.companyTrialExpiredNote"))}</p>`
+        ? `<p class="owner-dash-trial-expired-note mb-2">${escapeHtmlFn(tr("owner.companyTrialExpiredNote"))}</p>`
         : ""
     }
+    <div class="owner-dash-trial-actions mt-2">${ownerPricingCtaHtml({ variant: "card" })}</div>
   </section>`;
 }
 
@@ -1594,6 +1596,7 @@ export async function refreshOwnerDashboard({ force = false } = {}) {
     }
     main.innerHTML = ownerDashboardPageHtml(reportData);
     wireReportsPage(main);
+    wireOwnerPricingCtas(main);
     if (wireChromeHeaderFn) wireChromeHeaderFn(main);
     requestAnimationFrame(() => {
       renderMonthlyBudgetChart();

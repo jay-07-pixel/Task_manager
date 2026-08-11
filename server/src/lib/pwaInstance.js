@@ -5,6 +5,8 @@ const HOSTNAME_INSTANCE_ALIASES = {
   tacs: "TM-TACS",
   acs: "TM-ACS",
   ss2n: "TM-SS2N",
+  ensens: "TM-ENSENS",
+  edunest: "TM-EDUNEST",
 };
 
 function sanitizeInstanceSlug(raw) {

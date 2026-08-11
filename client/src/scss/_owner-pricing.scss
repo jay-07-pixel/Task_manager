@@ -1,0 +1,166 @@
+.owner-pricing-cta-group {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.admin-trial-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+
+  .admin-trial-banner-text {
+    flex: 1 1 12rem;
+    min-width: 0;
+  }
+
+  .owner-pricing-cta-group {
+    flex-shrink: 0;
+  }
+}
+
+.owner-pricing-modal-content {
+  background: #f7fafb;
+}
+
+.owner-pricing-brand {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #00535b;
+  margin: 0;
+}
+
+.owner-pricing-trial-badge {
+  display: inline-block;
+  margin: 0;
+  padding: 0.35rem 0.7rem;
+  border-radius: 0.4rem;
+  background: #00535b;
+  color: #fff;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.owner-pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+
+  @media (max-width: 991.98px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.owner-pricing-plan,
+.owner-pricing-storage {
+  background: #fff;
+  border: 1px solid #d5e0e2;
+  border-radius: 0.75rem;
+  padding: 1rem 1.1rem;
+}
+
+.owner-pricing-plan--task {
+  border-top: 4px solid #1a73a8;
+}
+
+.owner-pricing-plan--attendance {
+  border-top: 4px solid #1f7a4d;
+}
+
+.owner-pricing-plan-name {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin: 0 0 0.5rem;
+  color: #181a2e;
+}
+
+.owner-pricing-plan-price {
+  margin: 0 0 0.35rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem;
+}
+
+.owner-pricing-plan-amount {
+  font-size: 1.75rem;
+  font-weight: 800;
+  color: #00535b;
+  line-height: 1.1;
+}
+
+.owner-pricing-plan-unit {
+  font-size: 0.875rem;
+  color: #3e494a;
+}
+
+.owner-pricing-plan-storage,
+.owner-pricing-plan-blurb {
+  font-size: 0.875rem;
+  color: #3e494a;
+  margin: 0 0 0.65rem;
+}
+
+.owner-pricing-features {
+  margin: 0 0 1rem;
+  padding-left: 1.1rem;
+  font-size: 0.8125rem;
+  color: #181a2e;
+
+  li + li {
+    margin-top: 0.25rem;
+  }
+}
+
+.owner-pricing-renew-btn {
+  width: 100%;
+  font-weight: 600;
+  background: #00535b !important;
+  border-color: #00535b !important;
+  color: #fff !important;
+
+  &:hover {
+    background: #003f45 !important;
+    border-color: #003f45 !important;
+  }
+}
+
+.owner-pricing-plan--attendance .owner-pricing-renew-btn {
+  background: #1f7a4d !important;
+  border-color: #1f7a4d !important;
+
+  &:hover {
+    background: #17603c !important;
+    border-color: #17603c !important;
+  }
+}
+
+.owner-pricing-aside-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin: 0 0 0.4rem;
+  color: #181a2e;
+}
+
+.owner-pricing-aside-body,
+.owner-pricing-aside-extra {
+  font-size: 0.8125rem;
+  color: #3e494a;
+  margin: 0 0 0.65rem;
+}
+
+.owner-pricing-storage-examples {
+  margin: 0 0 0.75rem;
+  padding-left: 1.1rem;
+  font-size: 0.8125rem;
+}
+
+.owner-dash-trial-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
