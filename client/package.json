@@ -5,8 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:portfolio": "vite --mode portfolio",
     "build": "vite build",
-    "preview": "vite preview"
+    "build:portfolio": "vite build --mode portfolio",
+    "preview": "vite preview",
+    "preview:portfolio": "vite preview --mode portfolio"
   },
   "dependencies": {
     "bootstrap": "^5.3.3",

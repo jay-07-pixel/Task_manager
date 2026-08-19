@@ -1,0 +1,32 @@
+html.portfolio-demo {
+  --portfolio-demo-banner-h: 2.35rem;
+}
+
+html.portfolio-demo body {
+  padding-top: var(--portfolio-demo-banner-h);
+}
+
+#portfolio-demo-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1080;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: var(--portfolio-demo-banner-h);
+  margin: 0;
+  padding: 0.4rem 0.85rem;
+  background: #1b4332;
+  color: #fff;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: center;
+  letter-spacing: 0.01em;
+}
+
+[data-bs-theme="dark"] #portfolio-demo-banner {
+  background: #081c15;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}

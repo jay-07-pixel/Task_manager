@@ -3,7 +3,10 @@
   "private": true,
   "scripts": {
     "dev": "concurrently -n api,web -c blue,green \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
+    "dev:portfolio": "npm run dev:portfolio --prefix client",
     "build": "npm install --prefix client && npm run build --prefix client",
+    "build:portfolio": "npm install --prefix client && npm run build:portfolio --prefix client",
+    "zip:portfolio": "node scripts/zip-portfolio-demo.mjs",
     "sync-apk": "node scripts/sync-apk.mjs",
     "deploy": "npm install --prefix server && npm install --prefix client && npm run db:generate --prefix server && npm run build",
     "start": "npm run build && cross-env NODE_ENV=production npm run start --prefix server"

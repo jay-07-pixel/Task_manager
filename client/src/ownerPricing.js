@@ -124,6 +124,7 @@ export async function openKalpanikRenew(opts = {}) {
     instance: ctx.instance,
     site: ctx.site,
     company: ctx.companyName,
+    contact: ctx.ownerName,
     email: ctx.email,
     phone: ctx.phone,
     users: ctx.userCount,
@@ -131,6 +132,10 @@ export async function openKalpanikRenew(opts = {}) {
     plan: opts.planId || "",
     months: opts.months ?? 1,
     extraGb: opts.extraGb ?? 0,
+    gstin: ctx.gstNumber,
+    address: ctx.companyAddress,
+    state: ctx.companyState,
+    stateCode: ctx.stateCode,
   });
   window.open(url, "_blank", "noopener,noreferrer");
 }

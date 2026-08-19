@@ -1,15 +1,15 @@
-# Task Manager (Kalpanik)
+# Kalpanik Task Manager
 
-**Product name:** Kalpanik Task Manager (web) · **Companion app:** Kalpanik Reminder (Android)  
-**Provider / support:** Kalpanik · [support@kalpanik.in](mailto:support@kalpanik.in)  
+**Product:** Kalpanik Task Manager (web) · **Companion app:** Kalpanik Reminder (Android)  
+**Provider / support:** Kalpanik · [support@kalpanik.in](mailto:support@kalpanik.in) · [kalpanik.in](https://kalpanik.in/)  
 **Production example:** [https://sugandhshoppee.kalpanik.in](https://sugandhshoppee.kalpanik.in)  
 **Source:** [jay-07-pixel/Task_manager](https://github.com/jay-07-pixel/Task_manager)
 
-Full-stack workforce task management for **company owners**, **admins**, and **employees**. Teams assign work across **lists**, use an **All Tasks** aggregate view (list / employee / deadline / overdue filters), attach files and voice notes, collect proof, chat, track **live attendance / location**, run **geofenced daily check-in**, highlight **overdue work by color tiers**, approve **deadline extensions**, manage **company profile**, and receive reminders on **web** and **Android**.
+Workforce operations software for **company owners**, **admins**, and **employees**. One codebase powers every customer site; each company gets an isolated domain, database, uploads, and trial.
 
-**Core workflow:** employees submit proof → tasks sit in **Submitted** (awaiting owner) → owner **Mark as reviewed** → recurring series **spawns the next due card**. **6+ day overdue** work is gated until submit or postpone. The same rules apply on website and Kalpanik Reminder.
+Teams assign work across **lists**, review everything in **All Tasks**, collect mixed proof files (photos, PDFs, video, audio), chat, track **live GPS attendance**, run **geofenced check-in**, manage **deadline extensions**, and receive reminders on **web** and **Android**. Owners can **view plans** in-app and **renew on kalpanik.in**. Admins can **delete employees** so they can no longer sign in.
 
-Each customer site is a **separate deployment** (own domain, database, uploads, PM2 process, and trial dates). One GitHub codebase powers every instance.
+**Core workflow:** employee submits proof → **Submitted** (awaiting owner) → owner **Mark as reviewed** → recurring series **spawns the next due card**. Work that is **6+ days overdue** is gated until submit or postpone. The same rules apply on the website and Kalpanik Reminder.
 
 > **For Terms of Service & Privacy Policy authors:** start with [Product description for legal documents](#product-description-for-legal-documents) and [Personal data inventory](#personal-data-inventory). Those sections list every feature, role, data category, and third party the product uses today.
 
@@ -19,33 +19,34 @@ Each customer site is a **separate deployment** (own domain, database, uploads, 
 
 1. [Overview](#overview)
 2. [Architecture & product approach](#architecture--product-approach)
-3. [Product description for legal documents](#product-description-for-legal-documents)
-4. [Personal data inventory](#personal-data-inventory)
-5. [Roles & permissions](#roles--permissions)
-6. [Features (complete)](#features-complete)
-7. [All Tasks view](#all-tasks-view)
-8. [Overdue color coding](#overdue-color-coding)
-9. [Deadline extensions & critical overdue gate](#deadline-extensions--critical-overdue-gate)
-10. [Attendance: live location & daily check-in](#attendance-live-location--daily-check-in)
-11. [Company profile, employees & work locations](#company-profile-employees--work-locations)
-12. [Task lifecycle: submissions, reopen & recurrence](#task-lifecycle-submissions-reopen--recurrence)
-13. [Team chat](#team-chat)
-14. [Third-party services](#third-party-services)
-15. [Tech stack](#tech-stack)
-16. [Local development](#local-development)
-17. [Admin access & dual login](#admin-access--dual-login)
-18. [Task assignment attachments](#task-assignment-attachments)
-19. [Owner dashboard & reports](#owner-dashboard--reports)
-20. [Android app (Kalpanik Reminder)](#android-app-kalpanik-reminder)
-21. [File uploads & limits](#file-uploads--limits)
-22. [Push notifications](#push-notifications)
-23. [Internationalization](#internationalization)
-24. [PWA, legal & support](#pwa-legal--support)
-25. [Project structure](#project-structure)
-26. [API overview](#api-overview)
-27. [Production deployment (VPS)](#production-deployment-vps)
-28. [Nginx configuration](#nginx-configuration)
-29. [Troubleshooting](#troubleshooting)
+3. [Plans, billing & storage](#plans-billing--storage)
+4. [Product description for legal documents](#product-description-for-legal-documents)
+5. [Personal data inventory](#personal-data-inventory)
+6. [Roles & permissions](#roles--permissions)
+7. [Features (complete)](#features-complete)
+8. [All Tasks view](#all-tasks-view)
+9. [Overdue color coding](#overdue-color-coding)
+10. [Deadline extensions & critical overdue gate](#deadline-extensions--critical-overdue-gate)
+11. [Attendance: live location & daily check-in](#attendance-live-location--daily-check-in)
+12. [Company profile, employees & work locations](#company-profile-employees--work-locations)
+13. [Task lifecycle: submissions, reopen & recurrence](#task-lifecycle-submissions-reopen--recurrence)
+14. [Team chat](#team-chat)
+15. [Third-party services](#third-party-services)
+16. [Tech stack](#tech-stack)
+17. [Local development](#local-development)
+18. [Admin access & dual login](#admin-access--dual-login)
+19. [Task assignment attachments](#task-assignment-attachments)
+20. [Owner dashboard & reports](#owner-dashboard--reports)
+21. [Android app (Kalpanik Reminder)](#android-app-kalpanik-reminder)
+22. [File uploads & limits](#file-uploads--limits)
+23. [Push notifications](#push-notifications)
+24. [Internationalization](#internationalization)
+25. [PWA, legal & support](#pwa-legal--support)
+26. [Project structure](#project-structure)
+27. [API overview](#api-overview)
+28. [Production deployment (VPS)](#production-deployment-vps)
+29. [Nginx configuration](#nginx-configuration)
+30. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -53,12 +54,24 @@ Each customer site is a **separate deployment** (own domain, database, uploads, 
 
 | Role | Where they work | What they do |
 |------|-----------------|--------------|
-| **Employee (user)** | Website user dashboard or **Android app** | Share live location (when required), geofenced check-in/out (when enabled), view assigned tasks + admin attachments, submit/update proof, progress updates, delegate, request deadline extensions, team chat, see overdue color tiers / critical overdue gate |
-| **Admin** | Website admin dashboard (+ optional user view) | Lists, **All Tasks**, overdue color legend/filters, tasks, attachments, assignees, reports, **Attendance** (live map + daily reports), **Deadline extensions**, team chat, manage admins, manage employees, manage locations, salary fields |
-| **Company owner** | Same as admin, plus Owner dashboard | Everything an admin can do, plus **Owner dashboard** (capacity & performance), **Company profile** (GST, contacts), and promote/revoke other owners (**max 2 owners** per company instance) |
+| **Employee (user)** | Website user dashboard or **Android app** | Share live location (when required), geofenced check-in/out (when enabled), view assigned tasks + admin attachments, submit/update mixed proof files, progress updates, delegate, request deadline extensions, team chat, see overdue color tiers / critical overdue gate |
+| **Admin** | Website admin dashboard (+ optional user view) | Lists, **All Tasks**, overdue color legend/filters, tasks, attachments, assignees, reports, **Attendance** (live map + daily reports), **Deadline extensions**, team chat, manage admins, **manage employees** (salary + **delete**), manage locations |
+| **Company owner** | Same as admin, plus Owner dashboard | Everything an admin can do, plus **Owner dashboard** (capacity & performance), **Company profile** (GST, contacts), **view plans / renew on kalpanik.in**, and promote/revoke other owners (**max 2 owners** per company instance) |
 | **Admin + employee** | Both views | Same account; switch admin / user from profile menu |
 
 Everyone **registers as an employee**. Admins are promoted via **Manage Admin**. Company owners are a subset of admins (`isOwner` in the database). Promoted admins remain assignable as employees.
+
+### Capability snapshot
+
+| Area | Highlights |
+|------|------------|
+| **Work** | Lists, All Tasks, recurrence, high priority, duration, reminders, assignment attachments, voice notes |
+| **Proof** | Mixed photos + PDFs + video + audio (up to 10 files), archive/resubmit, owner Mark as reviewed |
+| **People** | Dual login, manage admins/owners, employee profiles, salary, **delete employee**, 1 GB storage quota |
+| **Field** | Live GPS map, geofenced check-in/out, daily/monthly attendance reports |
+| **Ops** | Deadline extensions (6+ day gate), reports, owner capacity dashboard, team chat (DM + groups) |
+| **Reach** | Web PWA, Android Kalpanik Reminder, EN/HI/MR/TA, Web Push + FCM |
+| **Commercial** | 30-day trial, ₹299 / ₹349 plans, renew on [kalpanik.in](https://kalpanik.in/) with bill + UPI QR |
 
 ### Production VPS layout
 
@@ -70,7 +83,7 @@ Everyone **registers as an employee**. Admins are promoted via **Manage Admin**.
 | `~/Task_manager_acs` | `acs` | `taskmanager_acs` | `acs.kalpanik.in` |
 | `~/Task_manager_tacs` | `tacs` | `taskmanager_tacs` | `tacs.kalpanik.in` |
 | `~/Task_manager_ensens` | `ensens` | `taskmanager_ensens` | `ensens.kalpanik.in` |
-| `~/Task_manager_edunest` | `edunest` | `taskmanager_edunest` | edunest subdomain |
+| `~/Task_manager_edunest` | `edunest` | `taskmanager_edunest` | `edunest.kalpanik.in` |
 
 Each instance has its own `server/.env`, MySQL database, session store, file uploads, and optional **company trial** dates. All deploy from the same GitHub repo. **Data is not shared across customer instances.**
 
@@ -128,16 +141,57 @@ Seeing the same **title** twice with **different due dates** is normal (yesterda
 
 Stale postpone requests are **cancelled** when the employee submits, owner reviews, or the task is no longer critically overdue. Admin badge only counts actionable pending requests.
 
-### Company free trial
+### Company free trial & renewal
 
 | Approach | Detail |
 |----------|--------|
 | Env | `COMPANY_TRIAL_START` / `COMPANY_TRIAL_END` as `YYYY-MM-DD` in that site’s `server/.env` |
-| Sync | On PM2 restart, env dates write into `company_settings` |
-| UI | Trial banner; login/register may block when expired |
+| Sync | On PM2 restart (`--update-env`), env dates write into `company_settings` |
+| UI | Trial banner, trial notice popup, Owner dashboard trial card |
+| In-app plans | Owners/admins open **View plans** (Task Management ₹299 / Task + Attendance ₹349) |
+| Renew | **Renew on kalpanik.in** opens `https://kalpanik.in/renew` with tenant context (instance, site, users, trial end, plan) |
+| Payment | Bill + **dynamic UPI QR** on kalpanik.in (no Razorpay/Paytm SDK in Task Manager) |
 | Examples | See `deploy/company-trial-env.example` |
 
-Extend a site by editing **that site’s** `.env` and `pm2 restart <name> --update-env` — no code change required.
+Extend a site by editing **that site’s** `.env` and `pm2 restart <name> --update-env`, or after a paid renewal on kalpanik.in. No Task Manager code change is required to change dates.
+
+---
+
+## Plans, billing & storage
+
+Public pricing lives on [kalpanik.in](https://kalpanik.in/). Task Manager shows the same plans in-app and sends owners to kalpanik.in to pay.
+
+### Plans
+
+| Plan | Price | Storage | What’s included |
+|------|-------|---------|-----------------|
+| **Task Management** | **₹299** / user / month | 1 GB per user | Unlimited tasks, categories, assignment, recurrence, proof (image/video/PDF), voice notes, team chat, push & smart reminders, deadline extensions, reports, productivity overview, multi-language, Android + web |
+| **Task + Attendance** | **₹349** / user / month | 1 GB per user | Everything in Task Management **plus** live GPS, check-in/out, geofence, automatic attendance, work/extra hours, attendance history & reports, late/early, overtime & leave, live location sharing, field force, Owner dashboard (capacity & performance) |
+
+**30-day free trial** — up to **5 employees**.
+
+### Storage
+
+| Rule | Detail |
+|------|--------|
+| Included | **1 GB per user** (`USER_STORAGE_QUOTA_BYTES` in `userStorageService.js`) |
+| Company total | Employees × 1 GB (5 users = 5 GB, 10 = 10 GB, …) |
+| Extra | **₹100 / GB / month** (purchased via kalpanik.in; cancel anytime) |
+| What counts | Chats, task proofs, images, videos, PDFs, voice notes, profile docs |
+| When full | New uploads are blocked until files are deleted or extra storage is purchased |
+| UI | Settings storage page; Manage employees shows used / quota per person |
+
+### How renewal works
+
+1. Owner opens **View plans** (trial banner, trial popup, or Owner dashboard).
+2. **Renew this plan** / **Renew on kalpanik.in** calls `GET /api/company/renewal-context` and opens:
+
+   `https://kalpanik.in/renew?instance=TM-ACS&site=…&company=…&email=…&gstin=…&address=…&state=…&users=12&trialEnd=YYYY-MM-DD&plan=task_attendance&months=1&source=task_manager`
+
+3. kalpanik.in generates a **proper bill** and a **dynamic UPI QR** (`upi://pay?pa=…&am=…&tn=<invoiceNo>`).
+4. After payment is marked paid, operators extend `COMPANY_TRIAL_END` on that VPS instance (or a future activate webhook).
+
+Canonical plan IDs in code: `task_management`, `task_attendance` (`client/src/pricingPlans.js`). Keep `pricing.png` and kalpanik.in in sync with those prices.
 
 ### Static UI vs API (nginx)
 
@@ -175,7 +229,8 @@ Kalpanik Task Manager is a **B2B / employer-operated** SaaS-style application ho
 - View **reports** and (for company owners) **work capacity and performance** dashboards
 - Maintain **company profile** (GST, certificate, director and contact details)
 - Store **employee profile photo and ID proof** documents
-- Optionally run a **free trial** period per company instance
+- Optionally run a **free trial** period per company instance, then **renew a paid plan** on kalpanik.in (bill + UPI QR)
+- Store **per-user file storage quotas** (1 GB included) and allow admins to **delete employees** (account removed; they cannot log in)
 - Offer an **Android companion app** (Kalpanik Reminder) for tasks, reminders, and related employee workflows
 
 The product is **not** a consumer social network. Accounts exist so an employer’s team can coordinate work on that employer’s instance.
@@ -220,11 +275,11 @@ Also supported:
 - **Forgot password** (email OTP via Brevo, then set new password)
 - **Role switch** for admins: admin dashboard (`owner` session role) vs employee tasks (`employee` session role)
 - **Android CAPTCHA bypass** — Kalpanik Reminder may skip Turnstile when the request identifies as the Android client (`X-Kalpanik-Client: SugandhReminder-Android` or User-Agent containing `in.kalpanik.sugandhreminder`). Web browsers still require Turnstile when configured.
-- **No self-service account deletion** in the product today — account removal requires operator/support action (state this clearly in Privacy Policy / Terms)
+- **Admin delete employee** — company admins/owners can permanently delete a non-owner employee from **Manage employees**. The user row is removed from the database and they **cannot log in**. Company owners cannot be deleted until owner access is revoked. Employees cannot delete their own account from this screen.
 
 ### Company trial
 
-Per-instance optional **free trial** via `COMPANY_TRIAL_START` / `COMPANY_TRIAL_END` in that site’s `server/.env` (synced into `CompanySettings` on restart). UI shows trial banners and may restrict continued use after expiry until the plan is renewed via support. See `deploy/company-trial-env.example` and [Architecture & product approach](#architecture--product-approach).
+Per-instance optional **free trial** via `COMPANY_TRIAL_START` / `COMPANY_TRIAL_END` in that site’s `server/.env` (synced into `CompanySettings` on restart). UI shows trial banners, a **View plans** modal, and **Renew on kalpanik.in**. After expiry, continued use is restricted until the plan is renewed (kalpanik.in bill + UPI QR, then trial end date updated on the VPS). See [Plans, billing & storage](#plans-billing--storage).
 
 ### Support contact
 
@@ -353,6 +408,7 @@ Legal docs should treat this as **location / monitoring data** and require clear
 | Live location required (boolean) | Yes | Company-wide gate for employees |
 | Attendance enabled (boolean) | Yes | Enables geofenced check-in/out |
 | Daily check-in / check-out times | Yes | HH:mm schedule |
+| Per-user storage usage | Derived | 1 GB quota; proofs, chat, profile files |
 
 ### I. Support messages
 
@@ -379,7 +435,7 @@ Privacy Policy should disclose that **user-generated text may be sent to third-p
 
 ### L. Data not collected by the product (current scope)
 
-- Payment card numbers (billing is offline via support / plan renewal)
+- Payment card numbers (card checkout is not in Task Manager; renewal uses **UPI QR on kalpanik.in**)
 - Government ID documents (unless a user uploads them as profile ID proof or task/chat file — treat uploads as user-controlled content)
 - Contacts, SMS, or call logs from the phone (unless the Android app’s OS permissions change — document app permissions separately in the Play/APK privacy form)
 
@@ -396,11 +452,12 @@ Privacy Policy should disclose that **user-generated text may be sent to third-p
 
 | Topic | Current product behavior |
 |-------|--------------------------|
-| Account self-delete | **Not available** in-app |
-| Admin revoke | Admin access can be revoked; user account remains |
-| Owner revoke | Owner flag can be removed (not last owner; not self) |
-| Cascades | Deleting a user in the database would cascade related rows (tasks ownership rules vary); there is **no end-user “delete my data” button** |
-| Files | Remain on disk until removed by operators |
+| Account self-delete | Employees **cannot** delete their own account in-app |
+| Admin delete employee | Admins/owners can **delete** a non-owner employee (Manage employees). Lists/tasks they owned are reassigned to the acting admin; the user cannot log in |
+| Admin revoke | Admin access can be revoked; user account remains unless deleted |
+| Owner revoke | Owner flag can be removed (not last owner; not self). Owners cannot be deleted until revoked |
+| Cascades | Deleting a user removes related assignee/chat/device rows; list ownership and task authorship are reassigned so company work is not wiped |
+| Files | Profile docs are removed on delete; other uploads remain until operators clean storage |
 
 Privacy Policy should state how users request deletion (e.g. contact **support@kalpanik.in** or their company admin) and how long data is kept after employment ends.
 
@@ -426,10 +483,11 @@ Privacy Policy should state how users request deletion (e.g. contact **support@k
 | Approve deadline extensions | — | ✓ | ✓ |
 | Reports | — | ✓ | ✓ |
 | Manage admins (promote/revoke) | — | ✓ | ✓ |
-| Manage employees (view profiles, edit salary) | — | ✓ | ✓ |
+| Manage employees (view profiles, edit salary, **delete employee**) | — | ✓ | ✓ |
 | Manage work locations & attendance settings | — | ✓ | ✓ |
 | Edit employee salary | — | ✓ | ✓ |
 | Owner dashboard (capacity, performance) | — | — | ✓ |
+| View plans & renew on kalpanik.in | — | ✓ | ✓ |
 | Company profile (GST, contacts, certificate) | — | — | ✓ |
 | Promote/revoke company owners (max 2) | — | — | ✓ |
 | Download Android APK | ✓ | ✓ | ✓ |
@@ -474,7 +532,7 @@ Privacy Policy should state how users request deletion (e.g. contact **support@k
 - **Employee assignments** — system list (pinned) for peer-delegated tasks
 - **All Tasks** — virtual nav item under Your Lists; aggregates every list’s tasks sorted by **nearest deadline** (see [All Tasks view](#all-tasks-view))
 - **Mobile offcanvas** sidebar (scrollable nav so long list names stay usable)
-- **Trial banner** — days remaining / expired (owners/admins)
+- **Trial banner** — days remaining / expired, with **View plans** and **Renew on kalpanik.in** (owners/admins)
 - **Theme toggle** — light / dark
 - **Language selector** — EN / HI / MR / TA
 - **Notifications bell** — product announcements + unread badge
@@ -519,7 +577,8 @@ Privacy Policy should state how users request deletion (e.g. contact **support@k
 
 ### Company owner only
 
-- **Owner dashboard** (Profile → Owner dashboard) — trial card, monthly work capacity, employee performance, tasks-by-admin breakdown
+- **Owner dashboard** (Profile → Owner dashboard) — trial card with **View plans / Renew**, monthly work capacity, employee performance, tasks-by-admin breakdown
+- **Plans & billing** — in-app pricing modal (₹299 / ₹349) and redirect to kalpanik.in/renew with company context
 - **Company profile** — name, address, state, GST, certificate, director & second contact (Settings → My company details)
 - **Manage company owners** — promote/revoke owners (admins only; max 2)
 
@@ -530,7 +589,7 @@ Privacy Policy should state how users request deletion (e.g. contact **support@k
 - **Theme toggle**
 - **Privacy & Terms** — in-app legal modal + standalone HTML page
 - **Manage admin** — promote/revoke admin (email notification via Brevo)
-- **Manage employees** — team list with role badges; open employee profile
+- **Manage employees** — team list with role badges, storage used/quota, **View profile**, **Delete** (cannot delete self or company owners)
 - **Manage locations** — enable attendance, set daily schedule, CRUD geofenced work sites
 - **Company attendance** toggle — enable/disable daily check-in feature
 - **Company live location** toggle — require GPS for employees
@@ -557,7 +616,7 @@ Privacy Policy should state how users request deletion (e.g. contact **support@k
 - **24-hour postpone grace** — after requesting an extension, gate dismissed for that task for 24h (`localStorage` + server `expiresAt`)
 - View **assignment attachments** (images, video, PDF, voice)
 - **Progress updates** — Started, In progress, Blocked, Update
-- **Submit** — notes + proof files (images, video, PDF; clipboard paste; preview); sets assignee done, keeps task `completed: false` until owner reviews
+- **Submit** — notes + **up to 10 mixed files** (JPGs, PDFs ≤ 5 MB each, videos, audio; clipboard paste; preview); sets assignee done, keeps task `completed: false` until owner reviews
 - **Update submission** — resubmit after already submitted (archives prior submission)
 - **View / View previous submission**
 - **Overdue badge** — “Overdue by X days” with the same color tiers as admin
@@ -783,10 +842,11 @@ Push to admins when employee turns tracking **off** or **on** (`?openAttendance=
 
 **Settings → Manage employees**
 
-- List all team members with owner / admin / employee role badges
-- Open **employee profile modal** — view name, email, phone, role, member since
-- Admin can edit **salary** only; other fields read-only in this view
-- View profile photo & ID proof status (links to full profile docs)
+- List all team members with owner / admin / employee role badges and **storage used / 1 GB quota**
+- Open **employee profile modal** — view name, email, phone, role, member since; edit **salary**
+- **Delete** — permanently removes the user from the database (confirm dialog). They cannot log in again. Lists and tasks they owned are reassigned to the acting admin so company work is kept.
+- Guards: cannot delete yourself; cannot delete a **company owner** (revoke owner first); only company owners can delete other admins; cannot delete the last admin
+- API: `DELETE /api/users/:id`
 
 ### Manage locations (admins & owners)
 
@@ -813,11 +873,12 @@ Push to admins when employee turns tracking **off** or **on** (`?openAttendance=
 
 ### Submission & proof
 
-- Employee submits **notes** + up to **10 media files** or **one PDF** (5 MB max for PDF)
-- Multiple proof files stored in `TaskSubmissionProof` table
+- Employee submits **notes** and/or **up to 10 files** in one go — mix photos (JPEG/PNG/GIF/WebP), **multiple PDFs** (5 MB each), videos, and audio
+- Files stored as rows in `TaskSubmissionProof` (legacy first-file path kept on `TaskAssignee.completionProofPath`)
 - Sets **`assigneeDone: true`**; task stays **`completed: false`** until owner **Mark as reviewed**
-- Admins view submissions in expand panel or submission detail modal (images, video, PDF lightbox)
-- Multi-assignee: each person keeps their own proof row (one person’s photo does not replace another’s)
+- Admins view submissions in expand panel or submission detail modal (gallery of images, video, PDF)
+- Multi-assignee: each person keeps their own proof rows
+- Progress updates support the same mixed-file attachments (up to 10)
 
 ### Employee update submission
 
@@ -888,9 +949,10 @@ Disclose these processors in the Privacy Policy.
 | **Web Push (VAPID)** | Browser push services (e.g. browser vendors) | Browser notifications | Push subscription endpoints/keys |
 | **MyMemory / Google Translate** | Third-party translation APIs | Optional UI translation of tasks/chat | Text snippets submitted for translation |
 | **Gmail SMTP** (support) | Google | Support contact form delivery | Support message + user email/name |
+| **kalpanik.in** | Kalpanik | Public site, plan selection, invoice, UPI QR renewal | Company name, email, user count, plan, trial end (query params from Task Manager) |
 | **Hosting VPS / MySQL** | Kalpanik infrastructure | Application hosting | All application data for that instance |
 
-No payment gateway is integrated in-app.
+Card/net-banking gateways (Razorpay, Paytm, Cashfree) are **not** integrated in Task Manager. Payment is **UPI QR** generated on kalpanik.in.
 
 ---
 
@@ -901,7 +963,7 @@ No payment gateway is integrated in-app.
 | Frontend | Vite 6, Bootstrap 5, Sass, SortableJS, Chart.js, Inter, Material Symbols / Bootstrap Icons |
 | Maps | Google Maps JavaScript API + Geocoding API (attendance); Leaflet fallback |
 | Backend | Node.js, Express, Zod, **compression** (gzip HTTP responses) |
-| Database | MySQL 8+, Prisma ORM (**26** models) |
+| Database | MySQL 8+, Prisma ORM (**27** models) |
 | Auth | `express-session` + file store (`taskmgr.sid`) |
 | Email OTP | Brevo Transactional API |
 | CAPTCHA | Cloudflare Turnstile (web; Android client may skip) |
@@ -1023,13 +1085,52 @@ Use **5173** during development for the latest UI. Geolocation requires **HTTPS*
 |--------|-------------|
 | `npm run dev` | API + Vite together |
 | `npm run build` | Production client → `client/dist` |
+| `npm run dev:portfolio` | **Portfolio demo** UI only (in-memory dummy data, no API) |
+| `npm run build:portfolio` | **Portfolio demo** static build → `client/dist` |
 | `npm run sync-apk` | Copy Android APK → `client/public/downloads/sugandh-reminder.apk` |
 | `npm run start` | Build client + start API (`NODE_ENV=production`) |
 | `npm run deploy` | Install deps, `db:generate`, build — before VPS restart |
 
 **Server** (`server/`): `dev`, `start`, `db:generate`, `db:migrate`, `db:migrate:deploy`, `db:seed`, `vapid:generate`
 
-**Client** (`client/`): `dev`, `build`, `preview`
+**Client** (`client/`): `dev`, `build`, `preview`, `dev:portfolio`, `build:portfolio`, `preview:portfolio`
+
+### Portfolio demo mode (shareable static site)
+
+Same UI as production, with in-memory dummy data. **Does not** call Firestore, MySQL, or the Express API. Refresh resets to the original sample dataset. Production commands (`npm run dev` / `npm run build`) are unchanged.
+
+**Run locally** (client only — do not start the API):
+
+```bash
+npm run dev:portfolio
+```
+
+Open http://localhost:5173. You are auto-logged in as the demo owner (`owner@demo.kalpanik.in`). Logout, then sign in with **any** email/password (use a seed email like `guna@demo.kalpanik.in` to open that employee’s view).
+
+**Build static files:**
+
+```bash
+npm run build:portfolio
+```
+
+Output: `client/dist`. Preview with `npm run preview:portfolio --prefix client`.
+
+**Deploy a second site** (not the live ops VPS / sugandhshoppee instance):
+
+1. Build with `npm run build:portfolio`.
+2. Create a **new** Netlify or Vercel project pointed at `client/dist` (or drag-drop that folder). Do not reuse the production site.
+3. Netlify: SPA fallback is already in `client/public/_redirects` (`/* → /index.html 200`).
+4. Vercel: `client/public/vercel.json` is copied into `dist` (SPA rewrite).
+5. **Netlify Drop zip on Windows:** do **not** use `Compress-Archive` (it stores backslash paths). From Git Bash or WSL:
+
+```bash
+cd client/dist
+zip -r ../portfolio-demo.zip .
+```
+
+Or: `npm run zip:portfolio` from the repo root (writes `portfolio-demo.zip` with forward-slash paths).
+
+No env secrets are required for the demo site. Push, email, analytics, and OTP are stubbed.
 
 ---
 
@@ -1097,7 +1198,7 @@ Each attachment object:
 
 Visible only to users with **`isOwner: true`** (company owners, max 2).
 
-- **Company trial** banner (optional `COMPANY_TRIAL_*` env or DB settings)
+- **Company trial** card — start/end dates, days remaining, **View plans** and **Renew on kalpanik.in**
 - **Monthly work capacity**
   - Select **month** → KPIs, chart, and tables reload for that month
   - Capacity uses due/start month so one-time and not-yet-started tasks do not inflate other months
@@ -1132,7 +1233,7 @@ Package: `in.kalpanik.sugandhreminder`
 
 - Login with same email/password as website (shared session cookie API)
 - **Today / Upcoming / Completed** sections aligned with website Active vs Submitted rules
-- View assigned tasks, submit completion proof, progress updates, attachments
+- View assigned tasks, submit **mixed proof files** (photos + PDFs), progress updates, attachments
 - **6+ day critical overdue gate** (`TaskOverdueGateActivity`) — Submit or Postpone; same API as web
 - FCM reminders and alarms (same reminder slots as web); skips already-submitted work
 - Device registration via `POST /api/push/devices/register`
@@ -1191,7 +1292,7 @@ adb install -r "C:\Users\jayjo\AndroidStudioProjects\SugandhReminder\app\build\o
 
 | Context | Photos / videos | PDF | Notes |
 |---------|-----------------|-----|-------|
-| **Task submission** (web + Android) | No app size limit | 5 MB max | Up to 10 media files or one PDF alone |
+| **Task submission** (web + Android) | Mix photos/videos/audio | 5 MB each | **Up to 10 files total** (JPGs + PDFs together allowed) |
 | **Assignment attachments** | Supported | Supported | Plus voice notes; max 30 per task |
 | **Team chat** | 5 MB | 5 MB | Any file type |
 | **Profile photo** | JPEG/PNG/WebP | — | User profile |
@@ -1263,7 +1364,7 @@ fetch("/api/push/test", { method: "POST", credentials: "include" }).then((r) => 
 - Language-change overlay during switch
 - Dynamic content (task titles, descriptions, chat): `POST /api/translate` with `{ texts, to: "en"|"hi"|"mr"|"ta" }`
 - Chat voice-to-text: EN / HI / MR / TA via Web Speech API
-- Locale namespaces include: `app`, `language`, `common`, `auth`, `nav`, `owner`, `lists`, `employee`, `modals`, `profile`, `settings`, `tasks`, `contact`, `toast`, `empty`, `validation`, `chat`, `reports`, `notifications`, `legal`, `errors`, `reminders`, `attendance`, `deadlineExtensions`
+- Locale namespaces include: `app`, `language`, `common`, `auth`, `nav`, `owner`, `lists`, `employee`, `modals`, `profile`, `settings`, `tasks`, `contact`, `toast`, `empty`, `validation`, `chat`, `reports`, `notifications`, `legal`, `errors`, `reminders`, `attendance`, `deadlineExtensions`, `pricing`
 - All Tasks filter labels (List / Employee / Deadline / Show) and overdue / **Unassigned** strings live under `owner.*` and `common.*`
 
 ---
@@ -1303,7 +1404,9 @@ Task Manager/
 │   │   ├── adminAttendance.js           # Admin live map + daily/monthly reports
 │   │   ├── adminDeadlineExtensions.js   # Admin deadline extension approvals
 │   │   ├── adminReports.js              # Reports + owner dashboard charts
-│   │   ├── adminManageEmployees.js      # Manage employees page
+│   │   ├── adminManageEmployees.js      # Manage employees (salary, delete)
+│   │   ├── ownerPricing.js              # Plans modal + kalpanik.in renew
+│   │   ├── pricingPlans.js              # Canonical ₹299 / ₹349 plan data
 │   │   ├── adminManageLocations.js      # Work locations + attendance settings
 │   │   ├── adminAnnouncements.js        # Admin/employee bell notifications
 │   │   ├── adminSettings.js             # Settings page rows
@@ -1326,7 +1429,7 @@ Task Manager/
 │   └── dist/                            # Build output (not in git)
 ├── server/
 │   ├── prisma/
-│   │   ├── schema.prisma                # 26 models
+│   │   ├── schema.prisma                # 27 models
 │   │   └── migrations/                  # includes perf_query_indexes + feature migrations
 │   ├── src/
 │   │   ├── index.js                     # Express app, compression, static dist, session
@@ -1334,7 +1437,8 @@ Task Manager/
 │   │   │                                # reports, attendance, deadline-extensions,
 │   │   │                                # translate, support, company
 │   │   ├── services/                    # attendance, geocode, FCM, notifications,
-│   │   │                                # deadline extensions, task reopen, monthly minutes
+│   │   │                                # deadline extensions, task reopen, monthly minutes,
+│   │   │                                # user storage quota (1 GB / user)
 │   │   ├── middleware/
 │   │   └── lib/                         # mail, otp, turnstile, push, recurrence,
 │   │                                    # geofence, company profile, reminder scheduler
@@ -1364,9 +1468,9 @@ Base path: `/api`. Authenticated routes use session cookie (`credentials: "inclu
 | **Attendance (check-in)** | `/attendance/check-status`, `/check-in`, `/check-out`, `/my-history`, `/daily-report`, `/monthly-report` |
 | **Work locations** | `GET/POST/PATCH/DELETE /attendance/work-locations[...]` |
 | **Company settings** | `/attendance/company-settings`, `/attendance/daily-schedule` |
-| **Users** | `/assignees`, `/team`, `/peers`, `/profile`, `PATCH /users/:id/profile`, role, company-owner, photo/ID proof upload |
+| **Users** | `/assignees`, `/team`, `/peers`, `/profile`, `PATCH /users/:id/profile`, `DELETE /users/:id` (delete employee), role, company-owner, photo/ID proof upload, `/storage`, `/storage/team` |
 | **Reports** | `/reports/summary`, `/reports/employee-performance`, `/reports/owner-dashboard/summary?year=&month=` |
-| **Company** | `GET/PATCH /company/profile`, GST certificate upload/download/delete, `GET /company/trial` |
+| **Company** | `GET/PATCH /company/profile`, GST certificate, `GET /company/trial`, `GET /company/renewal-context` (kalpanik.in prefill) |
 | **Translate** | `POST /translate` |
 | **Push** | VAPID key, subscribe, device register, test-web, test |
 | **Chat** | contacts, threads, messages, groups, SSE `/chat/live`, attachments, typing, forward |
@@ -1399,7 +1503,12 @@ done
 pm2 restart taskmanager safari ss2n acs tacs ensens edunest
 ```
 
-Skip folders that do not exist on the VPS. Adjust the `pm2 restart` list to match `pm2 list`.
+If a site uses nginx `root /var/www/<site>`, rsync `client/dist` after build (ensens, edunest). Start missing processes the same way as ensens, for example:
+
+```bash
+pm2 start src/index.js --name edunest --cwd /root/Task_manager_edunest/server
+pm2 save
+```
 
 ### Deploy one site only (example: ensens)
 
@@ -1448,10 +1557,36 @@ pm2 restart <pm2-name> --update-env
 Edit that site’s `server/.env` (`COMPANY_TRIAL_START` / `COMPANY_TRIAL_END`), then:
 
 ```bash
-pm2 restart ensens --update-env
+pm2 restart <pm2-name> --update-env
 ```
 
-Examples: `deploy/company-trial-env.example`.
+To add N days on **all** sites (example: +7):
+
+```bash
+SITES=(
+  "Task_manager|taskmanager"
+  "Task_manager_safari|safari"
+  "Task_manager_ss2n|ss2n"
+  "Task_manager_acs|acs"
+  "Task_manager_tacs|tacs"
+  "Task_manager_ensens|ensens"
+  "Task_manager_edunest|edunest"
+)
+for entry in "${SITES[@]}"; do
+  dir="${entry%%|*}"
+  name="${entry##*|}"
+  envf="$HOME/$dir/server/.env"
+  [ -f "$envf" ] || continue
+  current=$(grep -E '^COMPANY_TRIAL_END=' "$envf" | tail -n1 | cut -d= -f2- | tr -d "\"'[:space:]")
+  [ -n "$current" ] || continue
+  new_end=$(date -d "$current + 7 days" +%F)
+  sed -i "s/^COMPANY_TRIAL_END=.*/COMPANY_TRIAL_END=$new_end/" "$envf"
+  echo "$dir: $current -> $new_end"
+  pm2 restart "$name" --update-env
+done
+```
+
+Examples: `deploy/company-trial-env.example`. Paid renewals on kalpanik.in should then be reflected by updating the same `COMPANY_TRIAL_END`.
 
 ### Deduplicate recurring cards (ops)
 
@@ -1529,7 +1664,7 @@ client_max_body_size 0;
 | `/etc/nginx/sites-enabled/acs` | `acs.kalpanik.in` | May use `/var/www` static root |
 | `/etc/nginx/sites-enabled/tacs` | `tacs.kalpanik.in` | May use `/var/www` static root |
 | `/etc/nginx/sites-enabled/ensens` | `ensens.kalpanik.in` | **`root /var/www/ensens`** — rsync after build |
-| `/etc/nginx/sites-enabled/edunest` | edunest | **`root /var/www/edunest`** — rsync after build |
+| `/etc/nginx/sites-enabled/edunest` | `edunest.kalpanik.in` | **`root /var/www/edunest`** — rsync after build; API proxy `127.0.0.1:3015` |
 
 ### Fix sugandhshoppee (one-liner)
 
@@ -1562,6 +1697,12 @@ See also: `deploy/nginx-upload-limit.conf.example`, `deploy/fix-nginx-proxy-all-
 | `413` on task submit | Nginx `client_max_body_size` too small — set `0` |
 | Old UI after deploy | `npm run build`; hard-refresh; if nginx `root /var/www/...`, **rsync `client/dist`** (ensens/edunest/etc.) |
 | Prisma **P3005** schema not empty | Baseline: `db push` + `migrate resolve --applied` for each migration, then `migrate deploy` |
+| Prisma **P3008** already applied | Migrations are already recorded — skip resolve; run `npx prisma migrate deploy` then `npx prisma db push` if columns are still missing |
+| `archived_submitted_at` / P2022 missing column | History was marked applied without SQL. On that site: `npx prisma db push` then `pm2 restart <name> --update-env` |
+| PM2 **edunest not found** | Start like ensens: `pm2 start src/index.js --name edunest --cwd /root/Task_manager_edunest/server` then `pm2 save` |
+| Cannot submit multiple PDFs + photos | Deploy latest client + server — mixed files up to 10 are allowed |
+| Delete employee missing | Deploy latest; only shown for non-owners; owners must revoke owner first |
+| Renew / View plans missing | Deploy latest client; company owner session; opens kalpanik.in/renew |
 | Duplicate recurring tasks | Same title + same due day: run `delete-duplicate-recurring-tasks.js`; different due days are normal |
 | Submitted tasks in Active | Deploy latest client — Active excludes `assigneeDone` / current submission |
 | Critical overdue gate loops after Postpone | Deploy latest web + Android; gone/submitted must keep gate dismissed |
@@ -1606,6 +1747,8 @@ curl -s -o /dev/null -w "%{http_code}\n" -X POST \
 
 - [DESIGN.md](./DESIGN.md) — architecture, topology, data flows
 - [deploy/](./deploy/) — nginx helpers, diagnostics, static sync
+- [pricing.png](./pricing.png) — canonical plan sheet (keep in sync with kalpanik.in and `client/src/pricingPlans.js`)
+- [kalpanik.in](https://kalpanik.in/) — public site, plans, invoices, UPI renewal
 
 ---
 

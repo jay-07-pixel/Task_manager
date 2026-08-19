@@ -1,5 +1,6 @@
 import { applyPwaBranding } from "./pwaBranding.js";
 import { initPwaSplash, notifyAppReady } from "./pwaSplash.js";
+import { IS_PORTFOLIO_DEMO } from "./demo/isPortfolioDemo.js";
 import "./scss/styles.scss";
 import * as bootstrap from "bootstrap";
 import Sortable from "sortablejs";
@@ -24,6 +25,7 @@ import {
   wireOwnerPricingModal,
   wireOwnerPricingCtas,
   ownerPricingCtaHtml,
+  invalidateRenewalContextCache,
 } from "./ownerPricing.js";
 import {
   profileDocumentsSectionHtml,
@@ -118,6 +120,13 @@ import {
 import { initI18n, tr, dateLocale, formatTime24, formatDateTime24, formatShortDateTime24, setLanguageChangeHandler } from "./i18n/index.js";
 import { dt, ensureStateContentTranslations, initContentTranslate, onContentTranslationsUpdated } from "./i18n/contentTranslate.js";
 import { languageSelectorHtml, wireLanguageSelector } from "./i18n/languageSelector.js";
+
+const portfolioDemoReady =
+  import.meta.env.VITE_PORTFOLIO_DEMO === "true"
+    ? import("./demo/installDemo.js").then((m) => {
+        m.installPortfolioDemo();
+      })
+    : Promise.resolve();
 
 const app = document.getElementById("app");
 const toastHost = document.getElementById("toastHost");
@@ -9070,6 +9079,7 @@ function renderOwnerChrome() {
         state.user.companyProfileComplete = profile.companyProfileComplete;
       }
       refreshCompanyProfileSettingsBadge(!profile.companyProfileComplete);
+      invalidateRenewalContextCache();
     },
   });
   initOwnerPricing({ api, escapeHtml, showToast });
@@ -10777,7 +10787,7 @@ async function render() {
       if (state.user?.attendanceEnabled === true && !isEmployeeOverdueGateActive()) {
         startAttendanceCheckInReminder();
       }
-      void prepareEmployeePushOnLogin();
+      if (!IS_PORTFOLIO_DEMO) void prepareEmployeePushOnLogin();
       await handleEmployeeNotifyDeepLink();
     } else {
       const empMain = document.getElementById("emp-main-column");
@@ -10794,7 +10804,7 @@ async function render() {
         /* ignore */
       }
     }
-    if ("serviceWorker" in navigator) {
+    if (!IS_PORTFOLIO_DEMO && "serviceWorker" in navigator) {
       void navigator.serviceWorker.getRegistrations().then((regs) => {
         for (const reg of regs) void reg.update();
       });
@@ -10831,6 +10841,7 @@ applyPwaBranding();
 initPwaSplash();
 
 async function startup() {
+  await portfolioDemoReady;
   await initI18n();
   wireOwnerDashboardAnnouncementListener();
   initContentTranslate(api);

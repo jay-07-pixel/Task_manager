@@ -42,6 +42,7 @@ export function buildKalpanikRenewUrl(ctx = {}) {
     instance: ctx.instance,
     site: ctx.site,
     company: ctx.company,
+    contact: ctx.contact,
     email: ctx.email,
     phone: ctx.phone,
     users: ctx.users,
@@ -49,6 +50,10 @@ export function buildKalpanikRenewUrl(ctx = {}) {
     plan: ctx.plan,
     extraGb: ctx.extraGb,
     months: ctx.months ?? 1,
+    gstin: ctx.gstin,
+    address: ctx.address,
+    state: ctx.state,
+    stateCode: ctx.stateCode,
     source: "task_manager",
   };
   for (const [key, value] of Object.entries(entries)) {

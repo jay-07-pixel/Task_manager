@@ -13,6 +13,7 @@ import {
   clearCompanyGstCertificate,
   getCompanyProfile,
   getCompanyProfileRow,
+  gstinStateCode,
   setCompanyGstCertificate,
   updateCompanyProfile,
 } from "../lib/companyProfile.js";
@@ -130,6 +131,10 @@ router.get("/renewal-context", requireCompanyOwner, async (req, res) => {
     instance,
     site,
     companyName: profile?.companyName || null,
+    companyAddress: profile?.companyAddress || null,
+    companyState: profile?.companyState || null,
+    gstNumber: profile?.gstNumber || null,
+    stateCode: gstinStateCode(profile?.gstNumber) || null,
     email: profile?.directorEmail || owner?.email || null,
     phone: profile?.directorPhone || owner?.phone || null,
     ownerName: profile?.directorName || owner?.displayName || null,

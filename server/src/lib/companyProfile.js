@@ -1,6 +1,14 @@
 import { prisma } from "./prisma.js";
 import { syncCompanyTrialSettings } from "./companyTrial.js";
 
+/** GSTIN first two digits are the Indian state code (e.g. 27 = Maharashtra). */
+export function gstinStateCode(gstNumber) {
+  const s = String(gstNumber || "").trim().toUpperCase();
+  if (s.length < 2) return null;
+  const code = s.slice(0, 2);
+  return /^\d{2}$/.test(code) ? code : null;
+}
+
 /** @param {import("@prisma/client").CompanySettings} row */
 export function isCompanyProfileComplete(row) {
   const text = (v) => String(v ?? "").trim();
