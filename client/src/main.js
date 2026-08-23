@@ -177,7 +177,8 @@ let ownerNavBusyUntil = 0;
 let ownerListRefreshTimer = null;
 let ownerListRefreshTarget = null;
 let taskSortableListId = null;
-const OWNER_TRIAL_POPUP_KEY = "taskmgr-owner-trial-popup-shown";
+const OWNER_TRIAL_POPUP_KEY = "taskmgr-subscription-expiry-popup";
+const SUBSCRIPTION_EXPIRY_NOTICE_DAYS = 8;
 const EMP_CRITICAL_OVERDUE_MIN_DAYS = 6;
 const POSTPONE_GRACE_MS = 24 * 60 * 60 * 1000;
 const POSTPONE_GRACE_STORAGE_KEY = "taskmgr-postpone-grace-v1";
@@ -4706,12 +4707,12 @@ function ownerTrialMessageModalHtml() {
       <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content border-0 shadow">
           <div class="modal-header border-0 pb-0">
-            <h2 class="modal-title h5 mb-0" id="ownerTrialMessageModalTitle">${tr("owner.trialNoticeTitle")}</h2>
+            <h2 class="modal-title h5 mb-0" id="ownerTrialMessageModalTitle">${tr("owner.subscriptionExpiringTitle")}</h2>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="${tr("common.close")}"></button>
           </div>
           <div class="modal-body pt-2">
-            <p class="mb-2">${ownerTrialNoticeBodyHtml()}</p>
-            <p class="mb-0">${tr("owner.trialNoticeBody2")}</p>
+            <p class="mb-2" id="ownerTrialMessageModalBody1"></p>
+            <p class="mb-0">${tr("owner.subscriptionExpiringBody2")}</p>
           </div>
           <div class="modal-footer border-0 pt-2 flex-wrap gap-2">
             <button type="button" class="btn btn-outline-primary js-open-owner-pricing" data-bs-dismiss="modal">${tr("pricing.viewPlans")}</button>
@@ -4723,22 +4724,35 @@ function ownerTrialMessageModalHtml() {
     </div>`;
 }
 
+function subscriptionDaysRemaining() {
+  const trial = state.companyTrial;
+  if (typeof trial?.remainingDays === "number") return trial.remainingDays;
+  return ownerTrialStatusInfo().daysRemaining;
+}
+
+function fillOwnerSubscriptionExpiryModal() {
+  const info = ownerTrialStatusInfo();
+  const days = subscriptionDaysRemaining();
+  const body1 = document.getElementById("ownerTrialMessageModalBody1");
+  if (body1) {
+    body1.innerHTML = tr("owner.subscriptionExpiringBody1", {
+      days: String(days),
+      end: info.end ? formatTrialDate(info.end) : "",
+    });
+  }
+}
+
 function maybeShowOwnerTrialMessageModal() {
   if (state.user?.role !== "owner") return;
+  const info = ownerTrialStatusInfo();
+  if (!info.hasStarted || info.isExpired || !info.end) return;
+  if (subscriptionDaysRemaining() !== SUBSCRIPTION_EXPIRY_NOTICE_DAYS) return;
   if (sessionStorage.getItem(OWNER_TRIAL_POPUP_KEY) === "1") return;
   const modalEl = document.getElementById("ownerTrialMessageModal");
   if (!modalEl) return;
+  fillOwnerSubscriptionExpiryModal();
   sessionStorage.setItem(OWNER_TRIAL_POPUP_KEY, "1");
   bootstrap.Modal.getOrCreateInstance(modalEl).show();
-}
-
-function ownerTrialNoticeBodyHtml() {
-  const info = ownerTrialStatusInfo();
-  if (!info.start || !info.end) return escapeHtml(tr("owner.trialNoticeBody1Fallback"));
-  return tr("owner.trialNoticeBody1", {
-    start: formatTrialDate(info.start),
-    end: formatTrialDate(info.end),
-  });
 }
 
 function ownerTrialStatusInfo() {
