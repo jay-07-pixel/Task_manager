@@ -24,7 +24,6 @@ import {
   ownerPricingModalHtml,
   wireOwnerPricingModal,
   wireOwnerPricingCtas,
-  ownerPricingCtaHtml,
   invalidateRenewalContextCache,
 } from "./ownerPricing.js";
 import {
@@ -3215,12 +3214,11 @@ function formatTrialDate(date) {
 
 function ownerTrialTopBannerHtml() {
   const info = ownerTrialStatusInfo();
-  const cta = ownerPricingCtaHtml();
+  if (!info.end) return "";
   if (info.isExpired) {
     const endStr = info.end.toLocaleDateString(undefined, { month: "short", day: "numeric" });
     return `<div class="admin-trial-banner admin-trial-banner--expired">
       <span class="admin-trial-banner-text">${tr("owner.trialEndedShort", { date: endStr })}</span>
-      ${cta}
     </div>`;
   }
   if (!info.hasStarted) return "";
@@ -3231,7 +3229,6 @@ function ownerTrialTopBannerHtml() {
       dayLabel: info.daysRemaining === 1 ? tr("owner.day") : tr("owner.days"),
       date: endStr,
     })}</span>
-    ${cta}
   </div>`;
 }
 
@@ -4792,7 +4789,6 @@ function ownerTrialStatusChipHtml() {
     return `<div class="owner-trial-chip owner-trial-chip--expired small">
       <i class="bi bi-exclamation-triangle" aria-hidden="true"></i>
       <span>${tr("owner.trialEndedOnShort", { end: endStr })}</span>
-      <button type="button" class="btn btn-link btn-sm p-0 ms-1 js-open-owner-pricing">${tr("pricing.viewPlans")}</button>
     </div>`;
   }
   return `<div class="owner-trial-chip owner-trial-chip--active small">

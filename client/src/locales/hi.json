@@ -227,6 +227,8 @@
     "noAssigneesYet": "अभी कोई असाइनी नहीं। लोग जोड़ने के लिए कार्य संपादित करें।",
     "trialEnded": "मुफ़्त ट्रायल समाप्त ({{date}})। <a href=\"mailto:support@kalpanik.in\">सहायता से संपर्क करें</a>",
     "trialEnds": "मुफ़्त ट्रायल <strong>{{days}}</strong> {{dayLabel}} में समाप्त ({{date}})। <a href=\"mailto:support@kalpanik.in\">सहायता से संपर्क करें</a>",
+    "trialEndedShort": "सदस्यता समाप्त ({{date}}).",
+    "trialEndsShort": "सदस्यता <strong>{{days}}</strong> {{dayLabel}} में समाप्त ({{date}}).",
     "day": "दिन",
     "days": "दिन",
     "trialNoticeTitle": "मुफ़्त ट्रायल सूचना",
@@ -557,6 +559,7 @@
     "title": "सेटिंग्स",
     "menuLabel": "सेटिंग्स",
     "intro": "अपनी प्रोफ़ाइल, थीम और एडमिन विकल्प प्रबंधित करें।",
+    "manageSubscription": "सदस्यता प्रबंधित करें",
     "manageNotifications": "सूचनाएँ प्रबंधित करें",
     "notificationsTurnedOn": "सूचनाएँ चालू कर दी गईं।",
     "notificationsTurnedOff": "सूचनाएँ बंद कर दी गईं।"

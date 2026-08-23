@@ -9,6 +9,7 @@ import {
   wireCompanyAttendanceEnabledToggle,
 } from "./attendance.js";
 import { openLegalModal } from "./legal/legalModal.js";
+import { ownerPricingCtaHtml, wireOwnerPricingCtas } from "./ownerPricing.js";
 import {
   isPushSupported,
   isPushSubscribed,
@@ -622,6 +623,15 @@ function ownerSettingsRowsHtml() {
 
   if (getUserFn?.()?.isOwner) {
     rows.push(companyProfileSettingsRowHtml());
+    rows.push(`<div class="admin-settings-subscription">
+      <div class="admin-settings-row admin-settings-row--static">
+        ${adminMsIconFn?.("credit_card") ?? ""}
+        <span class="admin-settings-row-label">${escapeHtmlFn?.(tr("settings.manageSubscription")) ?? ""}</span>
+      </div>
+      <div class="admin-settings-subscription-actions">
+        ${ownerPricingCtaHtml({ variant: "card" })}
+      </div>
+    </div>`);
   }
 
   rows.push(
@@ -901,6 +911,7 @@ function wireSettingsPage(main, role) {
   void refreshMyProfileSettingsBadge();
   if (role === "owner") {
     void refreshCompanyProfileSettingsBadge();
+    wireOwnerPricingCtas(main);
   }
 }
 

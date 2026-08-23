@@ -15,6 +15,36 @@
   gap: 0.5rem;
 }
 
+.admin-settings-subscription {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding: 0.85rem 1rem 1rem;
+  border: 1px solid var(--admin-outline-variant, #bec8ca);
+  border-radius: 12px;
+  background: var(--admin-surface-container, #f3f3ff);
+}
+
+.admin-settings-subscription .admin-settings-row--static {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  cursor: default;
+
+  &:hover,
+  &:focus-visible {
+    background: transparent;
+    border-color: transparent;
+  }
+}
+
+.admin-settings-subscription-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
 .admin-settings-row {
   display: flex;
   align-items: center;

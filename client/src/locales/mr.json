@@ -227,6 +227,8 @@
     "noAssigneesYet": "अद्याप कोणी नियुक्त नाही. लोक जोडण्यासाठी कार्य संपादित करा.",
     "trialEnded": "मोफत ट्रायल संपला ({{date}}). <a href=\"mailto:support@kalpanik.in\">सहाय्याशी संपर्क</a>",
     "trialEnds": "मोफत ट्रायल <strong>{{days}}</strong> {{dayLabel}} मध्ये संपेल ({{date}}). <a href=\"mailto:support@kalpanik.in\">सहाय्याशी संपर्क</a>",
+    "trialEndedShort": "सबस्क्रिप्शन संपले ({{date}}).",
+    "trialEndsShort": "सबस्क्रिप्शन <strong>{{days}}</strong> {{dayLabel}} संपेल ({{date}}).",
     "day": "दिवस",
     "days": "दिवस",
     "trialNoticeTitle": "मोफत ट्रायल सूचना",
@@ -557,6 +559,7 @@
     "title": "सेटिंग्ज",
     "menuLabel": "सेटिंग्ज",
     "intro": "तुमची प्रोफाइल, थीम आणि प्रशासक पर्याय व्यवस्थापित करा.",
+    "manageSubscription": "सबस्क्रिप्शन व्यवस्थापित करा",
     "manageNotifications": "सूचना व्यवस्थापित करा",
     "notificationsTurnedOn": "सूचना सुरू केल्या.",
     "notificationsTurnedOff": "सूचना बंद केल्या."
