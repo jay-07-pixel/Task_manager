@@ -38,11 +38,34 @@ export async function isCompanyAttendanceEnabled() {
   }
 }
 
+/**
+ * Whether employees get email when an admin assigns or edits a task.
+ * Opt-in: only on when explicitly set to true.
+ */
+export async function isCompanyTaskAssignmentEmailEnabled() {
+  try {
+    const row = await prisma.companySettings.findUnique({
+      where: { id: COMPANY_SETTINGS_ID },
+      select: { taskAssignmentEmailEnabled: true },
+    });
+    if (!row) return false;
+    return row.taskAssignmentEmailEnabled === true;
+  } catch {
+    return false;
+  }
+}
+
 export async function getCompanyAttendanceSettings() {
   const liveLocationRequired = await isCompanyLiveLocationRequired();
   const attendanceEnabled = await isCompanyAttendanceEnabled();
+  const taskAssignmentEmailEnabled = await isCompanyTaskAssignmentEmailEnabled();
   const schedule = await getDailyAttendanceSchedule();
-  return { liveLocationRequired, attendanceEnabled, ...schedule };
+  return {
+    liveLocationRequired,
+    attendanceEnabled,
+    taskAssignmentEmailEnabled,
+    ...schedule,
+  };
 }
 
 export async function getDailyAttendanceSchedule() {
@@ -185,6 +208,22 @@ export async function setCompanyAttendanceEnabled(attendanceEnabled) {
   });
   return {
     attendanceEnabled: updated.attendanceEnabled,
+    updatedAt: updated.updatedAt.toISOString(),
+  };
+}
+
+/**
+ * @param {boolean} taskAssignmentEmailEnabled
+ */
+export async function setCompanyTaskAssignmentEmailEnabled(taskAssignmentEmailEnabled) {
+  await syncCompanyTrialSettings();
+  const updated = await prisma.companySettings.update({
+    where: { id: COMPANY_SETTINGS_ID },
+    data: { taskAssignmentEmailEnabled: !!taskAssignmentEmailEnabled },
+    select: { taskAssignmentEmailEnabled: true, updatedAt: true },
+  });
+  return {
+    taskAssignmentEmailEnabled: updated.taskAssignmentEmailEnabled,
     updatedAt: updated.updatedAt.toISOString(),
   };
 }

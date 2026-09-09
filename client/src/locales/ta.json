@@ -562,7 +562,11 @@
     "manageSubscription": "சந்தாவை நிர்வகிக்கவும்",
     "manageNotifications": "அறிவிப்புகளை நிர்வகி",
     "notificationsTurnedOn": "அறிவிப்புகள் இயக்கப்பட்டன.",
-    "notificationsTurnedOff": "அறிவிப்புகள் முடக்கப்பட்டன."
+    "notificationsTurnedOff": "அறிவிப்புகள் முடக்கப்பட்டன.",
+    "taskAssignmentEmail": "பணி ஒதுக்கும்போது மின்னஞ்சல் அனுப்பு",
+    "taskAssignmentEmailHint": "இயக்கினால், நீங்கள் ஒரு பணியாளருக்கு பணி ஒதுக்கும்போதோ அல்லது அந்த பணியை மாற்றும்போதோ மின்னஞ்சல் அனுப்பப்படும். இயல்பாக அணைக்கப்பட்டிருக்கும்.",
+    "taskAssignmentEmailOnToast": "பணி ஒதுக்கல் மின்னஞ்சல்கள் இயக்கப்பட்டன.",
+    "taskAssignmentEmailOffToast": "பணி ஒதுக்கல் மின்னஞ்சல்கள் முடக்கப்பட்டன."
   },
   "tasks": {
     "assignmentAttachments": "பணியாளர்களுக்கான இணைப்புகள்",

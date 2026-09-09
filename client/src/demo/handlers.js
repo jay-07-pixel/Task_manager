@@ -1052,15 +1052,20 @@ export async function handleDemoRequest(url, init = {}) {
       ok: true,
       liveLocationRequired: store.company.liveLocationRequired,
       attendanceEnabled: store.company.attendanceEnabled,
+      taskAssignmentEmailEnabled: store.company.taskAssignmentEmailEnabled === true,
     });
   }
   if (pathname === "/api/attendance/company-settings" && method === "PATCH") {
     if (body.liveLocationRequired != null) store.company.liveLocationRequired = !!body.liveLocationRequired;
     if (body.attendanceEnabled != null) store.company.attendanceEnabled = !!body.attendanceEnabled;
+    if (body.taskAssignmentEmailEnabled != null) {
+      store.company.taskAssignmentEmailEnabled = !!body.taskAssignmentEmailEnabled;
+    }
     return json({
       ok: true,
       liveLocationRequired: store.company.liveLocationRequired,
       attendanceEnabled: store.company.attendanceEnabled,
+      taskAssignmentEmailEnabled: store.company.taskAssignmentEmailEnabled === true,
     });
   }
   if (pathname === "/api/attendance/daily-schedule" && method === "GET") {

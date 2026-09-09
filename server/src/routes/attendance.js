@@ -26,6 +26,7 @@ import {
   isCompanyAttendanceEnabled,
   setCompanyAttendanceEnabled,
   setCompanyLiveLocationRequired,
+  setCompanyTaskAssignmentEmailEnabled,
   setDailyAttendanceSchedule,
 } from "../services/companyAttendanceSettings.js";
 import {
@@ -57,6 +58,7 @@ const trackingSchema = z.object({
 const companySettingsSchema = z.object({
   liveLocationRequired: z.boolean().optional(),
   attendanceEnabled: z.boolean().optional(),
+  taskAssignmentEmailEnabled: z.boolean().optional(),
 });
 
 const workLocationSchema = z.object({
@@ -99,7 +101,8 @@ router.patch("/company-settings", requireOwner, async (req, res) => {
   }
   if (
     parsed.data.liveLocationRequired === undefined &&
-    parsed.data.attendanceEnabled === undefined
+    parsed.data.attendanceEnabled === undefined &&
+    parsed.data.taskAssignmentEmailEnabled === undefined
   ) {
     return res.status(400).json({ error: "No settings to update." });
   }
@@ -114,6 +117,12 @@ router.patch("/company-settings", requireOwner, async (req, res) => {
     settings = {
       ...settings,
       ...(await setCompanyAttendanceEnabled(parsed.data.attendanceEnabled)),
+    };
+  }
+  if (parsed.data.taskAssignmentEmailEnabled !== undefined) {
+    settings = {
+      ...settings,
+      ...(await setCompanyTaskAssignmentEmailEnabled(parsed.data.taskAssignmentEmailEnabled)),
     };
   }
   res.json({ ok: true, ...settings });

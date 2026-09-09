@@ -562,7 +562,11 @@
     "manageSubscription": "सबस्क्रिप्शन व्यवस्थापित करा",
     "manageNotifications": "सूचना व्यवस्थापित करा",
     "notificationsTurnedOn": "सूचना सुरू केल्या.",
-    "notificationsTurnedOff": "सूचना बंद केल्या."
+    "notificationsTurnedOff": "सूचना बंद केल्या.",
+    "taskAssignmentEmail": "कार्य नेमून देताना ईमेल पाठवा",
+    "taskAssignmentEmailHint": "सुरू असताना, तुम्ही कर्मचारीाला कार्य नेमून दिल्यावर किंवा ते कार्य बदलल्यावर ईमेल मिळेल. डीफॉल्ट बंद आहे.",
+    "taskAssignmentEmailOnToast": "कार्य नेमणूक ईमेल सुरू आहेत.",
+    "taskAssignmentEmailOffToast": "कार्य नेमणूक ईमेल बंद आहेत."
   },
   "tasks": {
     "assignmentAttachments": "नियुक्त कर्मचाऱ्यांसाठी संलग्नक",

@@ -562,7 +562,11 @@
     "manageSubscription": "सदस्यता प्रबंधित करें",
     "manageNotifications": "सूचनाएँ प्रबंधित करें",
     "notificationsTurnedOn": "सूचनाएँ चालू कर दी गईं।",
-    "notificationsTurnedOff": "सूचनाएँ बंद कर दी गईं।"
+    "notificationsTurnedOff": "सूचनाएँ बंद कर दी गईं।",
+    "taskAssignmentEmail": "कार्य सौंपने पर ईमेल भेजें",
+    "taskAssignmentEmailHint": "चालू होने पर, जब आप किसी कर्मचारी को कार्य सौंपते हैं या उस कार्य को बदलते हैं, उन्हें ईमेल मिलेगा। डिफ़ॉल्ट रूप से बंद रहता है।",
+    "taskAssignmentEmailOnToast": "कार्य असाइनमेंट ईमेल चालू हैं।",
+    "taskAssignmentEmailOffToast": "कार्य असाइनमेंट ईमेल बंद हैं।"
   },
   "tasks": {
     "assignmentAttachments": "नियुक्त कर्मचारियों के लिए संलग्नक",

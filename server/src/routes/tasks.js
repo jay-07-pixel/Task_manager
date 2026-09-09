@@ -26,6 +26,10 @@ import {
 import { notifyAdminsTaskSubmitted } from "../services/taskCompletionNotificationService.js";
 import { notifyAdminsTaskProgressUpdate } from "../services/taskProgressUpdateNotificationService.js";
 import { notifyEmployeeTaskReopened } from "../services/taskReopenNotificationService.js";
+import {
+  notifyAssigneesAfterTaskCreate,
+  notifyAssigneesAfterTaskUpdate,
+} from "../services/taskAssignmentEmailService.js";
 import { adminUserWhere, userHasAdminAccess } from "../lib/adminUsers.js";
 import { DEFAULT_REMINDER_BEFORE_MINUTES } from "../lib/reminderTiming.js";
 
@@ -2209,6 +2213,7 @@ router.post("/lists/:listId", requireOwner, async (req, res) => {
     data: createPayload,
     include: taskAssigneeInclude,
   });
+  notifyAssigneesAfterTaskCreate({ task, actorUserId: req.session.userId });
   res.status(201).json({ task: serializeTask(task) });
 });
 
@@ -2486,6 +2491,15 @@ router.patch("/:id", requireAuth, async (req, res) => {
         where: { id: task.id },
         include: taskAssigneeInclude,
       })) ?? updated;
+  }
+
+  if (isOwner && parsed.data.completed === undefined) {
+    notifyAssigneesAfterTaskUpdate({
+      previous: task,
+      updated,
+      patch: parsed.data,
+      actorUserId: req.session.userId,
+    });
   }
 
   res.json({ task: serializeTask(updated) });

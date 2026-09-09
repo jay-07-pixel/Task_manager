@@ -417,3 +417,194 @@ export async function sendAdminRevocationEmail(params) {
 
   return { ok: true, devMode: false };
 }
+
+function previewSubjectTitle(title) {
+  const t = String(title || "").trim() || "Task";
+  return t.length > 80 ? `${t.slice(0, 77)}…` : t;
+}
+
+function formatTaskDueLine(dueAt, allDay) {
+  if (!dueAt) return null;
+  const d = dueAt instanceof Date ? dueAt : new Date(dueAt);
+  if (Number.isNaN(d.getTime())) return null;
+  try {
+    if (allDay) {
+      return d.toLocaleDateString("en-IN", {
+        weekday: "short",
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      });
+    }
+    return d.toLocaleString("en-IN", {
+      weekday: "short",
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  } catch {
+    return d.toISOString();
+  }
+}
+
+function truncateNotes(notes) {
+  const t = String(notes || "").trim();
+  if (!t) return "";
+  return t.length > 400 ? `${t.slice(0, 397)}…` : t;
+}
+
+/**
+ * @param {{
+ *   kind: "assigned" | "updated";
+ *   to: string;
+ *   recipientName: string;
+ *   admin: { email?: string; displayName?: string };
+ *   task: { title?: string; notes?: string; dueAt?: Date | string | null; allDay?: boolean };
+ * }} params
+ */
+async function sendTaskNoticeEmail(params) {
+  const config = getBrevoConfig();
+  const adminName = params.admin.displayName?.trim() || "An administrator";
+  const adminEmail = params.admin.email?.trim() || "";
+  const recipientName = params.recipientName?.trim() || "there";
+  const signInUrl = process.env.APP_PUBLIC_URL?.trim() || "";
+  const title = String(params.task.title || "").trim() || "Untitled task";
+  const dueLine = formatTaskDueLine(params.task.dueAt, params.task.allDay);
+  const notes = truncateNotes(params.task.notes);
+  const assigned = params.kind === "assigned";
+
+  if (!config) {
+    if (process.env.NODE_ENV !== "production") {
+      console.log(
+        `[mail] Brevo not configured — task ${params.kind} email for ${params.to} (“${title}”) (dev only, not sent)`
+      );
+      return { ok: true, devMode: true };
+    }
+    console.warn(`[mail] Brevo not configured — skipped task ${params.kind} email for ${params.to}`);
+    return { ok: false, skipped: true };
+  }
+
+  const subject = assigned
+    ? `New task assigned: ${previewSubjectTitle(title)}`
+    : `Task updated: ${previewSubjectTitle(title)}`;
+  const intro = assigned
+    ? `${adminName} assigned you a task in Task Manager.`
+    : `${adminName} updated a task assigned to you.`;
+  const headerSub = assigned ? "New task assigned" : "Task updated";
+
+  const textContent = [
+    `Hi ${recipientName},`,
+    "",
+    intro,
+    "",
+    `Task: ${title}`,
+    dueLine ? `Due: ${dueLine}` : null,
+    notes ? `Notes: ${notes}` : null,
+    signInUrl ? `Open Task Manager: ${signInUrl}` : null,
+    "",
+    "If you have questions, reply to this email to contact your administrator.",
+    "",
+    "— Task Manager",
+  ]
+    .filter((line) => line !== null)
+    .join("\n");
+
+  const htmlContent = `
+    <div style="font-family:system-ui,-apple-system,Segoe UI,sans-serif;max-width:520px;margin:0 auto;color:#212529;line-height:1.5">
+      <div style="background:#00535b;color:#fff;border-radius:10px 10px 0 0;padding:20px 24px">
+        <h1 style="margin:0;font-size:20px;font-weight:700">Task Manager</h1>
+        <p style="margin:8px 0 0;opacity:0.92;font-size:14px">${escapeHtml(headerSub)}</p>
+      </div>
+      <div style="border:1px solid #dee2e6;border-top:0;border-radius:0 0 10px 10px;padding:24px;background:#fff">
+        <p style="margin:0 0 16px">Hi <strong>${escapeHtml(recipientName)}</strong>,</p>
+        <p style="margin:0 0 16px">
+          <strong>${escapeHtml(adminName)}</strong>${
+            adminEmail
+              ? ` (<a href="mailto:${escapeHtml(adminEmail)}" style="color:#00535b">${escapeHtml(adminEmail)}</a>)`
+              : ""
+          }
+          ${assigned ? "assigned you a task." : "updated a task assigned to you."}
+        </p>
+        <p style="margin:0 0 8px;font-size:16px;font-weight:700">${escapeHtml(title)}</p>
+        ${
+          dueLine
+            ? `<p style="margin:0 0 12px;font-size:14px;color:#495057">Due: ${escapeHtml(dueLine)}</p>`
+            : ""
+        }
+        ${
+          notes
+            ? `<p style="margin:0 0 16px;font-size:14px;color:#495057;white-space:pre-wrap">${escapeHtml(notes)}</p>`
+            : ""
+        }
+        ${
+          signInUrl
+            ? `<p style="margin:16px 0 20px"><a href="${escapeHtml(signInUrl)}" style="display:inline-block;background:#00535b;color:#fff;text-decoration:none;padding:10px 18px;border-radius:6px;font-weight:600">Open Task Manager</a></p>`
+            : ""
+        }
+        <p style="margin:0;font-size:13px;color:#6c757d">
+          If you have questions, reply to this email to contact ${escapeHtml(adminName)}.
+        </p>
+      </div>
+      <p style="margin:16px 0 0;font-size:12px;color:#adb5bd;text-align:center">
+        Sent on behalf of ${escapeHtml(adminName)} via Task Manager
+      </p>
+    </div>
+  `;
+
+  const res = await fetch(BREVO_API_URL, {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+      "api-key": config.apiKey,
+    },
+    body: JSON.stringify({
+      sender: { name: adminName, email: config.senderEmail },
+      to: [{ email: params.to, name: recipientName }],
+      replyTo: adminEmail ? { email: adminEmail, name: adminName } : undefined,
+      subject,
+      htmlContent,
+      textContent,
+    }),
+  });
+
+  if (!res.ok) {
+    let detail = res.statusText;
+    try {
+      const errBody = await res.json();
+      detail = errBody?.message || errBody?.error || JSON.stringify(errBody);
+    } catch {
+      /* ignore */
+    }
+    console.error(`[mail/brevo] task ${params.kind}`, res.status, detail);
+    throw new Error("Failed to send task notification email.");
+  }
+
+  return { ok: true, devMode: false };
+}
+
+/**
+ * @param {{
+ *   to: string;
+ *   recipientName: string;
+ *   admin: { email?: string; displayName?: string };
+ *   task: { title?: string; notes?: string; dueAt?: Date | string | null; allDay?: boolean };
+ * }} params
+ */
+export async function sendTaskAssignedEmail(params) {
+  return sendTaskNoticeEmail({ ...params, kind: "assigned" });
+}
+
+/**
+ * @param {{
+ *   to: string;
+ *   recipientName: string;
+ *   admin: { email?: string; displayName?: string };
+ *   task: { title?: string; notes?: string; dueAt?: Date | string | null; allDay?: boolean };
+ * }} params
+ */
+export async function sendTaskUpdatedEmail(params) {
+  return sendTaskNoticeEmail({ ...params, kind: "updated" });
+}

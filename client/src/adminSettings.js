@@ -617,6 +617,72 @@ function companyProfileSettingsRowHtml() {
   </button>`;
 }
 
+function taskAssignmentEmailToggleHtml() {
+  const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
+  const icon = adminMsIconFn?.("mail") ?? "";
+  const label = esc(tr("settings.taskAssignmentEmail"));
+  return `<div class="admin-settings-row admin-settings-row--toggle">
+    <span class="admin-settings-row-left">
+      ${icon}
+      <span class="admin-settings-row-label">${label}</span>
+    </span>
+    <label class="admin-settings-switch">
+      <input type="checkbox" class="admin-settings-switch-input js-task-assignment-email-toggle" aria-label="${label}" />
+      <span class="admin-settings-switch-track" aria-hidden="true"></span>
+    </label>
+  </div>
+  <p class="admin-settings-hint">${esc(tr("settings.taskAssignmentEmailHint"))}</p>`;
+}
+
+async function refreshTaskAssignmentEmailToggle(root, api = apiFn) {
+  const toggle = root?.querySelector(".js-task-assignment-email-toggle");
+  if (!toggle) return;
+  toggle.checked = false;
+  if (!api) return;
+  try {
+    const settings = await api("/api/attendance/company-settings");
+    toggle.checked = settings?.taskAssignmentEmailEnabled === true;
+  } catch {
+    toggle.checked = false;
+  }
+}
+
+function wireTaskAssignmentEmailToggle(root) {
+  const toggle = root?.querySelector(".js-task-assignment-email-toggle");
+  if (!toggle || toggle.dataset.wired === "1") return;
+  toggle.dataset.wired = "1";
+  void refreshTaskAssignmentEmailToggle(root, apiFn);
+  toggle.addEventListener("change", () => {
+    const wantOn = toggle.checked;
+    if (!apiFn) {
+      toggle.checked = !wantOn;
+      showToastFn?.(tr("errors.requestFailed"), "danger");
+      return;
+    }
+    toggle.disabled = true;
+    void apiFn("/api/attendance/company-settings", {
+      method: "PATCH",
+      body: JSON.stringify({ taskAssignmentEmailEnabled: wantOn }),
+    })
+      .then((settings) => {
+        toggle.checked = settings?.taskAssignmentEmailEnabled === true;
+        showToastFn?.(
+          wantOn
+            ? tr("settings.taskAssignmentEmailOnToast")
+            : tr("settings.taskAssignmentEmailOffToast"),
+          "success"
+        );
+      })
+      .catch((err) => {
+        toggle.checked = !wantOn;
+        showToastFn?.(err?.message || tr("errors.requestFailed"), "danger");
+      })
+      .finally(() => {
+        toggle.disabled = false;
+      });
+  });
+}
+
 function ownerSettingsRowsHtml() {
   const isDark = document.documentElement.getAttribute("data-bs-theme") === "dark";
   const rows = [myProfileSettingsRowHtml()];
@@ -669,6 +735,7 @@ function ownerSettingsRowsHtml() {
       extraClass: "js-open-manage-locations",
     }),
     companyAttendanceEnabledToggleHtml(),
+    taskAssignmentEmailToggleHtml(),
     settingsRowHtml({
       icon: "person",
       label: tr("owner.switchToUserView"),
@@ -903,6 +970,7 @@ function wireSettingsPage(main, role) {
       showToast: showToastFn,
       onChanged: (enabled) => onCompanyAttendanceChangedFn?.(enabled),
     });
+    wireTaskAssignmentEmailToggle(main);
   }
   if (role === "employee") {
     wireAttendanceSettingsToggle(main);

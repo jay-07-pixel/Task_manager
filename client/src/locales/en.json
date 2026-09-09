@@ -595,7 +595,11 @@
     "storagePreviewUnsupported": "Preview is not available for this file type.",
     "storageDownload": "Download",
     "storageViewFullScreen": "View full screen",
-    "storageTapFullScreen": "Tap to view full screen"
+    "storageTapFullScreen": "Tap to view full screen",
+    "taskAssignmentEmail": "Email employees when tasks are assigned",
+    "taskAssignmentEmailHint": "When on, employees get an email when you assign a task to them or change that task. Off by default.",
+    "taskAssignmentEmailOnToast": "Task assignment emails are on.",
+    "taskAssignmentEmailOffToast": "Task assignment emails are off."
   },
   "tasks": {
     "assignmentAttachments": "Attachments for assignees",
