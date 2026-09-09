@@ -608,3 +608,126 @@ export async function sendTaskAssignedEmail(params) {
 export async function sendTaskUpdatedEmail(params) {
   return sendTaskNoticeEmail({ ...params, kind: "updated" });
 }
+
+/**
+ * @param {{
+ *   to: string;
+ *   recipientName: string;
+ *   admin: { email?: string; displayName?: string };
+ *   previousName: string;
+ *   titles: string[];
+ * }} params
+ */
+export async function sendWorkTransferredEmail(params) {
+  const config = getBrevoConfig();
+  const adminName = params.admin.displayName?.trim() || "An administrator";
+  const adminEmail = params.admin.email?.trim() || "";
+  const recipientName = params.recipientName?.trim() || "there";
+  const previousName = params.previousName?.trim() || "a teammate";
+  const signInUrl = process.env.APP_PUBLIC_URL?.trim() || "";
+  const titles = (params.titles ?? []).map((t) => String(t || "").trim()).filter(Boolean);
+  const shown = titles.slice(0, 20);
+  const extra = titles.length > shown.length ? titles.length - shown.length : 0;
+
+  if (!config) {
+    if (process.env.NODE_ENV !== "production") {
+      console.log(
+        `[mail] Brevo not configured — work transfer email for ${params.to} (${titles.length} tasks) (dev only, not sent)`
+      );
+      return { ok: true, devMode: true };
+    }
+    console.warn(`[mail] Brevo not configured — skipped work transfer email for ${params.to}`);
+    return { ok: false, skipped: true };
+  }
+
+  const subject = titles.length === 1
+    ? `Task assigned: ${previewSubjectTitle(shown[0])}`
+    : `${titles.length} tasks assigned to you — Task Manager`;
+  const listText = shown.map((t) => `- ${t}`).join("\n");
+  const extraText = extra ? `\n…and ${extra} more.` : "";
+
+  const textContent = [
+    `Hi ${recipientName},`,
+    "",
+    `${adminName} assigned you work previously assigned to ${previousName}.`,
+    "",
+    titles.length ? `Tasks:\n${listText}${extraText}` : null,
+    signInUrl ? `Open Task Manager: ${signInUrl}` : null,
+    "",
+    "If you have questions, reply to this email to contact your administrator.",
+    "",
+    "— Task Manager",
+  ]
+    .filter((line) => line !== null)
+    .join("\n");
+
+  const listHtml = shown
+    .map((t) => `<li style="margin:0 0 6px">${escapeHtml(t)}</li>`)
+    .join("");
+  const extraHtml = extra
+    ? `<p style="margin:8px 0 0;font-size:13px;color:#6c757d">…and ${extra} more.</p>`
+    : "";
+
+  const htmlContent = `
+    <div style="font-family:system-ui,-apple-system,Segoe UI,sans-serif;max-width:520px;margin:0 auto;color:#212529;line-height:1.5">
+      <div style="background:#00535b;color:#fff;border-radius:10px 10px 0 0;padding:20px 24px">
+        <h1 style="margin:0;font-size:20px;font-weight:700">Task Manager</h1>
+        <p style="margin:8px 0 0;opacity:0.92;font-size:14px">Work transferred to you</p>
+      </div>
+      <div style="border:1px solid #dee2e6;border-top:0;border-radius:0 0 10px 10px;padding:24px;background:#fff">
+        <p style="margin:0 0 16px">Hi <strong>${escapeHtml(recipientName)}</strong>,</p>
+        <p style="margin:0 0 16px">
+          <strong>${escapeHtml(adminName)}</strong> assigned you work previously assigned to
+          <strong>${escapeHtml(previousName)}</strong>.
+        </p>
+        ${
+          listHtml
+            ? `<ul style="margin:0 0 16px;padding-left:20px">${listHtml}</ul>${extraHtml}`
+            : ""
+        }
+        ${
+          signInUrl
+            ? `<p style="margin:16px 0 20px"><a href="${escapeHtml(signInUrl)}" style="display:inline-block;background:#00535b;color:#fff;text-decoration:none;padding:10px 18px;border-radius:6px;font-weight:600">Open Task Manager</a></p>`
+            : ""
+        }
+        <p style="margin:0;font-size:13px;color:#6c757d">
+          If you have questions, reply to this email to contact ${escapeHtml(adminName)}.
+        </p>
+      </div>
+      <p style="margin:16px 0 0;font-size:12px;color:#adb5bd;text-align:center">
+        Sent on behalf of ${escapeHtml(adminName)} via Task Manager
+      </p>
+    </div>
+  `;
+
+  const res = await fetch(BREVO_API_URL, {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+      "api-key": config.apiKey,
+    },
+    body: JSON.stringify({
+      sender: { name: adminName, email: config.senderEmail },
+      to: [{ email: params.to, name: recipientName }],
+      replyTo: adminEmail ? { email: adminEmail, name: adminName } : undefined,
+      subject,
+      htmlContent,
+      textContent,
+    }),
+  });
+
+  if (!res.ok) {
+    let detail = res.statusText;
+    try {
+      const errBody = await res.json();
+      detail = errBody?.message || errBody?.error || JSON.stringify(errBody);
+    } catch {
+      /* ignore */
+    }
+    console.error("[mail/brevo] work transfer", res.status, detail);
+    throw new Error("Failed to send work transfer email.");
+  }
+
+  return { ok: true, devMode: false };
+}

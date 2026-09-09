@@ -931,6 +931,70 @@ export async function handleDemoRequest(url, init = {}) {
   }
   p = route("GET", "/api/users/:id/storage");
   if (p) return json({ storage: storagePayload(p.id) });
+  p = route("GET", "/api/users/:id/transfer-preview");
+  if (p) {
+    const from = userById(store, p.id);
+    if (!from) return err("User not found", 404);
+    let openCount = 0;
+    let submittedCount = 0;
+    for (const task of store.tasks) {
+      if (task.completed) continue;
+      for (const a of task.assignments || []) {
+        if (a.userId !== p.id) continue;
+        if (a.assigneeDone) submittedCount += 1;
+        else openCount += 1;
+      }
+    }
+    return json({
+      from: { id: from.id, email: from.email, displayName: from.displayName },
+      openCount,
+      submittedCount,
+      users: store.users
+        .filter((u) => u.id !== p.id)
+        .map((u) => ({ id: u.id, email: u.email, displayName: u.displayName })),
+    });
+  }
+  p = route("POST", "/api/users/:id/transfer-work");
+  if (p) {
+    const from = userById(store, p.id);
+    const to = userById(store, body.toUserId);
+    if (!from) return err("User not found", 404);
+    if (!to) return err("Replacement employee not found.", 404);
+    if (from.id === to.id) return err("Choose a different employee.");
+    let transferred = 0;
+    let alreadyAssigned = 0;
+    let submittedKept = 0;
+    const titles = [];
+    for (const task of store.tasks) {
+      if (task.completed) continue;
+      const fromOpen = (task.assignments || []).find((a) => a.userId === from.id && !a.assigneeDone);
+      const fromSubmitted = (task.assignments || []).find((a) => a.userId === from.id && a.assigneeDone);
+      if (fromSubmitted) submittedKept += 1;
+      if (!fromOpen) continue;
+      const toHas = (task.assignments || []).some((a) => a.userId === to.id);
+      if (toHas) {
+        task.assignments = task.assignments.filter((a) => !(a.userId === from.id && !a.assigneeDone));
+        alreadyAssigned += 1;
+      } else {
+        fromOpen.userId = to.id;
+        fromOpen.assignedByUserId = me.id;
+        fromOpen.assigneeDone = false;
+        fromOpen.submissionText = null;
+        fromOpen.proofUrls = [];
+        transferred += 1;
+        if (task.title) titles.push(task.title);
+      }
+    }
+    return json({
+      ok: true,
+      transferred,
+      alreadyAssigned,
+      submittedKept,
+      from: { id: from.id, email: from.email, displayName: from.displayName },
+      to: { id: to.id, email: to.email, displayName: to.displayName },
+      titles,
+    });
+  }
   p = route("DELETE", "/api/users/:id");
   if (p) {
     if (p.id === me.id) return err("You cannot delete your own account.");

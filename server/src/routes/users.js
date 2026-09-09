@@ -33,6 +33,7 @@ import {
   STORAGE_FILE_CATEGORIES,
   USER_STORAGE_QUOTA_BYTES,
 } from "../services/userStorageService.js";
+import { getTransferPreview, transferOpenWork } from "../services/taskWorkTransferService.js";
 
 const router = Router();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -696,6 +697,35 @@ router.patch("/:id/company-owner", requireCompanyOwner, async (req, res) => {
     select: { id: true, email: true, displayName: true, role: true, isAdmin: true, isOwner: true, salary: true },
   });
   res.json({ user: serializeTeamUser(user) });
+});
+
+const transferWorkSchema = z.object({
+  toUserId: z.string().uuid(),
+});
+
+router.get("/:id/transfer-preview", requireOwner, async (req, res) => {
+  const preview = await getTransferPreview(req.params.id);
+  if (!preview) return res.status(404).json({ error: "User not found" });
+  res.json(preview);
+});
+
+router.post("/:id/transfer-work", requireOwner, async (req, res) => {
+  const parsed = transferWorkSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ error: "Choose an employee to receive the work." });
+  }
+  try {
+    const result = await transferOpenWork({
+      fromUserId: req.params.id,
+      toUserId: parsed.data.toUserId,
+      actorUserId: req.session.userId,
+    });
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    const status = Number(err?.status) || 500;
+    if (status >= 500) console.error("[users] transfer work failed", err);
+    res.status(status).json({ error: err?.message || "Could not transfer work." });
+  }
 });
 
 /**

@@ -27,6 +27,9 @@ let getCurrentUserFn = null;
 /** @type {string | null} */
 let viewingEmployeeId = null;
 
+/** @type {string | null} */
+let transferringFromId = null;
+
 export function initManageEmployees({
   api,
   escapeHtml,
@@ -127,7 +130,8 @@ export function employeeProfileModalHtml() {
           </form>
         </div>
       </div>
-    </div>`;
+    </div>
+    ${transferWorkModalHtml()}`;
 }
 
 function fillEmployeeProfileModal(profile) {
@@ -229,14 +233,158 @@ async function saveEmployeeProfile(e) {
 
 export function wireEmployeeProfileModal() {
   const form = document.getElementById("employee-profile-form");
-  if (!form || form.dataset.wired === "1") return;
-  form.dataset.wired = "1";
-  form.addEventListener("submit", (e) => {
-    void saveEmployeeProfile(e);
+  if (form && form.dataset.wired !== "1") {
+    form.dataset.wired = "1";
+    form.addEventListener("submit", (e) => {
+      void saveEmployeeProfile(e);
+    });
+    document.getElementById("employeeProfileModal")?.addEventListener("hidden.bs.modal", () => {
+      viewingEmployeeId = null;
+    });
+  }
+  wireTransferWorkModal();
+}
+
+function wireTransferWorkModal() {
+  const modalEl = document.getElementById("transferWorkModal");
+  const submitBtn = document.getElementById("transfer-work-submit");
+  if (!modalEl || !submitBtn || submitBtn.dataset.wired === "1") return;
+  submitBtn.dataset.wired = "1";
+  submitBtn.addEventListener("click", () => {
+    void submitTransferWork();
   });
-  document.getElementById("employeeProfileModal")?.addEventListener("hidden.bs.modal", () => {
-    viewingEmployeeId = null;
+  modalEl.addEventListener("hidden.bs.modal", () => {
+    transferringFromId = null;
   });
+}
+
+async function openTransferWorkModal(userId) {
+  const modalEl = document.getElementById("transferWorkModal");
+  if (!modalEl || !apiFn || !userId) return;
+  transferringFromId = userId;
+  const intro = document.getElementById("transfer-work-intro");
+  const summary = document.getElementById("transfer-work-summary");
+  const submittedNote = document.getElementById("transfer-work-submitted-note");
+  const select = document.getElementById("transfer-work-to");
+  const wrap = document.getElementById("transfer-work-to-wrap");
+  const submitBtn = document.getElementById("transfer-work-submit");
+  const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
+
+  if (intro) intro.textContent = tr("common.loading");
+  if (summary) summary.textContent = "";
+  if (submittedNote) submittedNote.textContent = "";
+  if (select) select.innerHTML = "";
+  if (submitBtn) submitBtn.disabled = true;
+
+  bootstrap.Modal.getOrCreateInstance(modalEl).show();
+  try {
+    const preview = await apiFn(`/api/users/${userId}/transfer-preview`);
+    const fromName = preview?.from?.displayName || preview?.from?.email || tr("common.employee");
+    if (intro) intro.textContent = tr("owner.transferWorkIntro", { name: fromName });
+    const openCount = Number(preview?.openCount) || 0;
+    if (summary) {
+      summary.textContent =
+        openCount > 0
+          ? tr("owner.transferWorkSummary", { count: openCount })
+          : tr("owner.transferWorkSummaryNone");
+    }
+    const submittedCount = Number(preview?.submittedCount) || 0;
+    if (submittedNote) {
+      submittedNote.textContent =
+        submittedCount > 0
+          ? tr("owner.transferWorkSubmittedNote", { count: submittedCount, name: fromName })
+          : "";
+    }
+    const users = preview?.users ?? [];
+    if (!users.length) {
+      if (wrap) wrap.classList.add("d-none");
+      if (summary) summary.textContent = tr("owner.transferWorkNoTeammates");
+      if (submitBtn) submitBtn.disabled = true;
+      return;
+    }
+    if (wrap) wrap.classList.remove("d-none");
+    if (select) {
+      select.innerHTML = [
+        `<option value="">${esc(tr("owner.transferWorkChoose"))}</option>`,
+        ...users.map(
+          (u) =>
+            `<option value="${esc(u.id)}">${esc(u.displayName || u.email)} — ${esc(u.email)}</option>`
+        ),
+      ].join("");
+    }
+    if (submitBtn) submitBtn.disabled = openCount === 0;
+  } catch (err) {
+    if (intro) intro.textContent = err.message || tr("owner.transferWorkFailed");
+    if (submitBtn) submitBtn.disabled = true;
+  }
+}
+
+async function submitTransferWork() {
+  if (!apiFn || !transferringFromId) return;
+  const select = document.getElementById("transfer-work-to");
+  const toUserId = select?.value || "";
+  const submitBtn = document.getElementById("transfer-work-submit");
+  if (!toUserId) {
+    showToastFn?.(tr("owner.transferWorkChoose"), "warning");
+    return;
+  }
+  if (submitBtn) submitBtn.disabled = true;
+  try {
+    const result = await apiFn(`/api/users/${transferringFromId}/transfer-work`, {
+      method: "POST",
+      body: JSON.stringify({ toUserId }),
+    });
+    const fromName = result?.from?.displayName || result?.from?.email || tr("common.employee");
+    const toName = result?.to?.displayName || result?.to?.email || tr("common.employee");
+    const count = Number(result?.transferred) || 0;
+    showToastFn?.(
+      count > 0
+        ? tr("owner.transferWorkSuccess", { count, from: fromName, to: toName })
+        : tr("owner.transferWorkSuccessNone", { from: fromName }),
+      "success"
+    );
+    bootstrap.Modal.getInstance(document.getElementById("transferWorkModal"))?.hide();
+    transferringFromId = null;
+  } catch (err) {
+    showToastFn?.(err.message || tr("owner.transferWorkFailed"), "danger");
+  } finally {
+    if (submitBtn) submitBtn.disabled = false;
+  }
+}
+
+function transferWorkModalHtml() {
+  const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
+  return `
+    <div class="modal fade profile-modal" id="transferWorkModal" tabindex="-1" aria-labelledby="transferWorkModalTitle" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered profile-modal-dialog">
+        <div class="modal-content profile-modal-card">
+          <div class="modal-header profile-modal-header">
+            <h2 class="modal-title h5 mb-0" id="transferWorkModalTitle">${esc(tr("owner.transferWorkTitle"))}</h2>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="${esc(tr("common.close"))}"></button>
+          </div>
+          <div class="modal-body profile-modal-body">
+            <p class="small text-muted mb-3" id="transfer-work-intro"></p>
+            <p class="small mb-2" id="transfer-work-summary"></p>
+            <p class="small text-muted mb-3" id="transfer-work-submitted-note"></p>
+            <div class="mb-0" id="transfer-work-to-wrap">
+              <label class="form-label" for="transfer-work-to">${esc(tr("owner.transferWorkTo"))}</label>
+              <select class="form-select" id="transfer-work-to"></select>
+            </div>
+          </div>
+          <div class="modal-footer profile-modal-footer">
+            <button type="button" class="profile-modal-btn-cancel" data-bs-dismiss="modal">${esc(tr("common.cancel"))}</button>
+            <button type="button" class="profile-modal-btn-save" id="transfer-work-submit">${esc(tr("owner.transferWorkConfirm"))}</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function canTransferWork(user) {
+  const me = getCurrentUserFn?.();
+  if (!me?.id || !user?.id) return false;
+  if (user.id === me.id) return false;
+  return true;
 }
 
 function canDeleteEmployee(user) {
@@ -264,6 +412,9 @@ function employeeRowHtml(user, storage = null) {
     )}</span>`;
   }
 
+  const transferBtn = canTransferWork(user)
+    ? `<button type="button" class="btn btn-sm btn-outline-primary manage-employee-transfer-btn" data-user-id="${esc(user.id)}" data-user-name="${esc(user.displayName || user.email)}">${esc(tr("owner.transferWork"))}</button>`
+    : "";
   const deleteBtn = canDeleteEmployee(user)
     ? `<button type="button" class="btn btn-sm btn-outline-danger manage-employee-delete-btn" data-user-id="${esc(user.id)}" data-user-name="${esc(user.displayName || user.email)}">${esc(tr("owner.deleteEmployee"))}</button>`
     : "";
@@ -280,6 +431,7 @@ function employeeRowHtml(user, storage = null) {
     </span>
     <span class="manage-employee-actions">
       <button type="button" class="btn btn-sm btn-outline-primary manage-employee-view-btn" data-user-id="${esc(user.id)}">${esc(tr("profile.viewProfile"))}</button>
+      ${transferBtn}
       ${deleteBtn}
     </span>
   </div>`;
@@ -321,6 +473,12 @@ async function renderManageEmployeesList() {
       btn.addEventListener("click", () => {
         const id = btn.getAttribute("data-user-id");
         if (id) void openEmployeeProfileModal(id);
+      });
+    });
+    host.querySelectorAll(".manage-employee-transfer-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.getAttribute("data-user-id");
+        if (id) void openTransferWorkModal(id);
       });
     });
     host.querySelectorAll(".manage-employee-delete-btn").forEach((btn) => {
