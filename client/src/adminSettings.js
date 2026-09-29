@@ -657,7 +657,7 @@ function userAccountTileHtml() {
     </span>
     <span class="admin-settings-account-who">
       <span class="admin-settings-avatar" data-account-avatar>
-        <img class="d-none" data-account-photo alt="" />
+        <img class="d-none" data-account-photo alt="" width="76" height="76" />
         <span data-account-initials>${esc(accountInitials(name))}</span>
       </span>
       <span class="admin-settings-account-id">

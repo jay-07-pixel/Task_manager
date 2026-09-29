@@ -332,9 +332,9 @@
 }
 
 .admin-settings-avatar {
-  width: 2.6rem;
-  height: 2.6rem;
-  border-radius: 0.8rem;
+  width: 4.75rem;
+  height: 4.75rem;
+  border-radius: 0.95rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -343,12 +343,16 @@
   background: var(--set-mint);
   color: var(--set-mint-ink);
   font-weight: 700;
-  font-size: 0.85rem;
+  font-size: 1.05rem;
 
   img {
-    width: 100%;
-    height: 100%;
+    display: block;
+    width: 4.75rem;
+    height: 4.75rem;
+    flex: none;
     object-fit: cover;
+    object-position: center 18%;
+    image-rendering: auto;
   }
 }
 
