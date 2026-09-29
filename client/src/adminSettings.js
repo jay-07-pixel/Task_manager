@@ -107,8 +107,14 @@ export function initAdminSettings({
   if (kalpanikWebsiteUrl) visitUrl = kalpanikWebsiteUrl;
 }
 
-function settingsRowHtml({ icon, label, extraClass = "", attrs = "", tag = "button" }) {
-  const inner = `${adminMsIconFn?.(icon) ?? ""}<span class="admin-settings-row-label">${escapeHtmlFn?.(label) ?? label}</span>${extraClass.includes("admin-settings-row--link") ? adminMsIconFn?.("open_in_new", "admin-settings-row-chevron") ?? "" : adminMsIconFn?.("chevron_right", "admin-settings-row-chevron") ?? ""}`;
+function settingsRowHtml({ icon, label, hint = "", hintAttr = "", extraClass = "", attrs = "", tag = "button" }) {
+  const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
+  const chevron = extraClass.includes("admin-settings-row--link")
+    ? adminMsIconFn?.("open_in_new", "admin-settings-row-chevron") ?? ""
+    : adminMsIconFn?.("chevron_right", "admin-settings-row-chevron") ?? "";
+  const inner = `<span class="admin-settings-icon-well">${adminMsIconFn?.(icon) ?? ""}</span><span class="admin-settings-link-copy"><span class="admin-settings-row-label">${esc(label)}</span>${
+    hint ? `<span class="admin-settings-link-hint" ${hintAttr}>${esc(hint)}</span>` : ""
+  }</span>${chevron}`;
   if (tag === "a") {
     return `<a class="admin-settings-row ${extraClass}" ${attrs}>${inner}</a>`;
   }
@@ -127,35 +133,59 @@ export function formatStorageBytes(bytes) {
   return `${Math.round(n)} B`;
 }
 
+function formatStoragePretty(bytes) {
+  return formatStorageBytes(bytes).replace(/(\.\d*?)0+(?=\s)/, "$1").replace(/\.(?=\s)/, "");
+}
+
+function visitHostLabel() {
+  try {
+    return new URL(visitUrl).host;
+  } catch {
+    return visitUrl;
+  }
+}
+
+function accountRoleLabel(user) {
+  if (user?.isOwner) return tr("settings.roleOwner");
+  if (user?.isAdmin) return tr("common.admin");
+  return tr("common.employee");
+}
+
+function accountInitials(name) {
+  const parts = String(name || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  const letters = `${parts[0]?.[0] || ""}${parts[1]?.[0] || ""}`;
+  return (letters || "?").toUpperCase();
+}
+
 /** @param {any} storage */
 function storageBreakdownHtml(storage) {
   const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
   const cats = storage?.byCategory || {};
   const taskBytes = (cats.taskProofs || 0) + (cats.progressUpdates || 0);
   const rows = [
-    { category: "tasks", label: tr("settings.storageCategoryTasks"), bytes: taskBytes },
-    { category: "chat", label: tr("settings.storageCategoryChat"), bytes: cats.chat || 0 },
-    { category: "profile", label: tr("settings.storageCategoryProfile"), bytes: cats.profile || 0 },
+    { category: "tasks", icon: "folder", label: tr("settings.storageCategoryTasks"), bytes: taskBytes },
+    { category: "chat", icon: "attach_file", label: tr("settings.storageCategoryChat"), bytes: cats.chat || 0 },
+    { category: "profile", icon: "badge", label: tr("settings.storageCategoryProfile"), bytes: cats.profile || 0 },
     {
       category: "assignment",
+      icon: "assignment",
       label: tr("settings.storageCategoryAssignment"),
       bytes: cats.assignmentAttachments || 0,
     },
-  ].filter((r) => r.bytes > 0);
-
-  if (!rows.length) return "";
+  ];
   return `<ul class="admin-settings-storage-breakdown">
     ${rows
       .map(
         (r) => `<li>
           <button type="button" class="admin-settings-storage-cat-btn js-open-storage-category" data-storage-category="${esc(
             r.category
-          )}">
+          )}" title="${esc(r.label)}">
+            <span class="admin-settings-icon-well admin-settings-icon-well--sm">${adminMsIconFn?.(r.icon) ?? ""}</span>
             <span class="admin-settings-storage-cat-label">${esc(r.label)}</span>
-            <span class="admin-settings-storage-cat-meta">
-              <span class="tabular-nums">${esc(formatStorageBytes(r.bytes))}</span>
-              ${adminMsIconFn?.("chevron_right", "admin-settings-storage-cat-chevron") ?? ""}
-            </span>
+            <span class="admin-settings-storage-cat-meta tabular-nums">${esc(formatStoragePretty(r.bytes))}</span>
           </button>
         </li>`
       )
@@ -545,27 +575,40 @@ export function storageUsageCardHtml(storage, { loading = false } = {}) {
       <p class="admin-settings-storage-loading text-danger mb-0">${esc(tr("settings.storageLoadFailed"))}</p>
     </div>`;
   }
-  const used = formatStorageBytes(storage.usedBytes);
-  const quota = formatStorageBytes(storage.quotaBytes || 1024 * 1024 * 1024);
+  const quotaBytes = storage.quotaBytes || 1024 * 1024 * 1024;
+  const used = formatStoragePretty(storage.usedBytes);
+  const quota = formatStoragePretty(quotaBytes);
+  const free = formatStoragePretty(Math.max(0, quotaBytes - storage.usedBytes));
   const pct = Math.min(100, Math.max(0, Number(storage.percentUsed) || 0));
+  const pctLabel = pct > 0 && pct < 1 ? "<1" : String(Math.round(pct));
   const over = Boolean(storage.overQuota);
   return `<div class="admin-settings-storage-card${over ? " admin-settings-storage-card--over" : ""}" data-storage-card>
-    <div class="admin-settings-storage-head">
-      ${adminMsIconFn?.("hard_drive") ?? ""}
-      <div class="admin-settings-storage-titles">
-        <p class="admin-settings-storage-title mb-0">${esc(tr("settings.storageTitle"))}</p>
-        <p class="admin-settings-storage-quota mb-0 tabular-nums">${esc(
-          tr("settings.storageQuotaLabel", { used, quota })
-        )}</p>
+    <div class="admin-settings-card-head">
+      <span class="admin-settings-icon-well">${adminMsIconFn?.("cloud") ?? ""}</span>
+      <div class="admin-settings-card-copy">
+        <h2 class="admin-settings-card-title">${esc(tr("settings.storageTitle"))}</h2>
+        <p class="admin-settings-card-sub">${esc(tr("settings.storageEyebrow"))}</p>
       </div>
+      <span class="admin-settings-used-pill">${esc(tr("settings.storagePercentUsed", { percent: pctLabel }))}</span>
     </div>
-    <div class="admin-settings-storage-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" aria-label="${esc(
+    <div class="admin-settings-storage-hero">
+      <p class="admin-settings-storage-figure mb-0">
+        <span class="admin-settings-storage-big tabular-nums">${esc(used)}</span>
+        <span class="admin-settings-storage-of tabular-nums"> / ${esc(quota)}</span>
+      </p>
+      <span class="admin-settings-storage-free tabular-nums">${esc(tr("settings.storageFree", { amount: free }))}</span>
+    </div>
+    <div class="admin-settings-storage-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(pct)}" aria-label="${esc(
       tr("settings.storageTitle")
     )}">
       <span class="admin-settings-storage-bar-fill" style="width:${pct}%"></span>
     </div>
-    <p class="admin-settings-storage-hint mb-0">${esc(tr("settings.storageHint"))}</p>
+    <div class="admin-settings-storage-meta">
+      <span class="tabular-nums">${esc(tr("settings.storageActive", { amount: used }))}</span>
+      <span class="tabular-nums">${esc(tr("settings.storageMax", { amount: quota }))}</span>
+    </div>
     ${storageBreakdownHtml(storage)}
+    <p class="admin-settings-storage-hint mb-0">${esc(tr("settings.storageHint"))}</p>
   </div>`;
 }
 
@@ -597,23 +640,52 @@ async function loadAndRenderStorageCard(root) {
   }
 }
 
-function myProfileSettingsRowHtml() {
+function statusPillHtml(dataAttr) {
   const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
-  return `<button type="button" class="admin-settings-row js-open-my-profile" data-my-profile-row="1">
-    ${adminMsIconFn?.("account_circle") ?? ""}
-    <span class="admin-settings-row-label">${esc(tr("profile.myProfile"))}</span>
-    <span class="admin-settings-row-status admin-settings-row-status--incomplete d-none" data-my-profile-status>${esc(tr("profile.sectionIncompleteTitle"))}</span>
-    ${adminMsIconFn?.("chevron_right", "admin-settings-row-chevron") ?? ""}
+  return `<span class="admin-settings-row-status d-none" ${dataAttr}></span>`;
+}
+
+function userAccountTileHtml() {
+  const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
+  const user = getUserFn?.() || {};
+  const name = user.displayName || tr("profile.myProfile");
+  const email = user.email || "";
+  return `<button type="button" class="admin-settings-account-tile js-open-my-profile" data-my-profile-row="1">
+    <span class="admin-settings-account-kicker">
+      <span>${esc(tr("settings.userAccount"))}</span>
+      ${statusPillHtml('data-my-profile-status="1"')}
+    </span>
+    <span class="admin-settings-account-who">
+      <span class="admin-settings-avatar" data-account-avatar>
+        <img class="d-none" data-account-photo alt="" />
+        <span data-account-initials>${esc(accountInitials(name))}</span>
+      </span>
+      <span class="admin-settings-account-id">
+        <span class="admin-settings-account-name" data-account-name>${esc(name)}</span>
+        <span class="admin-settings-account-email" data-account-email>${esc(email)}</span>
+        <span class="admin-settings-account-role" data-account-role>${esc(accountRoleLabel(user))}</span>
+      </span>
+    </span>
+    <span class="admin-settings-inline-action">${esc(tr("profile.editProfile"))} ${adminMsIconFn?.("edit", "admin-settings-inline-icon") ?? ""}</span>
   </button>`;
 }
 
-function companyProfileSettingsRowHtml() {
+function companyAccountTileHtml() {
   const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
-  return `<button type="button" class="admin-settings-row js-open-company-profile" data-company-profile-row="1">
-    ${adminMsIconFn?.("business") ?? ""}
-    <span class="admin-settings-row-label">${esc(tr("profile.myCompanyDetails"))}</span>
-    <span class="admin-settings-row-status admin-settings-row-status--incomplete d-none" data-company-profile-status>${esc(tr("profile.sectionIncompleteTitle"))}</span>
-    ${adminMsIconFn?.("chevron_right", "admin-settings-row-chevron") ?? ""}
+  return `<button type="button" class="admin-settings-account-tile js-open-company-profile" data-company-profile-row="1">
+    <span class="admin-settings-account-kicker">
+      <span>${esc(tr("settings.companyKicker"))}</span>
+      ${statusPillHtml('data-company-profile-status="1"')}
+    </span>
+    <span class="admin-settings-account-who">
+      <span class="admin-settings-icon-well">${adminMsIconFn?.("apartment") ?? ""}</span>
+      <span class="admin-settings-account-id">
+        <span class="admin-settings-account-name" data-company-account-name>${esc(tr("profile.myCompanyDetails"))}</span>
+        <span class="admin-settings-account-email" data-company-account-gst></span>
+        <span class="admin-settings-account-role" data-company-account-place></span>
+      </span>
+    </span>
+    <span class="admin-settings-inline-action">${esc(tr("settings.companyDetails"))} ${adminMsIconFn?.("chevron_right", "admin-settings-inline-icon") ?? ""}</span>
   </button>`;
 }
 
@@ -683,119 +755,201 @@ function wireTaskAssignmentEmailToggle(root) {
   });
 }
 
-function ownerSettingsRowsHtml() {
+function themeChoiceHtml(mode, isDark) {
+  const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
+  const active = mode === "dark" ? isDark : !isDark;
+  const icon = mode === "dark" ? "dark_mode" : "light_mode";
+  const label = mode === "dark" ? tr("settings.themeDark") : tr("settings.themeLight");
+  const toggleClass = active ? "" : " js-admin-theme-toggle";
+  return `<button type="button" class="admin-settings-theme-btn${active ? " is-active" : ""}${toggleClass}" aria-pressed="${active ? "true" : "false"}">
+    ${adminMsIconFn?.(icon) ?? ""}
+    <span>${esc(label)}</span>
+  </button>`;
+}
+
+function appearanceControlHtml() {
+  const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
   const isDark = document.documentElement.getAttribute("data-bs-theme") === "dark";
-  const rows = [myProfileSettingsRowHtml()];
+  return `<div class="admin-settings-appearance">
+    <p class="admin-settings-appearance-label">${esc(tr("settings.appearance"))}</p>
+    <div class="admin-settings-theme-switch" role="group" aria-label="${esc(tr("owner.themeToggle"))}">
+      ${themeChoiceHtml("light", isDark)}
+      ${themeChoiceHtml("dark", isDark)}
+    </div>
+  </div>`;
+}
 
-  if (getUserFn?.()?.isOwner) {
-    rows.push(companyProfileSettingsRowHtml());
-    rows.push(`<div class="admin-settings-subscription">
-      <div class="admin-settings-row admin-settings-row--static">
-        ${adminMsIconFn?.("credit_card") ?? ""}
-        <span class="admin-settings-row-label">${escapeHtmlFn?.(tr("settings.manageSubscription")) ?? ""}</span>
-      </div>
-      <div class="admin-settings-subscription-actions">
-        ${ownerPricingCtaHtml({ variant: "card" })}
-      </div>
-    </div>`);
-  }
+function visitUsRowHtml() {
+  return settingsRowHtml({
+    icon: "language",
+    label: tr("common.visitUs"),
+    hint: visitHostLabel(),
+    extraClass: "admin-settings-row--link",
+    tag: "a",
+    attrs: `href="${escapeHtmlFn?.(visitUrl) ?? visitUrl}" target="_blank" rel="noopener noreferrer"`,
+  });
+}
 
-  rows.push(
-    settingsRowHtml({
-      icon: isDark ? "light_mode" : "dark_mode",
-      label: tr("owner.themeToggle"),
-      extraClass: "js-admin-theme-toggle",
-    }),
-    settingsRowHtml({
-      icon: "language",
-      label: tr("common.visitUs"),
-      extraClass: "admin-settings-row--link",
-      tag: "a",
-      attrs: `href="${escapeHtmlFn?.(visitUrl) ?? visitUrl}" target="_blank" rel="noopener noreferrer"`,
-    }),
-    settingsRowHtml({
-      icon: "policy",
-      label: tr("legal.settingsRow"),
-      extraClass: "js-open-legal",
-    }),
+function privacyRowHtml() {
+  return settingsRowHtml({
+    icon: "policy",
+    label: tr("legal.settingsRow"),
+    hint: tr("settings.privacyHint"),
+    extraClass: "js-open-legal",
+  });
+}
+
+function sectionHeadHtml({ icon, title, subtitle, pill = "" }) {
+  const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
+  return `<header class="admin-settings-section-head">
+    <span class="admin-settings-icon-well">${adminMsIconFn?.(icon) ?? ""}</span>
+    <div class="admin-settings-section-copy">
+      <h2 class="admin-settings-section-title">${esc(title)}</h2>
+      <p class="admin-settings-section-sub">${esc(subtitle)}</p>
+    </div>
+    ${pill ? `<span class="admin-settings-count-pill">${esc(pill)}</span>` : ""}
+  </header>`;
+}
+
+function switchViewCalloutHtml(role) {
+  const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
+  const toEmployee = role !== "owner";
+  return `<button type="button" class="admin-settings-preview js-switch-account-view" data-view-role="${toEmployee ? "employee" : "owner"}">
+    ${adminMsIconFn?.(toEmployee ? "swap_horiz" : "admin_panel_settings") ?? ""}
+    <span class="admin-settings-link-copy">
+      <span class="admin-settings-row-label">${esc(tr(toEmployee ? "owner.switchToUserView" : "owner.switchToAdminView"))}</span>
+      <span class="admin-settings-link-hint">${esc(tr(toEmployee ? "settings.switchPreview" : "owner.adminDashboard"))}</span>
+    </span>
+    <span class="admin-settings-preview-pill">${esc(tr("settings.preview"))}</span>
+  </button>`;
+}
+
+function notificationsToggleHtml() {
+  return `<div class="admin-settings-row admin-settings-row--toggle">
+    <span class="admin-settings-row-left">
+      ${adminMsIconFn?.("notifications") ?? ""}
+      <span class="admin-settings-row-label">${escapeHtmlFn?.(tr("settings.manageNotifications")) ?? ""}</span>
+    </span>
+    <label class="admin-settings-switch">
+      <input type="checkbox" class="admin-settings-switch-input js-admin-notifications-toggle" aria-label="${escapeHtmlFn?.(tr("settings.manageNotifications")) ?? ""}" />
+      <span class="admin-settings-switch-track" aria-hidden="true"></span>
+    </label>
+  </div>`;
+}
+
+function subscriptionBlockHtml() {
+  const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
+  return `<div class="admin-settings-plan">
+    <span class="admin-settings-icon-well">${adminMsIconFn?.("credit_card") ?? ""}</span>
+    <div class="admin-settings-plan-copy">
+      <div class="admin-settings-plan-title-row">
+        <span class="admin-settings-plan-title">${esc(tr("settings.manageSubscription"))}</span>
+        <span class="admin-settings-expiry-pill d-none" data-subscription-expiry></span>
+      </div>
+      <p class="admin-settings-plan-sub mb-0" data-subscription-line></p>
+    </div>
+    <div class="admin-settings-plan-actions">
+      ${ownerPricingCtaHtml({ variant: "card" })}
+    </div>
+  </div>`;
+}
+
+function ownerSettingsBodyHtml() {
+  const isOwner = !!getUserFn?.()?.isOwner;
+  const accountTiles = [userAccountTileHtml(), isOwner ? companyAccountTileHtml() : ""].join("");
+
+  const team = [
     settingsRowHtml({
       icon: "admin_panel_settings",
       label: tr("owner.manageAdmin"),
+      hint: tr("settings.adminAccessHint"),
+      hintAttr: 'data-settings-admin-hint="1"',
       extraClass: "js-admin-manage-admin",
       attrs: 'data-bs-toggle="modal" data-bs-target="#teamAdminModal"',
     }),
     settingsRowHtml({
       icon: "groups",
       label: tr("owner.manageEmployees"),
+      hint: tr("settings.employeeDirectoryHint"),
+      hintAttr: 'data-settings-employee-hint="1"',
       extraClass: "js-open-manage-employees",
     }),
     settingsRowHtml({
       icon: "pin_drop",
       label: tr("attendance.manageLocations"),
+      hint: tr("settings.locationsHint"),
+      hintAttr: 'data-settings-locations-hint="1"',
       extraClass: "js-open-manage-locations",
     }),
+  ].join("");
+
+  const tracking = [
     companyAttendanceEnabledToggleHtml(),
+    companyLiveLocationSettingsToggleHtml(),
     taskAssignmentEmailToggleHtml(),
-    settingsRowHtml({
-      icon: "person",
-      label: tr("owner.switchToUserView"),
-      extraClass: "js-switch-account-view",
-      attrs: 'data-view-role="employee"',
-    })
-  );
+    isPushSupported() ? notificationsToggleHtml() : "",
+  ].join("");
 
-  rows.push(companyLiveLocationSettingsToggleHtml());
-
-  if (isPushSupported()) {
-    rows.push(`<div class="admin-settings-row admin-settings-row--toggle">
-      <span class="admin-settings-row-left">
-        ${adminMsIconFn?.("notifications") ?? ""}
-        <span class="admin-settings-row-label">${escapeHtmlFn?.(tr("settings.manageNotifications")) ?? ""}</span>
-      </span>
-      <label class="admin-settings-switch">
-        <input type="checkbox" class="admin-settings-switch-input js-admin-notifications-toggle" aria-label="${escapeHtmlFn?.(tr("settings.manageNotifications")) ?? ""}" />
-        <span class="admin-settings-switch-track" aria-hidden="true"></span>
-      </label>
-    </div>`);
-  }
-
-  return rows.join("");
+  return `<div class="admin-settings-bento">
+    <div class="admin-settings-bento-top">
+      <section class="admin-settings-panel admin-settings-panel--storage">
+        ${storageUsageCardHtml(null, { loading: true })}
+      </section>
+      <section class="admin-settings-panel admin-settings-panel--account">
+        <header class="admin-settings-card-head">
+          <span class="admin-settings-icon-well">${adminMsIconFn?.("verified") ?? ""}</span>
+          <div class="admin-settings-card-copy">
+            <h2 class="admin-settings-card-title">${escapeHtmlFn?.(tr("settings.accountTitle")) ?? ""}</h2>
+            <p class="admin-settings-card-sub">${escapeHtmlFn?.(tr("settings.accountSubtitle")) ?? ""}</p>
+          </div>
+        </header>
+        <div class="admin-settings-account-grid">${accountTiles}</div>
+        ${isOwner ? subscriptionBlockHtml() : ""}
+      </section>
+    </div>
+    <div class="admin-settings-bento-grid">
+      <section class="admin-settings-panel">
+        ${sectionHeadHtml({
+          icon: "shield",
+          title: tr("settings.teamTitle"),
+          subtitle: tr("settings.teamSubtitle"),
+          pill: tr("settings.moduleCount", { count: "3" }),
+        })}
+        <div class="admin-settings-list">${team}</div>
+        ${switchViewCalloutHtml("employee")}
+      </section>
+      <section class="admin-settings-panel" data-settings-tracking="1">
+        ${sectionHeadHtml({
+          icon: "schedule",
+          title: tr("settings.trackingTitle"),
+          subtitle: tr("settings.trackingSubtitle"),
+        })}
+        <div class="admin-settings-list admin-settings-track">${tracking}</div>
+        <p class="admin-settings-track-foot">
+          <span class="admin-settings-dot" data-tracking-dot></span>
+          <span data-tracking-status></span>
+          <span class="admin-settings-track-count" data-tracking-count></span>
+        </p>
+      </section>
+      <section class="admin-settings-panel">
+        ${sectionHeadHtml({
+          icon: "tune",
+          title: tr("settings.prefsTitle"),
+          subtitle: tr("settings.prefsSubtitle"),
+        })}
+        <div class="admin-settings-list">
+          ${appearanceControlHtml()}
+          ${visitUsRowHtml()}
+          ${privacyRowHtml()}
+        </div>
+      </section>
+    </div>
+  </div>`;
 }
 
-function employeeSettingsRowsHtml() {
+function employeeSettingsBodyHtml() {
   const user = getUserFn?.();
-  const isDark = document.documentElement.getAttribute("data-bs-theme") === "dark";
-  const rows = [
-    myProfileSettingsRowHtml(),
-    settingsRowHtml({
-      icon: isDark ? "light_mode" : "dark_mode",
-      label: tr("owner.themeToggle"),
-      extraClass: "js-admin-theme-toggle",
-    }),
-    settingsRowHtml({
-      icon: "language",
-      label: tr("common.visitUs"),
-      extraClass: "admin-settings-row--link",
-      tag: "a",
-      attrs: `href="${escapeHtmlFn?.(visitUrl) ?? visitUrl}" target="_blank" rel="noopener noreferrer"`,
-    }),
-    settingsRowHtml({
-      icon: "policy",
-      label: tr("legal.settingsRow"),
-      extraClass: "js-open-legal",
-    }),
-  ];
-
-  if (user?.isAdmin) {
-    rows.push(
-      settingsRowHtml({
-        icon: "admin_panel_settings",
-        label: tr("owner.switchToAdminView"),
-        extraClass: "js-switch-account-view",
-        attrs: 'data-view-role="owner"',
-      })
-    );
-  }
+  const rows = [appearanceControlHtml(), visitUsRowHtml(), privacyRowHtml()];
 
   if (isPushSupported()) {
     rows.push(
@@ -807,24 +961,57 @@ function employeeSettingsRowsHtml() {
     );
   }
 
-  if (user?.role === "employee" && user?.liveLocationRequired !== false) {
-    rows.push(attendanceSettingsToggleHtml());
-  }
+  const tracking = user?.role === "employee" && user?.liveLocationRequired !== false ? attendanceSettingsToggleHtml() : "";
 
-  return rows.join("");
+  return `<div class="admin-settings-bento">
+    <div class="admin-settings-bento-top">
+      <section class="admin-settings-panel admin-settings-panel--storage">
+        ${storageUsageCardHtml(null, { loading: true })}
+      </section>
+      <section class="admin-settings-panel admin-settings-panel--account">
+        <header class="admin-settings-card-head">
+          <span class="admin-settings-icon-well">${adminMsIconFn?.("account_circle") ?? ""}</span>
+          <div class="admin-settings-card-copy">
+            <h2 class="admin-settings-card-title">${escapeHtmlFn?.(tr("settings.profileCardTitle")) ?? ""}</h2>
+            <p class="admin-settings-card-sub">${escapeHtmlFn?.(tr("settings.profileCardSubtitle")) ?? ""}</p>
+          </div>
+        </header>
+        <div class="admin-settings-account-grid admin-settings-account-grid--single">${userAccountTileHtml()}</div>
+      </section>
+    </div>
+    <div class="admin-settings-bento-grid admin-settings-bento-grid--employee">
+      <section class="admin-settings-panel">
+        ${sectionHeadHtml({
+          icon: "tune",
+          title: tr("settings.prefsTitle"),
+          subtitle: tr("settings.prefsSubtitle"),
+        })}
+        <div class="admin-settings-list">${rows.join("")}</div>
+        ${user?.isAdmin ? switchViewCalloutHtml("owner") : ""}
+      </section>
+      ${
+        tracking
+          ? `<section class="admin-settings-panel" data-settings-tracking="1">
+        ${sectionHeadHtml({
+          icon: "schedule",
+          title: tr("settings.trackingTitle"),
+          subtitle: tr("attendance.liveLocationTracking"),
+        })}
+        <div class="admin-settings-list admin-settings-track">${tracking}</div>
+      </section>`
+          : ""
+      }
+    </div>
+  </div>`;
 }
 
 function settingsPageHtml(role) {
-  const rows = role === "owner" ? ownerSettingsRowsHtml() : employeeSettingsRowsHtml();
+  const body = role === "owner" ? ownerSettingsBodyHtml() : employeeSettingsBodyHtml();
   const chromeHeader = role === "owner" ? ownerChromeHeaderFn?.() ?? "" : employeeChromeHeaderFn?.() ?? "";
   return `<div class="admin-main-scroll d-flex flex-column">
     ${chromeHeader}
     <div class="admin-settings-page">
-      <p class="admin-settings-intro">${escapeHtmlFn?.(tr("settings.intro")) ?? ""}</p>
-      ${storageUsageCardHtml(null, { loading: true })}
-      <nav class="admin-settings-list" aria-label="${escapeHtmlFn?.(tr("settings.title")) ?? "Settings"}">
-        ${rows}
-      </nav>
+      ${body}
     </div>
   </div>`;
 }
@@ -959,6 +1146,7 @@ function wireSettingsPage(main, role) {
   });
 
   wireNotificationsToggle(main);
+  bindTrackingFooter(main);
   if (role === "owner") {
     wireCompanyLiveLocationToggle(main, {
       api: apiFn,
@@ -979,7 +1167,140 @@ function wireSettingsPage(main, role) {
   void refreshMyProfileSettingsBadge();
   if (role === "owner") {
     void refreshCompanyProfileSettingsBadge();
+    void refreshSubscriptionCard();
+    void refreshTeamAndLocationFacts(main);
     wireOwnerPricingCtas(main);
+  }
+}
+
+function bindTrackingFooter(root) {
+  const panel = root.querySelector("[data-settings-tracking]");
+  const status = panel?.querySelector("[data-tracking-status]");
+  const count = panel?.querySelector("[data-tracking-count]");
+  const dot = panel?.querySelector("[data-tracking-dot]");
+  if (!panel || !status || !count) return;
+  const update = () => {
+    const inputs = [...panel.querySelectorAll(".admin-settings-switch-input")];
+    const on = inputs.filter((input) => input.checked).length;
+    status.textContent = tr(on > 0 ? "settings.trackingOn" : "settings.trackingOff");
+    count.textContent = tr("settings.trackingFooter", { on: String(on), total: String(inputs.length) });
+    dot?.classList.toggle("is-on", on > 0);
+  };
+  panel.addEventListener("change", update);
+  update();
+  setTimeout(update, 500);
+  setTimeout(update, 1400);
+}
+
+function formatSubscriptionDate(date) {
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+function subscriptionStatusFromTrial(trial) {
+  const end = trial?.trialEndDate ? new Date(trial.trialEndDate) : null;
+  const start = trial?.trialStartDate ? new Date(trial.trialStartDate) : null;
+  if (!end || Number.isNaN(end.getTime())) return null;
+  const now = Date.now();
+  const dayMs = 24 * 60 * 60 * 1000;
+  const daysRemaining = Math.max(0, Math.ceil((end.getTime() - now) / dayMs));
+  const isExpired = typeof trial?.isExpired === "boolean" ? trial.isExpired : now > end.getTime();
+  const hasStarted =
+    typeof trial?.hasStarted === "boolean" ? trial.hasStarted : !start || Number.isNaN(start.getTime()) || now >= start.getTime();
+  return { start, end, daysRemaining, isExpired, hasStarted };
+}
+
+async function refreshSubscriptionCard() {
+  const line = document.querySelector("[data-subscription-line]");
+  const pill = document.querySelector("[data-subscription-expiry]");
+  if (!line || !pill || !apiFn || !getUserFn?.()?.isOwner) return;
+  try {
+    const trial = await apiFn("/api/company/trial");
+    const info = subscriptionStatusFromTrial(trial);
+    if (!info) return;
+    const endStr = formatSubscriptionDate(info.end);
+    const dayLabel = tr(info.daysRemaining === 1 ? "owner.day" : "owner.days");
+    if (info.isExpired) {
+      pill.textContent = tr("settings.subscriptionEnded");
+      pill.classList.remove("d-none");
+      line.textContent = tr("owner.trialEndedShort", { date: endStr });
+      return;
+    }
+    if (!info.hasStarted && info.start && !Number.isNaN(info.start.getTime())) {
+      pill.classList.add("d-none");
+      line.textContent = tr("owner.trialStartsOn", {
+        start: formatSubscriptionDate(info.start),
+        end: endStr,
+      });
+      return;
+    }
+    pill.textContent = tr("settings.expiresIn", {
+      days: String(info.daysRemaining),
+      dayLabel,
+    });
+    pill.classList.remove("d-none");
+    line.innerHTML = tr("owner.trialEndsShort", {
+      days: String(info.daysRemaining),
+      dayLabel,
+      date: endStr,
+    });
+  } catch {
+    /* plan buttons stay; dates stay blank until the company trial loads */
+  }
+}
+
+function fillUserAccountTile(profile) {
+  const row = document.querySelector("[data-my-profile-row]");
+  if (!row || !profile) return;
+  const name = profile.displayName || "";
+  const nameEl = row.querySelector("[data-account-name]");
+  const emailEl = row.querySelector("[data-account-email]");
+  const roleEl = row.querySelector("[data-account-role]");
+  const initialsEl = row.querySelector("[data-account-initials]");
+  const photoEl = row.querySelector("[data-account-photo]");
+  if (nameEl && name) nameEl.textContent = name;
+  if (emailEl) emailEl.textContent = profile.email || "";
+  if (roleEl) roleEl.textContent = accountRoleLabel({ ...getUserFn?.(), ...profile });
+  if (initialsEl && name) initialsEl.textContent = accountInitials(name);
+  const photoUrl = profile.profilePhoto?.url;
+  if (photoEl && photoUrl) {
+    photoEl.alt = name;
+    photoEl.src = photoUrl;
+    photoEl.classList.remove("d-none");
+    initialsEl?.classList.add("d-none");
+  }
+}
+
+async function refreshTeamAndLocationFacts(root) {
+  if (!apiFn) return;
+  const adminHint = root.querySelector("[data-settings-admin-hint]");
+  const employeeHint = root.querySelector("[data-settings-employee-hint]");
+  const locationHint = root.querySelector("[data-settings-locations-hint]");
+  try {
+    const data = await apiFn("/api/users/team");
+    const users = Array.isArray(data?.users) ? data.users : [];
+    const admins = users.filter((user) => user.isAdmin).length;
+    const owners = users.filter((user) => user.isOwner).length;
+    if (adminHint) {
+      adminHint.textContent = tr("settings.adminAccessLive", {
+        admins: String(admins),
+        owners: String(owners),
+        maxOwners: String(data?.maxOwners ?? owners),
+      });
+    }
+    if (employeeHint) {
+      employeeHint.textContent = tr("settings.employeeDirectoryLive", { count: String(users.length) });
+    }
+  } catch {
+    /* keep the static description */
+  }
+  try {
+    const data = await apiFn("/api/attendance/work-locations");
+    const count = Array.isArray(data?.locations) ? data.locations.length : null;
+    if (locationHint && count != null) {
+      locationHint.textContent = tr("settings.locationsLive", { count: String(count) });
+    }
+  } catch {
+    /* keep the static description */
   }
 }
 
@@ -989,7 +1310,10 @@ export function refreshMyProfileSettingsBadge(incomplete = null) {
   if (!row || !badge) return;
 
   const apply = (isIncomplete) => {
-    badge.classList.toggle("d-none", !isIncomplete);
+    badge.classList.remove("d-none");
+    badge.textContent = isIncomplete ? tr("profile.sectionIncompleteTitle") : tr("profile.documentsComplete");
+    badge.classList.toggle("admin-settings-row-status--incomplete", isIncomplete);
+    badge.classList.toggle("admin-settings-row-status--complete", !isIncomplete);
     row.classList.toggle("admin-settings-row--incomplete", isIncomplete);
   };
 
@@ -1002,8 +1326,13 @@ export function refreshMyProfileSettingsBadge(incomplete = null) {
     void apiFn("/api/users/profile")
       .then(({ profile }) => {
         apply(!profile.profileDocumentsComplete);
+        fillUserAccountTile(profile);
         const user = getUserFn?.();
-        if (user) user.profileDocumentsComplete = profile.profileDocumentsComplete;
+        if (user) {
+          user.profileDocumentsComplete = profile.profileDocumentsComplete;
+          if (profile.displayName) user.displayName = profile.displayName;
+          if (profile.email) user.email = profile.email;
+        }
       })
       .catch(() => {});
     return;
@@ -1018,19 +1347,35 @@ export function refreshCompanyProfileSettingsBadge(incomplete = null) {
   if (!row || !badge) return;
 
   const apply = (isIncomplete) => {
-    badge.classList.toggle("d-none", !isIncomplete);
+    badge.classList.remove("d-none");
+    badge.textContent = isIncomplete ? tr("profile.sectionIncompleteTitle") : tr("profile.documentsComplete");
+    badge.classList.toggle("admin-settings-row-status--incomplete", isIncomplete);
+    badge.classList.toggle("admin-settings-row-status--complete", !isIncomplete);
     row.classList.toggle("admin-settings-row--incomplete", isIncomplete);
   };
 
-  if (incomplete === null) {
-    if (!getUserFn?.()?.isOwner || !apiFn) return;
-    void apiFn("/api/company/profile")
-      .then(({ profile }) => apply(!profile.companyProfileComplete))
-      .catch(() => {});
+  const fill = (profile) => {
+    const nameEl = row.querySelector("[data-company-account-name]");
+    const gstEl = row.querySelector("[data-company-account-gst]");
+    const placeEl = row.querySelector("[data-company-account-place]");
+    if (nameEl) nameEl.textContent = profile?.companyName || tr("profile.myCompanyDetails");
+    if (gstEl) gstEl.textContent = profile?.gstNumber ? `${tr("profile.gstNumber")}: ${profile.gstNumber}` : "";
+    if (placeEl) {
+      placeEl.textContent = [profile?.companyState, profile?.companyAddress].filter(Boolean).join(" · ");
+    }
+  };
+
+  if (!getUserFn?.()?.isOwner || !apiFn) {
+    if (incomplete !== null) apply(incomplete);
     return;
   }
-
-  apply(incomplete);
+  if (incomplete !== null) apply(incomplete);
+  void apiFn("/api/company/profile")
+    .then(({ profile }) => {
+      apply(!profile.companyProfileComplete);
+      fill(profile);
+    })
+    .catch(() => {});
 }
 
 function openSettingsView(role) {
