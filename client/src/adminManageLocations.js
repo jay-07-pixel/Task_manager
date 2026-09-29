@@ -115,29 +115,38 @@ function openLocationModal(location = null) {
 
 function locationRowHtml(loc) {
   const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
-  return `<div class="admin-settings-row manage-location-row">
-    <span class="manage-location-row-left">
-      ${adminMsIconFn?.("location_on") ?? ""}
-      <span class="admin-settings-row-label">
-        <span class="manage-location-name">${esc(loc.name)}</span>
-        <span class="manage-location-meta">${esc(loc.coordinates)} · ${esc(tr("attendance.radiusShort", { meters: loc.radiusMeters }))}</span>
-      </span>
+  const inactive = loc.isActive === false;
+  return `<article class="manage-location-row${inactive ? " is-inactive" : ""}">
+    <span class="manage-location-pin">${adminMsIconFn?.("location_on") ?? ""}</span>
+    <span class="manage-location-copy">
+      <span class="manage-location-name">${esc(loc.name)}</span>
+      ${inactive ? `<span class="manage-location-off">${esc(tr("attendance.attendanceToggleOff"))}</span>` : ""}
+      <span class="manage-location-meta">${esc(loc.coordinates)}</span>
+      <span class="manage-location-radius">${esc(tr("attendance.radiusShort", { meters: loc.radiusMeters }))}</span>
     </span>
+    <span class="manage-location-ring" aria-hidden="true"><span>${esc(String(loc.radiusMeters))}m</span></span>
     <span class="manage-location-actions">
-      <button type="button" class="btn btn-sm btn-outline-primary manage-location-edit-btn" data-location-id="${esc(loc.id)}">${esc(tr("common.edit"))}</button>
-      <button type="button" class="btn btn-sm btn-outline-danger manage-location-delete-btn" data-location-id="${esc(loc.id)}">${esc(tr("common.delete"))}</button>
+      <button type="button" class="manage-location-edit-btn" data-location-id="${esc(loc.id)}">${adminMsIconFn?.("edit") ?? ""}${esc(tr("common.edit"))}</button>
+      <button type="button" class="manage-location-delete-btn" data-location-id="${esc(loc.id)}">${adminMsIconFn?.("delete") ?? ""}${esc(tr("common.delete"))}</button>
     </span>
-  </div>`;
+  </article>`;
+}
+
+function setLocationsCount(count) {
+  const el = document.querySelector("[data-locations-count]");
+  if (!el || count == null) return;
+  el.textContent = tr("attendance.locationsCount", { count: String(count) });
 }
 
 async function renderLocationsList() {
   const host = document.querySelector(".manage-locations-list");
   if (!host || !apiFn) return;
-  host.innerHTML = `<p class="admin-settings-intro mb-0">${escapeHtmlFn?.(tr("common.loading")) ?? ""}</p>`;
+  host.innerHTML = `<p class="manage-locations-empty mb-0">${escapeHtmlFn?.(tr("common.loading")) ?? ""}</p>`;
   try {
     const { locations } = await apiFn("/api/attendance/work-locations");
+    setLocationsCount(locations.length);
     if (!locations.length) {
-      host.innerHTML = `<p class="admin-settings-intro mb-0">${escapeHtmlFn?.(tr("attendance.noLocations")) ?? ""}</p>`;
+      host.innerHTML = `<p class="manage-locations-empty mb-0">${escapeHtmlFn?.(tr("attendance.noLocations")) ?? ""}</p>`;
       return;
     }
     host.innerHTML = locations.map((loc) => locationRowHtml(loc)).join("");
@@ -155,7 +164,7 @@ async function renderLocationsList() {
       });
     });
   } catch (err) {
-    host.innerHTML = `<p class="admin-settings-intro text-danger mb-0">${escapeHtmlFn?.(err.message) ?? err.message}</p>`;
+    host.innerHTML = `<p class="manage-locations-empty text-danger mb-0">${escapeHtmlFn?.(err.message) ?? err.message}</p>`;
   }
 }
 
@@ -204,45 +213,53 @@ function manageLocationsPageHtml() {
   const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
   return `<div class="admin-main-scroll d-flex flex-column">
     ${ownerChromeHeaderFn?.() ?? ""}
-    <div class="admin-settings-page manage-locations-page">
-      <p class="admin-settings-intro">${esc(tr("attendance.manageLocationsIntro"))}</p>
-      <section class="card border-0 shadow-sm mb-4 manage-locations-attendance-card">
-        <div class="card-body py-3">
-          <nav class="admin-settings-list manage-locations-attendance-toggle" aria-label="${esc(tr("attendance.manageAttendance"))}">
-            ${companyAttendanceEnabledToggleHtml()}
-          </nav>
+    <div class="manage-locations-page">
+      <header class="manage-loc-head">
+        <span class="manage-loc-icon">${adminMsIconFn?.("location_on") ?? ""}</span>
+        <div class="manage-loc-head-copy">
+          <h2 class="manage-loc-title">${esc(tr("attendance.manageLocations"))}</h2>
+          <p class="manage-loc-sub">${esc(tr("attendance.manageLocationsIntro"))}</p>
         </div>
+        <button type="button" class="manage-loc-add" id="manage-locations-add-btn">${adminMsIconFn?.("add") ?? ""}${esc(tr("attendance.addLocation"))}</button>
+      </header>
+      <section class="manage-loc-card manage-locations-attendance-card">
+        <nav class="manage-locations-attendance-toggle" aria-label="${esc(tr("attendance.manageAttendance"))}">
+          ${companyAttendanceEnabledToggleHtml()}
+        </nav>
+        <span class="manage-loc-state" data-attendance-state></span>
+        <p class="manage-loc-live" data-live-location-status></p>
       </section>
-      <section class="manage-locations-schedule card border-0 shadow-sm mb-4">
-        <div class="card-body">
-          <h3 class="h6 mb-1">${esc(tr("attendance.dailyScheduleTitle"))}</h3>
-          <p class="small text-muted mb-3">${esc(tr("attendance.dailyScheduleIntro"))}</p>
-          <form id="manage-locations-schedule-form" class="manage-locations-schedule-form">
-            <div class="row g-3 align-items-end">
-              <div class="col-sm-6 col-md-4">
-                <label class="form-label" for="daily-check-in-time">${esc(tr("attendance.dailyCheckInTime"))}</label>
-                <input type="time" class="form-control" id="daily-check-in-time" step="60" />
-              </div>
-              <div class="col-sm-6 col-md-4">
-                <label class="form-label" for="daily-check-out-time">${esc(tr("attendance.dailyCheckOutTime"))}</label>
-                <input type="time" class="form-control" id="daily-check-out-time" step="60" />
-              </div>
-              <div class="col-sm-6 col-md-4">
-                <label class="form-label" for="attendance-start-date">${esc(tr("attendance.attendanceStartDate"))}</label>
-                <input type="date" class="form-control" id="attendance-start-date" />
-                <p class="form-text small text-muted mb-0 mt-1">${esc(tr("attendance.attendanceStartDateHint"))}</p>
-              </div>
-              <div class="col-sm-12 col-md-4">
-                <button type="submit" class="profile-modal-btn-save w-100">${esc(tr("attendance.saveSchedule"))}</button>
-              </div>
-            </div>
-          </form>
-        </div>
+      <section class="manage-loc-card manage-locations-schedule">
+        <h3 class="manage-loc-card-title">${esc(tr("attendance.dailyScheduleTitle"))}</h3>
+        <p class="manage-loc-sub">${esc(tr("attendance.dailyScheduleIntro"))}</p>
+        <form id="manage-locations-schedule-form" class="manage-locations-schedule-form">
+          <div class="manage-loc-fields">
+            <label class="manage-loc-field" for="daily-check-in-time">
+              <span>${esc(tr("attendance.dailyCheckInTime"))}</span>
+              <input type="time" id="daily-check-in-time" step="60" />
+            </label>
+            <label class="manage-loc-field" for="daily-check-out-time">
+              <span>${esc(tr("attendance.dailyCheckOutTime"))}</span>
+              <input type="time" id="daily-check-out-time" step="60" />
+            </label>
+            <label class="manage-loc-field" for="attendance-start-date">
+              <span>${esc(tr("attendance.attendanceStartDate"))}</span>
+              <input type="date" id="attendance-start-date" />
+              <small>${esc(tr("attendance.attendanceStartDateHint"))}</small>
+            </label>
+          </div>
+          <div class="manage-loc-save-row">
+            <button type="submit" class="manage-loc-save">${adminMsIconFn?.("check") ?? ""}${esc(tr("attendance.saveSchedule"))}</button>
+          </div>
+        </form>
       </section>
-      <div class="manage-locations-toolbar mb-3">
-        <button type="button" class="profile-modal-btn-save" id="manage-locations-add-btn">${esc(tr("attendance.addLocation"))}</button>
-      </div>
-      <div class="admin-settings-list manage-locations-list"></div>
+      <section class="manage-loc-card">
+        <header class="manage-loc-list-head">
+          <h3 class="manage-loc-card-title">${esc(tr("attendance.locationsHeading"))}</h3>
+          <span class="manage-loc-count" data-locations-count></span>
+        </header>
+        <div class="manage-locations-list"></div>
+      </section>
     </div>
   </div>`;
 }
@@ -314,7 +331,45 @@ export function openOwnerManageLocationsView() {
     onChanged: (enabled) => onCompanyAttendanceChangedFn?.(enabled),
   });
   wireDailyScheduleForm();
+  wireAttendanceState(main);
   document.getElementById("manage-locations-add-btn")?.addEventListener("click", () => openLocationModal());
   void loadDailyScheduleForm();
+  void loadLiveLocationStatus();
   void renderLocationsList();
+}
+
+function syncAttendanceState(root) {
+  const input = root.querySelector(".js-company-attendance-toggle");
+  const pill = root.querySelector("[data-attendance-state]");
+  if (!input || !pill) return;
+  const on = input.checked;
+  pill.textContent = tr(on ? "attendance.attendanceToggleOn" : "attendance.attendanceToggleOff");
+  pill.classList.toggle("is-on", on);
+}
+
+function wireAttendanceState(root) {
+  const input = root.querySelector(".js-company-attendance-toggle");
+  const label = root.querySelector(".manage-locations-attendance-card .admin-settings-row-label");
+  const pill = root.querySelector("[data-attendance-state]");
+  if (label && pill) label.append(pill);
+  if (!input) return;
+  input.addEventListener("change", () => syncAttendanceState(root));
+  syncAttendanceState(root);
+  setTimeout(() => syncAttendanceState(root), 400);
+  setTimeout(() => syncAttendanceState(root), 1200);
+}
+
+async function loadLiveLocationStatus() {
+  const el = document.querySelector("[data-live-location-status]");
+  if (!el || !apiFn) return;
+  try {
+    const settings = await apiFn("/api/attendance/company-settings");
+    const on = settings?.liveLocationRequired !== false;
+    el.textContent = tr("attendance.liveLocationState", {
+      state: tr(on ? "attendance.attendanceToggleOn" : "attendance.attendanceToggleOff"),
+    });
+    el.classList.toggle("is-on", on);
+  } catch {
+    el.textContent = "";
+  }
 }

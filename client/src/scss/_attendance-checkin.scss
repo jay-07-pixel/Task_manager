@@ -614,10 +614,6 @@
 }
 
 .manage-locations-attendance-card {
-  .admin-settings-list {
-    margin: 0;
-  }
-
   .admin-settings-row--toggle {
     border: 0;
     background: transparent;
@@ -625,7 +621,8 @@
     box-shadow: none;
   }
 
-  .admin-settings-hint {
-    margin-top: 0.65rem;
+  .admin-settings-row--toggle:hover {
+    background: transparent;
+    border-color: transparent;
   }
 }
