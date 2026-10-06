@@ -671,6 +671,7 @@
     "emailVerifiedCreate": "ईमेल सत्यापित. फॉर्म पूर्ण करा आणि खाते तयार करा.",
     "captchaBeforeCode": "कोड पाठवण्यापूर्वी CAPTCHA पूर्ण करा.",
     "resetCodeSent": "रीसेट कोड पाठवला.",
+    "resetCodeSentOwners": "रीसेट कोड या ईमेलवर आणि कंपनी मालकांना पाठवला.",
     "codeVerifiedNewPassword": "कोड सत्यापित. नवीन पासवर्ड निवडा.",
     "verifyEmailCodeFirst": "प्रथम ईमेल कोड सत्यापित करा.",
     "passwordUpdated": "पासवर्ड अपडेट. नवीन पासवर्डने साइन इन करा.",

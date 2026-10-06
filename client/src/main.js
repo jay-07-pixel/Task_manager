@@ -1802,7 +1802,12 @@ function wireForgotPasswordModal() {
       }
       verifyBtn.disabled = false;
       startCountdown(data.expiresInSeconds ?? 600);
-      showToast(isResend ? tr("toast.newCodeSent") : data.message || tr("toast.resetCodeSent"), "success");
+      const sentKey = data.notifiedOwners
+        ? "toast.resetCodeSentOwners"
+        : isResend
+          ? "toast.newCodeSent"
+          : "toast.resetCodeSent";
+      showToast(tr(sentKey), "success");
       resetForgotTurnstileWidget();
       void wireForgotTurnstile();
     } catch (err) {

@@ -704,6 +704,7 @@
     "emailVerifiedCreate": "Email verified. Complete the form and create your account.",
     "captchaBeforeCode": "Please complete CAPTCHA before sending code.",
     "resetCodeSent": "Reset code sent.",
+    "resetCodeSentOwners": "Reset code sent to this email and to the company owners.",
     "codeVerifiedNewPassword": "Code verified. Choose a new password.",
     "verifyEmailCodeFirst": "Verify the email code first.",
     "passwordUpdated": "Password updated. Sign in with your new password.",

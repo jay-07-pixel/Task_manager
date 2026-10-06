@@ -19,29 +19,34 @@ import {
   PASSWORD_RESET_WINDOW_MS,
   OTP_LENGTH,
 } from "../lib/otp.js";
-import { adminUserWhere, userHasAdminAccess } from "../lib/adminUsers.js";
+import { adminUserWhere, companyOwnerWhere, userHasAdminAccess } from "../lib/adminUsers.js";
 import { getCompanyTrialStatus, TRIAL_EXPIRED_MESSAGE } from "../lib/companyTrial.js";
 import { getCompanyAttendanceSettings } from "../services/companyAttendanceSettings.js";
 
 const router = Router();
 
-async function notifyAdminsEmployeePasswordReset(requester, otp) {
-  if (userHasAdminAccess(requester)) return;
-
-  const admins = await prisma.user.findMany({
-    where: adminUserWhere,
+async function notifyOwnersPasswordReset(requester, otp) {
+  const owners = await prisma.user.findMany({
+    where: companyOwnerWhere,
     select: { email: true },
   });
-  if (!admins.length) return;
+  const requesterEmail = normalizeEmail(requester.email);
+  const targets = owners.filter((owner) => normalizeEmail(owner.email) !== requesterEmail);
+  if (!targets.length) return 0;
 
   const employeeName = requester.displayName?.trim() || requester.email;
   const employeeEmail = requester.email;
 
-  await Promise.allSettled(
-    admins.map((admin) =>
-      sendPasswordResetAdminNotifyEmail(admin.email, { employeeName, employeeEmail, otp })
+  const results = await Promise.all(
+    targets.map((owner) =>
+      sendPasswordResetAdminNotifyEmail(owner.email, { employeeName, employeeEmail, otp })
     )
   );
+  const sent = results.filter((result) => result?.ok).length;
+  if (!sent) {
+    throw new Error("Owner reset emails were not sent.");
+  }
+  return sent;
 }
 
 function serializeSessionUser(user, activeRole, company = null) {
@@ -505,13 +510,17 @@ router.post("/forgot-password/send-otp", forgotPasswordSendLimiter, async (req, 
 
     await sendPasswordResetEmail(email, otp);
 
-    void notifyAdminsEmployeePasswordReset(user, otp).catch((err) => {
-      console.error("[auth/forgot-password/send-otp] admin notify", err);
-    });
+    let notifiedOwners = 0;
+    try {
+      notifiedOwners = await notifyOwnersPasswordReset(user, otp);
+    } catch (err) {
+      console.error("[auth/forgot-password/send-otp] owner notify", err);
+    }
 
     res.json({
       ok: true,
       expiresInSeconds: Math.floor(OTP_EXPIRY_MS / 1000),
+      notifiedOwners,
       message: "If an account exists for this email, a reset code has been sent.",
     });
   } catch (err) {
