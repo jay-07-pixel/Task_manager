@@ -1706,7 +1706,11 @@ function resetForgotPasswordModal() {
   if (countdownEl) countdownEl.textContent = tr("auth.captchaThenCode");
   document.getElementById("fp-step-verify")?.classList.remove("d-none");
   document.getElementById("fp-step-password")?.classList.add("d-none");
-  document.getElementById("fp-btn-reset-password")?.classList.add("d-none");
+  const resetBtn = document.getElementById("fp-btn-reset-password");
+  if (resetBtn) {
+    resetBtn.classList.add("d-none");
+    resetBtn.disabled = false;
+  }
   document.getElementById("fp-btn-verify-otp")?.setAttribute("disabled", "");
   document.getElementById("fp-btn-resend-otp")?.setAttribute("disabled", "");
 }
@@ -1738,6 +1742,7 @@ function wireForgotPasswordModal() {
     forgotGate.otpVerified = true;
     document.getElementById("fp-step-verify")?.classList.add("d-none");
     document.getElementById("fp-step-password")?.classList.remove("d-none");
+    resetBtn.disabled = false;
     resetBtn.classList.remove("d-none");
     if (statusEl) {
       statusEl.textContent = tr("toast.codeVerifiedNewPassword");
@@ -1885,7 +1890,8 @@ function wireForgotPasswordModal() {
           method: "POST",
           body: JSON.stringify({ email, password }),
         });
-        bootstrap.Modal.getInstance(modalEl)?.hide();
+        if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+        bootstrap.Modal.getOrCreateInstance(modalEl).hide();
         const loginEmail = document.getElementById("login-email");
         if (loginEmail) loginEmail.value = email;
         showToast(tr("toast.passwordUpdated"), "success");
@@ -1896,6 +1902,7 @@ function wireForgotPasswordModal() {
         } else {
           showToast(err.message, "danger");
         }
+      } finally {
         resetBtn.disabled = false;
       }
     })();

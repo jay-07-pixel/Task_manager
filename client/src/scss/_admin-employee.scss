@@ -464,6 +464,20 @@ body:has(.admin-emp-modal.show) .modal-backdrop {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
+  background: linear-gradient(135deg, #00535b 0%, #006972 100%);
+  color: #fff;
+
+  &:hover:not(:disabled),
+  &:focus-visible:not(:disabled) {
+    background: linear-gradient(135deg, #006972 0%, #00838f 100%);
+    color: #fff;
+  }
+
+  &:disabled {
+    opacity: 1;
+    color: #fff;
+    background: linear-gradient(135deg, #00535b 0%, #006972 100%);
+  }
 
   .material-symbols-outlined {
     font-size: 1.1rem;
