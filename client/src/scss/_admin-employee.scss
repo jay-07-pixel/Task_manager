@@ -64,18 +64,21 @@
     }
 
     .emp-task-actions {
+      align-items: stretch;
+      min-width: 10.5rem;
+
       .emp-action-btn {
         display: inline-flex;
         align-items: center;
         justify-content: center;
         gap: 0.35rem;
-        min-width: 7.5rem;
-        width: 7.5rem;
-        max-width: 100%;
-        white-space: nowrap;
-        flex-wrap: nowrap;
-        padding: 0.35rem 0.65rem;
-        line-height: 1.2;
+        width: 100%;
+        max-width: 12rem;
+        white-space: normal;
+        text-align: center;
+        padding: 0.4rem 0.55rem;
+        line-height: 1.25;
+        overflow-wrap: anywhere;
       }
 
       .emp-update-count {

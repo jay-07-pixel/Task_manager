@@ -88,8 +88,10 @@ function shouldProjectSeries(recurrence) {
  * Tasks to show in the employee Upcoming view (next `dayCount` calendar days, deadline-wise).
  * @param {EmpTaskLike[]} tasks
  * @param {number} [dayCount]
+ * @param {{ isSubmitted?: (task: EmpTaskLike) => boolean }} [options]
  */
-export function buildEmployeeUpcomingTasks(tasks, dayCount = 8) {
+export function buildEmployeeUpcomingTasks(tasks, dayCount = 8, options = {}) {
+  const isSubmitted = options.isSubmitted ?? (() => false);
   const list = Array.isArray(tasks) ? tasks : [];
   const windowStart = startOfLocalDay();
   const windowEnd = endOfLocalDay(new Date(windowStart.getTime() + (dayCount - 1) * MS_DAY));
@@ -114,7 +116,7 @@ export function buildEmployeeUpcomingTasks(tasks, dayCount = 8) {
   };
 
   for (const task of list) {
-    if (task.dueAt) remember(task, task.dueAt, false);
+    if (task.dueAt && !isSubmitted(task)) remember(task, task.dueAt, false);
   }
 
   const seriesMap = new Map();
@@ -164,8 +166,8 @@ export function buildEmployeeUpcomingTasks(tasks, dayCount = 8) {
   });
 }
 
-export function countEmployeeUpcomingTasks(tasks, dayCount = 8) {
-  return buildEmployeeUpcomingTasks(tasks, dayCount).length;
+export function countEmployeeUpcomingTasks(tasks, dayCount = 8, options = {}) {
+  return buildEmployeeUpcomingTasks(tasks, dayCount, options).length;
 }
 
 export function employeeUpcomingDisplayDueAt(task) {

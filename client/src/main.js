@@ -10358,7 +10358,9 @@ function empFilteredTasks() {
   } else if (state.empFilter === "all") {
     tasks = state.empTasks;
   } else if (state.empFilter === "upcoming") {
-    tasks = buildEmployeeUpcomingTasks(state.empTasks, 8);
+    tasks = buildEmployeeUpcomingTasks(state.empTasks, 8, {
+      isSubmitted: (task) => employeeAssigneeShowsAsSubmitted(task),
+    });
   } else {
     tasks = state.empTasks.filter((t) => employeeTaskIsActiveOpen(t));
   }
@@ -10566,7 +10568,9 @@ function renderEmpListContentOnly() {
   const metrics = employeeDashboardMetrics();
   const assignedMetrics = employeeAssignedByMeMetrics();
   const onDashboard = state.empView !== "attendance";
-  const upcomingCount = countEmployeeUpcomingTasks(state.empTasks, 8);
+  const upcomingCount = countEmployeeUpcomingTasks(state.empTasks, 8, {
+    isSubmitted: (task) => employeeAssigneeShowsAsSubmitted(task),
+  });
   const myWorkFilters = [
     { id: "active", label: tr("nav.activeTasks"), icon: "list-task", count: metrics.active },
     { id: "upcoming", label: tr("nav.upcomingTasks"), icon: "event_upcoming", count: upcomingCount },
@@ -10738,7 +10742,7 @@ function renderEmployeeMain() {
               <th scope="col" class="owner-task-head owner-task-col--task">${tr("common.task")}</th>
               <th scope="col" class="owner-task-head owner-task-col--deadline text-nowrap text-center">${tr("common.dates")}</th>
               <th scope="col" class="owner-task-head">${tr("common.description")}</th>
-              <th scope="col" class="owner-task-head text-end" style="width:9rem;">${tr("common.actions")}</th>
+              <th scope="col" class="owner-task-head text-end emp-col-proof-head">${tr("common.actions")}</th>
             </tr>
           </thead>
           ${tableBody}
