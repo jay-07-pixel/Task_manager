@@ -2059,10 +2059,18 @@ router.post("/:id/completion-proof", requireAuth, handleProofUpload, async (req,
       console.error("[deadline-ext-cancel]", err)
     );
     void notifyAdminsIfEmployeeSubmitted(task, req.session.userId, wasAlreadyDone);
-    const updated = await prisma.task.findUnique({
+    let updated = await prisma.task.findUnique({
       where: { id: task.id },
       include: { ...taskAssigneeInclude, ...taskListSelect },
     });
+    if (updated) {
+      await maybeRollRecurringAfterEmployeeComplete(updated, req.session.userId);
+      updated =
+        (await prisma.task.findUnique({
+          where: { id: task.id },
+          include: { ...taskAssigneeInclude, ...taskListSelect },
+        })) ?? updated;
+    }
     res.json({ task: serializeTask(updated) });
   } catch (err) {
     console.error("[completion-proof]", err);
@@ -2441,10 +2449,18 @@ router.patch("/:id", requireAuth, async (req, res) => {
       );
       void notifyAdminsIfEmployeeSubmitted(task, req.session.userId, wasAlreadyDone);
     }
-    const afterAssignee = await prisma.task.findUnique({
+    let afterAssignee = await prisma.task.findUnique({
       where: { id: task.id },
       include: { ...taskAssigneeInclude, ...taskListSelect },
     });
+    if (afterAssignee && d.completed === true) {
+      await maybeRollRecurringAfterEmployeeComplete(afterAssignee, req.session.userId);
+      afterAssignee =
+        (await prisma.task.findUnique({
+          where: { id: task.id },
+          include: { ...taskAssigneeInclude, ...taskListSelect },
+        })) ?? afterAssignee;
+    }
     return res.json({ task: serializeTask(afterAssignee) });
   }
 

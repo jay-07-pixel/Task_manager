@@ -119,6 +119,11 @@ import {
 import { initI18n, tr, dateLocale, formatTime24, formatDateTime24, formatShortDateTime24, setLanguageChangeHandler } from "./i18n/index.js";
 import { dt, ensureStateContentTranslations, initContentTranslate, onContentTranslationsUpdated } from "./i18n/contentTranslate.js";
 import { languageSelectorHtml, wireLanguageSelector } from "./i18n/languageSelector.js";
+import {
+  buildEmployeeUpcomingTasks,
+  countEmployeeUpcomingTasks,
+  employeeUpcomingDisplayDueAt,
+} from "./employeeUpcomingTasks.js";
 
 const portfolioDemoReady =
   import.meta.env.VITE_PORTFOLIO_DEMO === "true"
@@ -9381,11 +9386,13 @@ function ownerTaskOverdueTier(task) {
 }
 
 function empTaskOverdueTier(task) {
-  if (!task?.dueAt) return "";
+  const dueIso = employeeUpcomingDisplayDueAt(task);
+  if (!dueIso) return "";
   const me = employeeMyAssignee(task);
   if (!me || employeeAssigneeShowsAsSubmitted(task, me)) return "";
+  if (task.isUpcomingProjection) return "";
   if (empTaskRowDisplayMode(task, me) !== "active") return "";
-  return taskOverdueTierFromDueAt(task.dueAt);
+  return taskOverdueTierFromDueAt(dueIso);
 }
 
 function filterTasksByOverdueColor(tasks, filter, getTier) {
@@ -9858,18 +9865,19 @@ function syncEmployeeOverdueGate() {
 }
 
 function formatEmpDeadlineDisplay(task, { submitted = false } = {}) {
-  if (!task?.dueAt) return `<span class="text-muted">—</span>`;
-  const due = new Date(task.dueAt);
+  const dueIso = employeeUpcomingDisplayDueAt(task);
+  if (!dueIso) return `<span class="text-muted">—</span>`;
+  const due = new Date(dueIso);
   if (Number.isNaN(due.getTime())) return `<span class="text-muted">—</span>`;
 
   if (!submitted && Date.now() > due.getTime()) {
-    const days = taskOverdueDayCount(task.dueAt);
+    const days = taskOverdueDayCount(dueIso);
     const overdueLabel = tr("employee.overdueByDays", { count: days });
     return `<span class="emp-deadline-overdue text-danger fw-semibold tabular-nums">${escapeHtml(overdueLabel)}</span>
-      <span class="d-block small text-muted emp-deadline-was tabular-nums mt-1">${escapeHtml(formatEmpDue(task.dueAt))}</span>`;
+      <span class="d-block small text-muted emp-deadline-was tabular-nums mt-1">${escapeHtml(formatEmpDue(dueIso))}</span>`;
   }
 
-  return `<span class="tabular-nums">${escapeHtml(formatEmpDue(task.dueAt))}</span>`;
+  return `<span class="tabular-nums">${escapeHtml(formatEmpDue(dueIso))}</span>`;
 }
 
 function formatTaskCreatedDate(iso, { short = false } = {}) {
@@ -10264,12 +10272,16 @@ function empFilterLabel(filter) {
   if (filter === "assigned-by-me") return tr("nav.assignedByMe");
   if (filter === "submitted") return tr("employee.submittedTasks");
   if (filter === "all") return tr("employee.allAssignedTasks");
+  if (filter === "upcoming") return tr("nav.upcomingTasks");
   return tr("nav.activeTasks");
 }
 
 function empFilterSubtitle(filter) {
   if (filter === "assigned-by-me") {
     return tr("employee.assignedByMeHint");
+  }
+  if (filter === "upcoming") {
+    return tr("employee.upcomingTasksHint");
   }
   return tr("employee.activeTasksHint");
 }
@@ -10280,9 +10292,11 @@ function empNavFilterButtonHtml(f, active) {
       ? "check_circle"
       : f.id === "all"
         ? "inventory_2"
-        : f.id === "assigned-by-me"
-          ? "group_add"
-          : "task_alt";
+        : f.id === "upcoming"
+          ? "event_upcoming"
+          : f.id === "assigned-by-me"
+            ? "group_add"
+            : "task_alt";
   return `<button type="button" class="admin-sidebar-nav-item${active ? " active" : ""}" data-emp-filter="${f.id}">
     <span class="admin-nav-item-left">
       ${adminMsIcon(msIconName)}
@@ -10343,10 +10357,12 @@ function empFilteredTasks() {
     tasks = state.empTasks.filter((t) => employeeAssigneeShowsAsSubmitted(t));
   } else if (state.empFilter === "all") {
     tasks = state.empTasks;
+  } else if (state.empFilter === "upcoming") {
+    tasks = buildEmployeeUpcomingTasks(state.empTasks, 8);
   } else {
     tasks = state.empTasks.filter((t) => employeeTaskIsActiveOpen(t));
   }
-  return sortEmpTasksForDisplay(tasks);
+  return state.empFilter === "upcoming" ? tasks : sortEmpTasksForDisplay(tasks);
 }
 
 function empTaskTableRows(tasks) {
@@ -10355,7 +10371,9 @@ function empTaskTableRows(tasks) {
       ? { icon: "check-circle", title: tr("empty.nothingSubmitted"), desc: tr("empty.nothingSubmittedDesc") }
       : state.empFilter === "all"
         ? { icon: "folder2-open", title: tr("empty.noAssignedTasks"), desc: tr("empty.noAssignedTasksDesc") }
-        : { icon: "clipboard2-plus", title: tr("empty.empNoActive"), desc: tr("empty.empNoActiveDesc") };
+        : state.empFilter === "upcoming"
+          ? { icon: "calendar-event", title: tr("empty.empNoUpcoming"), desc: tr("empty.empNoUpcomingDesc") }
+          : { icon: "clipboard2-plus", title: tr("empty.empNoActive"), desc: tr("empty.empNoActiveDesc") };
 
   if (!tasks.length) {
     return `<tbody class="owner-task-empty"><tr><td colspan="4">
@@ -10370,7 +10388,8 @@ function empTaskTableRows(tasks) {
   return `<tbody>${tasks
     .map((task) => {
       const me = employeeMyAssignee(task);
-      const displayMode = empTaskRowDisplayMode(task, me);
+      const isProjection = Boolean(task.isUpcomingProjection);
+      const displayMode = isProjection ? "scheduled" : empTaskRowDisplayMode(task, me);
       const submitted = displayMode === "submitted";
       const notesRaw = (task.notes || "").trim().replace(/\s+/g, " ");
       const descriptionBox = empTaskDescriptionBoxHtml(notesRaw, task.id, task.title);
@@ -10413,9 +10432,12 @@ function empTaskTableRows(tasks) {
       const assignedByLine = me?.assignedBy?.displayName
         ? `<div class="small text-muted emp-assigned-by-line mt-1">From ${escapeHtml(dt(me.assignedBy.displayName))}</div>`
         : "";
-      const showRecurrenceOnActive = displayMode === "active" && (task.recurrence ?? "none") !== "none";
+      const showRecurrenceOnActive =
+        (displayMode === "active" || displayMode === "scheduled") && (task.recurrence ?? "none") !== "none";
       const recurrenceLines = showRecurrenceOnActive ? empActiveRecurrenceLinesHtml(task) : "";
-      const submissionCell = `<div class="d-flex flex-column align-items-end gap-1 emp-task-actions">
+      const submissionCell = isProjection
+        ? `<span class="badge rounded-pill text-bg-secondary emp-upcoming-scheduled-badge">${escapeHtml(tr("employee.scheduledOccurrence"))}</span>`
+        : `<div class="d-flex flex-column align-items-end gap-1 emp-task-actions">
           <button type="button" class="btn btn-sm emp-open-progress-update emp-update-btn emp-action-btn" data-task-id="${task.id}">
             <i class="bi bi-chat-left-dots" aria-hidden="true"></i><span>${tr("common.update")}</span>${updateBadge}
           </button>
@@ -10544,8 +10566,10 @@ function renderEmpListContentOnly() {
   const metrics = employeeDashboardMetrics();
   const assignedMetrics = employeeAssignedByMeMetrics();
   const onDashboard = state.empView !== "attendance";
+  const upcomingCount = countEmployeeUpcomingTasks(state.empTasks, 8);
   const myWorkFilters = [
     { id: "active", label: tr("nav.activeTasks"), icon: "list-task", count: metrics.active },
+    { id: "upcoming", label: tr("nav.upcomingTasks"), icon: "event_upcoming", count: upcomingCount },
     { id: "submitted", label: tr("nav.submitted"), icon: "check-circle", count: metrics.done },
     { id: "all", label: tr("nav.allAssigned"), icon: "collection", count: metrics.total },
   ];
