@@ -444,8 +444,8 @@ async function api(path, options = {}) {
     if (res.status === 401 && !isPublicAuthPath(path)) {
       const wasLoggedIn = !!state.user;
       state.user = null;
-      renderAuthForm();
       if (wasLoggedIn) {
+        renderAuthForm();
         showToast(tr("toast.sessionExpired"), "warning");
       }
     }
@@ -1236,15 +1236,129 @@ async function applyAccountViewAfterAuth() {
   return true;
 }
 
+const AUTH_TAB_STORAGE_KEY = "taskmgr-auth-tab";
+const AUTH_REGISTER_DRAFT_KEY = "taskmgr-register-draft";
+
 const PUBLIC_AUTH_PATHS = [
   "/api/auth/login",
   "/api/auth/register",
   "/api/auth/send-otp",
   "/api/auth/verify-otp",
+  "/api/auth/turnstile-site-key",
   "/api/auth/forgot-password/send-otp",
   "/api/auth/forgot-password/verify-otp",
   "/api/auth/forgot-password/reset",
 ];
+
+function getAuthTabPreference() {
+  return sessionStorage.getItem(AUTH_TAB_STORAGE_KEY) === "register" ? "register" : "login";
+}
+
+function saveAuthTabPreference(tab) {
+  if (tab === "register" || tab === "login") {
+    sessionStorage.setItem(AUTH_TAB_STORAGE_KEY, tab);
+  }
+}
+
+function readRegisterDraft() {
+  try {
+    const raw = sessionStorage.getItem(AUTH_REGISTER_DRAFT_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    if (!data || typeof data !== "object") return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+function saveRegisterDraft() {
+  const name = document.getElementById("reg-name");
+  const email = document.getElementById("reg-email");
+  const phone = document.getElementById("reg-phone");
+  const password = document.getElementById("reg-password");
+  if (!name && !email && !phone && !password) return;
+  const draft = {
+    displayName: String(name?.value || ""),
+    email: String(email?.value || ""),
+    phone: String(phone?.value || ""),
+    password: String(password?.value || ""),
+  };
+  if (!draft.displayName && !draft.email && !draft.phone && !draft.password) {
+    sessionStorage.removeItem(AUTH_REGISTER_DRAFT_KEY);
+    return;
+  }
+  sessionStorage.setItem(AUTH_REGISTER_DRAFT_KEY, JSON.stringify(draft));
+}
+
+function restoreRegisterDraft() {
+  const draft = readRegisterDraft();
+  if (!draft) return;
+  const name = document.getElementById("reg-name");
+  const email = document.getElementById("reg-email");
+  const phone = document.getElementById("reg-phone");
+  const password = document.getElementById("reg-password");
+  if (name && draft.displayName) name.value = draft.displayName;
+  if (email && draft.email) email.value = draft.email;
+  if (phone && draft.phone) phone.value = draft.phone;
+  if (password && draft.password) password.value = draft.password;
+}
+
+function clearRegisterDraft() {
+  sessionStorage.removeItem(AUTH_REGISTER_DRAFT_KEY);
+}
+
+let registerDraftSaveTimer = null;
+
+function wireRegisterDraftPersistence() {
+  const form = document.getElementById("form-register");
+  if (!form || form.dataset.wiredRegisterDraft === "1") return;
+  form.dataset.wiredRegisterDraft = "1";
+  const queueSave = () => {
+    if (registerDraftSaveTimer) clearTimeout(registerDraftSaveTimer);
+    registerDraftSaveTimer = setTimeout(() => {
+      registerDraftSaveTimer = null;
+      saveRegisterDraft();
+    }, 200);
+  };
+  form.addEventListener("input", queueSave);
+  form.addEventListener("change", queueSave);
+}
+
+function restoreAuthTabUi() {
+  const preferRegister = getAuthTabPreference() === "register";
+  const loginBtn = document.getElementById("tab-login-btn");
+  const registerBtn = document.getElementById("tab-register-btn");
+  const loginPane = document.getElementById("tab-login");
+  const registerPane = document.getElementById("tab-register");
+  if (!loginBtn || !registerBtn || !loginPane || !registerPane) return;
+
+  if (preferRegister) {
+    loginBtn.classList.remove("active");
+    loginBtn.setAttribute("aria-selected", "false");
+    registerBtn.classList.add("active");
+    registerBtn.setAttribute("aria-selected", "true");
+    loginPane.classList.remove("show", "active");
+    registerPane.classList.add("show", "active");
+    if (window.bootstrap?.Tab) {
+      try {
+        bootstrap.Tab.getOrCreateInstance(registerBtn).show();
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+}
+
+function wireAuthTabPersistence() {
+  const loginBtn = document.getElementById("tab-login-btn");
+  const registerBtn = document.getElementById("tab-register-btn");
+  loginBtn?.addEventListener("shown.bs.tab", () => saveAuthTabPreference("login"));
+  registerBtn?.addEventListener("shown.bs.tab", () => {
+    saveAuthTabPreference("register");
+    saveRegisterDraft();
+  });
+}
 
 function isPublicAuthPath(path) {
   return PUBLIC_AUTH_PATHS.some((p) => path === p || path.startsWith(`${p}?`));
@@ -2182,6 +2296,8 @@ function renderAuthForm() {
         }),
       });
       sessionStorage.setItem("taskmgr-app-welcome", "1");
+      clearRegisterDraft();
+      saveAuthTabPreference("login");
       await refreshMe();
       render();
     } catch (err) {
@@ -2193,7 +2309,11 @@ function renderAuthForm() {
   registerGate.turnstileToken = null;
   wireRegisterPhoneDigits();
   wireRegisterOtp();
+  wireRegisterDraftPersistence();
+  restoreRegisterDraft();
   void wireRegisterTurnstile();
+  wireAuthTabPersistence();
+  restoreAuthTabUi();
   wireThemeIconToggles();
   wireAuthPasswordToggles(app);
   wireLanguageSelector(app);
@@ -2215,6 +2335,7 @@ async function logout() {
     /* ignore */
   }
   state.user = null;
+  saveAuthTabPreference("login");
   renderAuthForm();
 }
 
