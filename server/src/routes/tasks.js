@@ -283,6 +283,130 @@ async function endRecurrenceSeries(taskId) {
 }
 
 /** Create the next open occurrence as a new task card (submission stays on the completed card). */
+function recurringHorizonWindow(horizonDays) {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + Math.max(1, horizonDays) - 1);
+  end.setHours(23, 59, 59, 999);
+  return { start, end };
+}
+
+function recurringSeriesKey(task) {
+  return `${task.listId}\0${task.title}\0${task.recurrence ?? "none"}`;
+}
+
+/** Open occurrence card for a specific due date (does not complete the template task). */
+async function createOpenOccurrenceAtDue(template, dueAt) {
+  if (!template?.dueAt || !dueAt) return null;
+  if (!shouldRollOnEmployeeComplete(template.recurrence, template.recurrenceRule)) return null;
+  if (recurrenceNextDueExceedsEndOn(dueAt, template.recurrenceRule)) return null;
+
+  const existing = await findExistingSeriesOccurrence(prisma, {
+    listId: template.listId,
+    title: template.title,
+    recurrence: template.recurrence,
+    dueAt,
+    excludeTaskId: null,
+  });
+  if (existing) return existing;
+
+  const maxOrder = await prisma.task.aggregate({
+    where: { listId: template.listId },
+    _max: { sortOrder: true },
+  });
+  const sortOrder = (maxOrder._max.sortOrder ?? -1) + 1;
+
+  const assigneeCreates = (template.assignments ?? []).map((a) => ({
+    userId: a.userId,
+    assignedByUserId: a.assignedByUserId ?? null,
+    delegatedAt: a.delegatedAt ?? null,
+  }));
+
+  const createData = {
+    listId: template.listId,
+    createdById: template.createdById,
+    title: template.title,
+    notes: template.notes,
+    dueAt,
+    dueTimeZone: template.dueTimeZone,
+    allDay: template.allDay,
+    recurrence: template.recurrence,
+    sortOrder,
+    completed: false,
+    starred: template.starred,
+    highPriority: template.highPriority,
+    durationMinutes: template.durationMinutes,
+    reminderBeforeMinutes: template.reminderBeforeMinutes,
+    assignments: assigneeCreates.length ? { create: assigneeCreates } : undefined,
+  };
+
+  if (template.recurrenceRule) {
+    createData.recurrenceRule = template.recurrenceRule;
+  }
+
+  return prisma.task.create({
+    data: createData,
+    include: taskAssigneeInclude,
+  });
+}
+
+/** Ensure recurring assignees have real open task cards through the upcoming horizon. */
+async function materializeRecurringHorizonForEmployee(employeeUserId, horizonDays = 8) {
+  const openRecurring = await prisma.task.findMany({
+    where: {
+      completed: false,
+      recurrence: { not: "none" },
+      assignments: { some: { userId: employeeUserId } },
+    },
+    include: taskAssigneeInclude,
+  });
+  if (!openRecurring.length) return;
+
+  const { start: windowStart, end: windowEnd } = recurringHorizonWindow(horizonDays);
+  const bySeries = new Map();
+  for (const task of openRecurring) {
+    if (!shouldRollOnEmployeeComplete(task.recurrence, task.recurrenceRule)) continue;
+    const key = recurringSeriesKey(task);
+    if (!bySeries.has(key)) bySeries.set(key, []);
+    bySeries.get(key).push(task);
+  }
+
+  for (const seriesTasks of bySeries.values()) {
+    const template = seriesTasks.reduce((best, t) => {
+      const bestDue = best?.dueAt ? new Date(best.dueAt).getTime() : 0;
+      const tDue = t?.dueAt ? new Date(t.dueAt).getTime() : 0;
+      return tDue >= bestDue ? t : best;
+    }, seriesTasks[0]);
+    if (!template?.dueAt) continue;
+
+    let cursor = new Date(template.dueAt);
+    if (Number.isNaN(cursor.getTime())) continue;
+
+    const earliest = seriesTasks.reduce((min, t) => {
+      const tDue = t?.dueAt ? new Date(t.dueAt).getTime() : Infinity;
+      const minDue = min?.dueAt ? new Date(min.dueAt).getTime() : Infinity;
+      return tDue < minDue ? t : min;
+    }, seriesTasks[0]);
+    if (earliest?.dueAt) cursor = new Date(earliest.dueAt);
+
+    for (let guard = 0; guard < 48; guard += 1) {
+      if (cursor.getTime() > windowEnd.getTime()) break;
+      if (cursor.getTime() >= windowStart.getTime()) {
+        await createOpenOccurrenceAtDue(template, new Date(cursor));
+      }
+      const next = computeNextDueAt(
+        cursor,
+        template.recurrence,
+        template.allDay,
+        template.recurrenceRule
+      );
+      if (!next || next.getTime() <= cursor.getTime()) break;
+      cursor = next;
+    }
+  }
+}
+
 async function spawnNextRecurringTask(completedTask, nextRecurrenceRuleJson = null) {
   const maxOrder = await prisma.task.aggregate({
     where: { listId: completedTask.listId },
@@ -1215,6 +1339,11 @@ router.get("/assigned", requireAuth, async (req, res) => {
     return res.status(403).json({ error: "Employees only" });
   }
   const meId = req.session.userId;
+  try {
+    await materializeRecurringHorizonForEmployee(meId, 8);
+  } catch (err) {
+    console.error("[tasks/assigned] recurring horizon", err);
+  }
   let tasks = sortEmployeeAssignedTasks(
     await attachProgressUpdateMeta(
       await prisma.task.findMany({

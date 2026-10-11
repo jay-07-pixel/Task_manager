@@ -9390,7 +9390,6 @@ function empTaskOverdueTier(task) {
   if (!dueIso) return "";
   const me = employeeMyAssignee(task);
   if (!me || employeeAssigneeShowsAsSubmitted(task, me)) return "";
-  if (task.isUpcomingProjection) return "";
   if (empTaskRowDisplayMode(task, me) !== "active") return "";
   return taskOverdueTierFromDueAt(dueIso);
 }
@@ -10360,6 +10359,7 @@ function empFilteredTasks() {
   } else if (state.empFilter === "upcoming") {
     tasks = buildEmployeeUpcomingTasks(state.empTasks, 8, {
       isSubmitted: (task) => employeeAssigneeShowsAsSubmitted(task),
+      isActiveOpen: (task) => employeeTaskIsActiveOpen(task),
     });
   } else {
     tasks = state.empTasks.filter((t) => employeeTaskIsActiveOpen(t));
@@ -10390,8 +10390,7 @@ function empTaskTableRows(tasks) {
   return `<tbody>${tasks
     .map((task) => {
       const me = employeeMyAssignee(task);
-      const isProjection = Boolean(task.isUpcomingProjection);
-      const displayMode = isProjection ? "scheduled" : empTaskRowDisplayMode(task, me);
+      const displayMode = empTaskRowDisplayMode(task, me);
       const submitted = displayMode === "submitted";
       const notesRaw = (task.notes || "").trim().replace(/\s+/g, " ");
       const descriptionBox = empTaskDescriptionBoxHtml(notesRaw, task.id, task.title);
@@ -10434,12 +10433,9 @@ function empTaskTableRows(tasks) {
       const assignedByLine = me?.assignedBy?.displayName
         ? `<div class="small text-muted emp-assigned-by-line mt-1">From ${escapeHtml(dt(me.assignedBy.displayName))}</div>`
         : "";
-      const showRecurrenceOnActive =
-        (displayMode === "active" || displayMode === "scheduled") && (task.recurrence ?? "none") !== "none";
+      const showRecurrenceOnActive = displayMode === "active" && (task.recurrence ?? "none") !== "none";
       const recurrenceLines = showRecurrenceOnActive ? empActiveRecurrenceLinesHtml(task) : "";
-      const submissionCell = isProjection
-        ? `<span class="badge rounded-pill text-bg-secondary emp-upcoming-scheduled-badge">${escapeHtml(tr("employee.scheduledOccurrence"))}</span>`
-        : `<div class="d-flex flex-column align-items-end gap-1 emp-task-actions">
+      const submissionCell = `<div class="d-flex flex-column align-items-end gap-1 emp-task-actions">
           <button type="button" class="btn btn-sm emp-open-progress-update emp-update-btn emp-action-btn" data-task-id="${task.id}">
             <i class="bi bi-chat-left-dots" aria-hidden="true"></i><span>${tr("common.update")}</span>${updateBadge}
           </button>
@@ -10570,6 +10566,7 @@ function renderEmpListContentOnly() {
   const onDashboard = state.empView !== "attendance";
   const upcomingCount = countEmployeeUpcomingTasks(state.empTasks, 8, {
     isSubmitted: (task) => employeeAssigneeShowsAsSubmitted(task),
+    isActiveOpen: (task) => employeeTaskIsActiveOpen(task),
   });
   const myWorkFilters = [
     { id: "active", label: tr("nav.activeTasks"), icon: "list-task", count: metrics.active },
