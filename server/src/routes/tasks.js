@@ -351,7 +351,34 @@ async function createOpenOccurrenceAtDue(template, dueAt) {
   });
 }
 
-/** Ensure recurring assignees have real open task cards through the upcoming horizon. */
+function occurrenceHasEmployeeWork(task) {
+  if ((task.progressUpdates ?? []).length > 0) return true;
+  return (task.assignments ?? []).some((assignee) => {
+    if (assignee.assigneeDone || assignee.lastSubmittedAt) return true;
+    if (assignee.completionProofPath || assignee.lastCompletionProofPath) return true;
+    if (String(assignee.submissionText || "").trim()) return true;
+    if (String(assignee.lastSubmissionText || "").trim()) return true;
+    return (assignee.submissionProofs ?? []).length > 0;
+  });
+}
+
+/** Next due date strictly after today, walking past missed days without creating a card for each one. */
+function nextDueAfterToday(fromDue, recurrence, allDay, recurrenceRule, todayEnd) {
+  let cursor = fromDue ? new Date(fromDue) : null;
+  if (!cursor || Number.isNaN(cursor.getTime())) return null;
+  for (let guard = 0; guard < 400; guard += 1) {
+    const next = computeNextDueAt(cursor, recurrence, allDay, recurrenceRule);
+    if (!next || next.getTime() <= cursor.getTime()) return null;
+    if (next.getTime() > todayEnd.getTime()) return next;
+    cursor = next;
+  }
+  return null;
+}
+
+/**
+ * One open card for the current day (or the latest overdue day) and one next card
+ * inside the upcoming window. A daily task for a month does not become 30 cards.
+ */
 async function materializeRecurringHorizonForEmployee(employeeUserId, horizonDays = 8) {
   const openRecurring = await prisma.task.findMany({
     where: {
@@ -359,11 +386,15 @@ async function materializeRecurringHorizonForEmployee(employeeUserId, horizonDay
       recurrence: { not: "none" },
       assignments: { some: { userId: employeeUserId } },
     },
-    include: taskAssigneeInclude,
+    include: {
+      ...taskAssigneeInclude,
+      progressUpdates: { select: { id: true }, take: 1 },
+    },
   });
   if (!openRecurring.length) return;
 
-  const { start: windowStart, end: windowEnd } = recurringHorizonWindow(horizonDays);
+  const { end: todayEnd } = recurringHorizonWindow(1);
+  const { end: horizonEnd } = recurringHorizonWindow(horizonDays + 1);
   const bySeries = new Map();
   for (const task of openRecurring) {
     if (!shouldRollOnEmployeeComplete(task.recurrence, task.recurrenceRule)) continue;
@@ -373,36 +404,39 @@ async function materializeRecurringHorizonForEmployee(employeeUserId, horizonDay
   }
 
   for (const seriesTasks of bySeries.values()) {
-    const template = seriesTasks.reduce((best, t) => {
-      const bestDue = best?.dueAt ? new Date(best.dueAt).getTime() : 0;
-      const tDue = t?.dueAt ? new Date(t.dueAt).getTime() : 0;
-      return tDue >= bestDue ? t : best;
-    }, seriesTasks[0]);
-    if (!template?.dueAt) continue;
+    const sorted = seriesTasks
+      .filter((task) => task.dueAt && !Number.isNaN(new Date(task.dueAt).getTime()))
+      .sort((a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime());
+    if (!sorted.length) continue;
 
-    let cursor = new Date(template.dueAt);
-    if (Number.isNaN(cursor.getTime())) continue;
+    const onOrBeforeToday = sorted.filter((task) => new Date(task.dueAt).getTime() <= todayEnd.getTime());
+    const afterToday = sorted.filter((task) => new Date(task.dueAt).getTime() > todayEnd.getTime());
+    const keepIds = new Set();
+    const current = onOrBeforeToday.length ? onOrBeforeToday[onOrBeforeToday.length - 1] : null;
+    if (current) keepIds.add(current.id);
 
-    const earliest = seriesTasks.reduce((min, t) => {
-      const tDue = t?.dueAt ? new Date(t.dueAt).getTime() : Infinity;
-      const minDue = min?.dueAt ? new Date(min.dueAt).getTime() : Infinity;
-      return tDue < minDue ? t : min;
-    }, seriesTasks[0]);
-    if (earliest?.dueAt) cursor = new Date(earliest.dueAt);
+    const nextExisting = afterToday.find((task) => new Date(task.dueAt).getTime() <= horizonEnd.getTime()) ?? null;
+    if (nextExisting && current) keepIds.add(nextExisting.id);
+    if (!current && afterToday[0]) keepIds.add(afterToday[0].id);
 
-    for (let guard = 0; guard < 48; guard += 1) {
-      if (cursor.getTime() > windowEnd.getTime()) break;
-      if (cursor.getTime() >= windowStart.getTime()) {
-        await createOpenOccurrenceAtDue(template, new Date(cursor));
-      }
-      const next = computeNextDueAt(
-        cursor,
-        template.recurrence,
-        template.allDay,
-        template.recurrenceRule
+    if (current && !nextExisting) {
+      const nextDue = nextDueAfterToday(
+        current.dueAt,
+        current.recurrence,
+        current.allDay,
+        current.recurrenceRule,
+        todayEnd
       );
-      if (!next || next.getTime() <= cursor.getTime()) break;
-      cursor = next;
+      if (nextDue && nextDue.getTime() <= horizonEnd.getTime()) {
+        await createOpenOccurrenceAtDue(current, nextDue);
+      }
+    }
+
+    for (const task of sorted) {
+      if (keepIds.has(task.id) || occurrenceHasEmployeeWork(task)) continue;
+      await prisma.task.delete({ where: { id: task.id } }).catch((err) => {
+        console.error("[tasks/assigned] prune extra occurrence", task.id, err);
+      });
     }
   }
 }

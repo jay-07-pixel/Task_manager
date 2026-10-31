@@ -121,6 +121,7 @@ import { dt, ensureStateContentTranslations, initContentTranslate, onContentTran
 import { languageSelectorHtml, wireLanguageSelector } from "./i18n/languageSelector.js";
 import {
   buildEmployeeUpcomingTasks,
+  employeeTaskIsDueTodayOrEarlier,
   countEmployeeUpcomingTasks,
   employeeUpcomingDisplayDueAt,
 } from "./employeeUpcomingTasks.js";
@@ -10249,7 +10250,7 @@ function wireEmpDelegateModal() {
 
 function employeeDashboardMetrics() {
   const tasks = state.empTasks;
-  const active = tasks.filter((t) => employeeTaskIsActiveOpen(t)).length;
+  const active = tasks.filter((t) => employeeTaskIsActiveOpen(t) && employeeTaskIsDueTodayOrEarlier(t)).length;
   const done = tasks.filter((t) => employeeAssigneeShowsAsSubmitted(t)).length;
   const now = Date.now();
   const dueSoon = tasks.filter((t) => {
@@ -10362,7 +10363,7 @@ function empFilteredTasks() {
       isActiveOpen: (task) => employeeTaskIsActiveOpen(task),
     });
   } else {
-    tasks = state.empTasks.filter((t) => employeeTaskIsActiveOpen(t));
+    tasks = state.empTasks.filter((t) => employeeTaskIsActiveOpen(t) && employeeTaskIsDueTodayOrEarlier(t));
   }
   return state.empFilter === "upcoming" ? tasks : sortEmpTasksForDisplay(tasks);
 }
