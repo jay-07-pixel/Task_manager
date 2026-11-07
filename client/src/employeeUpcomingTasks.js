@@ -19,25 +19,18 @@ function dueMs(iso) {
   return new Date(iso).getTime();
 }
 
-/** Past deadline — belongs in Active. */
-export function employeeTaskIsOverdue(task, now = new Date()) {
-  const ms = dueMs(task?.dueAt);
-  if (!Number.isFinite(ms)) return false;
-  return ms < now.getTime();
-}
-
-/** Still due later (including later today) through the next `dayCount` calendar days. */
-export function employeeTaskIsUpcomingDue(task, dayCount = 8, now = new Date()) {
-  const ms = dueMs(task?.dueAt);
-  if (!Number.isFinite(ms)) return false;
-  if (ms <= now.getTime()) return false;
-  const windowEnd = endOfLocalDay(new Date(startOfLocalDay(now).getTime() + dayCount * MS_DAY));
-  return ms <= windowEnd.getTime();
-}
-
-/** @deprecated Prefer employeeTaskIsOverdue for Active. Kept for older call sites. */
+/** Open work with no deadline, due today, or still overdue from earlier days. */
 export function employeeTaskIsDueTodayOrEarlier(task, now = new Date()) {
-  return employeeTaskIsOverdue(task, now);
+  const ms = dueMs(task?.dueAt);
+  if (!Number.isFinite(ms)) return true;
+  return ms <= endOfLocalDay(now).getTime();
+}
+
+/** Deadline falls on today's local calendar day. */
+export function employeeTaskIsDueToday(task, now = new Date()) {
+  const ms = dueMs(task?.dueAt);
+  if (!Number.isFinite(ms)) return false;
+  return ms >= startOfLocalDay(now).getTime() && ms <= endOfLocalDay(now).getTime();
 }
 
 function seriesKey(task) {
@@ -69,9 +62,11 @@ export function dedupeOpenRecurringAssignedTasks(tasks, options = {}) {
       openBySeries.set(key, task);
       continue;
     }
-    const a = dueMs(task.dueAt);
-    const b = dueMs(existing.dueAt);
-    if (Number.isFinite(a) && (!Number.isFinite(b) || a < b)) {
+    const preferExisting = employeeTaskIsDueTodayOrEarlier(existing);
+    const preferTask = employeeTaskIsDueTodayOrEarlier(task);
+    if (preferTask && !preferExisting) {
+      openBySeries.set(key, task);
+    } else if (preferTask === preferExisting && dueMs(task.dueAt) < dueMs(existing.dueAt)) {
       openBySeries.set(key, task);
     }
   }
@@ -81,7 +76,8 @@ export function dedupeOpenRecurringAssignedTasks(tasks, options = {}) {
 }
 
 /**
- * Open tasks due after now through the next `dayCount` days, one card per repeating series.
+ * Next open cards after today, through the next `dayCount` calendar days (not including today).
+ * One card per repeating series.
  * @param {EmpTaskLike[]} tasks
  * @param {number} [dayCount]
  * @param {{ isSubmitted?: (task: EmpTaskLike) => boolean; isActiveOpen?: (task: EmpTaskLike) => boolean }} [options]
@@ -91,9 +87,14 @@ export function buildEmployeeUpcomingTasks(tasks, dayCount = 8, options = {}) {
   const isActiveOpen = options.isActiveOpen ?? (() => true);
   const list = Array.isArray(tasks) ? tasks : [];
   const now = new Date();
+  const windowStart = new Date(startOfLocalDay(now).getTime() + MS_DAY);
+  const windowEnd = endOfLocalDay(new Date(startOfLocalDay(now).getTime() + dayCount * MS_DAY));
 
   const eligible = list
-    .filter((task) => employeeTaskIsUpcomingDue(task, dayCount, now))
+    .filter((task) => {
+      const ms = dueMs(task.dueAt);
+      return Number.isFinite(ms) && ms >= windowStart.getTime() && ms <= windowEnd.getTime();
+    })
     .filter((task) => !isSubmitted(task) && isActiveOpen(task))
     .sort((a, b) => dueMs(a.dueAt) - dueMs(b.dueAt));
 

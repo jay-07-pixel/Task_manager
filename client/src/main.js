@@ -122,7 +122,7 @@ import { languageSelectorHtml, wireLanguageSelector } from "./i18n/languageSelec
 import {
   buildEmployeeUpcomingTasks,
   dedupeOpenRecurringAssignedTasks,
-  employeeTaskIsOverdue,
+  employeeTaskIsDueTodayOrEarlier,
   countEmployeeUpcomingTasks,
   employeeUpcomingDisplayDueAt,
 } from "./employeeUpcomingTasks.js";
@@ -147,7 +147,7 @@ let state = {
   assignees: [],
   empTasks: [],
   empAssignedByMeTasks: [],
-  empFilter: "upcoming",
+  empFilter: "active",
   ownerTaskFilter: "active",
   overdueColorFilter: "all",
   allTasksEmployeeFilter: "all",
@@ -2505,7 +2505,7 @@ async function focusEmployeeTaskFromNotify(notify) {
     return;
   }
 
-  state.empFilter = "upcoming";
+  state.empFilter = "active";
 
   renderEmpListContentOnly();
   renderEmployeeMain();
@@ -10251,7 +10251,7 @@ function wireEmpDelegateModal() {
 
 function employeeDashboardMetrics() {
   const tasks = state.empTasks;
-  const active = tasks.filter((t) => employeeTaskIsActiveOpen(t) && employeeTaskIsOverdue(t)).length;
+  const active = tasks.filter((t) => employeeTaskIsActiveOpen(t) && employeeTaskIsDueTodayOrEarlier(t)).length;
   const done = tasks.filter((t) => employeeAssigneeShowsAsSubmitted(t)).length;
   const allAssigned = dedupeOpenRecurringAssignedTasks(tasks, {
     isSubmitted: (task) => employeeAssigneeShowsAsSubmitted(task),
@@ -10369,9 +10369,7 @@ function empFilteredTasks() {
       isActiveOpen: (task) => employeeTaskIsActiveOpen(task),
     });
   } else {
-    tasks = state.empTasks.filter(
-      (t) => employeeTaskIsActiveOpen(t) && (employeeTaskIsOverdue(t) || !t.dueAt)
-    );
+    tasks = state.empTasks.filter((t) => employeeTaskIsActiveOpen(t) && employeeTaskIsDueTodayOrEarlier(t));
   }
   return state.empFilter === "upcoming" ? tasks : sortEmpTasksForDisplay(tasks);
 }
@@ -10608,7 +10606,7 @@ function bindEmpNavHandlers() {
     btn.dataset.empNavWired = "1";
     btn.addEventListener("click", () => {
       dismissEmpMobileNav();
-      state.empFilter = btn.getAttribute("data-emp-filter") || "upcoming";
+      state.empFilter = btn.getAttribute("data-emp-filter") || "active";
       state.empView = "dashboard";
       updateEmpNavActiveState();
       renderEmployeeMain();
