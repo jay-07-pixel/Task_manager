@@ -9,6 +9,7 @@ import { prisma } from "../lib/prisma.js";
 import { sendAdminPromotionEmail, sendAdminRevocationEmail } from "../lib/mail.js";
 import {
   adminUserWhere,
+  assignableEmployeeWhere,
   companyOwnerWhere,
   MAX_COMPANY_OWNERS,
   userHasAdminAccess,
@@ -144,7 +145,9 @@ router.get("/peers", requireAuth, async (req, res) => {
     return res.status(403).json({ error: "Employees only" });
   }
   const users = await prisma.user.findMany({
-    where: { id: { not: req.session.userId } },
+    where: {
+      AND: [{ id: { not: req.session.userId } }, assignableEmployeeWhere],
+    },
     select: { id: true, email: true, displayName: true },
     orderBy: { displayName: "asc" },
   });
@@ -153,6 +156,7 @@ router.get("/peers", requireAuth, async (req, res) => {
 
 router.get("/assignees", requireOwner, async (req, res) => {
   const users = await prisma.user.findMany({
+    where: assignableEmployeeWhere,
     select: { id: true, email: true, displayName: true },
     orderBy: { displayName: "asc" },
   });

@@ -30,7 +30,7 @@ import {
   notifyAssigneesAfterTaskCreate,
   notifyAssigneesAfterTaskUpdate,
 } from "../services/taskAssignmentEmailService.js";
-import { adminUserWhere, userHasAdminAccess } from "../lib/adminUsers.js";
+import { adminUserWhere, assignableEmployeeWhere, userHasAdminAccess } from "../lib/adminUsers.js";
 import { DEFAULT_REMINDER_BEFORE_MINUTES } from "../lib/reminderTiming.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -565,7 +565,7 @@ async function resolveEmployeeIds(ids) {
   const unique = [...new Set(ids)];
   if (!unique.length) return [];
   const employees = await prisma.user.findMany({
-    where: { id: { in: unique }, role: "employee" },
+    where: { AND: [{ id: { in: unique } }, assignableEmployeeWhere] },
     select: { id: true },
   });
   const ok = new Set(employees.map((e) => e.id));

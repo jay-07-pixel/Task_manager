@@ -7,6 +7,13 @@ export const companyOwnerWhere = {
   isOwner: true,
 };
 
+/** Staff who can be assigned tasks — never admins or company owners. */
+export const assignableEmployeeWhere = {
+  isAdmin: false,
+  isOwner: false,
+  NOT: { role: "owner" },
+};
+
 export const MAX_COMPANY_OWNERS = 2;
 
 export function userHasAdminAccess(user) {
