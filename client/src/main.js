@@ -121,6 +121,7 @@ import { dt, ensureStateContentTranslations, initContentTranslate, onContentTran
 import { languageSelectorHtml, wireLanguageSelector } from "./i18n/languageSelector.js";
 import {
   buildEmployeeUpcomingTasks,
+  dedupeOpenRecurringAssignedTasks,
   employeeTaskIsDueTodayOrEarlier,
   countEmployeeUpcomingTasks,
   employeeUpcomingDisplayDueAt,
@@ -10252,13 +10253,16 @@ function employeeDashboardMetrics() {
   const tasks = state.empTasks;
   const active = tasks.filter((t) => employeeTaskIsActiveOpen(t) && employeeTaskIsDueTodayOrEarlier(t)).length;
   const done = tasks.filter((t) => employeeAssigneeShowsAsSubmitted(t)).length;
+  const allAssigned = dedupeOpenRecurringAssignedTasks(tasks, {
+    isSubmitted: (task) => employeeAssigneeShowsAsSubmitted(task),
+  }).length;
   const now = Date.now();
   const dueSoon = tasks.filter((t) => {
     if (!t.dueAt || !employeeTaskIsActiveOpen(t)) return false;
     const due = new Date(t.dueAt).getTime();
     return Number.isFinite(due) && due > now && due - now < 24 * 60 * 60 * 1000;
   }).length;
-  return { total: tasks.length, active, done, dueSoon };
+  return { total: allAssigned, active, done, dueSoon };
 }
 
 function employeeAssignedByMeMetrics() {
@@ -10356,7 +10360,9 @@ function empFilteredTasks() {
   if (state.empFilter === "submitted") {
     tasks = state.empTasks.filter((t) => employeeAssigneeShowsAsSubmitted(t));
   } else if (state.empFilter === "all") {
-    tasks = state.empTasks;
+    tasks = dedupeOpenRecurringAssignedTasks(state.empTasks, {
+      isSubmitted: (task) => employeeAssigneeShowsAsSubmitted(task),
+    });
   } else if (state.empFilter === "upcoming") {
     tasks = buildEmployeeUpcomingTasks(state.empTasks, 8, {
       isSubmitted: (task) => employeeAssigneeShowsAsSubmitted(task),

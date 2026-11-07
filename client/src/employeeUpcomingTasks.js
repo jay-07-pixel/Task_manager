@@ -34,6 +34,41 @@ function seriesKey(task) {
 }
 
 /**
+ * Open assigned list: at most one open card per repeating series (keep submitted history).
+ * @param {EmpTaskLike[]} tasks
+ * @param {{ isSubmitted?: (task: EmpTaskLike) => boolean }} [options]
+ */
+export function dedupeOpenRecurringAssignedTasks(tasks, options = {}) {
+  const isSubmitted = options.isSubmitted ?? (() => false);
+  const list = Array.isArray(tasks) ? tasks : [];
+  const kept = [];
+  const openBySeries = new Map();
+
+  for (const task of list) {
+    if (isSubmitted(task) || (task.recurrence ?? "none") === "none") {
+      kept.push(task);
+      continue;
+    }
+    const key = seriesKey(task);
+    const existing = openBySeries.get(key);
+    if (!existing) {
+      openBySeries.set(key, task);
+      continue;
+    }
+    const preferExisting = employeeTaskIsDueTodayOrEarlier(existing);
+    const preferTask = employeeTaskIsDueTodayOrEarlier(task);
+    if (preferTask && !preferExisting) {
+      openBySeries.set(key, task);
+    } else if (preferTask === preferExisting && dueMs(task.dueAt) < dueMs(existing.dueAt)) {
+      openBySeries.set(key, task);
+    }
+  }
+
+  for (const task of openBySeries.values()) kept.push(task);
+  return kept;
+}
+
+/**
  * The next open card after today, inside `dayCount` days, one card per repeating series.
  * @param {EmpTaskLike[]} tasks
  * @param {number} [dayCount]
