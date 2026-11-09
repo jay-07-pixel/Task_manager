@@ -79,18 +79,21 @@ export async function getCheckoutTaskGateSettings() {
       select: {
         checkoutRequiresTasksDone: true,
         dailyTaskReportTime: true,
+        dailyTaskReportEmail: true,
         dailyTaskReportLastSentOn: true,
       },
     });
     return {
       checkoutRequiresTasksDone: row?.checkoutRequiresTasksDone === true,
       dailyTaskReportTime: row?.dailyTaskReportTime ?? null,
+      dailyTaskReportEmail: row?.dailyTaskReportEmail ?? null,
       dailyTaskReportLastSentOn: row?.dailyTaskReportLastSentOn ?? null,
     };
   } catch {
     return {
       checkoutRequiresTasksDone: false,
       dailyTaskReportTime: null,
+      dailyTaskReportEmail: null,
       dailyTaskReportLastSentOn: null,
     };
   }
@@ -108,6 +111,7 @@ export async function getCompanyAttendanceSettings() {
     taskAssignmentEmailEnabled,
     checkoutRequiresTasksDone: checkoutGate.checkoutRequiresTasksDone,
     dailyTaskReportTime: checkoutGate.dailyTaskReportTime,
+    dailyTaskReportEmail: checkoutGate.dailyTaskReportEmail,
     ...schedule,
   };
 }
@@ -272,10 +276,18 @@ export async function setCompanyTaskAssignmentEmailEnabled(taskAssignmentEmailEn
   };
 }
 
+function normalizeReportEmail(value) {
+  if (value == null || value === "") return null;
+  const email = String(value).trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 191) return null;
+  return email;
+}
+
 /**
  * @param {{
  *   checkoutRequiresTasksDone?: boolean;
  *   dailyTaskReportTime?: string | null;
+ *   dailyTaskReportEmail?: string | null;
  * }} data
  */
 export async function setCheckoutTaskGateSettings(data) {
@@ -295,6 +307,17 @@ export async function setCheckoutTaskGateSettings(data) {
       patch.dailyTaskReportTime = normalized;
     }
   }
+  if (data.dailyTaskReportEmail !== undefined) {
+    if (data.dailyTaskReportEmail === null || data.dailyTaskReportEmail === "") {
+      patch.dailyTaskReportEmail = null;
+    } else {
+      const email = normalizeReportEmail(data.dailyTaskReportEmail);
+      if (!email) {
+        throw new Error("Invalid daily task report email.");
+      }
+      patch.dailyTaskReportEmail = email;
+    }
+  }
   if (!Object.keys(patch).length) {
     return getCheckoutTaskGateSettings();
   }
@@ -304,12 +327,14 @@ export async function setCheckoutTaskGateSettings(data) {
     select: {
       checkoutRequiresTasksDone: true,
       dailyTaskReportTime: true,
+      dailyTaskReportEmail: true,
       updatedAt: true,
     },
   });
   return {
     checkoutRequiresTasksDone: updated.checkoutRequiresTasksDone === true,
     dailyTaskReportTime: updated.dailyTaskReportTime ?? null,
+    dailyTaskReportEmail: updated.dailyTaskReportEmail ?? null,
     updatedAt: updated.updatedAt.toISOString(),
   };
 }

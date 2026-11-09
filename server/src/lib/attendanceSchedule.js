@@ -32,6 +32,48 @@ function minutesSinceLocalMidnight(date, timeZone = getCompanyTimeZone()) {
   return hours * 60 + minutes;
 }
 
+/** @param {Date} [date] @param {string} [timeZone] */
+export function minutesSinceCompanyMidnight(date = new Date(), timeZone = getCompanyTimeZone()) {
+  return minutesSinceLocalMidnight(date, timeZone);
+}
+
+/** YYYY-MM-DD in company timezone. @param {Date} [date] @param {string} [timeZone] */
+export function companyDateKey(date = new Date(), timeZone = getCompanyTimeZone()) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+/**
+ * Start/end of the company-local calendar day containing `date`.
+ * @param {Date} [date]
+ * @param {string} [timeZone]
+ */
+export function companyDayBounds(date = new Date(), timeZone = getCompanyTimeZone()) {
+  const dateKey = companyDateKey(date, timeZone);
+  const probe = new Date(`${dateKey}T06:00:00.000Z`);
+  const tzName =
+    new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      timeZoneName: "shortOffset",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    })
+      .formatToParts(probe)
+      .find((p) => p.type === "timeZoneName")?.value || "GMT+5:30";
+  const m = String(tzName).match(/GMT([+-])(\d{1,2})(?::?(\d{2}))?/i);
+  const offset = m
+    ? `${m[1]}${String(m[2]).padStart(2, "0")}:${m[3] || "00"}`
+    : "+05:30";
+  const start = new Date(`${dateKey}T00:00:00${offset}`);
+  const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+  return { start, end, dateKey };
+}
+
 /**
  * @param {Date | string} recordedAt
  * @param {string | null | undefined} checkInTime

@@ -1119,6 +1119,7 @@ export async function handleDemoRequest(url, init = {}) {
       taskAssignmentEmailEnabled: store.company.taskAssignmentEmailEnabled === true,
       checkoutRequiresTasksDone: store.company.checkoutRequiresTasksDone === true,
       dailyTaskReportTime: store.company.dailyTaskReportTime ?? null,
+      dailyTaskReportEmail: store.company.dailyTaskReportEmail ?? null,
     });
   }
   if (pathname === "/api/attendance/company-settings" && method === "PATCH") {
@@ -1133,6 +1134,9 @@ export async function handleDemoRequest(url, init = {}) {
     if (body.dailyTaskReportTime !== undefined) {
       store.company.dailyTaskReportTime = body.dailyTaskReportTime || null;
     }
+    if (body.dailyTaskReportEmail !== undefined) {
+      store.company.dailyTaskReportEmail = body.dailyTaskReportEmail || null;
+    }
     return json({
       ok: true,
       liveLocationRequired: store.company.liveLocationRequired,
@@ -1140,6 +1144,7 @@ export async function handleDemoRequest(url, init = {}) {
       taskAssignmentEmailEnabled: store.company.taskAssignmentEmailEnabled === true,
       checkoutRequiresTasksDone: store.company.checkoutRequiresTasksDone === true,
       dailyTaskReportTime: store.company.dailyTaskReportTime ?? null,
+      dailyTaskReportEmail: store.company.dailyTaskReportEmail ?? null,
     });
   }
   if (pathname === "/api/attendance/daily-task-report-preview" && method === "GET") {

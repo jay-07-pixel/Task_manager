@@ -478,6 +478,7 @@ export function createDemoSeed() {
       taskAssignmentEmailEnabled: false,
       checkoutRequiresTasksDone: false,
       dailyTaskReportTime: null,
+      dailyTaskReportEmail: null,
       dailyCheckInTime: "09:30",
       dailyCheckOutTime: "18:30",
       attendanceStartDate: ymd(-40),

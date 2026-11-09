@@ -1,6 +1,11 @@
 import { prisma } from "../lib/prisma.js";
 import { adminUserWhere } from "../lib/adminUsers.js";
-import { parseTimeHHmm } from "../lib/attendanceSchedule.js";
+import {
+  companyDateKey,
+  companyDayBounds,
+  minutesSinceCompanyMidnight,
+  parseTimeHHmm,
+} from "../lib/attendanceSchedule.js";
 import { sendDailyTaskStatusReportEmail } from "../lib/mail.js";
 import {
   getCheckoutTaskGateSettings,
@@ -9,24 +14,11 @@ import {
   markDailyTaskReportSent,
 } from "./companyAttendanceSettings.js";
 
-function startOfDayLocal(dateStr) {
-  let start;
-  if (dateStr) {
-    const m = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (!m) throw new Error("Invalid date");
-    start = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-    if (Number.isNaN(start.getTime())) throw new Error("Invalid date");
-  } else {
-    const now = new Date();
-    start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  }
-  const end = new Date(start);
-  end.setDate(end.getDate() + 1);
-  return { start, end };
-}
-
-function localDateKey(date = new Date()) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+function dayBoundsForKey(dateKey) {
+  if (!dateKey) return companyDayBounds();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateKey))) throw new Error("Invalid date");
+  // Use noon UTC on that calendar day so companyDayBounds resolves the intended local day.
+  return companyDayBounds(new Date(`${dateKey}T12:00:00.000Z`));
 }
 
 function serializeAssignment(row) {
@@ -48,7 +40,7 @@ function serializeAssignment(row) {
  * @param {string} [dateKey]
  */
 export async function getEmployeeTaskCheckoutSummary(userId, dateKey) {
-  const { start, end } = startOfDayLocal(dateKey);
+  const { start, end, dateKey: resolvedKey } = dayBoundsForKey(dateKey);
   const rows = await prisma.taskAssignee.findMany({
     where: {
       userId,
@@ -84,7 +76,7 @@ export async function getEmployeeTaskCheckoutSummary(userId, dateKey) {
   }
 
   return {
-    date: localDateKey(start),
+    date: resolvedKey,
     todayCompleted,
     todayIncomplete,
     pastIncomplete,
@@ -119,8 +111,7 @@ export async function assertEmployeeCanCheckout(userId) {
  * @param {string} [dateKey]
  */
 export async function buildDailyTaskStatusReport(dateKey) {
-  const { start, end } = startOfDayLocal(dateKey);
-  const date = localDateKey(start);
+  const { start, end, dateKey: date } = dayBoundsForKey(dateKey);
 
   const rows = await prisma.taskAssignee.findMany({
     where: {
@@ -170,7 +161,7 @@ async function listAdminRecipients() {
 }
 
 /**
- * Send today's task completion report to all admins (idempotent per calendar day).
+ * Send today's task completion report at the configured company-local time.
  */
 export async function runDailyTaskReportTick(now = new Date()) {
   if (!(await isCompanyAttendanceEnabled())) {
@@ -183,34 +174,58 @@ export async function runDailyTaskReportTick(now = new Date()) {
   const parsed = parseTimeHHmm(settings.dailyTaskReportTime);
   if (!parsed) return { skipped: true, reason: "invalid_time" };
 
-  const dateKey = localDateKey(now);
+  const dateKey = companyDateKey(now);
   if (settings.dailyTaskReportLastSentOn === dateKey) {
     return { skipped: true, reason: "already_sent" };
   }
 
-  const minsNow = now.getHours() * 60 + now.getMinutes();
+  const minsNow = minutesSinceCompanyMidnight(now);
   const target = parsed.hours * 60 + parsed.minutes;
   if (minsNow < target) return { skipped: true, reason: "too_early" };
 
   const report = await buildDailyTaskStatusReport(dateKey);
+  const recipients = new Map();
+
+  const configuredEmail = String(settings.dailyTaskReportEmail || "")
+    .trim()
+    .toLowerCase();
+  if (configuredEmail) {
+    recipients.set(configuredEmail, {
+      email: configuredEmail,
+      displayName: "Admin",
+    });
+  }
+
   const admins = await listAdminRecipients();
-  const withEmail = admins.filter((a) => a.email?.trim());
-  if (!withEmail.length) {
+  for (const admin of admins) {
+    const email = String(admin.email || "")
+      .trim()
+      .toLowerCase();
+    if (!email) continue;
+    if (!recipients.has(email)) {
+      recipients.set(email, {
+        email,
+        displayName: admin.displayName || "Admin",
+      });
+    }
+  }
+
+  if (!recipients.size) {
     await markDailyTaskReportSent(dateKey);
-    return { skipped: true, reason: "no_admins" };
+    return { skipped: true, reason: "no_recipients" };
   }
 
   let sent = 0;
-  for (const admin of withEmail) {
+  for (const recipient of recipients.values()) {
     try {
       const result = await sendDailyTaskStatusReportEmail({
-        to: admin.email,
-        recipientName: admin.displayName || "Admin",
+        to: recipient.email,
+        recipientName: recipient.displayName || "Admin",
         report,
       });
       if (result?.ok !== false) sent += 1;
     } catch (err) {
-      console.error("[daily-task-report] email failed", admin.email, err);
+      console.error("[daily-task-report] email failed", recipient.email, err);
     }
   }
 
@@ -229,7 +244,7 @@ let dailyTaskReportTimer = null;
 
 export function startDailyTaskReportScheduler() {
   if (dailyTaskReportTimer) return dailyTaskReportTimer;
-  console.log("[daily-task-report] scheduler started (every 60s)");
+  console.log("[daily-task-report] scheduler started (every 60s, company timezone)");
   void runDailyTaskReportTick().catch((err) => console.error("[daily-task-report]", err));
   dailyTaskReportTimer = setInterval(() => {
     runDailyTaskReportTick().catch((err) => console.error("[daily-task-report]", err));

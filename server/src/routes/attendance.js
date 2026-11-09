@@ -65,6 +65,9 @@ const companySettingsSchema = z.object({
   dailyTaskReportTime: z
     .union([z.string().regex(/^\d{1,2}:\d{2}$/), z.null(), z.literal("")])
     .optional(),
+  dailyTaskReportEmail: z
+    .union([z.string().email().max(191), z.null(), z.literal("")])
+    .optional(),
 });
 
 const workLocationSchema = z.object({
@@ -110,7 +113,8 @@ router.patch("/company-settings", requireOwner, async (req, res) => {
     parsed.data.attendanceEnabled === undefined &&
     parsed.data.taskAssignmentEmailEnabled === undefined &&
     parsed.data.checkoutRequiresTasksDone === undefined &&
-    parsed.data.dailyTaskReportTime === undefined
+    parsed.data.dailyTaskReportTime === undefined &&
+    parsed.data.dailyTaskReportEmail === undefined
   ) {
     return res.status(400).json({ error: "No settings to update." });
   }
@@ -135,7 +139,8 @@ router.patch("/company-settings", requireOwner, async (req, res) => {
   }
   if (
     parsed.data.checkoutRequiresTasksDone !== undefined ||
-    parsed.data.dailyTaskReportTime !== undefined
+    parsed.data.dailyTaskReportTime !== undefined ||
+    parsed.data.dailyTaskReportEmail !== undefined
   ) {
     try {
       settings = {
@@ -143,6 +148,7 @@ router.patch("/company-settings", requireOwner, async (req, res) => {
         ...(await setCheckoutTaskGateSettings({
           checkoutRequiresTasksDone: parsed.data.checkoutRequiresTasksDone,
           dailyTaskReportTime: parsed.data.dailyTaskReportTime,
+          dailyTaskReportEmail: parsed.data.dailyTaskReportEmail,
         })),
       };
     } catch (err) {
