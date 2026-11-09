@@ -5,6 +5,7 @@ import { sendDailyTaskStatusReportEmail } from "../lib/mail.js";
 import {
   getCheckoutTaskGateSettings,
   isCheckoutRequiresTasksDone,
+  isCompanyAttendanceEnabled,
   markDailyTaskReportSent,
 } from "./companyAttendanceSettings.js";
 
@@ -172,6 +173,9 @@ async function listAdminRecipients() {
  * Send today's task completion report to all admins (idempotent per calendar day).
  */
 export async function runDailyTaskReportTick(now = new Date()) {
+  if (!(await isCompanyAttendanceEnabled())) {
+    return { skipped: true, reason: "attendance_off" };
+  }
   const settings = await getCheckoutTaskGateSettings();
   if (!settings.checkoutRequiresTasksDone) return { skipped: true, reason: "feature_off" };
   if (!settings.dailyTaskReportTime) return { skipped: true, reason: "no_time" };
