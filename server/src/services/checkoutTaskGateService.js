@@ -211,11 +211,12 @@ export async function runDailyTaskReportTick(now = new Date()) {
   }
 
   if (!recipients.size) {
-    await markDailyTaskReportSent(dateKey);
+    console.warn("[daily-task-report] no recipients for", dateKey);
     return { skipped: true, reason: "no_recipients" };
   }
 
   let sent = 0;
+  const failures = [];
   for (const recipient of recipients.values()) {
     try {
       const result = await sendDailyTaskStatusReportEmail({
@@ -223,17 +224,36 @@ export async function runDailyTaskReportTick(now = new Date()) {
         recipientName: recipient.displayName || "Admin",
         report,
       });
-      if (result?.ok !== false) sent += 1;
+      if (result?.ok) {
+        sent += 1;
+        console.log("[daily-task-report] sent to", recipient.email, {
+          date: dateKey,
+          completed: report.todayCompleted.length,
+          incomplete: report.todayIncomplete.length,
+          past: report.pastIncomplete.length,
+        });
+      } else {
+        failures.push(`${recipient.email}: skipped`);
+        console.warn("[daily-task-report] skipped for", recipient.email, result);
+      }
     } catch (err) {
+      failures.push(`${recipient.email}: ${err?.message || err}`);
       console.error("[daily-task-report] email failed", recipient.email, err);
     }
   }
 
-  await markDailyTaskReportSent(dateKey);
+  // Only mark the day complete when at least one email actually went out.
+  if (sent > 0) {
+    await markDailyTaskReportSent(dateKey);
+  } else {
+    console.error("[daily-task-report] no emails delivered for", dateKey, failures);
+  }
+
   return {
-    ok: true,
+    ok: sent > 0,
     date: dateKey,
     sent,
+    failures,
     todayCompleted: report.todayCompleted.length,
     todayIncomplete: report.todayIncomplete.length,
     pastIncomplete: report.pastIncomplete.length,
