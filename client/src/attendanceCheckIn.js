@@ -1,3 +1,4 @@
+import * as bootstrap from "bootstrap";
 import { tr, dateLocale, formatTime24 } from "./i18n/index.js";
 import { notifyAttendanceCheckCompleted } from "./attendanceCheckInReminder.js";
 
@@ -14,6 +15,15 @@ let checkStatus = null;
 let historyRows = null;
 
 let actionsWired = false;
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 
 export function initAttendanceCheckIn({ api, showToast }) {
   apiFn = api;
@@ -61,11 +71,11 @@ function timingLabel(status) {
 }
 
 function timingClass(status) {
-  if (status === "late") return "text-danger fw-semibold";
-  if (status === "early") return "text-warning fw-semibold";
-  if (status === "overtime") return "text-primary fw-semibold";
-  if (status === "on_time") return "text-success";
-  return "";
+  if (status === "late") return "attendance-timing attendance-timing--late";
+  if (status === "early") return "attendance-timing attendance-timing--early";
+  if (status === "overtime") return "attendance-timing attendance-timing--overtime";
+  if (status === "on_time") return "attendance-timing attendance-timing--on-time";
+  return "attendance-timing";
 }
 
 function formatTime(iso) {
@@ -112,31 +122,94 @@ function renderHistoryLists() {
   const html =
     historyRows?.length
       ? `<ul class="attendance-history-list">${historyRows.map((row) => historyItemHtml(row)).join("")}</ul>`
-      : `<p class="attendance-history-empty small text-muted mb-0">${tr("attendance.historyEmpty")}</p>`;
+      : `<p class="attendance-history-empty mb-0">${tr("attendance.historyEmpty")}</p>`;
   document.querySelectorAll(".attendance-history-host").forEach((host) => {
     host.innerHTML = html;
   });
 }
 
+export function attendanceCheckoutBlockedModalHtml() {
+  return `
+    <div class="modal fade profile-modal" id="attendanceCheckoutBlockedModal" tabindex="-1" aria-labelledby="attendanceCheckoutBlockedTitle" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered profile-modal-dialog">
+        <div class="modal-content profile-modal-card">
+          <div class="modal-header profile-modal-header">
+            <h2 class="modal-title h5 mb-0" id="attendanceCheckoutBlockedTitle">${escapeHtml(
+              tr("attendance.checkoutBlockedTitle")
+            )}</h2>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="${escapeHtml(
+              tr("common.close")
+            )}"></button>
+          </div>
+          <div class="modal-body profile-modal-body">
+            <p class="attendance-checkout-blocked-lead mb-2" id="attendanceCheckoutBlockedMessage"></p>
+            <ul class="attendance-checkout-blocked-list mb-0" id="attendanceCheckoutBlockedList"></ul>
+          </div>
+          <div class="modal-footer profile-modal-footer">
+            <button type="button" class="attendance-btn attendance-btn--primary" data-bs-dismiss="modal">${escapeHtml(
+              tr("attendance.checkoutBlockedOk")
+            )}</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function showCheckoutBlockedPopup() {
+  const n = Number(checkStatus?.incompleteTodayCount) || 0;
+  const titles = Array.isArray(checkStatus?.incompleteTodayTitles)
+    ? checkStatus.incompleteTodayTitles
+    : [];
+  const messageEl = document.getElementById("attendanceCheckoutBlockedMessage");
+  const listEl = document.getElementById("attendanceCheckoutBlockedList");
+  const modalEl = document.getElementById("attendanceCheckoutBlockedModal");
+  if (!modalEl) {
+    showToastFn?.(tr("attendance.checkoutBlockedByTasks", { count: String(n) }), "warning");
+    return;
+  }
+  if (messageEl) {
+    messageEl.textContent = tr("attendance.checkoutBlockedPopupMessage", { count: String(n) });
+  }
+  if (listEl) {
+    if (titles.length) {
+      listEl.innerHTML = titles
+        .map((title) => `<li>${escapeHtml(title)}</li>`)
+        .join("");
+      listEl.classList.remove("d-none");
+    } else {
+      listEl.innerHTML = "";
+      listEl.classList.add("d-none");
+    }
+  }
+  bootstrap.Modal.getOrCreateInstance(modalEl).show();
+}
+
 export function attendanceCheckInSidebarHtml() {
-  return `<section class="attendance-checkin-sidebar attendance-checkin-panel" aria-label="${tr("attendance.myAttendance")}">
+  return `<section class="attendance-checkin-sidebar attendance-checkin-panel" aria-label="${escapeHtml(
+    tr("attendance.myAttendance")
+  )}">
     <div class="attendance-checkin-sidebar-today">
       <div class="attendance-checkin-card-head">
-        <h2 class="attendance-checkin-card-title">${tr("attendance.todayStatusTitle")}</h2>
+        <h2 class="attendance-checkin-card-title">${escapeHtml(tr("attendance.todayStatusTitle"))}</h2>
         <span class="attendance-checkin-status-badge d-none js-attendance-status-badge"></span>
       </div>
-      <p class="attendance-checkin-message small text-muted mb-2 js-attendance-message">${tr("attendance.checkInLoading")}</p>
-      <p class="attendance-checkin-proximity small mb-2 d-none js-attendance-proximity"></p>
-      <div class="attendance-checkin-times small mb-2 d-none js-attendance-times"></div>
+      <p class="attendance-checkin-message js-attendance-message">${escapeHtml(tr("attendance.checkInLoading"))}</p>
+      <div class="attendance-checkin-alert d-none js-attendance-task-alert" role="status"></div>
+      <p class="attendance-checkin-proximity d-none js-attendance-proximity"></p>
+      <div class="attendance-checkin-times d-none js-attendance-times"></div>
       <div class="attendance-checkin-actions">
-        <button type="button" class="profile-modal-btn-save js-attendance-checkin-btn">${tr("attendance.checkIn")}</button>
-        <button type="button" class="profile-modal-btn-cancel d-none js-attendance-checkout-btn">${tr("attendance.checkOut")}</button>
+        <button type="button" class="attendance-btn attendance-btn--primary js-attendance-checkin-btn">${escapeHtml(
+          tr("attendance.checkIn")
+        )}</button>
+        <button type="button" class="attendance-btn attendance-btn--checkout d-none js-attendance-checkout-btn">${escapeHtml(
+          tr("attendance.checkOut")
+        )}</button>
       </div>
     </div>
     <div class="attendance-checkin-sidebar-history">
-      <h3 class="attendance-history-title">${tr("attendance.historyTitle")}</h3>
+      <h3 class="attendance-history-title">${escapeHtml(tr("attendance.historyTitle"))}</h3>
       <div class="attendance-history-host">
-        <p class="attendance-history-empty small text-muted mb-0">${tr("common.loading")}</p>
+        <p class="attendance-history-empty mb-0">${escapeHtml(tr("common.loading"))}</p>
       </div>
     </div>
   </section>`;
@@ -152,6 +225,7 @@ function renderCheckInPanel(panel) {
   const proximityEl = panel.querySelector(".js-attendance-proximity");
   const timesEl = panel.querySelector(".js-attendance-times");
   const badgeEl = panel.querySelector(".js-attendance-status-badge");
+  const alertEl = panel.querySelector(".js-attendance-task-alert");
   const checkInBtn = panel.querySelector(".js-attendance-checkin-btn");
   const checkOutBtn = panel.querySelector(".js-attendance-checkout-btn");
   if (!messageEl) return;
@@ -160,6 +234,7 @@ function renderCheckInPanel(panel) {
     messageEl.textContent = tr("attendance.noLocationsEmployee");
     proximityEl?.classList.add("d-none");
     timesEl?.classList.add("d-none");
+    alertEl?.classList.add("d-none");
     checkInBtn?.classList.add("d-none");
     checkOutBtn?.classList.add("d-none");
     badgeEl?.classList.add("d-none");
@@ -169,27 +244,44 @@ function renderCheckInPanel(panel) {
   checkInBtn?.classList.toggle("d-none", !checkStatus.canCheckIn);
   checkOutBtn?.classList.toggle("d-none", !checkStatus.canCheckOut);
   if (checkOutBtn) {
-    checkOutBtn.disabled = !!checkStatus.checkoutBlockedByIncompleteTasks;
+    checkOutBtn.disabled = false;
+    checkOutBtn.classList.toggle(
+      "attendance-btn--blocked",
+      !!checkStatus.checkoutBlockedByIncompleteTasks
+    );
   }
   badgeEl?.classList.remove("d-none");
 
+  const blocked = !!checkStatus.checkoutBlockedByIncompleteTasks;
+  const incompleteCount = Number(checkStatus.incompleteTodayCount) || 0;
+
   if (checkStatus.dayComplete) {
     badgeEl.textContent = tr("attendance.presentBadge");
-    badgeEl.className = "attendance-checkin-status-badge attendance-checkin-status-badge--in js-attendance-status-badge";
+    badgeEl.className =
+      "attendance-checkin-status-badge attendance-checkin-status-badge--in js-attendance-status-badge";
     messageEl.textContent = tr("attendance.dayCompleteMessage");
-  } else if (checkStatus.isCheckedIn && checkStatus.checkoutBlockedByIncompleteTasks) {
-    badgeEl.textContent = tr("attendance.checkedInBadge");
-    badgeEl.className = "attendance-checkin-status-badge attendance-checkin-status-badge--in js-attendance-status-badge";
-    const n = Number(checkStatus.incompleteTodayCount) || 0;
-    messageEl.textContent = tr("attendance.checkoutBlockedByTasks", { count: String(n) });
   } else if (checkStatus.isCheckedIn) {
     badgeEl.textContent = tr("attendance.checkedInBadge");
-    badgeEl.className = "attendance-checkin-status-badge attendance-checkin-status-badge--in js-attendance-status-badge";
+    badgeEl.className =
+      "attendance-checkin-status-badge attendance-checkin-status-badge--in js-attendance-status-badge";
     messageEl.textContent = tr("attendance.checkedInMessage");
   } else {
     badgeEl.textContent = tr("attendance.notCheckedInBadge");
-    badgeEl.className = "attendance-checkin-status-badge attendance-checkin-status-badge--out js-attendance-status-badge";
+    badgeEl.className =
+      "attendance-checkin-status-badge attendance-checkin-status-badge--out js-attendance-status-badge";
     messageEl.textContent = tr("attendance.notCheckedInMessage");
+  }
+
+  if (alertEl) {
+    if (blocked && incompleteCount > 0) {
+      alertEl.classList.remove("d-none");
+      alertEl.innerHTML = `<span class="material-symbols-outlined" aria-hidden="true">warning</span><span>${escapeHtml(
+        tr("attendance.checkoutBlockedByTasks", { count: String(incompleteCount) })
+      )}</span>`;
+    } else {
+      alertEl.classList.add("d-none");
+      alertEl.innerHTML = "";
+    }
   }
 
   const showProximity = checkStatus.canCheckIn || checkStatus.canCheckOut;
@@ -201,13 +293,13 @@ function renderCheckInPanel(panel) {
         name: prox.locationName,
         meters: prox.distanceMeters,
       });
-      proximityEl.className = "attendance-checkin-proximity small mb-2 text-success js-attendance-proximity";
+      proximityEl.className = "attendance-checkin-proximity is-ok js-attendance-proximity";
     } else {
       proximityEl.textContent = tr("attendance.outsideRadius", {
         name: prox.locationName,
         meters: prox.distanceMeters,
       });
-      proximityEl.className = "attendance-checkin-proximity small mb-2 text-danger js-attendance-proximity";
+      proximityEl.className = "attendance-checkin-proximity is-far js-attendance-proximity";
     }
   } else {
     proximityEl?.classList.add("d-none");
@@ -219,10 +311,26 @@ function renderCheckInPanel(panel) {
     const checkOutTiming = checkStatus.lastCheckOut?.timingStatus;
     timesEl.innerHTML = [
       checkStatus.lastCheckIn
-        ? `<div>${tr("attendance.todayCheckIn")}: <strong>${formatTime(checkStatus.lastCheckIn.recordedAt)}</strong>${checkInTiming && checkInTiming !== "on_time" ? ` · <span class="${timingClass(checkInTiming)}">${timingLabel(checkInTiming)}</span>` : ""}</div>`
+        ? `<div class="attendance-time-chip">
+            <span class="attendance-time-chip-label">${escapeHtml(tr("attendance.todayCheckIn"))}</span>
+            <strong>${escapeHtml(formatTime(checkStatus.lastCheckIn.recordedAt))}</strong>
+            ${
+              checkInTiming && checkInTiming !== "on_time"
+                ? `<span class="${timingClass(checkInTiming)}">${escapeHtml(timingLabel(checkInTiming))}</span>`
+                : ""
+            }
+          </div>`
         : "",
       checkStatus.lastCheckOut
-        ? `<div>${tr("attendance.todayCheckOut")}: <strong>${formatTime(checkStatus.lastCheckOut.recordedAt)}</strong>${checkOutTiming && checkOutTiming !== "on_time" ? ` · <span class="${timingClass(checkOutTiming)}">${timingLabel(checkOutTiming)}</span>` : ""}</div>`
+        ? `<div class="attendance-time-chip">
+            <span class="attendance-time-chip-label">${escapeHtml(tr("attendance.todayCheckOut"))}</span>
+            <strong>${escapeHtml(formatTime(checkStatus.lastCheckOut.recordedAt))}</strong>
+            ${
+              checkOutTiming && checkOutTiming !== "on_time"
+                ? `<span class="${timingClass(checkOutTiming)}">${escapeHtml(timingLabel(checkOutTiming))}</span>`
+                : ""
+            }
+          </div>`
         : "",
     ]
       .filter(Boolean)
@@ -248,6 +356,12 @@ function setActionButtonsDisabled(disabled) {
 /** @param {"check_in" | "check_out"} type @returns {Promise<boolean>} */
 export async function performAttendanceCheck(type) {
   if (!apiFn) return false;
+
+  if (type === "check_out" && checkStatus?.checkoutBlockedByIncompleteTasks) {
+    showCheckoutBlockedPopup();
+    return false;
+  }
+
   setActionButtonsDisabled(true);
   try {
     const pos = await getPosition();
@@ -273,7 +387,22 @@ export async function performAttendanceCheck(type) {
     );
     return true;
   } catch (err) {
-    showToastFn?.(err.message || tr("errors.requestFailed"), "danger");
+    const msg = err?.message || tr("errors.requestFailed");
+    if (
+      type === "check_out" &&
+      /remaining task|before check-out|Complete your remaining|Complete all/i.test(msg)
+    ) {
+      try {
+        const pos = await getPosition();
+        await refreshCheckStatus(pos.coords.latitude, pos.coords.longitude);
+      } catch {
+        await refreshCheckStatus();
+      }
+      renderCheckInCard();
+      showCheckoutBlockedPopup();
+      return false;
+    }
+    showToastFn?.(msg, "danger");
     try {
       const pos = await getPosition();
       await refreshCheckStatus(pos.coords.latitude, pos.coords.longitude);
@@ -285,11 +414,6 @@ export async function performAttendanceCheck(type) {
     return false;
   } finally {
     setActionButtonsDisabled(false);
-    if (checkStatus?.checkoutBlockedByIncompleteTasks) {
-      document.querySelectorAll(".js-attendance-checkout-btn").forEach((btn) => {
-        btn.disabled = true;
-      });
-    }
   }
 }
 

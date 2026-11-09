@@ -80,6 +80,7 @@ import {
   initAttendanceCheckIn,
   attendanceCheckInCardHtml,
   attendanceCheckInSidebarHtml,
+  attendanceCheckoutBlockedModalHtml,
   wireAttendanceCheckInCard,
   refreshAttendanceCheckInCard,
   performAttendanceCheck,
@@ -10879,6 +10880,7 @@ function renderEmployeeChrome() {
       ${myProfileModalHtml()}
       ${contactUsModalHtml()}
       ${attendanceCheckInReminderModalHtml()}
+      ${attendanceCheckoutBlockedModalHtml()}
       ${adminNotifOffcanvasHtml(state.user?.id, state.user)}
       ${legalModalHtml()}
       ${teamChatOffcanvasHtml()}
