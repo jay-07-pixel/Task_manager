@@ -731,3 +731,151 @@ export async function sendWorkTransferredEmail(params) {
 
   return { ok: true, devMode: false };
 }
+
+function formatReportTaskLine(item) {
+  const who = item.employeeName || "Employee";
+  const title = item.title || "Untitled task";
+  const due = item.dueAt ? formatTaskDueLine(item.dueAt, false) : "No due date";
+  return `${who} — ${title} (due: ${due || "—"})`;
+}
+
+function reportListHtml(items, emptyLabel) {
+  if (!items?.length) {
+    return `<p style="margin:0;font-size:14px;color:#6c757d">${escapeHtml(emptyLabel)}</p>`;
+  }
+  return `<ul style="margin:0;padding-left:18px;font-size:14px;color:#212529">
+    ${items
+      .map(
+        (item) =>
+          `<li style="margin:0 0 6px"><strong>${escapeHtml(item.employeeName || "Employee")}</strong> — ${escapeHtml(
+            item.title || "Untitled task"
+          )}${
+            item.dueAt
+              ? ` <span style="color:#6c757d">(${escapeHtml(formatTaskDueLine(item.dueAt, false) || "")})</span>`
+              : ` <span style="color:#6c757d">(no due date)</span>`
+          }</li>`
+      )
+      .join("")}
+  </ul>`;
+}
+
+/**
+ * Daily admin report: today's completed / incomplete tasks + past incomplete.
+ * @param {{
+ *   to: string;
+ *   recipientName?: string;
+ *   report: {
+ *     date: string;
+ *     todayCompleted: Array<{ title?: string; employeeName?: string; dueAt?: string | null }>;
+ *     todayIncomplete: Array<{ title?: string; employeeName?: string; dueAt?: string | null }>;
+ *     pastIncomplete: Array<{ title?: string; employeeName?: string; dueAt?: string | null }>;
+ *   };
+ * }} params
+ */
+export async function sendDailyTaskStatusReportEmail(params) {
+  const config = getBrevoConfig();
+  const recipientName = params.recipientName?.trim() || "Admin";
+  const report = params.report || {
+    date: "",
+    todayCompleted: [],
+    todayIncomplete: [],
+    pastIncomplete: [],
+  };
+  const signInUrl = process.env.APP_PUBLIC_URL?.trim() || "";
+  const completed = report.todayCompleted || [];
+  const incomplete = report.todayIncomplete || [];
+  const past = report.pastIncomplete || [];
+
+  if (!config) {
+    if (process.env.NODE_ENV !== "production") {
+      console.log(
+        `[mail] Brevo not configured — daily task report for ${params.to} (${report.date}) (dev only, not sent)`
+      );
+      return { ok: true, devMode: true };
+    }
+    console.warn(`[mail] Brevo not configured — skipped daily task report for ${params.to}`);
+    return { ok: false, skipped: true };
+  }
+
+  const subject = `Daily task report · ${report.date || "today"} · ${completed.length} done / ${incomplete.length} open`;
+  const textContent = [
+    `Hi ${recipientName},`,
+    "",
+    `Daily task status for ${report.date || "today"}:`,
+    "",
+    `Completed today (${completed.length}):`,
+    ...(completed.length ? completed.map((i) => `• ${formatReportTaskLine(i)}`) : ["• None"]),
+    "",
+    `Not completed today (${incomplete.length}):`,
+    ...(incomplete.length ? incomplete.map((i) => `• ${formatReportTaskLine(i)}`) : ["• None"]),
+    "",
+    `Past incomplete (${past.length}):`,
+    ...(past.length ? past.map((i) => `• ${formatReportTaskLine(i)}`) : ["• None"]),
+    "",
+    signInUrl ? `Open Task Manager: ${signInUrl}` : null,
+    "",
+    "— Task Manager",
+  ]
+    .filter((line) => line !== null)
+    .join("\n");
+
+  const htmlContent = `
+    <div style="font-family:system-ui,-apple-system,Segoe UI,sans-serif;max-width:560px;margin:0 auto;color:#212529;line-height:1.5">
+      <div style="background:#00535b;color:#fff;border-radius:10px 10px 0 0;padding:20px 24px">
+        <h1 style="margin:0;font-size:20px;font-weight:700">Task Manager</h1>
+        <p style="margin:8px 0 0;opacity:0.92;font-size:14px">Daily task report · ${escapeHtml(
+          report.date || "today"
+        )}</p>
+      </div>
+      <div style="border:1px solid #dee2e6;border-top:0;border-radius:0 0 10px 10px;padding:24px;background:#fff">
+        <p style="margin:0 0 16px">Hi <strong>${escapeHtml(recipientName)}</strong>,</p>
+        <p style="margin:0 0 20px;font-size:14px;color:#495057">
+          Summary of tasks due today and past incomplete work.
+        </p>
+        <h2 style="margin:0 0 8px;font-size:15px;color:#198754">Completed today (${completed.length})</h2>
+        <div style="margin:0 0 18px">${reportListHtml(completed, "No completed tasks today.")}</div>
+        <h2 style="margin:0 0 8px;font-size:15px;color:#dc3545">Not completed today (${incomplete.length})</h2>
+        <div style="margin:0 0 18px">${reportListHtml(incomplete, "All of today’s tasks are done.")}</div>
+        <h2 style="margin:0 0 8px;font-size:15px;color:#856404">Past incomplete (${past.length})</h2>
+        <div style="margin:0 0 18px">${reportListHtml(past, "No past incomplete tasks.")}</div>
+        ${
+          signInUrl
+            ? `<p style="margin:16px 0 0"><a href="${escapeHtml(
+                signInUrl
+              )}" style="display:inline-block;background:#00535b;color:#fff;text-decoration:none;padding:10px 18px;border-radius:6px;font-weight:600">Open Task Manager</a></p>`
+            : ""
+        }
+      </div>
+    </div>
+  `;
+
+  const res = await fetch(BREVO_API_URL, {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+      "api-key": config.apiKey,
+    },
+    body: JSON.stringify({
+      sender: { name: config.senderName, email: config.senderEmail },
+      to: [{ email: params.to, name: recipientName }],
+      subject,
+      htmlContent,
+      textContent,
+    }),
+  });
+
+  if (!res.ok) {
+    let detail = res.statusText;
+    try {
+      const errBody = await res.json();
+      detail = errBody?.message || errBody?.error || JSON.stringify(errBody);
+    } catch {
+      /* ignore */
+    }
+    console.error("[mail/brevo] daily task report", res.status, detail);
+    throw new Error("Failed to send daily task report email.");
+  }
+
+  return { ok: true, devMode: false };
+}

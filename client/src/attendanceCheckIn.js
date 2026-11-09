@@ -168,12 +168,20 @@ function renderCheckInPanel(panel) {
 
   checkInBtn?.classList.toggle("d-none", !checkStatus.canCheckIn);
   checkOutBtn?.classList.toggle("d-none", !checkStatus.canCheckOut);
+  if (checkOutBtn) {
+    checkOutBtn.disabled = !!checkStatus.checkoutBlockedByIncompleteTasks;
+  }
   badgeEl?.classList.remove("d-none");
 
   if (checkStatus.dayComplete) {
     badgeEl.textContent = tr("attendance.presentBadge");
     badgeEl.className = "attendance-checkin-status-badge attendance-checkin-status-badge--in js-attendance-status-badge";
     messageEl.textContent = tr("attendance.dayCompleteMessage");
+  } else if (checkStatus.isCheckedIn && checkStatus.checkoutBlockedByIncompleteTasks) {
+    badgeEl.textContent = tr("attendance.checkedInBadge");
+    badgeEl.className = "attendance-checkin-status-badge attendance-checkin-status-badge--in js-attendance-status-badge";
+    const n = Number(checkStatus.incompleteTodayCount) || 0;
+    messageEl.textContent = tr("attendance.checkoutBlockedByTasks", { count: String(n) });
   } else if (checkStatus.isCheckedIn) {
     badgeEl.textContent = tr("attendance.checkedInBadge");
     badgeEl.className = "attendance-checkin-status-badge attendance-checkin-status-badge--in js-attendance-status-badge";
@@ -277,6 +285,11 @@ export async function performAttendanceCheck(type) {
     return false;
   } finally {
     setActionButtonsDisabled(false);
+    if (checkStatus?.checkoutBlockedByIncompleteTasks) {
+      document.querySelectorAll(".js-attendance-checkout-btn").forEach((btn) => {
+        btn.disabled = true;
+      });
+    }
   }
 }
 

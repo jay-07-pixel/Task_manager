@@ -24,11 +24,13 @@ import {
   getCompanyAttendanceSettings,
   getDailyAttendanceSchedule,
   isCompanyAttendanceEnabled,
+  setCheckoutTaskGateSettings,
   setCompanyAttendanceEnabled,
   setCompanyLiveLocationRequired,
   setCompanyTaskAssignmentEmailEnabled,
   setDailyAttendanceSchedule,
 } from "../services/companyAttendanceSettings.js";
+import { buildDailyTaskStatusReport } from "../services/checkoutTaskGateService.js";
 import {
   createWorkLocation,
   deleteWorkLocation,
@@ -59,6 +61,10 @@ const companySettingsSchema = z.object({
   liveLocationRequired: z.boolean().optional(),
   attendanceEnabled: z.boolean().optional(),
   taskAssignmentEmailEnabled: z.boolean().optional(),
+  checkoutRequiresTasksDone: z.boolean().optional(),
+  dailyTaskReportTime: z
+    .union([z.string().regex(/^\d{1,2}:\d{2}$/), z.null(), z.literal("")])
+    .optional(),
 });
 
 const workLocationSchema = z.object({
@@ -102,7 +108,9 @@ router.patch("/company-settings", requireOwner, async (req, res) => {
   if (
     parsed.data.liveLocationRequired === undefined &&
     parsed.data.attendanceEnabled === undefined &&
-    parsed.data.taskAssignmentEmailEnabled === undefined
+    parsed.data.taskAssignmentEmailEnabled === undefined &&
+    parsed.data.checkoutRequiresTasksDone === undefined &&
+    parsed.data.dailyTaskReportTime === undefined
   ) {
     return res.status(400).json({ error: "No settings to update." });
   }
@@ -125,7 +133,33 @@ router.patch("/company-settings", requireOwner, async (req, res) => {
       ...(await setCompanyTaskAssignmentEmailEnabled(parsed.data.taskAssignmentEmailEnabled)),
     };
   }
+  if (
+    parsed.data.checkoutRequiresTasksDone !== undefined ||
+    parsed.data.dailyTaskReportTime !== undefined
+  ) {
+    try {
+      settings = {
+        ...settings,
+        ...(await setCheckoutTaskGateSettings({
+          checkoutRequiresTasksDone: parsed.data.checkoutRequiresTasksDone,
+          dailyTaskReportTime: parsed.data.dailyTaskReportTime,
+        })),
+      };
+    } catch (err) {
+      return res.status(400).json({ error: err.message || "Invalid settings." });
+    }
+  }
   res.json({ ok: true, ...settings });
+});
+
+router.get("/daily-task-report-preview", requireOwner, async (req, res) => {
+  const date = typeof req.query.date === "string" ? req.query.date.trim() : "";
+  try {
+    const report = await buildDailyTaskStatusReport(date || undefined);
+    res.json(report);
+  } catch (err) {
+    res.status(400).json({ error: err.message || "Invalid date." });
+  }
 });
 
 router.post("/consent", requireAuth, async (req, res) => {

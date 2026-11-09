@@ -706,6 +706,30 @@ function taskAssignmentEmailToggleHtml() {
   <p class="admin-settings-hint">${esc(tr("settings.taskAssignmentEmailHint"))}</p>`;
 }
 
+function checkoutRequiresTasksToggleHtml() {
+  const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
+  const icon = adminMsIconFn?.("task_alt") ?? "";
+  const label = esc(tr("settings.checkoutRequiresTasks"));
+  const timeLabel = esc(tr("settings.dailyTaskReportTime"));
+  return `<div class="admin-settings-row admin-settings-row--toggle">
+    <span class="admin-settings-row-left">
+      ${icon}
+      <span class="admin-settings-row-label">${label}</span>
+    </span>
+    <label class="admin-settings-switch">
+      <input type="checkbox" class="admin-settings-switch-input js-checkout-requires-tasks-toggle" aria-label="${label}" />
+      <span class="admin-settings-switch-track" aria-hidden="true"></span>
+    </label>
+  </div>
+  <p class="admin-settings-hint">${esc(tr("settings.checkoutRequiresTasksHint"))}</p>
+  <div class="admin-settings-row admin-settings-row--field js-daily-task-report-time-row d-none">
+    <label class="admin-settings-field-label" for="daily-task-report-time">${timeLabel}</label>
+    <input type="time" id="daily-task-report-time" class="form-control form-control-sm js-daily-task-report-time" step="60" />
+  </div>
+  <p class="admin-settings-hint js-daily-task-report-time-hint d-none">${esc(tr("settings.dailyTaskReportTimeHint"))}</p>
+  <div class="admin-settings-hint js-past-incomplete-preview d-none" hidden></div>`;
+}
+
 async function refreshTaskAssignmentEmailToggle(root, api = apiFn) {
   const toggle = root?.querySelector(".js-task-assignment-email-toggle");
   if (!toggle) return;
@@ -753,6 +777,135 @@ function wireTaskAssignmentEmailToggle(root) {
         toggle.disabled = false;
       });
   });
+}
+
+function setCheckoutGateExtrasVisible(root, on) {
+  root?.querySelector(".js-daily-task-report-time-row")?.classList.toggle("d-none", !on);
+  root?.querySelector(".js-daily-task-report-time-hint")?.classList.toggle("d-none", !on);
+  const preview = root?.querySelector(".js-past-incomplete-preview");
+  if (preview) {
+    preview.classList.toggle("d-none", !on);
+    preview.hidden = !on;
+  }
+}
+
+async function refreshPastIncompletePreview(root, api = apiFn) {
+  const preview = root?.querySelector(".js-past-incomplete-preview");
+  if (!preview || preview.hidden) return;
+  const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
+  if (!api) {
+    preview.textContent = "";
+    return;
+  }
+  try {
+    const report = await api("/api/attendance/daily-task-report-preview");
+    const past = Array.isArray(report?.pastIncomplete) ? report.pastIncomplete : [];
+    if (!past.length) {
+      preview.innerHTML = esc(tr("settings.pastIncompleteEmpty"));
+      return;
+    }
+    const shown = past.slice(0, 8);
+    const more = past.length > shown.length ? past.length - shown.length : 0;
+    preview.innerHTML = `<strong>${esc(tr("settings.pastIncompleteTitle", { count: String(past.length) }))}</strong>
+      <ul class="mb-0 mt-1 ps-3">
+        ${shown
+          .map(
+            (item) =>
+              `<li>${esc(item.employeeName || "—")}: ${esc(item.title || "—")}</li>`
+          )
+          .join("")}
+        ${more ? `<li>${esc(tr("settings.pastIncompleteMore", { count: String(more) }))}</li>` : ""}
+      </ul>`;
+  } catch {
+    preview.textContent = "";
+  }
+}
+
+async function refreshCheckoutRequiresTasksToggle(root, api = apiFn) {
+  const toggle = root?.querySelector(".js-checkout-requires-tasks-toggle");
+  const timeInput = root?.querySelector(".js-daily-task-report-time");
+  if (!toggle) return;
+  toggle.checked = false;
+  setCheckoutGateExtrasVisible(root, false);
+  if (timeInput) timeInput.value = "";
+  if (!api) return;
+  try {
+    const settings = await api("/api/attendance/company-settings");
+    const on = settings?.checkoutRequiresTasksDone === true;
+    toggle.checked = on;
+    if (timeInput) timeInput.value = settings?.dailyTaskReportTime || "";
+    setCheckoutGateExtrasVisible(root, on);
+    if (on) void refreshPastIncompletePreview(root, api);
+  } catch {
+    toggle.checked = false;
+    setCheckoutGateExtrasVisible(root, false);
+  }
+}
+
+function wireCheckoutRequiresTasksToggle(root) {
+  const toggle = root?.querySelector(".js-checkout-requires-tasks-toggle");
+  const timeInput = root?.querySelector(".js-daily-task-report-time");
+  if (!toggle || toggle.dataset.wired === "1") return;
+  toggle.dataset.wired = "1";
+  void refreshCheckoutRequiresTasksToggle(root, apiFn);
+
+  toggle.addEventListener("change", () => {
+    const wantOn = toggle.checked;
+    if (!apiFn) {
+      toggle.checked = !wantOn;
+      showToastFn?.(tr("errors.requestFailed"), "danger");
+      return;
+    }
+    toggle.disabled = true;
+    const payload = { checkoutRequiresTasksDone: wantOn };
+    if (wantOn && timeInput?.value) payload.dailyTaskReportTime = timeInput.value;
+    void apiFn("/api/attendance/company-settings", {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    })
+      .then((settings) => {
+        const on = settings?.checkoutRequiresTasksDone === true;
+        toggle.checked = on;
+        if (timeInput) timeInput.value = settings?.dailyTaskReportTime || timeInput.value || "";
+        setCheckoutGateExtrasVisible(root, on);
+        if (on) void refreshPastIncompletePreview(root, apiFn);
+        showToastFn?.(
+          on ? tr("settings.checkoutRequiresTasksOnToast") : tr("settings.checkoutRequiresTasksOffToast"),
+          "success"
+        );
+      })
+      .catch((err) => {
+        toggle.checked = !wantOn;
+        setCheckoutGateExtrasVisible(root, !wantOn);
+        showToastFn?.(err?.message || tr("errors.requestFailed"), "danger");
+      })
+      .finally(() => {
+        toggle.disabled = false;
+      });
+  });
+
+  if (timeInput && timeInput.dataset.wired !== "1") {
+    timeInput.dataset.wired = "1";
+    timeInput.addEventListener("change", () => {
+      if (!toggle.checked || !apiFn) return;
+      const value = timeInput.value || null;
+      timeInput.disabled = true;
+      void apiFn("/api/attendance/company-settings", {
+        method: "PATCH",
+        body: JSON.stringify({ dailyTaskReportTime: value }),
+      })
+        .then((settings) => {
+          timeInput.value = settings?.dailyTaskReportTime || "";
+          showToastFn?.(tr("settings.dailyTaskReportTimeSavedToast"), "success");
+        })
+        .catch((err) => {
+          showToastFn?.(err?.message || tr("errors.requestFailed"), "danger");
+        })
+        .finally(() => {
+          timeInput.disabled = false;
+        });
+    });
+  }
 }
 
 function themeChoiceHtml(mode, isDark) {
@@ -885,6 +1038,7 @@ function ownerSettingsBodyHtml() {
 
   const tracking = [
     companyAttendanceEnabledToggleHtml(),
+    checkoutRequiresTasksToggleHtml(),
     companyLiveLocationSettingsToggleHtml(),
     taskAssignmentEmailToggleHtml(),
     isPushSupported() ? notificationsToggleHtml() : "",
@@ -1158,6 +1312,7 @@ function wireSettingsPage(main, role) {
       showToast: showToastFn,
       onChanged: (enabled) => onCompanyAttendanceChangedFn?.(enabled),
     });
+    wireCheckoutRequiresTasksToggle(main);
     wireTaskAssignmentEmailToggle(main);
   }
   if (role === "employee") {

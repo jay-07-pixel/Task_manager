@@ -4,6 +4,7 @@ import { getActiveWorkLocations } from "./workLocationService.js";
 import {
   getDailyAttendanceSchedule,
   isAttendanceDayApplicable,
+  isCheckoutRequiresTasksDone,
   isCompanyAttendanceEnabled,
 } from "./companyAttendanceSettings.js";
 import {
@@ -11,6 +12,10 @@ import {
   evaluateCheckOutTiming,
   overtimeMinutesAfterCheckOut,
 } from "../lib/attendanceSchedule.js";
+import {
+  assertEmployeeCanCheckout,
+  getEmployeeTaskCheckoutSummary,
+} from "./checkoutTaskGateService.js";
 
 function startOfDayLocal(dateStr) {
   let start;
@@ -126,6 +131,10 @@ export async function getCheckStatus(userId, { latitude, longitude } = {}) {
       lastCheckIn: null,
       lastCheckOut: null,
       proximity: null,
+      checkoutRequiresTasksDone: false,
+      checkoutBlockedByIncompleteTasks: false,
+      incompleteTodayCount: 0,
+      incompleteTodayTitles: [],
     };
   }
 
@@ -133,6 +142,16 @@ export async function getCheckStatus(userId, { latitude, longitude } = {}) {
   const checks = await getChecksForDay(userId, start, end);
   const schedule = await getDailyAttendanceSchedule();
   const today = deriveTodayStatus(checks, schedule);
+  const gateOn = await isCheckoutRequiresTasksDone();
+  let incompleteTodayCount = 0;
+  let incompleteTodayTitles = [];
+  let checkoutBlockedByIncompleteTasks = false;
+  if (gateOn && today.canCheckOut) {
+    const summary = await getEmployeeTaskCheckoutSummary(userId);
+    incompleteTodayCount = summary.todayIncomplete.length;
+    incompleteTodayTitles = summary.todayIncomplete.slice(0, 5).map((t) => t.title);
+    checkoutBlockedByIncompleteTasks = !summary.canCheckout;
+  }
 
   let proximity = null;
   if (latitude != null && longitude != null) {
@@ -143,11 +162,15 @@ export async function getCheckStatus(userId, { latitude, longitude } = {}) {
 
   return {
     attendanceEnabled: true,
-    date: start.toISOString().slice(0, 10),
+    date: `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}-${String(start.getDate()).padStart(2, "0")}`,
     locationsCount: locations.length,
     schedule,
     ...today,
     proximity,
+    checkoutRequiresTasksDone: gateOn,
+    checkoutBlockedByIncompleteTasks,
+    incompleteTodayCount,
+    incompleteTodayTitles,
   };
 }
 
@@ -181,6 +204,10 @@ export async function performCheck(userId, type, latitude, longitude) {
       throw new Error("You already checked out today.");
     }
     throw new Error("You are not checked in yet.");
+  }
+
+  if (type === "check_out") {
+    await assertEmployeeCanCheckout(userId);
   }
 
   const schedule = await getDailyAttendanceSchedule();

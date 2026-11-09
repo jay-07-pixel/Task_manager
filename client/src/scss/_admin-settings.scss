@@ -506,6 +506,40 @@
   color: var(--set-muted);
 }
 
+.admin-settings-page .admin-settings-track .admin-settings-row--field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem 0.85rem;
+  margin: -0.55rem 0 0;
+  padding: 0.35rem 0.9rem 0.75rem 3.7rem;
+  border-radius: 0;
+  background: var(--set-tile);
+}
+
+.admin-settings-page .admin-settings-track .admin-settings-row--field + .admin-settings-hint {
+  margin-top: -0.15rem;
+}
+
+.admin-settings-page .admin-settings-field-label {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--set-mint-ink);
+}
+
+.admin-settings-page .admin-settings-track .js-daily-task-report-time {
+  width: auto;
+  min-width: 7.5rem;
+  max-width: 10rem;
+}
+
+.admin-settings-page .admin-settings-track .js-past-incomplete-preview:not(.d-none) {
+  display: block;
+  margin-top: 0.15rem;
+  padding-bottom: 0.85rem;
+}
+
 .admin-settings-track-foot {
   display: flex;
   align-items: center;

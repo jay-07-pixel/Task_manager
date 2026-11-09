@@ -31,6 +31,7 @@ import { reconcileAllLegacyRolledRecurringTasks } from "./lib/recurringLegacyBac
 import { friendlyDbError } from "./lib/dbErrorMessage.js";
 import { syncCompanyTrialSettings } from "./lib/companyTrial.js";
 import { buildWebAppManifest, resolvePwaInstanceName } from "./lib/pwaInstance.js";
+import { startDailyTaskReportScheduler } from "./services/checkoutTaskGateService.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const sessionsDir = path.join(__dirname, "..", "sessions");
@@ -152,6 +153,7 @@ const server = app.listen(PORT, () => {
   initPush();
   initFcm();
   startReminderScheduler();
+  startDailyTaskReportScheduler();
   void syncCompanyTrialSettings().catch((err) => console.error("[company-trial]", err));
   void reconcileAllLegacyRolledRecurringTasks()
     .then((n) => {

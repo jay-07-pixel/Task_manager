@@ -55,15 +55,59 @@ export async function isCompanyTaskAssignmentEmailEnabled() {
   }
 }
 
+/**
+ * When on (and attendance is on), employees cannot check out until today's due tasks are done.
+ * Also enables the daily admin email report at `dailyTaskReportTime`.
+ */
+export async function isCheckoutRequiresTasksDone() {
+  try {
+    const row = await prisma.companySettings.findUnique({
+      where: { id: COMPANY_SETTINGS_ID },
+      select: { checkoutRequiresTasksDone: true },
+    });
+    if (!row) return false;
+    return row.checkoutRequiresTasksDone === true;
+  } catch {
+    return false;
+  }
+}
+
+export async function getCheckoutTaskGateSettings() {
+  try {
+    const row = await prisma.companySettings.findUnique({
+      where: { id: COMPANY_SETTINGS_ID },
+      select: {
+        checkoutRequiresTasksDone: true,
+        dailyTaskReportTime: true,
+        dailyTaskReportLastSentOn: true,
+      },
+    });
+    return {
+      checkoutRequiresTasksDone: row?.checkoutRequiresTasksDone === true,
+      dailyTaskReportTime: row?.dailyTaskReportTime ?? null,
+      dailyTaskReportLastSentOn: row?.dailyTaskReportLastSentOn ?? null,
+    };
+  } catch {
+    return {
+      checkoutRequiresTasksDone: false,
+      dailyTaskReportTime: null,
+      dailyTaskReportLastSentOn: null,
+    };
+  }
+}
+
 export async function getCompanyAttendanceSettings() {
   const liveLocationRequired = await isCompanyLiveLocationRequired();
   const attendanceEnabled = await isCompanyAttendanceEnabled();
   const taskAssignmentEmailEnabled = await isCompanyTaskAssignmentEmailEnabled();
+  const checkoutGate = await getCheckoutTaskGateSettings();
   const schedule = await getDailyAttendanceSchedule();
   return {
     liveLocationRequired,
     attendanceEnabled,
     taskAssignmentEmailEnabled,
+    checkoutRequiresTasksDone: checkoutGate.checkoutRequiresTasksDone,
+    dailyTaskReportTime: checkoutGate.dailyTaskReportTime,
     ...schedule,
   };
 }
@@ -226,4 +270,54 @@ export async function setCompanyTaskAssignmentEmailEnabled(taskAssignmentEmailEn
     taskAssignmentEmailEnabled: updated.taskAssignmentEmailEnabled,
     updatedAt: updated.updatedAt.toISOString(),
   };
+}
+
+/**
+ * @param {{
+ *   checkoutRequiresTasksDone?: boolean;
+ *   dailyTaskReportTime?: string | null;
+ * }} data
+ */
+export async function setCheckoutTaskGateSettings(data) {
+  await syncCompanyTrialSettings();
+  const patch = {};
+  if (data.checkoutRequiresTasksDone !== undefined) {
+    patch.checkoutRequiresTasksDone = !!data.checkoutRequiresTasksDone;
+  }
+  if (data.dailyTaskReportTime !== undefined) {
+    if (data.dailyTaskReportTime === null || data.dailyTaskReportTime === "") {
+      patch.dailyTaskReportTime = null;
+    } else {
+      const normalized = normalizeTimeHHmm(data.dailyTaskReportTime);
+      if (!normalized) {
+        throw new Error("Invalid daily task report time. Use HH:mm format.");
+      }
+      patch.dailyTaskReportTime = normalized;
+    }
+  }
+  if (!Object.keys(patch).length) {
+    return getCheckoutTaskGateSettings();
+  }
+  const updated = await prisma.companySettings.update({
+    where: { id: COMPANY_SETTINGS_ID },
+    data: patch,
+    select: {
+      checkoutRequiresTasksDone: true,
+      dailyTaskReportTime: true,
+      updatedAt: true,
+    },
+  });
+  return {
+    checkoutRequiresTasksDone: updated.checkoutRequiresTasksDone === true,
+    dailyTaskReportTime: updated.dailyTaskReportTime ?? null,
+    updatedAt: updated.updatedAt.toISOString(),
+  };
+}
+
+/** @param {string} dateKey YYYY-MM-DD */
+export async function markDailyTaskReportSent(dateKey) {
+  await prisma.companySettings.update({
+    where: { id: COMPANY_SETTINGS_ID },
+    data: { dailyTaskReportLastSentOn: String(dateKey).slice(0, 10) },
+  });
 }
