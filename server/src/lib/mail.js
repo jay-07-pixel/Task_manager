@@ -877,5 +877,18 @@ export async function sendDailyTaskStatusReportEmail(params) {
     throw new Error("Failed to send daily task report email.");
   }
 
-  return { ok: true, devMode: false };
+  let messageId = null;
+  try {
+    const body = await res.json();
+    messageId = body?.messageId || null;
+  } catch {
+    /* ignore */
+  }
+  console.log("[mail/brevo] daily task report sent", {
+    to: params.to,
+    subject,
+    messageId,
+  });
+
+  return { ok: true, devMode: false, messageId };
 }

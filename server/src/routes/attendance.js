@@ -30,7 +30,10 @@ import {
   setCompanyTaskAssignmentEmailEnabled,
   setDailyAttendanceSchedule,
 } from "../services/companyAttendanceSettings.js";
-import { buildDailyTaskStatusReport } from "../services/checkoutTaskGateService.js";
+import {
+  buildDailyTaskStatusReport,
+  runDailyTaskReportTick,
+} from "../services/checkoutTaskGateService.js";
 import {
   createWorkLocation,
   deleteWorkLocation,
@@ -165,6 +168,25 @@ router.get("/daily-task-report-preview", requireOwner, async (req, res) => {
     res.json(report);
   } catch (err) {
     res.status(400).json({ error: err.message || "Invalid date." });
+  }
+});
+
+/** Owner-only: send the daily task report immediately (ignores schedule + already-sent flag). */
+router.post("/daily-task-report-send-now", requireOwner, async (_req, res) => {
+  try {
+    const result = await runDailyTaskReportTick(new Date(), { force: true });
+    if (result?.skipped) {
+      return res.status(400).json({ error: `Report not sent (${result.reason}).`, ...result });
+    }
+    if (!result?.ok) {
+      return res.status(502).json({
+        error: "Report email failed to send. Check Brevo logs / spam folder.",
+        ...result,
+      });
+    }
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(500).json({ error: err.message || "Failed to send report." });
   }
 });
 

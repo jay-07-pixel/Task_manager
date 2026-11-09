@@ -162,26 +162,33 @@ async function listAdminRecipients() {
 
 /**
  * Send today's task completion report at the configured company-local time.
+ * @param {Date} [now]
+ * @param {{ force?: boolean }} [opts]
  */
-export async function runDailyTaskReportTick(now = new Date()) {
+export async function runDailyTaskReportTick(now = new Date(), opts = {}) {
+  const force = opts.force === true;
   if (!(await isCompanyAttendanceEnabled())) {
     return { skipped: true, reason: "attendance_off" };
   }
   const settings = await getCheckoutTaskGateSettings();
   if (!settings.checkoutRequiresTasksDone) return { skipped: true, reason: "feature_off" };
-  if (!settings.dailyTaskReportTime) return { skipped: true, reason: "no_time" };
+  if (!settings.dailyTaskReportTime && !force) return { skipped: true, reason: "no_time" };
 
-  const parsed = parseTimeHHmm(settings.dailyTaskReportTime);
-  if (!parsed) return { skipped: true, reason: "invalid_time" };
+  const parsed = settings.dailyTaskReportTime
+    ? parseTimeHHmm(settings.dailyTaskReportTime)
+    : { hours: 0, minutes: 0 };
+  if (settings.dailyTaskReportTime && !parsed) return { skipped: true, reason: "invalid_time" };
 
   const dateKey = companyDateKey(now);
-  if (settings.dailyTaskReportLastSentOn === dateKey) {
+  if (!force && settings.dailyTaskReportLastSentOn === dateKey) {
     return { skipped: true, reason: "already_sent" };
   }
 
-  const minsNow = minutesSinceCompanyMidnight(now);
-  const target = parsed.hours * 60 + parsed.minutes;
-  if (minsNow < target) return { skipped: true, reason: "too_early" };
+  if (!force) {
+    const minsNow = minutesSinceCompanyMidnight(now);
+    const target = parsed.hours * 60 + parsed.minutes;
+    if (minsNow < target) return { skipped: true, reason: "too_early" };
+  }
 
   const report = await buildDailyTaskStatusReport(dateKey);
   const recipients = new Map();
