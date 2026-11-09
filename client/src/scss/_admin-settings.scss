@@ -517,8 +517,10 @@
   background: var(--set-tile);
 }
 
-.admin-settings-page .admin-settings-track .admin-settings-row--field + .admin-settings-hint {
-  margin-top: -0.15rem;
+.admin-settings-page .admin-settings-track .admin-settings-row--field:last-of-type {
+  border-radius: 0 0 1rem 1rem;
+  padding-bottom: 0.9rem;
+  margin-bottom: 0.15rem;
 }
 
 .admin-settings-page .admin-settings-field-label {
@@ -537,12 +539,6 @@
 .admin-settings-page .admin-settings-track .js-daily-task-report-email {
   width: min(100%, 18rem);
   max-width: 100%;
-}
-
-.admin-settings-page .admin-settings-track .js-past-incomplete-preview:not(.d-none) {
-  display: block;
-  margin-top: 0.15rem;
-  padding-bottom: 0.85rem;
 }
 
 .admin-settings-track-foot {

@@ -730,9 +730,7 @@ function checkoutRequiresTasksToggleHtml() {
   <div class="admin-settings-row admin-settings-row--field js-daily-task-report-email-row d-none">
     <label class="admin-settings-field-label" for="daily-task-report-email">${emailLabel}</label>
     <input type="email" id="daily-task-report-email" class="form-control form-control-sm js-daily-task-report-email" placeholder="name@example.com" autocomplete="email" />
-  </div>
-  <p class="admin-settings-hint js-daily-task-report-time-hint d-none">${esc(tr("settings.dailyTaskReportTimeHint"))}</p>
-  <div class="admin-settings-hint js-past-incomplete-preview d-none" hidden></div>`;
+  </div>`;
 }
 
 async function refreshTaskAssignmentEmailToggle(root, api = apiFn) {
@@ -787,44 +785,6 @@ function wireTaskAssignmentEmailToggle(root) {
 function setCheckoutGateExtrasVisible(root, on) {
   root?.querySelector(".js-daily-task-report-time-row")?.classList.toggle("d-none", !on);
   root?.querySelector(".js-daily-task-report-email-row")?.classList.toggle("d-none", !on);
-  root?.querySelector(".js-daily-task-report-time-hint")?.classList.toggle("d-none", !on);
-  const preview = root?.querySelector(".js-past-incomplete-preview");
-  if (preview) {
-    preview.classList.toggle("d-none", !on);
-    preview.hidden = !on;
-  }
-}
-
-async function refreshPastIncompletePreview(root, api = apiFn) {
-  const preview = root?.querySelector(".js-past-incomplete-preview");
-  if (!preview || preview.hidden) return;
-  const esc = escapeHtmlFn ?? ((s) => String(s ?? ""));
-  if (!api) {
-    preview.textContent = "";
-    return;
-  }
-  try {
-    const report = await api("/api/attendance/daily-task-report-preview");
-    const past = Array.isArray(report?.pastIncomplete) ? report.pastIncomplete : [];
-    if (!past.length) {
-      preview.innerHTML = esc(tr("settings.pastIncompleteEmpty"));
-      return;
-    }
-    const shown = past.slice(0, 8);
-    const more = past.length > shown.length ? past.length - shown.length : 0;
-    preview.innerHTML = `<strong>${esc(tr("settings.pastIncompleteTitle", { count: String(past.length) }))}</strong>
-      <ul class="mb-0 mt-1 ps-3">
-        ${shown
-          .map(
-            (item) =>
-              `<li>${esc(item.employeeName || "—")}: ${esc(item.title || "—")}</li>`
-          )
-          .join("")}
-        ${more ? `<li>${esc(tr("settings.pastIncompleteMore", { count: String(more) }))}</li>` : ""}
-      </ul>`;
-  } catch {
-    preview.textContent = "";
-  }
 }
 
 async function refreshCheckoutRequiresTasksToggle(root, api = apiFn) {
@@ -844,7 +804,6 @@ async function refreshCheckoutRequiresTasksToggle(root, api = apiFn) {
     if (timeInput) timeInput.value = settings?.dailyTaskReportTime || "";
     if (emailInput) emailInput.value = settings?.dailyTaskReportEmail || "";
     setCheckoutGateExtrasVisible(root, on);
-    if (on) void refreshPastIncompletePreview(root, api);
   } catch {
     toggle.checked = false;
     setCheckoutGateExtrasVisible(root, false);
@@ -880,7 +839,6 @@ function wireCheckoutRequiresTasksToggle(root) {
         if (timeInput) timeInput.value = settings?.dailyTaskReportTime || timeInput.value || "";
         if (emailInput) emailInput.value = settings?.dailyTaskReportEmail || emailInput.value || "";
         setCheckoutGateExtrasVisible(root, on);
-        if (on) void refreshPastIncompletePreview(root, apiFn);
         showToastFn?.(
           on ? tr("settings.checkoutRequiresTasksOnToast") : tr("settings.checkoutRequiresTasksOffToast"),
           "success"
